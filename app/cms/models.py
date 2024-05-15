@@ -54,28 +54,36 @@ class Locality(BaseModel):
 class Collection(BaseModel):
     abbreviation = models.CharField(max_length=2)
     description = models.CharField(max_length=50)
+    
+    def get_absolute_url(self):
+        return reverse('collection-detail', args=[str(self.id)])
 
     def __str__(self): 
         return self.description
     
 class Accession(BaseModel):
     collection = models.ForeignKey(Collection, on_delete=models.CASCADE)
-    specimen_prefix = models.IntegerField()
+    specimen_prefix = models.CharField(Locality, on_delete=models.CASCADE)
     specimen_no = models.IntegerField()
     accessioned_by = models.ForeignKey(User, on_delete=models.CASCADE)
     nature_specimen = models.CharField(max_length=50)
-    verbatim_locality = models.ForeignKey(Locality, on_delete=models.CASCADE)
+
+    def get_absolute_url(self):
+        return reverse('accession-detail', args=[str(self.id)])
 
     def __str__(self):
         return f"{self.specimen_prefix}{self.specimen_no}"
     
 class Comment(BaseModel):
     accession = models.ForeignKey(Accession, on_delete=models.CASCADE)
-    comment = models.CharField(max_length=50)
-    subject = models.CharField(max_length=50)
-    response = models.CharField(max_length=50)
+    comment = models.TextField()
+    subject = models.CharField(max_length=50)  ##
+    response = models.CharField(max_length=50) ##
     status = models.CharField(max_length=50)
-    comment_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    comment_by = models.CharField(max_length=50)
+
+    def get_absolute_url(self):
+        return reverse('comment-detail', args=[str(self.id)])
 
     def __str__(self):
         return self.subject
