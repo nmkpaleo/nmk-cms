@@ -63,7 +63,7 @@ class Collection(BaseModel):
     
 class Accession(BaseModel):
     collection = models.ForeignKey(Collection, on_delete=models.CASCADE)
-    specimen_prefix = models.CharField(Locality, on_delete=models.CASCADE)
+    specimen_prefix = models.ForeignKey(Locality, on_delete=models.CASCADE)
     specimen_no = models.IntegerField()
     accessioned_by = models.ForeignKey(User, on_delete=models.CASCADE)
     nature_specimen = models.CharField(max_length=50)
@@ -73,12 +73,29 @@ class Accession(BaseModel):
 
     def __str__(self):
         return f"{self.specimen_prefix}{self.specimen_no}"
+
+class Subject(BaseModel):
+    subject_name = models.CharField(max_length=50)
+
+    def get_absolute_url(self):
+        return reverse('subject-detail', args=[str(self.id)])
+    
+    def __str__(self):
+        return self.subject_name
     
 class Comment(BaseModel):
     accession = models.ForeignKey(Accession, on_delete=models.CASCADE)
     comment = models.TextField()
-    subject = models.CharField(max_length=50)  ##
-    response = models.CharField(max_length=50) ##
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE)
+
+    RESPONSE_STATUS = (
+        ('P', 'Pending'),
+        ('A', 'Approved'),
+        ('R', 'Rejected'),
+        ('I', 'In Review'),
+    )
+    response = models.CharField(max_length=50, choices=RESPONSE_STATUS,  help_text="Please select your response")
+
     status = models.CharField(max_length=50)
     comment_by = models.CharField(max_length=50)
 
@@ -86,4 +103,4 @@ class Comment(BaseModel):
         return reverse('comment-detail', args=[str(self.id)])
 
     def __str__(self):
-        return self.subject
+        return self.comment
