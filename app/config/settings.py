@@ -66,6 +66,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "cms",
     'django_userforeignkey',
+    'import_export' ,
     #    'allauth',
     #    'allauth.account',
     #    'allauth.socialaccount',
