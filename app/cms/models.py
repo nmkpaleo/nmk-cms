@@ -1,6 +1,7 @@
 from django.db import models
 from django.urls import reverse
 from django_userforeignkey.models.fields import UserForeignKey
+from django.contrib.auth.models import User
 
 
 # https://medium.com/@KevinPavlish/add-common-fields-to-all-your-django-models-bce033ac2cdc
@@ -49,3 +50,40 @@ class Locality(BaseModel):
         String for representing the Model object (in Admin site etc.)
         """
         return "%s" % (self.name)
+
+class Collection(BaseModel):
+    abbreviation = models.CharField(max_length=2)
+    description = models.CharField(max_length=50)
+    
+    def get_absolute_url(self):
+        return reverse('collection-detail', args=[str(self.id)])
+
+    def __str__(self): 
+        return self.description
+    
+class Accession(BaseModel):
+    collection = models.ForeignKey(Collection, on_delete=models.CASCADE)
+    specimen_prefix = models.CharField(Locality, on_delete=models.CASCADE)
+    specimen_no = models.IntegerField()
+    accessioned_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    nature_specimen = models.CharField(max_length=50)
+
+    def get_absolute_url(self):
+        return reverse('accession-detail', args=[str(self.id)])
+
+    def __str__(self):
+        return f"{self.specimen_prefix}{self.specimen_no}"
+    
+class Comment(BaseModel):
+    accession = models.ForeignKey(Accession, on_delete=models.CASCADE)
+    comment = models.TextField()
+    subject = models.CharField(max_length=50)  ##
+    response = models.CharField(max_length=50) ##
+    status = models.CharField(max_length=50)
+    comment_by = models.CharField(max_length=50)
+
+    def get_absolute_url(self):
+        return reverse('comment-detail', args=[str(self.id)])
+
+    def __str__(self):
+        return self.subject
