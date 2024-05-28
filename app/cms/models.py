@@ -4,9 +4,7 @@ from django_userforeignkey.models.fields import UserForeignKey
 from django.contrib.auth.models import User
 
 
-# https://medium.com/@KevinPavlish/add-common-fields-to-all-your-django-models-bce033ac2cdc
 class BaseModel(models.Model):
-
     created_on = models.DateTimeField(auto_now_add=True)
     modified_on = models.DateTimeField(auto_now=True)
     created_by = UserForeignKey(
@@ -27,10 +25,6 @@ class BaseModel(models.Model):
 
 
 class Locality(BaseModel):
-    """
-    Model representing a Locality in NMK CMS
-    """
-
     abbreviation = models.CharField(
         max_length=2, help_text="Enter the Abbreviation of the Locality"
     )
@@ -40,33 +34,28 @@ class Locality(BaseModel):
         ordering = ["name"]
 
     def get_absolute_url(self):
-        """
-        Returns the url to access a particular Locality instance.
-        """
         return reverse("locality-detail", args=[str(self.id)])
 
     def __str__(self):
-        """
-        String for representing the Model object (in Admin site etc.)
-        """
-        return "%s" % (self.name)
+        return self.name
+
 
 class Collection(BaseModel):
-    abbreviation = models.CharField(max_length=2)
-    description = models.CharField(max_length=50)
-    
+    abbreviation = models.CharField(max_length=4)
+    description = models.CharField(max_length=250)
+
     def get_absolute_url(self):
         return reverse('collection-detail', args=[str(self.id)])
 
-    def __str__(self): 
+    def __str__(self):
         return self.description
-    
+
+
 class Accession(BaseModel):
     collection = models.ForeignKey(Collection, on_delete=models.CASCADE)
     specimen_prefix = models.ForeignKey(Locality, on_delete=models.CASCADE)
-    specimen_no = models.IntegerField()
+    specimen_no = models.PositiveIntegerField()
     accessioned_by = models.ForeignKey(User, on_delete=models.CASCADE)
-    nature_specimen = models.CharField(max_length=50)
 
     def get_absolute_url(self):
         return reverse('accession-detail', args=[str(self.id)])
@@ -74,29 +63,31 @@ class Accession(BaseModel):
     def __str__(self):
         return f"{self.specimen_prefix}{self.specimen_no}"
 
+
 class Subject(BaseModel):
     subject_name = models.CharField(max_length=50)
 
     def get_absolute_url(self):
         return reverse('subject-detail', args=[str(self.id)])
-    
+
     def __str__(self):
         return self.subject_name
-    
+
+
 class Comment(BaseModel):
-    accession = models.ForeignKey(Accession, on_delete=models.CASCADE)
+    specimen_no = models.ForeignKey(Accession, on_delete=models.CASCADE)
     comment = models.TextField()
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE)
 
     RESPONSE_STATUS = (
+        ('N', 'New'),
         ('P', 'Pending'),
         ('A', 'Approved'),
         ('R', 'Rejected'),
-        ('I', 'In Review'),
+        ('C', 'Closed'),
     )
-    response = models.CharField(max_length=50, choices=RESPONSE_STATUS,  help_text="Please select your response")
-
-    status = models.CharField(max_length=50)
+    status = models.CharField(max_length=50, choices=RESPONSE_STATUS, help_text="Please select your response")
+    response = models.TextField()
     comment_by = models.CharField(max_length=50)
 
     def get_absolute_url(self):
@@ -104,3 +95,37 @@ class Comment(BaseModel):
 
     def __str__(self):
         return self.comment
+
+
+class FieldSlip(BaseModel):
+    field_number = models.CharField(max_length=100)
+    discoverer = models.CharField(max_length=255)
+    collector = models.CharField(max_length=255)
+    collection_date = models.DateField()
+    verbatim_locality = models.CharField(max_length=255)
+    verbatim_taxon = models.CharField(max_length=255)
+    verbatim_element = models.CharField(max_length=255)
+    verbatim_horizon = models.CharField(max_length=255)
+    aerial_photo = models.CharField(max_length=255)
+    verbatim_latitude = models.CharField(max_length=255)
+    verbatim_longitude = models.CharField(max_length=255)
+    verbatim_SRS = models.CharField(max_length=255)
+    verbatim_coordinate_system = models.CharField(max_length=255)
+    verbatim_elevation = models.CharField(max_length=255)
+    accession = models.ForeignKey(Accession, on_delete=models.CASCADE)
+
+    def get_absolute_url(self):
+        return reverse('fieldslip-detail', args=[str(self.id)])
+
+    def __str__(self):
+        return self.field_number
+
+class Storage(BaseModel):
+    area = models.CharField(max_length=255)
+    parent_area = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True)
+
+    def get_absolute_url(self):
+        return reverse('storage-detail', args=[str(self.id)])
+
+    def __str__(self):
+        return self.area
