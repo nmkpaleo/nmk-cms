@@ -1,8 +1,7 @@
 from django.contrib import admin
 from import_export.admin import ImportExportModelAdmin
 from import_export import resources
-from .models import Locality, Collection, Accession, Subject, Comment
-
+from .models import Locality, Collection, Accession, Subject, Comment, FieldSlip, Storage
 
 class LocalityResource(resources.ModelResource):
     class Meta:
@@ -11,8 +10,28 @@ class LocalityResource(resources.ModelResource):
 
 class LocalityAdmin(ImportExportModelAdmin):
     resource_class = LocalityResource
-    list_display = ('name', 'abbreviation')  # Fields to display in the locality list
-    search_fields = ('name', 'abbreviation')  # Fields to search in the admin interface
+    list_display = ('name', 'abbreviation')
+    search_fields = ('name', 'abbreviation')
+
+class FieldSlipResource(resources.ModelResource):
+    class Meta:
+        model = FieldSlip
+        fields = ('field_number', 'discoverer', 'collector', 'collection_date', 'verbatim_locality', 'verbatim_taxon', 'verbatim_element', 'verbatim_horizon', 'aerial_photo', 'verbatim_latitude', 'verbatim_longitude', 'verbatim_SRS', 'verbatim_coordinate_system', 'verbatim_elevation', 'accession')
+
+class FieldSlipAdmin(ImportExportModelAdmin):
+    resource_class = FieldSlipResource
+    list_display = ('field_number', 'discoverer', 'collector', 'collection_date', 'verbatim_locality')
+    search_fields = ('field_number', 'discoverer', 'collector', 'verbatim_locality')
+
+class StorageResource(resources.ModelResource):
+    class Meta:
+        model = Storage
+        fields = ('area', 'parent_area')
+
+class StorageAdmin(ImportExportModelAdmin):
+    resource_class = StorageResource
+    list_display = ('area', 'parent_area')
+    search_fields = ('area', 'parent_area__area')
 
 class CollectionResource(resources.ModelResource):
     class Meta:
@@ -67,3 +86,5 @@ admin.site.register(Collection, CollectionAdmin)
 admin.site.register(Accession, AccessionAdmin)
 admin.site.register(Subject, SubjectAdmin)
 admin.site.register(Comment, CommentAdmin)
+admin.site.register(FieldSlip, FieldSlipAdmin)
+admin.site.register(Storage, StorageAdmin)
