@@ -48,13 +48,13 @@ class CollectionAdmin(ImportExportModelAdmin):
 class AccessionResource(resources.ModelResource):
     class Meta:
         model = Accession
-        fields = ('collection', 'specimen_prefix', 'specimen_no', 'accessioned_by', 'nature_specimen')
+        fields = ('collection', 'specimen_prefix', 'specimen_no', 'accessioned_by')
 
 
 class AccessionAdmin(ImportExportModelAdmin):
     resource_class = AccessionResource
-    list_display = ('specimen_prefix', 'specimen_no', 'collection', 'accessioned_by', 'nature_specimen')
-    search_fields = ('specimen_prefix__name', 'specimen_no', 'collection__description', 'accessioned_by__username', 'nature_specimen')
+    list_display = ('specimen_prefix', 'specimen_no', 'collection', 'accessioned_by')
+    search_fields = ('specimen_prefix__name', 'specimen_no', 'collection__description', 'accessioned_by__username')
 
 
 class SubjectResource(resources.ModelResource):
@@ -77,8 +77,8 @@ class CommentResource(resources.ModelResource):
 
 class CommentAdmin(ImportExportModelAdmin):
     resource_class = CommentResource
-    list_display = ('accession', 'comment', 'subject', 'response', 'status', 'comment_by')
-    search_fields = ('accession__specimen_no', 'comment', 'subject__subject_name', 'response', 'status', 'comment_by')
+    list_display = ('specimen_no', 'comment', 'subject', 'response', 'status', 'comment_by')
+    search_fields = ('specimen_no', 'comment', 'subject__subject_name', 'response', 'status', 'comment_by')
     list_filter = ('response', 'status')
 
 admin.site.register(Locality, LocalityAdmin)
