@@ -53,7 +53,7 @@ class AccessionResource(resources.ModelResource):
 
 class AccessionAdmin(ImportExportModelAdmin):
     resource_class = AccessionResource
-    list_display = ('specimen_prefix', 'specimen_no', 'collection', 'accessioned_by')
+    list_display = ('collection__abbreviation','specimen_prefix__abbreviation', 'specimen_no', 'accessioned_by')
     search_fields = ('specimen_prefix__name', 'specimen_no', 'collection__description', 'accessioned_by__username')
 
 
