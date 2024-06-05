@@ -48,13 +48,13 @@ class CollectionAdmin(ImportExportModelAdmin):
 class AccessionResource(resources.ModelResource):
     class Meta:
         model = Accession
-        fields = ('collection', 'specimen_prefix', 'specimen_no', 'accessioned_by')
+        fields = ('collection__abbreviation', 'specimen_prefix', 'specimen_no', 'accessioned_by')
 
 
 class AccessionAdmin(ImportExportModelAdmin):
     resource_class = AccessionResource
-    list_display = ('collection__abbreviation','specimen_prefix__abbreviation', 'specimen_no', 'accessioned_by')
-    search_fields = ('specimen_prefix__name', 'specimen_no', 'collection__description', 'accessioned_by__username')
+    list_display = ('collection','specimen_prefix', 'specimen_no', 'accessioned_by')
+    #search_fields = ('specimen_prefix__name', 'specimen_no', 'collection__description', 'accessioned_by__username')
 
 
 class SubjectResource(resources.ModelResource):
