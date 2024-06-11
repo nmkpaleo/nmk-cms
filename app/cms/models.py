@@ -56,6 +56,19 @@ class Accession(BaseModel):
     specimen_prefix = models.ForeignKey(Locality, on_delete=models.CASCADE)
     specimen_no = models.PositiveIntegerField()
     accessioned_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    options = (
+        "Type",
+        "Holotype",
+        "Isotype",
+        "Lectotype",
+        "Syntype",
+        "Isosyntype",
+        "Paratype",
+        "Neotype",
+        "Topotype",
+    )
+    type_status = models.CharField(max_length=50, choices=options)
+    comment = models.TextField()
 
     def get_absolute_url(self):
         return reverse('accession-detail', args=[str(self.id)])
@@ -87,7 +100,7 @@ class Comment(BaseModel):
         ('C', 'Closed'),
     )
     status = models.CharField(max_length=50, choices=RESPONSE_STATUS, help_text="Please select your response")
-    response = models.TextField()
+    response = models.TextField(null=True)
     comment_by = models.CharField(max_length=50)
 
     def get_absolute_url(self):
@@ -106,6 +119,7 @@ class FieldSlip(BaseModel):
     verbatim_taxon = models.CharField(max_length=255)
     verbatim_element = models.CharField(max_length=255)
     verbatim_horizon = models.CharField(max_length=255)
+    verbatim_method = models.CharField(max_length=255)
     aerial_photo = models.CharField(max_length=255)
     verbatim_latitude = models.CharField(max_length=255)
     verbatim_longitude = models.CharField(max_length=255)
@@ -121,7 +135,7 @@ class FieldSlip(BaseModel):
         return self.field_number
 
 class Storage(BaseModel):
-    area = models.CharField(max_length=255)
+    area = models.CharField(max_length=255, blank=False, null=False)
     parent_area = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True)
 
     def get_absolute_url(self):
