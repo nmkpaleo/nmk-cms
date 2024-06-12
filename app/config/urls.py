@@ -18,7 +18,7 @@ from django.contrib import admin
 from django.conf import settings
 from django.conf.urls.static import static
 from django.urls import include, path
-from .views import fieldslip_create, FieldSlipDetailView
+from cms.views import fieldslip_create, FieldSlipDetailView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
