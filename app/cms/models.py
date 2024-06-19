@@ -127,7 +127,6 @@ class FieldSlip(BaseModel):
     verbatim_SRS = models.CharField(max_length=255, null=True, blank=True)
     verbatim_coordinate_system = models.CharField(max_length=255, null=True, blank=True)
     verbatim_elevation = models.CharField(max_length=255, null=True, blank=True)
-    accession = models.ForeignKey(Accession, on_delete=models.CASCADE, null=True, blank=True)
 
     def get_absolute_url(self):
         return reverse('fieldslip-detail', args=[str(self.id)])
