@@ -98,28 +98,28 @@ class Comment(BaseModel):
 
 
 class FieldSlip(BaseModel):
-    field_number = models.CharField(max_length=100)
-    discoverer = models.CharField(max_length=255)
-    collector = models.CharField(max_length=255)
-    collection_date = models.DateField()
-    verbatim_locality = models.CharField(max_length=255)
-    verbatim_taxon = models.CharField(max_length=255)
-    verbatim_element = models.CharField(max_length=255)
-    verbatim_horizon = models.CharField(max_length=255)
-    aerial_photo = models.CharField(max_length=255)
-    verbatim_latitude = models.CharField(max_length=255)
-    verbatim_longitude = models.CharField(max_length=255)
-    verbatim_SRS = models.CharField(max_length=255)
-    verbatim_coordinate_system = models.CharField(max_length=255)
-    verbatim_elevation = models.CharField(max_length=255)
-    accession = models.ForeignKey(Accession, on_delete=models.CASCADE)
+    field_number = models.CharField(max_length=100, blank=True, null=True)
+    discoverer = models.CharField(max_length=255, blank=True, null=True)
+    collector = models.CharField(max_length=255, blank=True, null=True)
+    collection_date = models.DateField(blank=True, null=True)
+    verbatim_locality = models.CharField(max_length=255, blank=True, null=True)
+    verbatim_taxon = models.CharField(max_length=255, blank=True, null=True)
+    verbatim_element = models.CharField(max_length=255, blank=True, null=True)
+    verbatim_horizon = models.CharField(max_length=255, blank=True, null=True)
+    aerial_photo = models.CharField(max_length=255, blank=True, null=True)
+    verbatim_latitude = models.CharField(max_length=255, blank=True, null=True)
+    verbatim_longitude = models.CharField(max_length=255, blank=True, null=True)
+    verbatim_SRS = models.CharField(max_length=255, blank=True, null=True)
+    verbatim_coordinate_system = models.CharField(max_length=255, blank=True, null=True)
+    verbatim_elevation = models.CharField(max_length=255, blank=True, null=True)
+    
 
     def get_absolute_url(self):
         return reverse('fieldslip-detail', args=[str(self.id)])
 
     def __str__(self):
         return self.field_number
-
+        
 class Storage(BaseModel):
     area = models.CharField(max_length=255)
     parent_area = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True)
