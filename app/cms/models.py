@@ -52,10 +52,10 @@ class Collection(BaseModel):
 
 
 class Accession(BaseModel):
-    collection = models.ForeignKey(Collection, on_delete=models.CASCADE)
-    specimen_prefix = models.ForeignKey(Locality, on_delete=models.CASCADE)
-    specimen_no = models.PositiveIntegerField()
-    accessioned_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    collection = models.ForeignKey(Collection, on_delete=models.CASCADE, help_text="Please select the collection")
+    specimen_prefix = models.ForeignKey(Locality, on_delete=models.CASCADE, help_text="Please select the specimen prefix"   )
+    specimen_no = models.PositiveIntegerField(help_text="Please enter the specimen number")
+    accessioned_by = models.ForeignKey(User, on_delete=models.CASCADE, help_text="Please select the user who accessioned the specimen")
     options = (
         ('Type', 'Type'),
         ('Holotype', 'Holotype'),
@@ -68,8 +68,8 @@ class Accession(BaseModel):
         ('Topotype', 'Topotype'),
     )
 
-    type_status = models.CharField(max_length=50, choices=options)
-    comment = models.TextField(null=True, blank=True)
+    type_status = models.CharField(max_length=50, choices=options, null=True, blank=True, help_text="Please select the type status")
+    comment = models.TextField(null=True, blank=True, help_text="Any additional comments")
 
     def get_absolute_url(self):
         return reverse('accession-detail', args=[str(self.id)])
