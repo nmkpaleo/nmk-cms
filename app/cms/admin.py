@@ -84,7 +84,7 @@ class AccessionResource(resources.ModelResource):
         model = Accession
         skip_unchanged = True
         report_skipped = False
-        import_id_fields = ('collection', 'specimen_prefix', 'specimen_no', 'accessioned_by')
+        import_id_fields = ('collection', 'specimen_prefix', 'specimen_no',)
         fields = ('id', 'collection', 'specimen_prefix', 'specimen_no', 'accessioned_by', 'accession')
         export_order = ('accession', 'collection', 'specimen_prefix', 'specimen_no', 'accessioned_by', 'id')
 
@@ -93,7 +93,7 @@ class AccessionAdmin(ImportExportModelAdmin):
     list_display = ('collection__abbreviation', 'specimen_prefix__abbreviation', 'specimen_no', 'accessioned_by')
     list_filter = ('collection', 'specimen_prefix', 'accessioned_by')
     search_fields = ('specimen_no', 'collection__abbreviation', 'specimen_prefix__abbreviation', 'accessioned_by__username')
-
+    ordering = ('specimen_no', 'specimen_prefix__abbreviation')
     def collection__abbreviation(self, obj):
         return obj.collection.abbreviation
 
