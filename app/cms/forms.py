@@ -9,5 +9,5 @@ class FieldSlipForm(forms.ModelForm):
             'verbatim_locality', 'verbatim_taxon', 'verbatim_element',
             'verbatim_horizon', 'aerial_photo', 'verbatim_latitude',
             'verbatim_longitude', 'verbatim_SRS', 'verbatim_coordinate_system',
-            'verbatim_elevation', 'accession'
+            'verbatim_elevation'
         ]
