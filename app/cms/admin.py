@@ -123,6 +123,20 @@ class UserAdmin(ImportExportModelAdmin):
     list_display = ('username', 'first_name', 'last_name', 'email')
     search_fields = ('username', 'first_name', 'last_name', 'email')
 
+class CollectionResource(resources.ModelResource):
+    class Meta:
+        model = Collection
+        skip_unchanged = True
+        report_skipped = False
+        import_id_fields = ('abbreviation',)
+        fields = ('abbreviation', 'name')
+        export_order = ('abbreviation', 'name')
+
+class CollectionAdmin(ImportExportModelAdmin):
+    resource_class = CollectionResource
+    list_display = ('abbreviation', 'name')
+    search_fields = ('abbreviation', 'name')
+
 admin.site.register(Locality, LocalityAdmin)
 admin.site.register(Collection)
 admin.site.register(Accession, AccessionAdmin)
