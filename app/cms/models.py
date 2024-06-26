@@ -134,7 +134,7 @@ class FieldSlip(BaseModel):
 
     def __str__(self):
         return self.field_number
-
+        
 class Storage(BaseModel):
     area = models.CharField(max_length=255, blank=False, null=False)
     parent_area = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True)

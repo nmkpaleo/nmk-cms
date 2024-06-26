@@ -22,9 +22,7 @@ from cms.views import fieldslip_create, FieldSlipDetailView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    # path('accounts/', include('allauth.urls')),
-    path('fieldslip/new/', fieldslip_create, name='fieldslip-create'),
-    path('fieldslip/<int:pk>/', FieldSlipDetailView.as_view(), name='fieldslip-detail'),
+    path('', include('cms.urls')),
 ]
 
 if settings.DEBUG:

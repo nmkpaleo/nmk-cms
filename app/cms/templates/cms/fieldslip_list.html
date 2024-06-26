@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Field Slip List</title>
+</head>
+<body>
+    <h1>Field Slip List</h1>
+    <a href="{% url 'fieldslip-create' %}">Create New Field Slip</a>
+    <ul>
+        {% for fieldslip in fieldslips %}
+            <li>
+                <a href="{% url 'fieldslip-detail' fieldslip.pk %}">{{ fieldslip.field_number }}</a>
+            </li>
+        {% endfor %}
+    </ul>
+</body>
+</html>
