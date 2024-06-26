@@ -20,6 +20,7 @@ class LocalityAdmin(ImportExportModelAdmin):
     resource_class = LocalityResource
     list_display = ('abbreviation', 'name')
     search_fields = ('abbreviation', 'name')
+    ordering = ('abbreviation', 'name')
 
 class FieldSlipResource(resources.ModelResource):
     collection_date = fields.Field(
@@ -39,6 +40,8 @@ class FieldSlipAdmin(ImportExportModelAdmin):
     resource_class = FieldSlipResource
     list_display = ('field_number', 'discoverer', 'collector', 'collection_date', 'verbatim_locality')
     search_fields = ('field_number', 'discoverer', 'collector', 'verbatim_locality')
+    list_filter = ('verbatim_locality'),
+    ordering = ('field_number',)
 
 class StorageResource(resources.ModelResource):
     class Meta:
@@ -129,16 +132,16 @@ class CollectionResource(resources.ModelResource):
         skip_unchanged = True
         report_skipped = False
         import_id_fields = ('abbreviation',)
-        fields = ('abbreviation', 'name')
-        export_order = ('abbreviation', 'name')
+        fields = ('abbreviation', 'description')
+        export_order = ('abbreviation', 'description')
 
 class CollectionAdmin(ImportExportModelAdmin):
     resource_class = CollectionResource
-    list_display = ('abbreviation', 'name')
-    search_fields = ('abbreviation', 'name')
+    list_display = ('abbreviation', 'description')
+    search_fields = ('abbreviation', 'description')
 
 admin.site.register(Locality, LocalityAdmin)
-admin.site.register(Collection)
+admin.site.register(Collection, CollectionAdmin)
 admin.site.register(Accession, AccessionAdmin)
 admin.site.register(Subject)
 admin.site.register(Comment, CommentAdmin)
@@ -146,4 +149,3 @@ admin.site.register(FieldSlip, FieldSlipAdmin)
 admin.site.register(Storage, StorageAdmin)
 admin.site.unregister(User)
 admin.site.register(User, UserAdmin)
-
