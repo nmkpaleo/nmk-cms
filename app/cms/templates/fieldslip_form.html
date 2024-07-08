@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en-us">
+<head>
+    <title>Create Field Slip</title>
+    {% load static %}
+
+    {% block head %}
+    <!-- <link rel="stylesheet" type="text/css" href="../static/css/style.css">-->
+    <link rel="stylesheet" type="text/css" href="{% static 'css/style.css' %}">
+    <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+    {% endblock %}
+
+    {% load static %}
+</head>
+
+<body class="body_form">
+    <div class="form_container">
+        <div class="paper">
+   
+            <table class="fieldslip_table">
+                <caption class="fieldslip_caption">Field Slip Form</caption>
+
+                <form method="post" class="fieldslip_form">
+                    {% csrf_token %}
+
+                    <tr class="fieldslip_form_th">
+                        <th>Collection Information</th>
+                        <th>Coordinate Information</th>
+                        <th>Location  Information</th>
+                        <th>Taxonomic Information</th>
+                    </tr>
+                
+                    
+                    <tr>
+                        <td><label for="Field Number"> Field Number</label></td>
+                        <td> <label for="Verbatim Latitude">Verbatim Latitude</label></td>
+                        <td><label for="Verbatim Locality">Verbatim Locality</label> </td>
+                        <td><label for="Verbatim Taxon"> Verbatim Taxon</label> </td>
+                    </tr>
+                    <tr >
+                        <td> <input type="text" class="fieldslip_form_input" id="Field Number" name="Field Number" placeholder="Enter field number here"></td>
+                        <td> <input type="text" class="fieldslip_form_input" id="Verbatim Latitude" name="Verbatim Latitude" placeholder="Enter verbatim latitude here"></td>
+                        <td> <input type="text" class="fieldslip_form_input" id="Verbatim Locality" name="Verbatim Locality" placeholder="Enter verbatim locality here"></td>
+                        <td> <input type="text" class="fieldslip_form_input" id="Verbatim Taxon" name="Verbatim Taxon" placeholder="Enter verbatim taxon here"></td>
+                    </tr>
+
+                    <tr class="fieldslip_form_columns" >
+                        <td> <label for="Discoverer">Discoverer</label></td>
+                        <td> <label for="Verbatim Longitude">Verbatim Longitude</label></td>
+                        <td> <label for="Aerial Photo">Aerial Photo</label></td>
+                        <td> <label for="Verbatim Element">Verbatim Element</label></td>
+                    </tr>
+
+                    <tr >
+                        <td> <input type="text" class="fieldslip_form_input" id="Discoverer" name="Discoverer" placeholder="Enter discoverer name here"></td>
+                        <td> <input type="text" class="fieldslip_form_input" id="Verbatim Longitude" name="Verbatim Longitude" placeholder="Enter verbatim locality here"></td>
+                        <td> <input type="text" class="fieldslip_form_input" id="Aerial Photo" name="Aerial Photo" placeholder="Upload aerial photo here"></td>
+                        <td> <input type="text" class="fieldslip_form_input" id="Verbatim Element" name="Verbatim Element" placeholder="Enter verbatim element here"></td>
+                    </tr>
+
+                    <tr >
+                        <td><label for="Collector">Collector</label></td>
+                        <td> <label for="Verbatim Coordinate System">Verbatim Elevation</label></td>
+                        <td> <label for="Verbatim SRS"> Verbatim SRS</label></td>
+                        <td> <label for="Verbatim Horizon">Verbatim Horizon</label></td>
+                    </tr>
+
+                    <tr >
+                        <td> <input type="text" class="fieldslip_form_input" id="Collector" name="Collector" placeholder="Enter collector name here"></td>
+                        <td> <input type="text" class="fieldslip_form_input" id="Verbatim Elevation" name="Verbatim Elevation" placeholder="Enter verbatim elevation here"></td>
+                        <td> <input type="text" class="fieldslip_form_input" id="Verbatim SRS" name="Verbatim SRS" placeholder="Enter verbatim srs here"></td>
+                        <td> <input type="text" class="fieldslip_form_input" id="Verbatim Horizon" name="Verbatim Horizon" placeholder="Enter verbatim horizon here"></td>
+                    </tr>
+
+                    <tr >
+                        <td><label for="Collection Date"> Collection Date</label></td>
+                        <td> <label for="Verbatim Coordinate System">Verbatim Coordinate System</label></td>                    
+                        
+                    </tr>
+
+                    <tr >
+
+                        <td> <input type="text" class="fieldslip_form_input" id="Collection Date" name="Collection Date" placeholder="Enter Collection Date here"></td>
+    
+                        <td> <input type="text" class="fieldslip_form_input" id="Verbatim Coordinate System" name="Verbatim Coordinate System" placeholder="Enter verbatim coordinate systemhere"></td>
+                        
+                    </tr>
+
+                    <tr >
+                        <td>  <label for="Accession">Accession</label></td>
+                    </tr>
+
+                    
+                    <tr >
+
+                        <td> <input type="text" class="fieldslip_form_input" id="Accession" name="Accession"  placeholder="Enter accession number here"></td>
+                        <td></td>
+                        <td> <button type="submit" class="fieldslip_form_submit">Submit</button></td>
+                        
+                    </tr>
+
+                       
+
+                </form>
+
+            </table>
+        </div>
+    </div>  
+   
+</body>
+</html>

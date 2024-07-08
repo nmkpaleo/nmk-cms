@@ -2,6 +2,10 @@ from django.shortcuts import render, redirect
 from django.views.generic import DetailView
 from .models import FieldSlip
 from .forms import FieldSlipForm
+from .forms import FieldSlipForm
+
+def base_generic(request):
+    return render(request, 'base_generic.html')
 
 def fieldslip_create(request):
     if request.method == 'POST':
