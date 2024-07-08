@@ -22,11 +22,18 @@ from cms.views import fieldslip_create, FieldSlipDetailView, base_generic
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('', include('cms.urls')),
     # path('accounts/', include('allauth.urls')),
     path('', base_generic, name='base_generic'),
     path('fieldslip/new/', fieldslip_create, name='fieldslip-create'),
     path('fieldslip/<int:pk>/', FieldSlipDetailView.as_view(), name='fieldslip-detail'),
 ]
+#from cms.views import fieldslip_create, FieldSlipDetailView
+
+#urlpatterns = [
+    #path('admin/', admin.site.urls),
+    #path('', include('cms.urls')),
+#]
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
