@@ -38,10 +38,10 @@ class FieldSlipResource(resources.ModelResource):
 
 class FieldSlipAdmin(ImportExportModelAdmin):
     resource_class = FieldSlipResource
-    list_display = ('field_number', 'discoverer', 'collector', 'collection_date', 'verbatim_locality')
+    list_display = ('field_number', 'discoverer', 'collector', 'collection_date', 'verbatim_locality', 'verbatim_taxon', 'verbatim_element')
     search_fields = ('field_number', 'discoverer', 'collector', 'verbatim_locality')
     list_filter = ('verbatim_locality'),
-    ordering = ('field_number',)
+    ordering = ('verbatim_locality', 'field_number',)
 
 class StorageResource(resources.ModelResource):
     class Meta:
