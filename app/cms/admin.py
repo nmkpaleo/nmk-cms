@@ -34,7 +34,7 @@ class FieldSlipResource(resources.ModelResource):
         skip_unchanged = True
         report_skipped = False
         import_id_fields = ('field_number', 'verbatim_locality')
-        fields = ('field_number', 'discoverer', 'collector', 'collection_date', 'verbatim_locality', 'verbatim_taxon', 'verbatim_element', 'verbatim_horizon', 'aerial_photo', 'verbatim_latitude', 'verbatim_longitude', 'verbatim_SRS', 'verbatim_coordinate_system', 'verbatim_elevation')
+        fields = ('field_number', 'discoverer', 'collector', 'collection_date', 'verbatim_locality', 'verbatim_taxon', 'verbatim_element', 'verbatim_horizon', 'aerial_photo', 'verbatim_latitude', 'verbatim_longitude', 'verbatim_SRS', 'verbatim_coordinate_system', 'verbatim_elevation', 'verbatim_method')
 
 class FieldSlipAdmin(ImportExportModelAdmin):
     resource_class = FieldSlipResource
