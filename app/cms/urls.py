@@ -1,5 +1,6 @@
 from django.urls import path
-from .views import fieldslip_create, FieldSlipDetailView, FieldSlipListView
+from cms.views import fieldslip_create, FieldSlipDetailView,FieldSlipListView
+#from .views import fieldslip_create, FieldSlipDetailView, FieldSlipListView
 
 urlpatterns = [
     path('fieldslip/new/', fieldslip_create, name='fieldslip-create'),
