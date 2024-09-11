@@ -20,6 +20,7 @@ class LocalityAdmin(ImportExportModelAdmin):
     resource_class = LocalityResource
     list_display = ('abbreviation', 'name')
     search_fields = ('abbreviation', 'name')
+    ordering = ('abbreviation', 'name')
 
 class FieldSlipResource(resources.ModelResource):
     collection_date = fields.Field(
@@ -33,12 +34,14 @@ class FieldSlipResource(resources.ModelResource):
         skip_unchanged = True
         report_skipped = False
         import_id_fields = ('field_number', 'verbatim_locality')
-        fields = ('field_number', 'discoverer', 'collector', 'collection_date', 'verbatim_locality', 'verbatim_taxon', 'verbatim_element', 'verbatim_horizon', 'aerial_photo', 'verbatim_latitude', 'verbatim_longitude', 'verbatim_SRS', 'verbatim_coordinate_system', 'verbatim_elevation', 'accession')
+        fields = ('field_number', 'discoverer', 'collector', 'collection_date', 'verbatim_locality', 'verbatim_taxon', 'verbatim_element', 'verbatim_horizon', 'aerial_photo', 'verbatim_latitude', 'verbatim_longitude', 'verbatim_SRS', 'verbatim_coordinate_system', 'verbatim_elevation', 'verbatim_method')
 
 class FieldSlipAdmin(ImportExportModelAdmin):
     resource_class = FieldSlipResource
-    list_display = ('field_number', 'discoverer', 'collector', 'collection_date', 'verbatim_locality')
+    list_display = ('field_number', 'discoverer', 'collector', 'collection_date', 'verbatim_locality', 'verbatim_taxon', 'verbatim_element')
     search_fields = ('field_number', 'discoverer', 'collector', 'verbatim_locality')
+    list_filter = ('verbatim_locality'),
+    ordering = ('verbatim_locality', 'field_number',)
 
 class StorageResource(resources.ModelResource):
     class Meta:
@@ -123,8 +126,22 @@ class UserAdmin(ImportExportModelAdmin):
     list_display = ('username', 'first_name', 'last_name', 'email')
     search_fields = ('username', 'first_name', 'last_name', 'email')
 
+class CollectionResource(resources.ModelResource):
+    class Meta:
+        model = Collection
+        skip_unchanged = True
+        report_skipped = False
+        import_id_fields = ('abbreviation',)
+        fields = ('abbreviation', 'description')
+        export_order = ('abbreviation', 'description')
+
+class CollectionAdmin(ImportExportModelAdmin):
+    resource_class = CollectionResource
+    list_display = ('abbreviation', 'description')
+    search_fields = ('abbreviation', 'description')
+
 admin.site.register(Locality, LocalityAdmin)
-admin.site.register(Collection)
+admin.site.register(Collection, CollectionAdmin)
 admin.site.register(Accession, AccessionAdmin)
 admin.site.register(Subject)
 admin.site.register(Comment, CommentAdmin)
@@ -132,4 +149,3 @@ admin.site.register(FieldSlip, FieldSlipAdmin)
 admin.site.register(Storage, StorageAdmin)
 admin.site.unregister(User)
 admin.site.register(User, UserAdmin)
-
