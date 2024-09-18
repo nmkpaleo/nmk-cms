@@ -1,0 +1,30 @@
+{% extends "base_generic.html" %}
+
+
+
+{% block content %}
+<div class="hero_section_container">
+
+  <div>
+    <h1 class="hero_section_h1">Unlock the Past and <br> 
+      Discover the Stories</h1>
+    <p class="hero_section_p">
+      Explore our extensive digital archives, 
+      gain  <br> insights into historical artifacts, and access  <br> 
+      curated content designed to inspire learning <br> 
+      and discovery for all.
+    </p>
+
+    <button class="hero_section_button">Read more</button>
+  </div>
+  <div>
+    {% load static %}
+    <img 
+    src="{% static 'images/animal_skull.png' %}" 
+    class="hero_section_image" alt="animal skull">
+    
+  </div>
+
+</div>
+  
+{% endblock %}
