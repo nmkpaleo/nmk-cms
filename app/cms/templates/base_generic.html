@@ -1,55 +1,36 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
+  <head>
     {% block title %}
-        <title>NMK DATABASE</title>
+      <title>Local Library</title>
     {% endblock %}
-
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     
-    {% block head %}
-    <link rel="stylesheet" type="text/css" href="../static/css/style.css">
-    <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
-    {% endblock  %}
+    <!-- Add additional CSS in static file -->
     {% load static %}
+    <link rel="stylesheet" href="{% static 'css/style.css' %}" />
 
-</head>
+    
+    
+  </head>
+  <body>
+    <div class="container-fluid">
+      <div class="row">
+        <div class="main_navbar">
+          <a href=""><img src="{% static 'images/logo.jpg' %}" class="logo_image" alt="NMK LOGO"></a>
 
-<body class="home_background">
-    <nav>
-        <ul class="navbar">
-            <img src="../static/images/logo.jpg" alt="NMK LOGO"  class="nmk_logo">
-            <li><a href="#home">Home</a></li>
-            <li><a href="#services">Field Slips</a></li>
-            <li><a href="#about">Accession</a></li>
-            <li><a href="#contact">Contact</a></li>
-            
-        </ul>
-    </nav>
-    
-    <div class="home_h2">
-        <h2><b>Conserving<br> wildlife<span> data </span><br>forever</b></h2>
-    </div>
-    
-    <div class="home_paragraph">
-        <p>Protect the future of our planet by preserving <br>vital information on wildlife today.</p>
-        <button class="btnReadMore" onclick="openPopup()">Read more</button>
-    </div>
-    <div class="large-box">
-        <div class="small-box">
-            h
+          {% block sidebar %}
+            <ul class="sidebar-nav">
+              <li><a href="{% url 'index' %}" class="active">Home</a></li>
+              <li><a href="{% url 'fieldslip-list' %}">FieldSlips</a></li>
+              <li><a href="{% url 'accession-list' %}">Accession</a></li>
+              <li><a href="">Contact</a></li>
+            </ul>
+          {% endblock %}
         </div>
+        <div class="col-sm-10 ">{% block content %}{% endblock %}</div>
+      </div>
     </div>
-    
-
-
-
-
-<div class="main-content">
-    {% block content %}
-    {% endblock %}
-    
-</div>
-</body>
+  </body>
 </html>

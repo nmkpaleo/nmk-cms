@@ -1,189 +1,44 @@
-<!--<!DOCTYPE html>
-<html>
-<head>
-    <title>Field Slip Detail</title>
-    <style>
-        table {
-            width: 100%;
-            border-collapse: collapse;
+{% extends "base_generic.html" %}
 
+{% block content %}
+    
 
-        }
-        table{
-
-            border: 1px solid black;
-        }
-        th, td {
-            padding: 8px;
-            text-align: left;
-        }
-        caption {
-            font-size: 1.5em;
-            margin-bottom: 10px;
-        }
-    </style>
-</head>
-<body>
-    <table>
-        <caption><u><strong> Field Slip Detail</strong></u></caption>
-        <tr>
-            <th>Field Number</th>
-            <th>Discoverer</th>
-            <th>Collector</th>
-            <th>Collection Date</th>
-            <th>Verbatim Locality</th>
-            <th>Verbatim Taxon</th>   
-            <th>Verbatim Element</th>
-            <th>Verbatim Horizon</th>
-            <th>Aerial Photo</th>     
-            <th>Verbatim Latitude</th>    
-            <th>Verbatim Longitude</th>
-            <th>Verbatim SRS</th>
-            <th>Verbatim Coordinate System</th>
-            <th>Verbatim Elevation</th>
-            <th>Accession</th>
-        </tr>
-        <tr>
-            <td>{{ fieldslip.field_number }}</td>
-            <td>{{ fieldslip.discoverer }}</td>
-            <td>{{ fieldslip.collector }}</td>
-            <td>{{ fieldslip.collection_date }}</td>
-            <td>{{ fieldslip.verbatim_locality }}</td>
-            <td>{{ fieldslip.verbatim_taxon }}</td>          
-            <td>{{ fieldslip.verbatim_element }}</td>
-            <td>{{ fieldslip.verbatim_horizon }}</td>
-            <td>{{ fieldslip.aerial_photo }}</td> 
-            <td>{{ fieldslip.verbatim_latitude }}</td>
-            <td>{{ fieldslip.verbatim_longitude }}</td>
-            <td>{{ fieldslip.verbatim_SRS }}</td>
-            <td>{{ fieldslip.verbatim_coordinate_system }}</td>
-            <td>{{ fieldslip.verbatim_elevation }}</td>
-            <td>{{ fieldslip.accession }}</td>
-            <td>
-                <a href="edit_url">EDIT</a>
-            </td>
-            <td>
-                <a href="delete_url">DELETE</a>
-            </td>
-        </tr>
-
-            
-
-       
-        <tr>
-
-        </tr>
-    </table>
-</body>
-</html>-->
-
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Field Slip Detail</title>
-   
-        {% load static %}
-
-        {% block head %}
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" type="text/css" href="{% static 'css/style.css' %}">
-    <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.csss">
-    {% endblock %}
-
-    {% load static %}
-</head>
-<body>
-<<<<<<< Front-end-styling
-    <div class="fieldslip_detail_box">
-
-            <table  class ="w3-striped">
-                <caption class="fieldslip_detail_h3"><u>Field Slip Detail</u></caption>
-
-                <tr class="fieldslip_form_tr">
-                        <td>Field Number</td>
-                        <td>{{ fieldslip.field_number}}</td>
-                </tr>
-                <tr class="fieldslip_form_tr">
-                        <td>Discoverer</td>
-                        <td>{{ fieldslip.discoverer }}</td>
-                </tr>
-                <tr class="fieldslip_form_tr">
-                    <td>Collector</td>
-                    <td>{{ fieldslip.collector }}</td>
-                </tr>
-                <tr class="fieldslip_form_tr">
-                    <td>Collection Date</td>
-                    <td>{{ fieldslip.collection_date }}</td>
-                </tr>
-                <tr class="fieldslip_form_tr">
-                    <td>Verbatim Locality</td>
-                    <td>{{ fieldslip.verbatim_locality }}</td>
-                </tr>
-                <tr class="fieldslip_form_tr">
-                    <td>Verbatim Taxon</td>
-                    <td>{{ fieldslip.verbatim_taxon }}</td>
-                </tr>
-                <tr class="fieldslip_form_tr">
-                    <td>Verbatim Element</td>
-                    <td>{{ fieldslip.verbatim_element }}</td>
-                </tr>
-                <tr class="fieldslip_form_tr">
-                    <td>Verbatim Horizon</td>
-                    <td>{{ fieldslip.verbatim_horizon }}</td>
-                </tr>
-                <tr class="fieldslip_form_tr">
-                    <td>Aerial Photo</td>
-                    <td>{{ fieldslip.aerial_photo }}</td>
-                </tr>
-                <tr class="fieldslip_form_tr">
-                    <td>Verbatim Latitude</td>
-                    <td>{{ fieldslip.verbatim_latitude }}</td>
-                </tr>
-                <tr class="fieldslip_form_tr">
-                    <td>Verbatim Longitude</td>
-                    <td>{{ fieldslip.verbatim_longitude }}</td>
-                </tr>
-                <tr class="fieldslip_form_tr">
-                    <td>Verbatim SRS</td>
-                    <td>{{ fieldslip.verbatim_SRS }}</td>
-                </tr>
-                <tr class="fieldslip_form_tr">
-                    <td>Verbatim Coordinate System</td>
-                    <td>{{ fieldslip.verbatim_coordinate_system }}</td>
-                </tr>
-                <tr class="fieldslip_form_tr">
-                    <td>Verbatim Elevation</td>
-                    <td>{{ fieldslip.verbatim_elevation }}</td>
-                </tr>
-                <tr class="fieldslip_form_tr">
-                    <td>Accession</td>
-                    <td>{{ fieldslip.accession }}</td>
-                </tr>
-                <tr>
-                    <td colspan="2" style="text-align: center;">
-                        <a href="edit_url">EDIT</a> |
-                        <a href="delete_url">DELETE</a>
-                    </td>
-                </tr>
-            </table>
+        <div class="fieldslip_detail_container">
+            <h2 class="fieldslip_detail_h2">Field-Slip Detail</h2>
+            <div class="grid-container">
+                <!-- Field Number Card -->
+                <div class="card">
+                    <p><strong>Field number: </strong> <br> {{ fieldslip.field_number }}</p>
+                    <p><strong>Discoverer:</strong> <br> {{ fieldslip.discoverer }} </p>                   
+                    <p><strong>Collector:</strong> <br> {{ fieldslip.collector }}</p>
+                    <p><strong>Collection Date:</strong> <br> {{ fieldslip.collection_date }}</p>
+                    <p><strong>Verbatim locality:</strong> <br> {{ fieldslip.verbatim_locality }}</p>
+                </div>
+    
+                <!-- Verbatim Taxon Card -->
+                <div class="card">
+                    <p><strong>Verbatim Taxon:</strong> <br> {{ fieldslip.verbatim_taxon }}</p>
+                    <p><strong>Verbatim Element:</strong> <br> {{ fieldslip.verbatim_element }}</p>
+                    <p><strong>Verbatim Horizon:</strong> <br> {{ fieldslip.verbatim_horizon }}</p>
+                    <p><strong>Verbatim SRS:</strong> <br> {{ fieldslip.verbatim_SRS }}</p>
+                </div>
+    
+                <!-- Verbatim Latitude Card -->
+                <div class="card">
+                    <p><strong>Verbatim Latitude:</strong> <br> {{ fieldslip.verbatim_latitude }}</p>
+                    <p><strong>Verbatim Longitude:</strong> <br> {{ fieldslip.verbatim_longitude }}</p>
+                    <p><strong>Verbatim Elevation:</strong> <br> {{ fieldslip.verbatim_elevation }}</p>
+                    <p><strong>Verbatim Coordinate System:</strong> <br>  {{ fieldslip.verbatim_coordinate_system }}</p>
+                </div>
+    
+                <!-- Aerial Photo Card -->
+                <div class="card">
+                    <p><strong>Aerial Photo:</strong> <br>  {{ fieldslip.aerial_photo }}</p>
+                    
+                </div>
+            </div>
         </div>
-=======
-    <h1>Field Slip Detail</h1>
-    <p><strong>Field Number:</strong> {{ fieldslip.field_number }}</p>
-    <p><strong>Discoverer:</strong> {{ fieldslip.discoverer }}</p>
-    <p><strong>Collector:</strong> {{ fieldslip.collector }}</p>
-    <p><strong>Collection Date:</strong> {{ fieldslip.collection_date }}</p>
-    <p><strong>Verbatim Locality:</strong> {{ fieldslip.verbatim_locality }}</p>
-    <p><strong>Verbatim Taxon:</strong> {{ fieldslip.verbatim_taxon }}</p>
-    <p><strong>Verbatim Element:</strong> {{ fieldslip.verbatim_element }}</p>
-    <p><strong>Verbatim Horizon:</strong> {{ fieldslip.verbatim_horizon }}</p>
-    <p><strong>Aerial Photo:</strong> {{ fieldslip.aerial_photo }}</p>
-    <p><strong>Verbatim Latitude:</strong> {{ fieldslip.verbatim_latitude }}</p>
-    <p><strong>Verbatim Longitude:</strong> {{ fieldslip.verbatim_longitude }}</p>
-    <p><strong>Verbatim SRS:</strong> {{ fieldslip.verbatim_SRS }}</p>
-    <p><strong>Verbatim Coordinate System:</strong> {{ fieldslip.verbatim_coordinate_system }}</p>
-    <p><strong>Verbatim Elevation:</strong> {{ fieldslip.verbatim_elevation }}</p>
->>>>>>> main
-</body>
-</html>
+
+{% endblock %}
+
 
