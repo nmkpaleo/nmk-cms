@@ -121,19 +121,24 @@ class FieldSlip(BaseModel):
     verbatim_element = models.CharField(max_length=255, null=True, blank=True)
     verbatim_horizon = models.CharField(max_length=255, null=True, blank=True)
     verbatim_method = models.CharField(max_length=255, null=True, blank=True)
-    aerial_photo = models.CharField(max_length=255, null=True, blank=True)
+    
+        
+    # Replaced aerial_photo field with ImageField
+    aerial_photo = models.ImageField(upload_to='aerial_photos/', null=True, blank=True)
+
     verbatim_latitude = models.CharField(max_length=255, null=True, blank=True)
     verbatim_longitude = models.CharField(max_length=255, null=True, blank=True)
     verbatim_SRS = models.CharField(max_length=255, null=True, blank=True)
     verbatim_coordinate_system = models.CharField(max_length=255, null=True, blank=True)
     verbatim_elevation = models.CharField(max_length=255, null=True, blank=True)
+    
 
     def get_absolute_url(self):
         return reverse('fieldslip-detail', args=[str(self.id)])
 
     def __str__(self):
         return self.field_number
-        
+
 class Storage(BaseModel):
     area = models.CharField(max_length=255, blank=False, null=False)
     parent_area = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True)

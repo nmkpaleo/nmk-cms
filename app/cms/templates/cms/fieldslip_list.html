@@ -6,16 +6,15 @@
         <div class="container"></div>
             <h2 class="fieldslip_list_h2">Field-Slip List</h2>
             <div class="search-bar">
-                <input type="text" placeholder="Filter by Field Number, Collector, Collection Date or Discoverer">
+                <input type="text" id="searchInput" placeholder="Search by Field Number, Collector, Collection Date or Discoverer" onkeyup="searchFieldslips()"> 
                 
                 <div class="actions">
-                    <!--button class="add-new">ADD NEW</button-->
-                    <button><a href="{% url 'fieldslip-create' %}" >Create New Field Slip</a></button> 
-                    <button >Export</button>
-                    <button >Import</button>
+                    <button><a href="{% url 'fieldslip-create' %}">Create New Field Slip</a></button> 
+                    <button><a href="{% url 'fieldslip-export' %}">Export</a></button>
+                    <button><a href="{% url 'fieldslip-import' %}">Import</a></button>
+                
                     
                 </div>
-
             </div>
             <hr class="fieldslip_list_hr">
 
@@ -29,35 +28,62 @@
                         <th>Verbatim Taxon</th>
                         <th>Verbatim Element</th>
                         <th>Verbatim Horizon</th>
+                        <th>Aerial Photo</th>
                     </tr>
-                    
-
                 </thead>
 
                 <tbody id="fieldslip-list">
-                    <!-- Data rows go here -->
-
                     {% for fieldslip in fieldslips %}
-                    <tr >
+                    <tr>
                         <td><a href="{% url 'fieldslip-detail' fieldslip.pk %}">{{ fieldslip.field_number }}</a></td>
-                        
                         <td>{{ fieldslip.collector }}</td>
-                        <td> {{ fieldslip.collection_date }}</td>
-                        <td> {{ fieldslip.verbatim_locality }}</td>
-                        <td>  {{ fieldslip.verbatim_taxon }}</td>
-                        <td> {{ fieldslip.verbatim_element }}</td>
-                        <td> {{ fieldslip.verbatim_horizon }}</td>
-                        
+                        <td>{{ fieldslip.collection_date }}</td>
+                        <td>{{ fieldslip.verbatim_locality }}</td>
+                        <td>{{ fieldslip.verbatim_taxon }}</td>
+                        <td>{{ fieldslip.verbatim_element }}</td>
+                        <td>{{ fieldslip.verbatim_horizon }}</td>
+                        <td>
+                            {% if fieldslip.aerial_photo %}
+                                <img src="{{ fieldslip.aerial_photo.url }}" alt="Aerial Photo" style="max-width: 100px; height: auto;">
+                            {% else %}
+                                No photo
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{% url 'fieldslip-edit' fieldslip.pk %}" class="edit-icon">✏️</a>
+                        </td>
                     </tr>
-                    
-                    
                     {% endfor %}
                 </tbody>
             </table>
         </div>
-    
+
         <script src="script.js"></script>
+        <script>
+            function searchFieldslips() {
+                const input = document.getElementById('searchInput');
+                const filter = input.value.toLowerCase();
+                const table = document.getElementById('fieldslip-list');
+                const rows = table.getElementsByTagName('tr');
+
+                for (let i = 0; i < rows.length; i++) {
+                    const cells = rows[i].getElementsByTagName('td');
+                    let found = false;
+
+                    for (let j = 0; j < cells.length; j++) {
+                        if (cells[j]) {
+                            const textValue = cells[j].textContent || cells[j].innerText;
+                            if (textValue.toLowerCase().indexOf(filter) > -1) {
+                                found = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    rows[i].style.display = found ? "" : "none";
+                }
+            }
+        </script>
     </div>
-        
 
 {% endblock %}

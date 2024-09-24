@@ -1,0 +1,11 @@
+{% extends "base_generic.html" %}
+
+{% block content %}
+<h2>Import Field Slips</h2>
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <label for="import_file">Select CSV file:</label>
+    <input type="file" name="import_file" id="import_file" required>
+    <button type="submit">Import</button>
+</form>
+{% endblock %}

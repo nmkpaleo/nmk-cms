@@ -4,7 +4,11 @@
     
 
         <div class="fieldslip_detail_container">
-            <h2 class="fieldslip_detail_h2">Field-Slip Detail</h2>
+            <h2 class="fieldslip_detail_h2">Field-Slip Detail
+                <a href="{% url 'fieldslip-edit' fieldslip.pk %}" class="edit-icon">
+                    ✏️
+                </a>
+            </h2>
             <div class="grid-container">
                 <!-- Field Number Card -->
                 <div class="card">
@@ -33,8 +37,13 @@
     
                 <!-- Aerial Photo Card -->
                 <div class="card">
-                    <p><strong>Aerial Photo:</strong> <br>  {{ fieldslip.aerial_photo }}</p>
-                    
+                    <p><strong>Aerial Photo:</strong> <br>
+                    {% if fieldslip.aerial_photo %}
+                        <img src="{{ fieldslip.aerial_photo.url }}" alt="Aerial Photo" width="300">
+                    {% else %}
+                        No aerial photo uploaded.
+                    {% endif %}
+                    </p>
                 </div>
             </div>
         </div>

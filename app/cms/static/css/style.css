@@ -291,6 +291,14 @@ tbody td button {
         grid-template-columns: 1fr;
     }
 }
+.edit-icon {
+    font-size: O.5em; /*  size */
+    color: #007BFF;   /* Color of the icon */
+    text-decoration: none;
+}
+.edit-icon:hover {
+    color: #0056b3; /* Darker shade on hover */
+}
 
 /*
 .home_background{
