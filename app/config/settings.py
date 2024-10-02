@@ -87,11 +87,15 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = "config.urls"
+LOGIN_REDIRECT_URL = '/'
+
 
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+#        "DIRS": [],
+        "DIRS": [os.path.join(BASE_DIR, 'templates')],  # Ensure this points to your custom template folder
+
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -193,3 +197,6 @@ MEDIA_ROOT = get_var("MEDIA_ROOT", os.path.join(BASE_DIR, "media"))
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000
+
+# Email configuration
+EMAIL_BACKEND = get_var("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
