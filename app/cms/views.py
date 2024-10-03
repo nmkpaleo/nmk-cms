@@ -77,6 +77,7 @@ class FieldSlipListView(ListView):
     model = FieldSlip
     template_name = 'cms/fieldslip_list.html'
     context_object_name = 'fieldslips'
+    paginate_by = 3
 
 class AccessionDetailView(DetailView):
     model = Accession
@@ -87,3 +88,4 @@ class AccessionListView(ListView):
     model = Accession
     template_name = 'cms/accession_list.html'
     context_object_name = 'accessions'
+    paginate_by = 10
