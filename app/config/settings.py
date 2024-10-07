@@ -67,10 +67,10 @@ INSTALLED_APPS = [
     "cms",
     'django_userforeignkey',
     'import_export' ,
-    #    'allauth',
-    #    'allauth.account',
-    #    'allauth.socialaccount',
-    #    'allauth.socialaccount.providers.orcid',
+    'allauth',
+    'allauth.account',
+    'allauth.socialaccount',
+    'allauth.socialaccount.providers.orcid',
 ]
 
 SITE_ID = 1
@@ -83,14 +83,19 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "allauth.account.middleware.AccountMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
+LOGIN_REDIRECT_URL = '/'
+
 
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+#        "DIRS": [],
+        "DIRS": [os.path.join(BASE_DIR, 'templates')],  # Ensure this points to your custom template folder
+
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -107,22 +112,22 @@ TEMPLATES = [
 # ORCID Allauth Settings
 # https://django-allauth.readthedocs.io/en/latest/installation.html
 
-# AUTHENTICATION_BACKENDS = [
-#     'django.contrib.auth.backends.ModelBackend',
-#     'allauth.account.auth_backends.AuthenticationBackend',
-# ]
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',
+    'allauth.account.auth_backends.AuthenticationBackend',
+]
 
-# SOCIALACCOUNT_PROVIDERS = {
-#     'orcid': {
-#         'BASE_DOMAIN': 'orcid.org',
-#         'MEMBER_API': False,
-#         'APP': {
-#             'client_id': get_var("ORCID_CLIENT_ID", ''),
-#             'secret': get_var("ORCID_SECRET", ''),
-#             'key': '',
-#         }
-#     }
-# }
+SOCIALACCOUNT_PROVIDERS = {
+    'orcid': {
+        'BASE_DOMAIN': 'orcid.org',
+        'MEMBER_API': False,
+        'APP': {
+            'client_id': get_var("ORCID_CLIENT_ID", ''),
+            'secret': get_var("ORCID_SECRET", ''),
+            'key': '',
+        }
+    }
+}
 
 
 WSGI_APPLICATION = "config.wsgi.application"
@@ -192,3 +197,6 @@ MEDIA_ROOT = get_var("MEDIA_ROOT", os.path.join(BASE_DIR, "media"))
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000
+
+# Email configuration
+EMAIL_BACKEND = get_var("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
