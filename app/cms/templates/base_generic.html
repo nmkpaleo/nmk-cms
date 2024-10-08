@@ -26,6 +26,17 @@
               <li><a href="{% url 'fieldslip-list' %}">FieldSlips</a></li>
               <li><a href="{% url 'accession-list' %}">Accession</a></li>
               <li><a href="">Contact</a></li>
+              {% if user.is_authenticated %}
+                <li>User: {{ user.get_username }}</li>
+                <li>
+                  <form id="logout-form" method="post" action="{% url 'account_logout' %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-link">Logout</button>
+                  </form>
+                </li>
+              {% else %}
+                <li><a href="{% url 'account_login' %}?next={{ request.path }}">Login</a></li>
+              {% endif %}
             </ul>
           {% endblock %}
         </div>
