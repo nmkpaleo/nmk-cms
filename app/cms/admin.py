@@ -4,7 +4,8 @@ from import_export import resources, fields
 from import_export.fields import Field
 from import_export.widgets import ForeignKeyWidget
 
-from .models import Locality, Collection, Accession, Subject, Comment, FieldSlip, Storage, User
+from .models import AccessionReference, Locality, Collection, Accession, Subject, Comment, FieldSlip, Reference, Storage, User
+
 from import_export.widgets import DateWidget
 
 class LocalityResource(resources.ModelResource):
@@ -91,12 +92,19 @@ class AccessionResource(resources.ModelResource):
         fields = ('id', 'collection', 'specimen_prefix', 'specimen_no', 'accessioned_by', 'accession')
         export_order = ('accession', 'collection', 'specimen_prefix', 'specimen_no', 'accessioned_by', 'id')
 
+class AccessionReferenceInline(admin.TabularInline):
+    model = AccessionReference
+    extra = 0
+
 class AccessionAdmin(ImportExportModelAdmin):
     resource_class = AccessionResource
     list_display = ('collection__abbreviation', 'specimen_prefix__abbreviation', 'specimen_no', 'accessioned_by')
     list_filter = ('collection', 'specimen_prefix', 'accessioned_by')
     search_fields = ('specimen_no', 'collection__abbreviation', 'specimen_prefix__abbreviation', 'accessioned_by__username')
     ordering = ('specimen_no', 'specimen_prefix__abbreviation')
+
+    inlines = [AccessionReferenceInline]
+
     def collection__abbreviation(self, obj):
         return obj.collection.abbreviation
 
@@ -106,6 +114,7 @@ class AccessionAdmin(ImportExportModelAdmin):
         return obj.specimen_prefix.abbreviation
 
     specimen_prefix__abbreviation.short_description = 'Specimen Prefix'
+    
 
 class CommentAdmin(admin.ModelAdmin):
     list_display = ('specimen_no', 'comment', 'status', 'subject')
@@ -140,12 +149,54 @@ class CollectionAdmin(ImportExportModelAdmin):
     list_display = ('abbreviation', 'description')
     search_fields = ('abbreviation', 'description')
 
+class ReferenceResource(resources.ModelResource):
+    class Meta:
+        model = Reference
+        skip_unchanged = True
+        report_skipped = False
+        import_id_fields = ('first_author', 'year', 'title',)
+        fields = ('first_author', 'year', 'title', 'journal', 'volume', 'issue', 'pages', 'doi', 'citation')
+        export_order = (('first_author', 'year', 'title', 'journal', 'volume', 'issue', 'pages', 'doi', 'citation'))
+
+class ReferenceAdmin(ImportExportModelAdmin):
+    resource_class = ReferenceResource
+    list_display = ('first_author', 'year', 'title', 'journal', 'volume', 'issue', 'pages', 'citation')
+    search_fields = ('first_author', 'year', 'title', 'journal', 'volume', 'issue', 'pages', 'citation')
+
+class AccessionReferenceResource(resources.ModelResource):
+    accession = fields.Field(
+        column_name='accession',
+        attribute='accession',
+        widget=ForeignKeyWidget(Accession, 'id')
+    )
+
+    reference = fields.Field(
+        column_name='reference',
+        attribute='reference',
+        widget=ForeignKeyWidget(Reference, 'id')
+    )
+
+    class Meta:
+        model = AccessionReference
+        skip_unchanged = True
+        report_skipped = False
+        import_id_fields = ('accession', 'reference')
+        fields = ('accession', 'reference', 'page')
+        export_order = ('accession', 'reference', 'page')
+
+class AccessionReferenceAdmin(ImportExportModelAdmin):
+    resource_class = AccessionReferenceResource
+    list_display = ('accession', 'reference', 'page')
+    search_fields = ('accession', 'reference', 'page')
+
+admin.site.register(AccessionReference, AccessionReferenceAdmin)
 admin.site.register(Locality, LocalityAdmin)
 admin.site.register(Collection, CollectionAdmin)
 admin.site.register(Accession, AccessionAdmin)
 admin.site.register(Subject)
 admin.site.register(Comment, CommentAdmin)
 admin.site.register(FieldSlip, FieldSlipAdmin)
+admin.site.register(Reference, ReferenceAdmin)
 admin.site.register(Storage, StorageAdmin)
 admin.site.unregister(User)
 admin.site.register(User, UserAdmin)

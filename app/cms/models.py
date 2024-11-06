@@ -152,10 +152,10 @@ class Storage(BaseModel):
 class Reference(BaseModel):
     title = models.CharField(max_length=255, blank=False, null=False)
     first_author = models.CharField(max_length=255, blank=False, null=False)
-    year = models.CharField(max_length=4, blank=False, null=False)
+    year = models.PositiveIntegerField(blank=False, null=False)
     journal = models.CharField(max_length=255, blank=True, null=True)
-    volume = models.CharField(max_length=10, blank=True, null=True)
-    issue = models.CharField(max_length=10, blank=True, null=True)
+    volume = models.PositiveIntegerField(blank=True, null=True)
+    issue = models.PositiveIntegerField(blank=True, null=True)
     pages = models.CharField(max_length=10, blank=True, null=True)
     doi = models.CharField(max_length=255, blank=True, null=True)
     citation = models.TextField(blank=False, null=False)
