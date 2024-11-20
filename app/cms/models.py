@@ -148,3 +148,34 @@ class Storage(BaseModel):
 
     def __str__(self):
         return self.area
+
+class Reference(BaseModel):
+    title = models.CharField(max_length=255, blank=False, null=False)
+    first_author = models.CharField(max_length=255, blank=False, null=False)
+    year = models.PositiveIntegerField(blank=False, null=False)
+    journal = models.CharField(max_length=255, blank=True, null=True)
+    volume = models.PositiveIntegerField(blank=True, null=True)
+    issue = models.PositiveIntegerField(blank=True, null=True)
+    pages = models.CharField(max_length=10, blank=True, null=True)
+    doi = models.CharField(max_length=255, blank=True, null=True)
+    citation = models.TextField(blank=False, null=False)
+
+    def get_absolute_url(self):
+        return reverse('reference-detail', args=[str(self.id)])
+
+    def __str__(self):
+        return self.citation
+    
+class AccessionReference(BaseModel):
+    accession = models.ForeignKey(Accession, on_delete=models.CASCADE)
+    reference = models.ForeignKey(Reference, on_delete=models.CASCADE)
+    page = models.CharField(max_length=10, blank=True, null=True)
+
+    class Meta:
+        unique_together = ('accession', 'reference')
+
+    def get_absolute_url(self):
+        return reverse('accessionreference-detail', args=[str(self.id)])
+
+    def __str__(self):
+        return f"{self.accession} - {self.reference}"
