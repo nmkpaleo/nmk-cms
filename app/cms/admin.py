@@ -44,7 +44,7 @@ class FieldSlipAdmin(ImportExportModelAdmin):
     list_display = ('field_number', 'discoverer', 'collector', 'collection_date', 'verbatim_locality', 'verbatim_taxon', 'verbatim_element')
     search_fields = ('field_number', 'discoverer', 'collector', 'verbatim_locality')
     list_filter = ('verbatim_locality',)
-    ordering = ('verbatim_locality', 'field_number',)
+    ordering = ('verbatim_locality', 'field_number')
 
 
 # Storage Model
@@ -215,7 +215,6 @@ class PersonAdmin(ImportExportModelAdmin):
     resource_class = PersonResource
     list_display = ('first_name', 'last_name', 'orcid')
     search_fields = ('first_name', 'last_name', 'orcid')
-    ordering = ('last_name', 'first_name')
 
 
 # Identification Model
@@ -230,61 +229,46 @@ class IdentificationResource(resources.ModelResource):
         attribute='identified_by',
         widget=ForeignKeyWidget(Person, 'id')
     )
-    taxon = fields.Field(
-        column_name='taxon',
-        attribute='taxon',
-        widget=ForeignKeyWidget(Taxon, 'id')
-    )
-    reference = fields.Field(
-        column_name='reference',
-        attribute='reference',
-        widget=ForeignKeyWidget(Reference, 'id')
-    )
 
     class Meta:
         model = Identification
         skip_unchanged = True
         report_skipped = False
-        import_id_fields = ('accession_row', 'identified_by', 'taxon',)
-        fields = ('accession_row', 'identified_by', 'taxon', 'reference', 'date_identified', 'identification_qualifier', 'verbatim_identification', 'identification_remarks')
-        export_order = ('accession_row', 'identified_by', 'taxon', 'reference', 'date_identified', 'identification_qualifier', 'verbatim_identification', 'identification_remarks')
+        import_id_fields = ('accession_row', 'identified_by',)
+        fields = ('accession_row', 'identified_by', 'date_identified', )
+        export_order = ('accession_row', 'identified_by', 'date_identified', )
 
 class IdentificationAdmin(ImportExportModelAdmin):
     resource_class = IdentificationResource
-    list_display = ('accession_row', 'identified_by', 'taxon', 'date_identified', 'identification_qualifier')
-    search_fields = ('accession_row__id', 'identified_by__first_name', 'identified_by__last_name', 'taxon__genus', 'taxon__species')
-    ordering = ('accession_row', 'identified_by')
+    list_display = ('accession_row', 'identified_by', 'date_identified', )
+    search_fields = ('accession_row__specimen_no', 'identified_by__first_name', 'identified_by__last_name')
+    list_filter = ('date_identified',)
+    ordering = ('accession_row', 'date_identified')
 
 
 # Taxon Model
-class TaxonResource(resources.ModelResource):
-    class Meta:
-        model = Taxon
-        skip_unchanged = True
-        report_skipped = False
-        import_id_fields = ('genus', 'species',)
-        fields = ('taxon_rank', 'kingdom', 'phylum', 'class_name', 'order', 'superfamily', 'family', 'subfamily', 'tribe', 'genus', 'species', 'infraspecific_epithet', 'scientific_name_authorship')
-        export_order = ('taxon_rank', 'kingdom', 'phylum', 'class_name', 'order', 'superfamily', 'family', 'subfamily', 'tribe', 'genus', 'species', 'infraspecific_epithet', 'scientific_name_authorship')
+class TaxonAdmin(admin.ModelAdmin):
+    list_display = ('name', 'family', 'subfamily', 'tribe', 'genus', 'species', 'subspecies')
+    
+    def name(self, obj):
+        return str(obj)  # Calls __str__ method of the Taxon model
+    name.short_description = 'Taxon Name'
 
-class TaxonAdmin(ImportExportModelAdmin):
-    resource_class = TaxonResource
-    list_display = ('genus', 'species', 'kingdom', 'phylum', 'class_name', 'order', 'family')
-    search_fields = ('genus', 'species', 'family')
-    ordering = ('genus', 'species')
+    def subspecies(self, obj):
+        return obj.infraspecific_epithet if obj.infraspecific_epithet else "No subspecies"
+    subspecies.short_description = 'Subspecies'
 
-
-# Register models
-admin.site.register(Locality, LocalityAdmin)
-admin.site.register(Collection, CollectionAdmin)
-admin.site.register(Accession, AccessionAdmin)
-admin.site.register(Subject)
-admin.site.register(Comment, CommentAdmin)
-admin.site.register(FieldSlip, FieldSlipAdmin)
-admin.site.register(Storage, StorageAdmin)
-admin.site.unregister(User)
-admin.site.register(User, UserAdmin)
-admin.site.register(NatureOfSpecimen, NatureOfSpecimenAdmin)
-admin.site.register(Element, ElementAdmin)
-admin.site.register(Person, PersonAdmin)
-admin.site.register(Identification, IdentificationAdmin)
 admin.site.register(Taxon, TaxonAdmin)
+admin.site.register(Identification, IdentificationAdmin)
+admin.site.register(Person, PersonAdmin)
+admin.site.register(Element, ElementAdmin)
+admin.site.register(NatureOfSpecimen, NatureOfSpecimenAdmin)
+admin.site.register(Collection, CollectionAdmin)
+admin.site.register(Storage, StorageAdmin)
+admin.site.register(Accession, AccessionAdmin)
+admin.site.register(FieldSlip, FieldSlipAdmin)
+admin.site.register(Locality, LocalityAdmin)
+admin.site.register(Comment, CommentAdmin)
+admin.site.unregister(User)
+
+admin.site.register(User, UserAdmin)
