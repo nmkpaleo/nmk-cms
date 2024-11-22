@@ -266,18 +266,19 @@ class Identification(BaseModel):
 # Taxon Model
 class Taxon(BaseModel):
     taxon_rank = models.CharField(max_length=50)
+    taxon_name = models.CharField(max_length=50)
     kingdom = models.CharField(max_length=255)
     phylum = models.CharField(max_length=255)
     class_name = models.CharField(max_length=255)
     order = models.CharField(max_length=255)
-    superfamily = models.CharField(max_length=255)
+    superfamily = models.CharField(max_length=255, null=True, blank=True)
     family = models.CharField(max_length=255)
-    subfamily = models.CharField(max_length=255)
-    tribe = models.CharField(max_length=255)
+    subfamily = models.CharField(max_length=255, null=True, blank=True)
+    tribe = models.CharField(max_length=255, null=True, blank=True)
     genus = models.CharField(max_length=255)
     species = models.CharField(max_length=255)
-    infraspecific_epithet = models.CharField(max_length=255)
-    scientific_name_authorship = models.CharField(max_length=255)
+    infraspecific_epithet = models.CharField(max_length=255, null=True, blank=True)
+    scientific_name_authorship = models.CharField(max_length=255, null=True, blank=True)
 
     def get_absolute_url(self):
         return reverse('taxon-detail', args=[str(self.id)])
