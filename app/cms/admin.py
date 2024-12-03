@@ -2,201 +2,157 @@ from django.contrib import admin
 from import_export.admin import ImportExportModelAdmin
 from import_export import resources, fields
 from import_export.fields import Field
-from import_export.widgets import ForeignKeyWidget
+from import_export.widgets import ForeignKeyWidget, DateWidget
+from .models import (
+    NatureOfSpecimen, Element, Person, Identification, Taxon,
+    AccessionReference, Locality, Collection, Accession, AccessionRow, Subject, Comment, FieldSlip, Reference, Storage, User
+)
+from .resources import *
+import logging
 
-from .models import AccessionReference, Locality, Collection, Accession, Subject, Comment, FieldSlip, Reference, Storage, User
+# Configure the logger
+logging.basicConfig(level=logging.INFO)  # You can adjust the level as needed (DEBUG, WARNING, ERROR, etc.)
+logger = logging.getLogger(__name__)  # Creates a logger specific to the current module
 
-from import_export.widgets import DateWidget
-
-class LocalityResource(resources.ModelResource):
-    class Meta:
-        model = Locality
-        skip_unchanged = True
-        report_skipped = False
-        import_id_fields = ('abbreviation',)
-        fields = ('name', 'abbreviation')
-        export_order = ('abbreviation', 'name')
-
+# Locality Model
 class LocalityAdmin(ImportExportModelAdmin):
     resource_class = LocalityResource
     list_display = ('abbreviation', 'name')
     search_fields = ('abbreviation', 'name')
     ordering = ('abbreviation', 'name')
 
-class FieldSlipResource(resources.ModelResource):
-    collection_date = fields.Field(
-        column_name='collection_date',
-        attribute='collection_date',
-        widget=DateWidget(format='%d/%m/%Y')
-    )
-
-    class Meta:
-        model = FieldSlip
-        skip_unchanged = True
-        report_skipped = False
-        import_id_fields = ('field_number', 'verbatim_locality')
-        fields = ('field_number', 'discoverer', 'collector', 'collection_date', 'verbatim_locality', 'verbatim_taxon', 'verbatim_element', 'verbatim_horizon', 'aerial_photo', 'verbatim_latitude', 'verbatim_longitude', 'verbatim_SRS', 'verbatim_coordinate_system', 'verbatim_elevation', 'verbatim_method')
-
+# FieldSlip Model
 class FieldSlipAdmin(ImportExportModelAdmin):
     resource_class = FieldSlipResource
     list_display = ('field_number', 'discoverer', 'collector', 'collection_date', 'verbatim_locality', 'verbatim_taxon', 'verbatim_element')
     search_fields = ('field_number', 'discoverer', 'collector', 'verbatim_locality')
-    list_filter = ('verbatim_locality'),
-    ordering = ('verbatim_locality', 'field_number',)
+    list_filter = ('verbatim_locality',)
+    ordering = ('verbatim_locality', 'field_number')
 
-class StorageResource(resources.ModelResource):
-    class Meta:
-        model = Storage
-        skip_unchanged = True
-        report_skipped = False
-        import_id_fields = ('area',)
-        fields = ('area', 'parent_area')
 
+# Storage Model
 class StorageAdmin(ImportExportModelAdmin):
     resource_class = StorageResource
     list_display = ('area', 'parent_area')
     search_fields = ('area', 'parent_area__area')
 
-class AccessionResource(resources.ModelResource):
-
-    accession = fields.Field()
-    collection = fields.Field(
-        column_name='collection',
-        attribute='collection',
-        widget=ForeignKeyWidget(Collection, 'abbreviation')
-    )
-
-    specimen_prefix = fields.Field(
-        column_name='specimen_prefix',
-        attribute='specimen_prefix',
-        widget=ForeignKeyWidget(Locality, 'abbreviation')
-    )
-
-    accessioned_by = fields.Field(
-        column_name='accessioned_by',
-        attribute='accessioned_by',
-        widget=ForeignKeyWidget(User, 'username')
-    )
-
-    def dehydrate_accession(self, accession):
-        museum = getattr(accession.collection, "abbreviation", "unknown")
-        specimen_prefix = getattr(accession.specimen_prefix, "abbreviation", "unknown")
-        specimen_no = getattr(accession, "specimen_no", "unknown")
-        return '%s-%s %s' % (museum, specimen_prefix, specimen_no)
-    
-    class Meta:
-        model = Accession
-        skip_unchanged = True
-        report_skipped = False
-        import_id_fields = ('collection', 'specimen_prefix', 'specimen_no',)
-        fields = ('id', 'collection', 'specimen_prefix', 'specimen_no', 'accessioned_by', 'accession')
-        export_order = ('accession', 'collection', 'specimen_prefix', 'specimen_no', 'accessioned_by', 'id')
-
-class AccessionReferenceInline(admin.TabularInline):
-    model = AccessionReference
-    extra = 0
-
+# Accession Model
 class AccessionAdmin(ImportExportModelAdmin):
     resource_class = AccessionResource
-    list_display = ('collection__abbreviation', 'specimen_prefix__abbreviation', 'specimen_no', 'accessioned_by')
+    list_display = ('collection_abbreviation', 'specimen_prefix_abbreviation', 'specimen_no', 'accessioned_by')
     list_filter = ('collection', 'specimen_prefix', 'accessioned_by')
     search_fields = ('specimen_no', 'collection__abbreviation', 'specimen_prefix__abbreviation', 'accessioned_by__username')
     ordering = ('specimen_no', 'specimen_prefix__abbreviation')
 
-    inlines = [AccessionReferenceInline]
+    def collection_abbreviation(self, obj):
+        return obj.collection.abbreviation if obj.collection else None
+    collection_abbreviation.short_description = 'Collection'
 
-    def collection__abbreviation(self, obj):
-        return obj.collection.abbreviation
+    def specimen_prefix_abbreviation(self, obj):
+        return obj.specimen_prefix.abbreviation if obj.specimen_prefix else None
+    specimen_prefix_abbreviation.short_description = 'Specimen Prefix'
 
-    collection__abbreviation.short_description = 'Collection'
+class AccessionRowAdmin(ImportExportModelAdmin):
+    resource_class = AccessionRowResource
+    list_display = ('collection_abbreviation', 'specimen_prefix_abbreviation', 'specimen_number', 'specimen_suffix', 'storage')
+    search_fields = ('accession__specimen_no', 'specimen_suffix', 'storage__area',)
+    ordering = ('accession__collection__abbreviation', 'accession__specimen_prefix__abbreviation', 'accession__specimen_no', 'specimen_suffix',)
 
-    def specimen_prefix__abbreviation(self, obj):
-        return obj.specimen_prefix.abbreviation
+    def collection_abbreviation(self, obj):
+        return obj.accession.collection.abbreviation if obj.accession.collection else None
+    collection_abbreviation.short_description = 'Collection'
 
-    specimen_prefix__abbreviation.short_description = 'Specimen Prefix'
-    
+    def specimen_prefix_abbreviation(self, obj):
+        return obj.accession.specimen_prefix.abbreviation if obj.accession.specimen_prefix else None
+    specimen_prefix_abbreviation.short_description = 'Specimen Prefix'
 
+    def specimen_number(self, obj):
+        return obj.accession.specimen_no if obj.accession.specimen_no else None
+    specimen_number.short_description = 'Specimen Number'
+
+# Comment Model
 class CommentAdmin(admin.ModelAdmin):
     list_display = ('specimen_no', 'comment', 'status', 'subject')
     search_fields = ('comment', 'comment_by')
     list_filter = ('status', 'subject', 'comment_by')
 
-class UserResource(resources.ModelResource):
-    class Meta:
-        model = User
-        skip_unchanged = True
-        report_skipped = False
-        import_id_fields = ('username',)
-        fields = ('id', 'username', 'first_name', 'last_name', 'email', 'is_active', 'is_staff', 'is_superuser', 'last_login', 'date_joined')
-        export_order = ('id', 'username', 'first_name', 'last_name', 'email', 'is_active', 'is_staff', 'is_superuser', 'last_login', 'date_joined')
 
+# User Model
 class UserAdmin(ImportExportModelAdmin):
     resource_class = UserResource
     list_display = ('username', 'first_name', 'last_name', 'email')
     search_fields = ('username', 'first_name', 'last_name', 'email')
 
-class CollectionResource(resources.ModelResource):
-    class Meta:
-        model = Collection
-        skip_unchanged = True
-        report_skipped = False
-        import_id_fields = ('abbreviation',)
-        fields = ('abbreviation', 'description')
-        export_order = ('abbreviation', 'description')
 
+# Collection Model
 class CollectionAdmin(ImportExportModelAdmin):
     resource_class = CollectionResource
     list_display = ('abbreviation', 'description')
     search_fields = ('abbreviation', 'description')
 
-class ReferenceResource(resources.ModelResource):
-    class Meta:
-        model = Reference
-        skip_unchanged = True
-        report_skipped = False
-        import_id_fields = ('first_author', 'year', 'title',)
-        fields = ('first_author', 'year', 'title', 'journal', 'volume', 'issue', 'pages', 'doi', 'citation')
-        export_order = (('first_author', 'year', 'title', 'journal', 'volume', 'issue', 'pages', 'doi', 'citation'))
 
-class ReferenceAdmin(ImportExportModelAdmin):
-    resource_class = ReferenceResource
-    list_display = ('first_author', 'year', 'title', 'journal', 'volume', 'issue', 'pages', 'citation')
-    search_fields = ('first_author', 'year', 'title', 'journal', 'volume', 'issue', 'pages', 'citation')
+# NatureOfSpecimen Model
+class NatureOfSpecimenAdmin(ImportExportModelAdmin):
+    resource_class = NatureOfSpecimenResource
+    list_display = ('accession_row', 'element', 'side', 'condition', 'fragments')
+    search_fields = ('accession_row__id', 'element__name', 'side', 'condition')
+    ordering = ('accession_row', 'element')
 
-class AccessionReferenceResource(resources.ModelResource):
-    accession = fields.Field(
-        column_name='accession',
-        attribute='accession',
-        widget=ForeignKeyWidget(Accession, 'id')
-    )
+# Element Model
+class ElementAdmin(ImportExportModelAdmin):
+    resource_class = ElementResource
+    list_display = ('parent_element', 'name')
+    list_filter = ('parent_element__name',)
+    search_fields = ('name', 'parent_element__name')
+#    filter_fields = ('parent_element__name')
+    ordering = ('name',)
 
-    reference = fields.Field(
-        column_name='reference',
-        attribute='reference',
-        widget=ForeignKeyWidget(Reference, 'id')
-    )
+# Person Model
+class PersonAdmin(ImportExportModelAdmin):
+    resource_class = PersonResource
+    list_display = ('first_name', 'last_name', 'orcid')
+    search_fields = ('first_name', 'last_name', 'orcid')
 
-    class Meta:
-        model = AccessionReference
-        skip_unchanged = True
-        report_skipped = False
-        import_id_fields = ('accession', 'reference')
-        fields = ('accession', 'reference', 'page')
-        export_order = ('accession', 'reference', 'page')
+# Identification Model
+class IdentificationAdmin(ImportExportModelAdmin):
+    resource_class = IdentificationResource
+    list_display = ('accession_row', 'identification_qualifier', 'verbatim_identification', 'taxon', 'identified_by', 'date_identified', )
+    search_fields = ('accession_row__accession__specimen_no', 'verbatim_identification', 'taxon__taxon_name', 'identified_by__last_name')
+    list_filter = ('date_identified',)
+    ordering = ('accession_row', 'date_identified')
 
-class AccessionReferenceAdmin(ImportExportModelAdmin):
-    resource_class = AccessionReferenceResource
-    list_display = ('accession', 'reference', 'page')
-    search_fields = ('accession', 'reference', 'page')
+# TaxonAdmin: Customizes the admin interface for the Taxon model
+class TaxonAdmin(ImportExportModelAdmin):
+    resource_class = TaxonResource
 
-admin.site.register(AccessionReference, AccessionReferenceAdmin)
-admin.site.register(Locality, LocalityAdmin)
+    # Columns to display in the admin list view
+    list_display = ('taxon_name', 'taxon_rank', 'order', 'family', 'subfamily', 'tribe', 'genus', 'species', 'formatted_subspecies')
+    list_filter = ('taxon_rank', 'kingdom', 'phylum', 'class_name', 'order', 'superfamily', 'family')
+    ordering = ('taxon_name', 'taxon_rank', 'kingdom', 'phylum', 'class_name', 'order', 'superfamily', 'family', 'subfamily', 'tribe', 'genus', 'species', 'infraspecific_epithet', 'scientific_name_authorship')
+    search_fields = ('taxon_name', 'order', 'superfamily', 'family', 'subfamily', 'tribe', 'genus', 'species', 'infraspecific_epithet', 'scientific_name_authorship')
+
+    # Custom method to display the formatted taxon name
+    def formatted_name(self, obj):
+        return str(obj)  # Calls __str__ method of the Taxon model
+    formatted_name.short_description = 'Taxon Name'
+
+    # Custom method to handle subspecies display
+    def formatted_subspecies(self, obj):
+        return obj.infraspecific_epithet if obj.infraspecific_epithet else "-"
+    formatted_subspecies.short_description = 'Subspecies'
+
+# Register the models with the customized admin interface
+admin.site.register(Taxon, TaxonAdmin)
+admin.site.register(Identification, IdentificationAdmin)
+admin.site.register(Person, PersonAdmin)
+admin.site.register(Element, ElementAdmin)
+admin.site.register(NatureOfSpecimen, NatureOfSpecimenAdmin)
 admin.site.register(Collection, CollectionAdmin)
-admin.site.register(Accession, AccessionAdmin)
-admin.site.register(Subject)
-admin.site.register(Comment, CommentAdmin)
-admin.site.register(FieldSlip, FieldSlipAdmin)
-admin.site.register(Reference, ReferenceAdmin)
 admin.site.register(Storage, StorageAdmin)
+admin.site.register(Accession, AccessionAdmin)
+admin.site.register(AccessionRow, AccessionRowAdmin)
+admin.site.register(FieldSlip, FieldSlipAdmin)
+admin.site.register(Locality, LocalityAdmin)
+admin.site.register(Comment, CommentAdmin)
 admin.site.unregister(User)
 admin.site.register(User, UserAdmin)
