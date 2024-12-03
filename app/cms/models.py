@@ -3,7 +3,6 @@ from django.urls import reverse
 from django_userforeignkey.models.fields import UserForeignKey
 from django.contrib.auth.models import User
 
-
 class BaseModel(models.Model):
     created_on = models.DateTimeField(auto_now_add=True)
     modified_on = models.DateTimeField(auto_now=True)
@@ -77,7 +76,7 @@ class Accession(BaseModel):
         return reverse('accession-detail', args=[str(self.id)])
 
     def __str__(self):
-        return f"{self.specimen_prefix}{self.specimen_no}"
+        return f"{self.collection.abbreviation}-{self.specimen_prefix.abbreviation} {self.specimen_no}"
 
 
 # Subject Model
@@ -173,7 +172,6 @@ class Reference(BaseModel):
     def __str__(self):
         return self.citation
 
-
 # AccessionReference Model
 class AccessionReference(BaseModel):
     accession = models.ForeignKey(Accession, on_delete=models.CASCADE)
@@ -193,15 +191,16 @@ class AccessionReference(BaseModel):
 # AccessionRow Model
 class AccessionRow(BaseModel):
     accession = models.ForeignKey(Accession, on_delete=models.CASCADE)
-    storage = models.ForeignKey(Storage, on_delete=models.CASCADE)
+    storage = models.ForeignKey(Storage, on_delete=models.CASCADE, blank=True, null=True)
     specimen_suffix = models.CharField(max_length=255, blank=True, null=True)
 
     def get_absolute_url(self):
         return reverse('accessionrow-detail', args=[str(self.id)])
 
     def __str__(self):
-        return f"AccessionRow {self.specimen_suffix}"
-
+        return f"{self.accession} {self.specimen_suffix}" 
+    class Meta:
+        unique_together = ('accession', 'specimen_suffix')
 
 # NatureOfSpecimen Model
 class NatureOfSpecimen(BaseModel):
@@ -222,8 +221,17 @@ class NatureOfSpecimen(BaseModel):
 
 # Element Model
 class Element(BaseModel):
-    parent_element = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True)
-    name = models.CharField(max_length=255)
+    parent_element = models.ForeignKey(
+        'self',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='children'
+    )
+    name = models.CharField(max_length=255, blank=False, null=False)
+
+    class Meta:
+        ordering = ['parent_element__name', 'name']
 
     def get_absolute_url(self):
         return reverse('element-detail', args=[str(self.id)])
@@ -264,25 +272,57 @@ class Identification(BaseModel):
 
 
 # Taxon Model
+
+TAXON_RANK_CHOICES = [
+    ('kingdom', 'Kingdom'),
+    ('phylum', 'Phylum'),
+    ('class', 'Class'),
+    ('order', 'Order'),
+    ('family', 'Family'),
+    ('genus', 'Genus'),
+    ('species', 'Species'),
+    ('subspecies', 'Subspecies'),
+]
+
 class Taxon(BaseModel):
-    taxon_rank = models.CharField(max_length=50)
+    taxon_rank = models.CharField(max_length=50, choices=TAXON_RANK_CHOICES)
     taxon_name = models.CharField(max_length=50)
     kingdom = models.CharField(max_length=255)
     phylum = models.CharField(max_length=255)
     class_name = models.CharField(max_length=255)
     order = models.CharField(max_length=255)
-    superfamily = models.CharField(max_length=255, null=True, blank=True)
+    superfamily = models.CharField(max_length=255, null=True, blank=True, default="")
     family = models.CharField(max_length=255)
-    subfamily = models.CharField(max_length=255, null=True, blank=True)
-    tribe = models.CharField(max_length=255, null=True, blank=True)
+    subfamily = models.CharField(max_length=255, null=True, blank=True, default="")
+    tribe = models.CharField(max_length=255, null=True, blank=True, default="")
     genus = models.CharField(max_length=255)
     species = models.CharField(max_length=255)
     infraspecific_epithet = models.CharField(max_length=255, null=True, blank=True)
     scientific_name_authorship = models.CharField(max_length=255, null=True, blank=True)
 
+    class Meta:
+        ordering = ['class_name', 'order', 'family', 'genus', 'species']
+        verbose_name = 'Taxon'
+        verbose_name_plural = 'Taxa'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['taxon_rank', 'taxon_name', 'scientific_name_authorship'],
+                name='unique_taxon_rank_name_authorship'
+            )
+        ]
+
+    def clean(self):
+        super().clean()
+        if not self.family and (self.genus or self.species):
+            raise ValidationError("Genus and species must have a family.")
+        if not self.genus and self.species:
+            raise ValidationError("Species must have a genus.")
+
     def get_absolute_url(self):
         return reverse('taxon-detail', args=[str(self.id)])
 
     def __str__(self):
+        if self.infraspecific_epithet:
+            return f"{self.genus} {self.species} {self.infraspecific_epithet}"
         return f"{self.genus} {self.species}"
 
