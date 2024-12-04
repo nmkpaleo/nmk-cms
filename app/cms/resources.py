@@ -1,5 +1,5 @@
 from venv import logger
-from .models import Accession, FieldSlip, Storage, User, Collection, Locality, NatureOfSpecimen, Element, Person, Identification, Taxon, AccessionRow, Reference
+from .models import Accession, FieldSlip, Storage, User, Collection, Locality, NatureOfSpecimen, Element, Person, Identification, Taxon, AccessionRow, Reference, Media, SpecimenGeology, GeologicalContext
 from import_export import resources, fields
 #from import_export.fields import Field
 from import_export.widgets import ForeignKeyWidget, DateWidget
@@ -462,3 +462,57 @@ class UserResource(resources.ModelResource):
         import_id_fields = ('username',)
         fields = ('id', 'username', 'first_name', 'last_name', 'email', 'is_active', 'is_staff', 'is_superuser', 'last_login', 'date_joined')
         export_order = ('id', 'username', 'first_name', 'last_name', 'email', 'is_active', 'is_staff', 'is_superuser', 'last_login', 'date_joined')
+
+
+
+
+class MediaResource(resources.ModelResource):
+    accession = fields.Field(
+        column_name='accession',
+        attribute='accession',
+        widget=ForeignKeyWidget(Accession, 'id')
+    )
+    accession_row = fields.Field(
+        column_name='accession_row',
+        attribute='accession_row',
+        widget=ForeignKeyWidget(AccessionRow, 'id')
+    )
+
+    class Meta:
+        model = Media
+        fields = ('id', 'file_name', 'type', 'format', 'media_location', 'license', 'rights_holder', 'accession', 'accession_row')
+        export_order = ('id', 'file_name', 'type', 'format', 'media_location', 'license', 'rights_holder', 'accession', 'accession_row')
+
+class SpecimenGeologyResource(resources.ModelResource):
+    accession = fields.Field(
+        column_name='accession',
+        attribute='accession',
+        widget=ForeignKeyWidget(Accession, 'id')
+    )
+    earliest_geological_context = fields.Field(
+        column_name='earliest_geological_context',
+        attribute='earliest_geological_context',
+        widget=ForeignKeyWidget(GeologicalContext, 'id')
+    )
+    latest_geological_context = fields.Field(
+        column_name='latest_geological_context',
+        attribute='latest_geological_context',
+        widget=ForeignKeyWidget(GeologicalContext, 'id')
+    )
+
+    class Meta:
+        model = SpecimenGeology
+        fields = ('id', 'accession', 'earliest_geological_context', 'latest_geological_context', 'geological_context_type')
+        export_order = ('id', 'accession', 'earliest_geological_context', 'latest_geological_context', 'geological_context_type')
+
+class GeologicalContextResource(resources.ModelResource):
+    parent_geological_context = fields.Field(
+        column_name='parent_geological_context',
+        attribute='parent_geological_context',
+        widget=ForeignKeyWidget(GeologicalContext, 'id')
+    )
+
+    class Meta:
+        model = GeologicalContext
+        fields = ('id', 'geological_context_type', 'unit_name', 'name', 'parent_geological_context')
+        export_order = ('id', 'geological_context_type', 'unit_name', 'name', 'parent_geological_context')
