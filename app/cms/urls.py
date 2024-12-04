@@ -1,7 +1,7 @@
 from django.urls import path
 from django.conf.urls.static import static
 from django.conf import settings
-from cms.views import fieldslip_create, fieldslip_edit, FieldSlipDetailView,FieldSlipListView,AccessionListView,AccessionDetailView,fieldslip_export, fieldslip_import
+from cms.views import fieldslip_create, fieldslip_edit, FieldSlipDetailView,FieldSlipListView,AccessionListView,AccessionDetailView,fieldslip_export, fieldslip_import, ReferenceListView
 #from .views import fieldslip_create, FieldSlipDetailView, FieldSlipListView
 
 urlpatterns = [
@@ -15,6 +15,8 @@ urlpatterns = [
     path('fieldslip/import/', fieldslip_import, name='fieldslip-import'),  # Add import URL
 
     path('accession/', AccessionListView.as_view(), name='accession-list'),
-    path('accession/<int:pk>/', AccessionDetailView.as_view(), name='accession-detail')
+    path('accession/<int:pk>/', AccessionDetailView.as_view(), name='accession-detail'),
+    path('reference/', ReferenceListView.as_view(), name='reference-list')
+
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 

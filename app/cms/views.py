@@ -1,7 +1,7 @@
 from django.shortcuts import get_object_or_404
 from django.shortcuts import render, redirect
 from django.views.generic import DetailView, ListView
-from .models import FieldSlip, Accession
+from .models import FieldSlip, Accession, Reference
 from .forms import FieldSlipForm
 from .forms import FieldSlipForm
 import csv
@@ -89,3 +89,9 @@ class AccessionListView(ListView):
     template_name = 'cms/accession_list.html'
     context_object_name = 'accessions'
     paginate_by = 10
+
+class ReferenceListView(ListView):
+    model = Reference
+    template_name = 'cms/reference_list.html'
+    context_object_name = 'reference'
+    paginate_by = 1

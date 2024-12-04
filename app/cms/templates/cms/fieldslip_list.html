@@ -1,5 +1,9 @@
 {% extends "base_generic.html" %}
 
+{% block title %}
+      <title>taste</title>
+{% endblock %}
+
 {% block content %}
 
     <div class="fieldslip_list_body">
@@ -15,45 +19,53 @@
                     
                 </div>
             </div>
-            <hr class="fieldslip_list_hr">
+           <!--<hr class="fieldslip_list_hr">--> 
 
+            <table class="lists_table">
             
-                <div class="fieldslip_headings">
-                    <p><b>Field Number</b></p>  
-                    <p><b>Collector</b></p>
-                    <p><b>Collection Date</b></p>
-                    <p><b>Verbatim Locality</b></p>
-                    <p><b>Verbatim Taxon</b></p>
-                    <p><b>Verbatim Element</b></p>
-                    <p><b>Verbatim Horizon</b></p>
-                    <p><b>Aerial Photo</b></p>
-                    <p><b>Edit Fieldslip</b></p>
-                </div>
+               <!-- <div class="fieldslip_headings">-->
+                <th> </th>
+                  <th>Field Number</th>
+                  <th>Collector</b>
+                    <th>Collection Date</b>
+                    <th>Verbatim Locality</b>
+                    <th>Verbatim Taxon</b>
+                    <th>Verbatim Element</b>
+                    <th>Verbatim Horizon</b>
+                    <th>Aerial Photo</b>
+                    <th>Edit Fieldslip</b>
+               <!--</div>--> 
 
      
                 {% for fieldslip in fieldslips %}
 
-                <div class="fieldslip_inputs">
-                    <p><a href="{% url 'fieldslip-detail' fieldslip.pk %}">{{ fieldslip.field_number }}</a></p>
-                    <p>{{ fieldslip.collector }}</p>
-                    <hr class="fieldslip_inputs_hr">
-                    <p>{{ fieldslip.collection_date }}</p>
-                    <p>{{ fieldslip.verbatim_locality }}</p>
-                    <p>{{ fieldslip.verbatim_taxon }}</p>
-                    <p>{{ fieldslip.verbatim_element }}</p>
-                    <p>{{ fieldslip.verbatim_horizon }}</p>
-                    <p>
-                        {% if fieldslip.aerial_photo %}
-                            <img src="{{ fieldslip.aerial_photo.url }}" alt="Aerial Photo" style="max-width: 100px; height: auto;">
-                        {% else %}
-                            No photo
-                        {% endif %}
-                    </p>
-                    <p>
-                        <a href="{% url 'fieldslip-edit' fieldslip.pk %}" class="edit-icon">✏️</a>
-                    </p>
-                </div>
+               <!-- <div class="fieldslip_inputs">--> 
+                   <tr>
+                    <td><span class="checkbox_list"><input type="checkbox"></span></td>
+                        <td>
+                            
+                            <a href="{% url 'fieldslip-detail' fieldslip.pk %}">{{ fieldslip.field_number }}</a></td> 
+                        <td>{{ fieldslip.collector }}</td>
+                        
+                        <td>{{ fieldslip.collection_date }}</td>
+                        <td>&nbsp;{{ fieldslip.verbatim_locality }}</td>
+                        <td>&nbsp;{{ fieldslip.verbatim_taxon }}</td>
+                        <td>&nbsp;{{ fieldslip.verbatim_element }}</td>
+                        <td>&nbsp;{{ fieldslip.verbatim_horizon }}</td>
+                        <td>
+                            {% if fieldslip.aerial_photo %}
+                                <img src="{{ fieldslip.aerial_photo.url }}" alt="Aerial Photo" style="max-width: 100px; height: auto;">
+                            {% else %}
+                                No photo
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{% url 'fieldslip-edit' fieldslip.pk %}" class="edit-icon">✏️</a>
+                        </td>
+                    </tr>
+                <!--</div>--> 
                 {% endfor %}
+            </table>
             </tbody>
         </div>
 

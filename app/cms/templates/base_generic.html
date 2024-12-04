@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     {% block title %}
-      <title>Local Library</title>
+      <title>NMK CMS</title>
     {% endblock %}
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -10,6 +10,9 @@
     <!-- Add additional CSS in static file -->
     {% load static %}
     <link rel="stylesheet" href="{% static 'css/style.css' %}" />
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
 
     
     
@@ -25,7 +28,9 @@
               <li><a href="{% url 'index' %}" class="active">Home</a></li>
               <li><a href="{% url 'fieldslip-list' %}">FieldSlips</a></li>
               <li><a href="{% url 'accession-list' %}">Accession</a></li>
-              <li><a href="">Contact</a></li>
+              <!--<li><a href="">Contact</a></li>-->
+              <li><a href="{% url 'reference-list' %}">Reference</a></li>
+              
               {% if user.is_authenticated %}
                 <li>User: {{ user.get_username }}</li>
                 <li>
@@ -35,7 +40,7 @@
                   </form>
                 </li>
               {% else %}
-                <li><a href="{% url 'account_login' %}?next={{ request.path }}">Login</a></li>
+                <a href="{% url 'account_login' %}?next={{ request.path }}" class="login_base_button">Login</a>
               {% endif %}
             </ul>
           {% endblock %}
@@ -50,13 +55,17 @@
         <div class="pagination">
             <span class="page-links">
                 {% if page_obj.has_previous %}
-                    <a href="{{ request.path }}?page={{ page_obj.previous_page_number }}" class="pagination_previous">Previous</a>
+                    <a href="{{ request.path }}?page={{ page_obj.previous_page_number }}" class="pagination_previous">
+                      <i class="fa-solid fa-angles-left"></i>
+                      Previous
+                    </a>
                 {% endif %}
                 <span class="page-current">
                     Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}.
                 </span>
                 {% if page_obj.has_next %}
-                    <a href="{{ request.path }}?page={{ page_obj.next_page_number }}" class="pagination_next">Next</a>
+                    <a href="{{ request.path }}?page={{ page_obj.next_page_number }}" class="pagination_next">Next
+                    <i class="fa-solid fa-angles-right"></i></a>
                 {% endif %}
             </span>
         </div>
