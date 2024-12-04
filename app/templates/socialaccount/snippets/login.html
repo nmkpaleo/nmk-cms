@@ -1,0 +1,20 @@
+{% load i18n %}
+{% load allauth %}
+{% load socialaccount %}
+{% get_providers as socialaccount_providers %}
+{% if socialaccount_providers %}
+    {% if not SOCIALACCOUNT_ONLY %}
+        {% element hr %}
+        {% endelement %}
+       <!-- {% element h2 %}
+            {% translate "Or Sign In With" %}
+        {% endelement %}-->
+        <div class="login-Sign_In_With">
+            <h4 class="login-Sign_In_With-h4">
+                -----------------------Or Sign In With------------------------
+            </h4>
+        </div>
+    {% endif %}
+    {% include "socialaccount/snippets/provider_list.html" with process="login" %}
+    {% include "socialaccount/snippets/login_extra.html" %}
+{% endif %}

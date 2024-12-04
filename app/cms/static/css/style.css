@@ -24,6 +24,7 @@
     
 }
 
+
 .sidebar-nav{
     display: flex;
     gap: 60px;
@@ -80,7 +81,7 @@
     font-weight: 700;
     margin-left: 90px;
     margin-top: 30px;
-    border-radius: 20px;
+    border-radius: 10px;
     border: 2px solid #C46132;
     background-color: #C46132;
     box-shadow: 2px 3px 5px whitesmoke, 3px 3px 5px #C46132, 2px 3px 5px rgb(227, 226, 226);
@@ -95,6 +96,24 @@
     margin-top: 50px;
     width: 420px;
 
+}
+.login_base_button{
+    border-radius: 10px;
+    border: 2px solid #C46132;
+    background-color: #C46132;
+    text-align: center;
+    margin-top: -6px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    color: white; 
+    width: 85px;
+    text-decoration: none;   
+    font-family: 'Inter', sans-serif
+    
+}
+.login_base_button:hover{
+    border: 2px solid #E9AF42;
+    background-color: #E9AF42;
 }
 
 /* Fieldslip list */
@@ -198,21 +217,25 @@
 }
 
 .pagination{
-    margin-top: 20px;
+    margin-top: 25px;
     margin-left: 10px;
     font-family: 'Poppins', sans-serif;
 }
 .pagination_previous,  .pagination_next{
-    
-   border: 2px dashed #C46132;
-    padding: 2px 3px;
+    padding: 3px 3px;
     font-size: 15px;
-    
-    border-radius: 5px;
     cursor: pointer;
     color: black;
     font-weight: 600;
     text-decoration: none;
+
+}
+.pagination_previous:hover, .pagination_next:hover{
+    background-color: #C46132;
+    padding: 5px;
+    color: white;
+    border-radius: 5px;
+    margin: 10px;
 
 }
 
@@ -420,10 +443,247 @@
     }
 }
 
+/* login_page */
+
+.Login_page{
+    background-color: #F5F3F3;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    
+}
+
+.Login_box{
+    padding: 11x;
+    border-radius: 30px;
+    border: 2px solid #F5F3F3;
+    width: 340px;
+    height: 550px;
+    
+    box-shadow: 0 4px 5px rgb(177, 176, 176), 0 4px 5px #C46132, 0 4px 5px #F5F3F3;
+}
+.login-h1{
+    text-align: center;
+    font-family: 'Inter', sans-serif;
+    margin-bottom: 10px;
+    font-size: 25px;
+    font-weight: 800;
+    
+}
+
+.login-profile {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 40px;
+    height: 40px;
+    margin-left: 147px;
+    margin-bottom: 15px;
+    background-color: #F5F3F3;
+    border-radius: 50%;
+    box-shadow: 0 4px 5px rgb(177, 176, 176), 0 4px 5px #C46132, 0 4px 5px #F5F3F3;
+}
+.login-profile i {
+    font-size: 28px; /* Adjust as needed to fit within the box */
+    color: #333; /* Choose a color that works well with the background */
+}
+
+/* Target the errorlist class specifically */
+ul.errorlist.nonfield {
+    list-style: none; /* Removes the default bullet points */
+    color: red; /* Changes the text color */
+    background-color: #ffe6e6; /* Adds a light red background */
+    padding: 10px; /* Adds some padding around the message */
+    border: 1px solid red; /* Adds a red border */
+    border-radius: 5px; /* Rounds the corners */
+    font-size: 14px; /* Adjusts font size */
+}
+
+/* Additional styling for the list items if needed */
+ul.errorlist.nonfield li {
+    margin-bottom: 5px; /* Adds spacing between errors if multiple exist */
+}
+
+
+label[for="id_login"], [for="id_password"] {
+    color: #000000;
+    font-size: 1em;
+    font-weight: 700;
+    font-family: 'Inter', sans-serif;
+    margin-left: 10px;
+    
+   
+}
 
 
 
+/* Style for the Username field & Password field*/
+#id_login, #id_password {
+    margin-top: 20px;
+    margin-bottom: 20px;
+    width: 85%; 
+    padding: 10px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 1em;
+    background-color: #F5F3F3;
+    border: 1px solid #F5F3F3;
+    border-radius: 30px;
+    box-shadow: inset 2px 3px 5px rgb(121, 121, 121, 0.25),
+     2px 3px 5px rgba(99, 98, 98, 0.25);
+     margin-left: 10px;
+}
+
+/* Style for the Forgot Password link */
+.helptext a {
+    color: #C46132;
+    text-decoration: none;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    margin-left: 10px;
+}
+
+.helptext{
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 10px; 
+}
+#id_remember, [for="id_remember"]{
+    display: none;
+}
+.helptext a:hover {
+    text-decoration: underline; 
+}
+
+#id_login::placeholder,
+#id_password::placeholder {
+    color: #888;
+    font-size: 14px;
+}
+
+/* Target all submit buttons */
+button[type="submit"] {
+    background-color: #C46132;
+    margin-top: 10px;
+    margin-left: 10px;
+    margin-bottom: 8px;
+    color: white;
+    width: 90%;
+    box-shadow: 0 4px 5px rgb(177, 176, 176), 0 4px 5px #C46132, 0 4px 5px #F5F3F3 ;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 30px;
+    font-family: 'Inter', sans-serif;
+    font-weight: 700;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+button[type="submit"]:hover {
+    background-color: #151515;
+}
+.signup-text {
+    font-size: 14px;
+    color: #737373;
+    text-align: center;
+    font-family: 'Inter', sans-serif;
+    font-weight: 700;
+    margin-left: 35px;
+    
+}
 
 
+.login-Sign_In_With-h4{
+    font-size: 15px;
+    margin-top: 10px;
+}
+/* CSS to style the "Sign up" link */
+a[href="/accounts/signup/?next=%2F"] {
+    color: #C46132;       
+    text-decoration: none;
+}
+
+a[href="/accounts/signup/?next=%2F"]:hover {
+    color: black; /* Optional: Change color on hover */
+}
+
+
+a[title="Orcid.org"] {
+    display: inline-block;
+    width: 25px; /* Set width for the round logo */
+    height: 25px; /* Set height for the round logo */
+    background-image: url(../images/orchid\ log.png);
+    background-size: cover; /* Ensure the image fills the space */
+    background-position: center; /* Center the image */
+    border-radius: 50%; /* Makes it round */
+    text-indent: -9999px; /* Hide the text */
+    overflow: hidden; /* Ensures the logo is clipped to the circular shape */
+    margin-left: 35px;
+    margin-top: 15px;
+    margin-bottom: 15px;
+}
+
+
+/* SIGN-UP PAGE */
+
+
+label[for="id_username"], [for="id_email"], [for="id_password1"], [for="id_password2"] {
+    color: #000000;
+    font-size: 1em;
+    font-weight: 700;
+    font-family: 'Inter', sans-serif;
+    margin-left: 10px;
+    display: none;
+    
+   
+}
+#id_username, #id_email, #id_password1, #id_password2 {
+    margin-top: 20px;
+    margin-bottom: 20px;
+    width: 85%; 
+    padding: 10px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 1em;
+    background-color: #F5F3F3;
+    border: 1px solid #F5F3F3;
+    border-radius: 30px;
+    box-shadow: inset 2px 3px 5px rgb(121, 121, 121, 0.25),
+     2px 3px 5px rgba(99, 98, 98, 0.25);
+     margin-left: 10px;
+}
+
+a[href="/accounts/login/?next=%2F"] {
+    color: #C46132;       
+    text-decoration: none;
+}
+
+a[href="/accounts/login/?next=%2F"]:hover {
+    color: black; /* Optional: Change color on hover */
+}
+
+/* FOR ALL THE LIST TABLES */
+
+.lists_table{
+    border-collapse: collapse;
+    border-spacing: 0;
+    width: 97%;
+    margin-left: 21px;
+    
+    
+    
+}
+th, td {
+    text-align: left;
+    padding: 5px;
+}
+tr:nth-child(even) {
+    background-color: #f2f2f2;
+  }
+.checkbox_list{
+    margin-right: 5px;
+}
 
 
