@@ -326,3 +326,80 @@ class Taxon(BaseModel):
             return f"{self.genus} {self.species} {self.infraspecific_epithet}"
         return f"{self.genus} {self.species}"
 
+
+class Media(BaseModel):
+    # Dropdown choices for 'type' field
+    MEDIA_TYPE_CHOICES = [
+        ('photo', 'Photo'),
+        ('video', 'Video'),
+        ('audio', 'Audio'),
+        ('document', 'Document'),
+        ('text', 'Text'),
+        ('other', 'Other')
+    ]
+    
+    # Dropdown choices for 'format' field
+    MEDIA_FORMAT_CHOICES = [
+        ('jpg', 'JPG'),
+        ('png', 'PNG'),
+        ('mp4', 'MP4'),
+        ('mp3', 'MP3'),
+        ('pdf', 'PDF'),
+        ('txt', 'TXT'),
+        ('docx', 'DOCX'),
+        ('other', 'Other')
+    ]
+
+    accession = models.ForeignKey('Accession', on_delete=models.CASCADE, related_name='media', help_text="Accession this media belongs to")
+    accession_row = models.ForeignKey('AccessionRow', on_delete=models.CASCADE, related_name='media', help_text="Accession row this media belongs to")
+    
+    file_name = models.CharField(max_length=255, help_text="The name of the media file")
+    type = models.CharField(max_length=50, choices=MEDIA_TYPE_CHOICES, help_text="Type of the media (e.g., photo, video, etc.)")
+    format = models.CharField(max_length=50, choices=MEDIA_FORMAT_CHOICES, help_text="File format of the media (e.g., jpg, png, mp4, etc.)")
+    media_location = models.CharField(max_length=255, help_text="The physical or digital location of the media file")
+    license = models.CharField(max_length=255, help_text="License information for the media file")
+    rights_holder = models.CharField(max_length=255, help_text="The individual or organization holding rights to the media")
+
+    def get_absolute_url(self):
+        return reverse('media-detail', args=[str(self.id)])
+
+    def __str__(self):
+        return f"{self.file_name} ({self.type})"
+
+class SpecimenGeology(BaseModel):
+    # ForeignKey relationships to Accession and GeologicalContext
+    accession = models.ForeignKey('Accession', on_delete=models.CASCADE, related_name='specimen_geologies', help_text="Accession this specimen geology belongs to")
+    earliest_geological_context = models.ForeignKey('GeologicalContext', on_delete=models.SET_NULL, null=True, blank=True, related_name='earliest_geological_contexts', help_text="Earliest geological context of the specimen")
+    latest_geological_context = models.ForeignKey('GeologicalContext', on_delete=models.SET_NULL, null=True, blank=True, related_name='latest_geological_contexts', help_text="Latest geological context of the specimen")
+    
+    # Field to specify geological context type
+    geological_context_type = models.CharField(max_length=255, help_text="The geological context type of the specimen")
+
+    def get_absolute_url(self):
+        return reverse('specimen-geology-detail', args=[str(self.id)])
+
+    def __str__(self):
+        return f"SpecimenGeology for Accession {self.accession} - {self.geological_context_type}"
+
+
+class GeologicalContext(BaseModel):
+    # ForeignKey to self for hierarchical relationship (parent-child)
+    parent_geological_context = models.ForeignKey(
+        'self', 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='child_geological_contexts',
+        help_text="Parent geological context (if applicable)"
+    )
+
+    
+    geological_context_type = models.CharField(max_length=255, help_text="The type of geological context (e.g., Formation, Period, etc.)")
+    unit_name = models.CharField(max_length=255, help_text="The name of the geological unit (e.g., stratum, layer, etc.)")
+    name = models.CharField(max_length=255, help_text="The name of the geological context (e.g., name of the formation)")
+
+    def get_absolute_url(self):
+        return reverse('geologicalcontext-detail', args=[str(self.id)])
+
+    def __str__(self):
+        return f"{self.name} ({self.geological_context_type})"
