@@ -14,6 +14,58 @@ import logging
 logging.basicConfig(level=logging.INFO)  # You can adjust the level as needed (DEBUG, WARNING, ERROR, etc.)
 logger = logging.getLogger(__name__)  # Creates a logger specific to the current module
 
+# Accession Model
+class AccessionAdmin(ImportExportModelAdmin):
+    resource_class = AccessionResource
+    list_display = ('collection_abbreviation', 'specimen_prefix_abbreviation', 'specimen_no', 'accessioned_by')
+    list_filter = ('collection', 'specimen_prefix', 'accessioned_by')
+    search_fields = ('specimen_no', 'collection__abbreviation', 'specimen_prefix__abbreviation', 'accessioned_by__username')
+    ordering = ('specimen_no', 'specimen_prefix__abbreviation')
+
+    def collection_abbreviation(self, obj):
+        return obj.collection.abbreviation if obj.collection else None
+    collection_abbreviation.short_description = 'Collection'
+
+    def specimen_prefix_abbreviation(self, obj):
+        return obj.specimen_prefix.abbreviation if obj.specimen_prefix else None
+    specimen_prefix_abbreviation.short_description = 'Specimen Prefix'
+
+class AccessionReferenceAdmin(ImportExportModelAdmin):
+    resource_class = AccessionReferenceResource
+    list_display = ('collection_abbreviation', 'specimen_prefix_abbreviation', 'specimen_number', 'page', 'reference')
+    search_fields = ('accession__specimen_no', 'specimen_suffix', 'reference',)
+    ordering = ('accession__collection__abbreviation', 'accession__specimen_prefix__abbreviation', 'accession__specimen_no',)
+
+    def collection_abbreviation(self, obj):
+        return obj.accession.collection.abbreviation if obj.accession.collection else None
+    collection_abbreviation.short_description = 'Collection'
+
+    def specimen_prefix_abbreviation(self, obj):
+        return obj.accession.specimen_prefix.abbreviation if obj.accession.specimen_prefix else None
+    specimen_prefix_abbreviation.short_description = 'Specimen Prefix'
+
+    def specimen_number(self, obj):
+        return obj.accession.specimen_no if obj.accession.specimen_no else None
+    specimen_number.short_description = 'Specimen Number'
+
+class AccessionRowAdmin(ImportExportModelAdmin):
+    resource_class = AccessionRowResource
+    list_display = ('collection_abbreviation', 'specimen_prefix_abbreviation', 'specimen_number', 'specimen_suffix', 'storage')
+    search_fields = ('accession__specimen_no', 'specimen_suffix', 'storage__area',)
+    ordering = ('accession__collection__abbreviation', 'accession__specimen_prefix__abbreviation', 'accession__specimen_no', 'specimen_suffix',)
+
+    def collection_abbreviation(self, obj):
+        return obj.accession.collection.abbreviation if obj.accession.collection else None
+    collection_abbreviation.short_description = 'Collection'
+
+    def specimen_prefix_abbreviation(self, obj):
+        return obj.accession.specimen_prefix.abbreviation if obj.accession.specimen_prefix else None
+    specimen_prefix_abbreviation.short_description = 'Specimen Prefix'
+
+    def specimen_number(self, obj):
+        return obj.accession.specimen_no if obj.accession.specimen_no else None
+    specimen_number.short_description = 'Specimen Number'
+
 # Locality Model
 class LocalityAdmin(ImportExportModelAdmin):
     resource_class = LocalityResource
@@ -36,46 +88,17 @@ class StorageAdmin(ImportExportModelAdmin):
     list_display = ('area', 'parent_area')
     search_fields = ('area', 'parent_area__area')
 
-# Accession Model
-class AccessionAdmin(ImportExportModelAdmin):
-    resource_class = AccessionResource
-    list_display = ('collection_abbreviation', 'specimen_prefix_abbreviation', 'specimen_no', 'accessioned_by')
-    list_filter = ('collection', 'specimen_prefix', 'accessioned_by')
-    search_fields = ('specimen_no', 'collection__abbreviation', 'specimen_prefix__abbreviation', 'accessioned_by__username')
-    ordering = ('specimen_no', 'specimen_prefix__abbreviation')
-
-    def collection_abbreviation(self, obj):
-        return obj.collection.abbreviation if obj.collection else None
-    collection_abbreviation.short_description = 'Collection'
-
-    def specimen_prefix_abbreviation(self, obj):
-        return obj.specimen_prefix.abbreviation if obj.specimen_prefix else None
-    specimen_prefix_abbreviation.short_description = 'Specimen Prefix'
-
-class AccessionRowAdmin(ImportExportModelAdmin):
-    resource_class = AccessionRowResource
-    list_display = ('collection_abbreviation', 'specimen_prefix_abbreviation', 'specimen_number', 'specimen_suffix', 'storage')
-    search_fields = ('accession__specimen_no', 'specimen_suffix', 'storage__area',)
-    ordering = ('accession__collection__abbreviation', 'accession__specimen_prefix__abbreviation', 'accession__specimen_no', 'specimen_suffix',)
-
-    def collection_abbreviation(self, obj):
-        return obj.accession.collection.abbreviation if obj.accession.collection else None
-    collection_abbreviation.short_description = 'Collection'
-
-    def specimen_prefix_abbreviation(self, obj):
-        return obj.accession.specimen_prefix.abbreviation if obj.accession.specimen_prefix else None
-    specimen_prefix_abbreviation.short_description = 'Specimen Prefix'
-
-    def specimen_number(self, obj):
-        return obj.accession.specimen_no if obj.accession.specimen_no else None
-    specimen_number.short_description = 'Specimen Number'
+# Subject Model
+class SubjectAdmin(admin.ModelAdmin):
+    list_display = ('subject_name',)
+    search_fields = ('subject_name',)
+    list_filter = ('subject_name',)
 
 # Comment Model
 class CommentAdmin(admin.ModelAdmin):
-    list_display = ('specimen_no', 'comment', 'status', 'subject')
+    list_display = ('specimen_no', 'comment', 'status', 'subject', 'comment_by')
     search_fields = ('comment', 'comment_by')
     list_filter = ('status', 'subject', 'comment_by')
-
 
 # User Model
 class UserAdmin(ImportExportModelAdmin):
@@ -121,6 +144,12 @@ class IdentificationAdmin(ImportExportModelAdmin):
     list_filter = ('date_identified',)
     ordering = ('accession_row', 'date_identified')
 
+# Reference Model
+class ReferenceAdmin(ImportExportModelAdmin):
+    resource_class = ReferenceResource
+    list_display = ('citation', 'doi')
+    search_fields = ('citation', 'doi')
+
 # TaxonAdmin: Customizes the admin interface for the Taxon model
 class TaxonAdmin(ImportExportModelAdmin):
     resource_class = TaxonResource
@@ -141,18 +170,22 @@ class TaxonAdmin(ImportExportModelAdmin):
         return obj.infraspecific_epithet if obj.infraspecific_epithet else "-"
     formatted_subspecies.short_description = 'Subspecies'
 
-# Register the models with the customized admin interface
-admin.site.register(Taxon, TaxonAdmin)
-admin.site.register(Identification, IdentificationAdmin)
-admin.site.register(Person, PersonAdmin)
-admin.site.register(Element, ElementAdmin)
-admin.site.register(NatureOfSpecimen, NatureOfSpecimenAdmin)
-admin.site.register(Collection, CollectionAdmin)
-admin.site.register(Storage, StorageAdmin)
+# Register the models with the customized admin interface use alphabetical order
 admin.site.register(Accession, AccessionAdmin)
+admin.site.register(AccessionReference, AccessionReferenceAdmin)
 admin.site.register(AccessionRow, AccessionRowAdmin)
-admin.site.register(FieldSlip, FieldSlipAdmin)
-admin.site.register(Locality, LocalityAdmin)
+admin.site.register(Collection, CollectionAdmin)
 admin.site.register(Comment, CommentAdmin)
+admin.site.register(Element, ElementAdmin)
+admin.site.register(FieldSlip, FieldSlipAdmin)
+admin.site.register(Identification, IdentificationAdmin)
+admin.site.register(Locality, LocalityAdmin)
+admin.site.register(NatureOfSpecimen, NatureOfSpecimenAdmin)
+admin.site.register(Person, PersonAdmin)
+admin.site.register(Reference, ReferenceAdmin)
+admin.site.register(Storage, StorageAdmin)
+admin.site.register(Subject, SubjectAdmin)
+admin.site.register(Taxon, TaxonAdmin)
+# User needs to unregister the default User model and register the custom User model
 admin.site.unregister(User)
 admin.site.register(User, UserAdmin)

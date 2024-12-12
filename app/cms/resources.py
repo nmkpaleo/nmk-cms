@@ -1,5 +1,5 @@
 from venv import logger
-from .models import Accession, FieldSlip, Storage, User, Collection, Locality, NatureOfSpecimen, Element, Person, Identification, Taxon, AccessionRow, Reference
+from .models import Accession, AccessionReference, AccessionRow, Collection, Element, FieldSlip, Identification, Locality, NatureOfSpecimen, Person, Reference, Storage, Taxon, User
 from import_export import resources, fields
 #from import_export.fields import Field
 from import_export.widgets import ForeignKeyWidget, DateWidget
@@ -39,6 +39,87 @@ class AccessionResource(resources.ModelResource):
         import_id_fields = ('collection', 'specimen_prefix', 'specimen_no',)
         fields = ('collection', 'specimen_prefix', 'specimen_no', 'accessioned_by', 'accession')
         export_order = ('accession', 'collection', 'specimen_prefix', 'specimen_no', 'accessioned_by')
+
+class AccessionReferenceResource(resources.ModelResource):
+    accession_id= fields.Field(
+        column_name='accession',
+        attribute='accession',
+        widget=ForeignKeyWidget(Accession, 'id')
+    )
+
+    collection = fields.Field(
+        column_name='collection',
+        attribute='accession__collection',
+        widget=ForeignKeyWidget(Collection, 'abbreviation')
+    )
+    specimen_prefix = fields.Field(
+        column_name='specimen_prefix',
+        attribute='accession__specimen_prefix',
+        widget=ForeignKeyWidget(Locality, 'abbreviation')
+    )
+    specimen_no = fields.Field(
+        column_name='specimen_no',
+        attribute='accession__specimen_no',
+    )
+    reference = fields.Field(
+        column_name='reference',
+        attribute='reference',
+        widget=ForeignKeyWidget(Reference, 'citation'),
+    )
+
+    page = fields.Field(
+        column_name='page',
+        attribute='page'
+    )
+
+    def before_import(self, dataset, **kwargs):
+        # mimic a 'dynamic field' - i.e. append field which exists on
+        # model, but not in dataset
+        dataset.headers.append("accession")
+        super().before_import(dataset, **kwargs)
+
+    def before_import_row(self, row, **kwargs):
+        # Add accession_id to the row
+        # Validate required fields
+        collection = row.get('collection')
+        specimen_prefix = row.get('specimen_prefix')
+        specimen_no = row.get('specimen_no')
+       
+        # Raise error if required fields are missing
+        if not collection or not specimen_prefix or not specimen_no:
+            raise ValueError(
+                f"Missing required fields for Accession lookup: collection='{collection}', "
+                f"specimen_prefix='{specimen_prefix}', specimen_no='{specimen_no}'."
+            )
+
+        # Query Accession model
+        accession_queryset = Accession.objects.filter(
+            collection__abbreviation=collection,
+            specimen_prefix__abbreviation=specimen_prefix,
+            specimen_no=specimen_no
+        )
+
+        if accession_queryset.count() > 1:
+            raise ValueError(
+                f"Multiple Accessions found for collection='{collection}', "
+                f"specimen_prefix='{specimen_prefix}', specimen_no='{specimen_no}'."
+            )
+
+        accession = accession_queryset.first()
+        if not accession:
+            raise ValueError("Failed to retrieve a valid Accession after query.")
+        # Add accession_id to the row
+        row['accession'] = str(accession.id)
+        print("Import row number: ", kwargs.get('row_number'))
+        print(row)
+
+    class Meta:
+        model = AccessionReference
+        skip_unchanged = True
+        report_skipped = False
+        import_id_fields = ('accession', 'reference',)
+        fields = ('accession', 'collection', 'specimen_prefix', 'specimen_no',  'reference', 'page')
+        export_order = ('collection', 'specimen_prefix', 'specimen_no',  'reference', 'page')
 
 class AccessionRowResource(resources.ModelResource):
     accession_id= fields.Field(
@@ -429,6 +510,15 @@ class PersonResource(resources.ModelResource):
         import_id_fields = ('first_name', 'last_name',)
         fields = ('first_name', 'last_name', 'orcid')
         export_order = ('first_name', 'last_name', 'orcid')
+
+class ReferenceResource(resources.ModelResource):
+    class Meta:
+        model = Reference
+        skip_unchanged = True
+        report_skipped = False
+        import_id_fields = ('citation',)
+        fields = ('title', 'first_author', 'year', 'journal', 'volume', 'issue', 'pages', 'doi', 'citation')
+        export_order = ('title', 'first_author', 'year', 'journal', 'volume', 'issue', 'pages', 'doi', 'citation')
 
 class StorageResource(resources.ModelResource):
     class Meta:
