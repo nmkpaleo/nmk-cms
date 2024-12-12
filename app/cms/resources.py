@@ -1,5 +1,5 @@
 from venv import logger
-from .models import Accession, AccessionReference, AccessionRow, Collection, Element, FieldSlip, from .models import Accession, GeologicalContext, Identification, Locality, Media, NatureOfSpecimen, Person, Reference, SpecimenGeology, Storage, Taxon, User
+from .models import Accession, AccessionReference, AccessionRow, Collection, Element, FieldSlip, GeologicalContext, Identification, Locality, Media, NatureOfSpecimen, Person, Reference, SpecimenGeology, Storage, Taxon, User
 from import_export import resources, fields
 #from import_export.fields import Field
 from import_export.widgets import ForeignKeyWidget, DateWidget
