@@ -4,7 +4,7 @@ from import_export import resources, fields
 from import_export.fields import Field
 from import_export.widgets import ForeignKeyWidget, DateWidget
 from .models import (
-    NatureOfSpecimen, Element, Person, Identification, Taxon,
+    NatureOfSpecimen, Element, Person, Identification, Taxon,Media, SpecimenGeology, GeologicalContext,
     AccessionReference, Locality, Collection, Accession, AccessionRow, Subject, Comment, FieldSlip, Reference, Storage, User
 )
 from .resources import *
@@ -66,12 +66,25 @@ class AccessionRowAdmin(ImportExportModelAdmin):
         return obj.accession.specimen_no if obj.accession.specimen_no else None
     specimen_number.short_description = 'Specimen Number'
 
-# Locality Model
-class LocalityAdmin(ImportExportModelAdmin):
-    resource_class = LocalityResource
-    list_display = ('abbreviation', 'name')
-    search_fields = ('abbreviation', 'name')
-    ordering = ('abbreviation', 'name')
+# Comment Model
+class CommentAdmin(admin.ModelAdmin):
+    list_display = ('specimen_no', 'comment', 'status', 'subject', 'comment_by')
+    search_fields = ('comment', 'comment_by')
+    list_filter = ('status', 'subject', 'comment_by')
+
+# Collection Model
+class CollectionAdmin(ImportExportModelAdmin):
+    resource_class = CollectionResource
+    list_display = ('abbreviation', 'description')
+    search_fields = ('abbreviation', 'description')
+
+# Element Model
+class ElementAdmin(ImportExportModelAdmin):
+    resource_class = ElementResource
+    list_display = ('parent_element', 'name')
+    list_filter = ('parent_element__name',)
+    search_fields = ('name', 'parent_element__name')
+    ordering = ('name',)
 
 # FieldSlip Model
 class FieldSlipAdmin(ImportExportModelAdmin):
@@ -81,6 +94,60 @@ class FieldSlipAdmin(ImportExportModelAdmin):
     list_filter = ('verbatim_locality',)
     ordering = ('verbatim_locality', 'field_number')
 
+#  GeologicalContext
+class GeologicalContextAdmin(ImportExportModelAdmin):
+    list_display = ('geological_context_type', 'unit_name', 'name', 'parent_geological_context')
+    search_fields = ('geological_context_type', 'unit_name', 'name')
+    list_filter = ('geological_context_type',)
+    ordering = ('name',)
+
+# Identification Model
+class IdentificationAdmin(ImportExportModelAdmin):
+    resource_class = IdentificationResource
+    list_display = ('accession_row', 'identification_qualifier', 'verbatim_identification', 'taxon', 'identified_by', 'date_identified', )
+    search_fields = ('accession_row__accession__specimen_no', 'verbatim_identification', 'taxon__taxon_name', 'identified_by__last_name')
+    list_filter = ('date_identified',)
+    ordering = ('accession_row', 'date_identified')
+
+# Locality Model
+class LocalityAdmin(ImportExportModelAdmin):
+    resource_class = LocalityResource
+    list_display = ('abbreviation', 'name')
+    search_fields = ('abbreviation', 'name')
+    ordering = ('abbreviation', 'name')
+
+# Media
+class MediaAdmin(ImportExportModelAdmin):
+    list_display = ('file_name', 'type', 'format', 'media_location', 'license', 'rights_holder')
+    search_fields = ('file_name', 'type', 'format', 'media_location', 'license', 'rights_holder')
+    list_filter = ('type', 'format')
+    ordering = ('file_name',)
+
+# NatureOfSpecimen Model
+class NatureOfSpecimenAdmin(ImportExportModelAdmin):
+    resource_class = NatureOfSpecimenResource
+    list_display = ('accession_row', 'element', 'side', 'condition', 'fragments')
+    search_fields = ('accession_row__id', 'element__name', 'side', 'condition')
+    ordering = ('accession_row', 'element')
+
+# Person Model
+class PersonAdmin(ImportExportModelAdmin):
+    resource_class = PersonResource
+    list_display = ('first_name', 'last_name', 'orcid')
+    search_fields = ('first_name', 'last_name', 'orcid')
+
+# Reference Model
+class ReferenceAdmin(ImportExportModelAdmin):
+    resource_class = ReferenceResource
+    list_display = ('citation', 'doi')
+    search_fields = ('citation', 'doi')
+
+# SpecimenGeology
+class SpecimenGeologyAdmin(ImportExportModelAdmin):
+    list_display = ('accession', 'geological_context_type', 'earliest_geological_context', 'latest_geological_context')
+    search_fields = ('accession__specimen_prefix', 'geological_context_type')
+    list_filter = ('geological_context_type',)
+    ordering = ('accession',)
 
 # Storage Model
 class StorageAdmin(ImportExportModelAdmin):
@@ -93,62 +160,6 @@ class SubjectAdmin(admin.ModelAdmin):
     list_display = ('subject_name',)
     search_fields = ('subject_name',)
     list_filter = ('subject_name',)
-
-# Comment Model
-class CommentAdmin(admin.ModelAdmin):
-    list_display = ('specimen_no', 'comment', 'status', 'subject', 'comment_by')
-    search_fields = ('comment', 'comment_by')
-    list_filter = ('status', 'subject', 'comment_by')
-
-# User Model
-class UserAdmin(ImportExportModelAdmin):
-    resource_class = UserResource
-    list_display = ('username', 'first_name', 'last_name', 'email')
-    search_fields = ('username', 'first_name', 'last_name', 'email')
-
-
-# Collection Model
-class CollectionAdmin(ImportExportModelAdmin):
-    resource_class = CollectionResource
-    list_display = ('abbreviation', 'description')
-    search_fields = ('abbreviation', 'description')
-
-
-# NatureOfSpecimen Model
-class NatureOfSpecimenAdmin(ImportExportModelAdmin):
-    resource_class = NatureOfSpecimenResource
-    list_display = ('accession_row', 'element', 'side', 'condition', 'fragments')
-    search_fields = ('accession_row__id', 'element__name', 'side', 'condition')
-    ordering = ('accession_row', 'element')
-
-# Element Model
-class ElementAdmin(ImportExportModelAdmin):
-    resource_class = ElementResource
-    list_display = ('parent_element', 'name')
-    list_filter = ('parent_element__name',)
-    search_fields = ('name', 'parent_element__name')
-#    filter_fields = ('parent_element__name')
-    ordering = ('name',)
-
-# Person Model
-class PersonAdmin(ImportExportModelAdmin):
-    resource_class = PersonResource
-    list_display = ('first_name', 'last_name', 'orcid')
-    search_fields = ('first_name', 'last_name', 'orcid')
-
-# Identification Model
-class IdentificationAdmin(ImportExportModelAdmin):
-    resource_class = IdentificationResource
-    list_display = ('accession_row', 'identification_qualifier', 'verbatim_identification', 'taxon', 'identified_by', 'date_identified', )
-    search_fields = ('accession_row__accession__specimen_no', 'verbatim_identification', 'taxon__taxon_name', 'identified_by__last_name')
-    list_filter = ('date_identified',)
-    ordering = ('accession_row', 'date_identified')
-
-# Reference Model
-class ReferenceAdmin(ImportExportModelAdmin):
-    resource_class = ReferenceResource
-    list_display = ('citation', 'doi')
-    search_fields = ('citation', 'doi')
 
 # TaxonAdmin: Customizes the admin interface for the Taxon model
 class TaxonAdmin(ImportExportModelAdmin):
@@ -170,7 +181,13 @@ class TaxonAdmin(ImportExportModelAdmin):
         return obj.infraspecific_epithet if obj.infraspecific_epithet else "-"
     formatted_subspecies.short_description = 'Subspecies'
 
-# Register the models with the customized admin interface use alphabetical order
+# User Model
+class UserAdmin(ImportExportModelAdmin):
+    resource_class = UserResource
+    list_display = ('username', 'first_name', 'last_name', 'email')
+    search_fields = ('username', 'first_name', 'last_name', 'email')
+
+# Register the models with the customized admin interface
 admin.site.register(Accession, AccessionAdmin)
 admin.site.register(AccessionReference, AccessionReferenceAdmin)
 admin.site.register(AccessionRow, AccessionRowAdmin)
@@ -189,3 +206,6 @@ admin.site.register(Taxon, TaxonAdmin)
 # User needs to unregister the default User model and register the custom User model
 admin.site.unregister(User)
 admin.site.register(User, UserAdmin)
+admin.site.register(Media, MediaAdmin)
+admin.site.register(SpecimenGeology, SpecimenGeologyAdmin)
+admin.site.register(GeologicalContext, GeologicalContextAdmin)
