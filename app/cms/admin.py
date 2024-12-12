@@ -4,7 +4,7 @@ from import_export import resources, fields
 from import_export.fields import Field
 from import_export.widgets import ForeignKeyWidget, DateWidget
 from .models import (
-    NatureOfSpecimen, Element, Person, Identification, Taxon,
+    NatureOfSpecimen, Element, Person, Identification, Taxon,Media, SpecimenGeology, GeologicalContext,
     AccessionReference, Locality, Collection, Accession, AccessionRow, Subject, Comment, FieldSlip, Reference, Storage, User
 )
 from .resources import *
@@ -141,6 +141,32 @@ class TaxonAdmin(ImportExportModelAdmin):
         return obj.infraspecific_epithet if obj.infraspecific_epithet else "-"
     formatted_subspecies.short_description = 'Subspecies'
 
+
+# Media
+class MediaAdmin(ImportExportModelAdmin):
+    list_display = ('file_name', 'type', 'format', 'media_location', 'license', 'rights_holder')
+    search_fields = ('file_name', 'type', 'format', 'media_location', 'license', 'rights_holder')
+    list_filter = ('type', 'format')
+    ordering = ('file_name',)
+
+# SpecimenGeology
+class SpecimenGeologyAdmin(ImportExportModelAdmin):
+    list_display = ('accession', 'geological_context_type', 'earliest_geological_context', 'latest_geological_context')
+    search_fields = ('accession__specimen_prefix', 'geological_context_type')
+    list_filter = ('geological_context_type',)
+    ordering = ('accession',)
+
+#  GeologicalContext
+class GeologicalContextAdmin(ImportExportModelAdmin):
+    list_display = ('geological_context_type', 'unit_name', 'name', 'parent_geological_context')
+    search_fields = ('geological_context_type', 'unit_name', 'name')
+    list_filter = ('geological_context_type',)
+    ordering = ('name',)
+
+
+
+
+
 # Register the models with the customized admin interface
 admin.site.register(Taxon, TaxonAdmin)
 admin.site.register(Identification, IdentificationAdmin)
@@ -156,3 +182,7 @@ admin.site.register(Locality, LocalityAdmin)
 admin.site.register(Comment, CommentAdmin)
 admin.site.unregister(User)
 admin.site.register(User, UserAdmin)
+admin.site.register(Media, MediaAdmin)
+admin.site.register(SpecimenGeology, SpecimenGeologyAdmin)
+admin.site.register(GeologicalContext, GeologicalContextAdmin)
+
