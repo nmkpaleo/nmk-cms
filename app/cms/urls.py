@@ -14,7 +14,7 @@ urlpatterns = [
     path('fieldslip/export/', fieldslip_export, name='fieldslip-export'),  # Add export URL
     path('fieldslip/import/', fieldslip_import, name='fieldslip-import'),  # Add import URL
 
-    path('accession/', AccessionListView.as_view(), name='accession-list'),
+    path('accessions/', AccessionListView.as_view(), name='accession-list'),
     path('accession/<int:pk>/', AccessionDetailView.as_view(), name='accession-detail'),
     path('reference/', ReferenceListView.as_view(), name='reference-list')
 

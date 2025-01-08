@@ -16,11 +16,9 @@
             <table>
                 <thead>
                     <tr>
-                        <th>Specimen Number</th>  
-                        
+                        <th>Collection</th>  
+                        <th>Specimen Number</th>                          
                     </tr>
-                    
-
                 </thead>
 
                 <tbody id="accession-list">
@@ -28,8 +26,9 @@
 
                     {% for accession in accessions %}
                     <tr >
-                        <td><a href="{% url 'accession-detail' accession.pk %}">{{ accession.specimen_no }}</a></td>
-                    
+                        <td>{{ accession.collection.abbreviation }}</td>
+                    <!-- Add the specimen prefix here, i.e. ER and other prefixes -->
+                    <td><a href="{% url 'accession-detail' accession.pk %}">{{ accession.specimen_no }}</a></td>
                     </tr>
                     
                     

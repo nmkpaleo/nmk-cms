@@ -86,7 +86,6 @@ class AccessionDetailView(DetailView):
 
 class AccessionListView(ListView):
     model = Accession
-    template_name = 'cms/accession_list.html'
     context_object_name = 'accessions'
     paginate_by = 10
 
