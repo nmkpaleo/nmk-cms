@@ -402,4 +402,4 @@ class GeologicalContext(BaseModel):
         return reverse('geologicalcontext-detail', args=[str(self.id)])
 
     def __str__(self):
-        return f"{self.name} ({self.geological_context_type})"
+        return f"{self.name} ({self.unit_name})"
