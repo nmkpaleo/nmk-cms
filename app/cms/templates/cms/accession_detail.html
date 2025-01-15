@@ -1,0 +1,27 @@
+{% extends "base_generic.html" %}
+
+{% block content %}
+        <div class="accession_detail_container">
+            <div class="accession_detail_header">
+                <h2 class="accession_detail_h2">Accession Detail</h2>
+            </div>
+            <div class="grid-container">
+                <!-- Accession Card -->
+                <div class="card">
+                    <p><strong>Specimen prefix: </strong> <br> {{ accession.collection.abbreviation }}</p>
+                    <p><strong>Accession number: </strong> <br> {{ accession.specimen_no }}</p>
+                </div>
+                <div class="lists_table">
+                    {% for row in accession.accessionrow_set.all %}
+                <!-- Make this list below the Accession details as a Table. Also, add the storage field to the list -->
+                <div class="card">
+                            <p><strong>Suffix: </strong> <br> {{ row.specimen_suffix }}</p>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+{% endblock %}
+
+

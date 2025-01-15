@@ -18,8 +18,22 @@
            <!-- <i class="fa-solid fa-magnifying-glass"></i>-->
         </div>
             <div class="search-bar">
-                <input type="text" id="searchInput" placeholder="Search " >
-     
+                <input type="text" placeholder="Search by Specimen Number, Collector, Collection Date or Discoverer">
+                <div class="actions">
+                    <button class="add-new">+ ADD NEW</button>
+                    <button class="export">Export</button>
+                </div>
+            </div>
+            <hr class="accession_list_hr">
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Collection</th>  
+                        <th>Specimen Number</th>                          
+                    </tr>
+                </thead>
+                <input type="text" id="searchInput" placeholder="Search " >     
                 <select id="colors" name="fieldslip" class="fieldslip_select">
                 <option value="Field Number" >Field Number</option>
                 <option value="Collector" >Collector</option>
@@ -31,7 +45,6 @@
                 
             </div>
            
-            
 
             <table class="lists_table">
                 <th> </th>
@@ -39,10 +52,13 @@
 
                     {% for accession in accessions %}
                     <tr >
+                        <td>{{ accession.collection.abbreviation }}</td>
+                    <!-- Add the specimen prefix here, i.e. ER and other prefixes -->
+                    <td><a href="{% url 'accession-detail' accession.pk %}">{{ accession.specimen_no }}</a></td>
                         <td><span class="checkbox_list"><input type="checkbox"></span></td>
                         <td><a href="{% url 'accession-detail' accession.pk %}">{{ accession.specimen_no }}</a></td>
                     
-                    </tr>
+              </tr>
                     
                     
                     {% endfor %}
