@@ -128,41 +128,50 @@
     
 }
 
-.fieldslip_list_h2 {
-    text-align: left;
-    color: #232323;
-    font-family: 'Inter', sans-serif;
-    margin-left: 20px;
-    font-size: 16px;
-    
-}
 
 .search-bar {
-    display: flex;
-    align-items: center;
     margin-left: 20px;
-    justify-content: space-between;
-    
+    margin-top: 11px;
 }
 
 .search-bar input {
-    width: 40%;
-    padding: 5px;
-    background-color: #FBFAFA;
+    width: 150px;
+    padding: 7px;
+    box-shadow: 2px 2px 5px rgb(213, 212, 212), 2px 2px 5px rgb(213, 212, 212);
     border: 1px solid #fffefe;
-    border-radius: 5px;
-    box-shadow: inset 2px 2px 5px rgba(0, 0, 0, 0.1), 3px 3px 5px rgba(0, 0, 0, 0.05);
+    border-radius: 15px;
+    
     font-size: 16px;
-    margin-bottom: 15px;
+    margin-bottom: 18px;
 }
 
-.search-bar button {
-    background-color: transparent;
-    border: none;
-    font-size: 20px;
+
+
+.fieldslip_select{
+    width: 150px;
+    padding: 7px;
+    box-shadow: 2px 2px 5px rgb(213, 212, 212), 2px 2px 5px rgb(213, 212, 212);
+    border: 1px solid #fffefe;
+    border-radius: 15px;
+    margin-left: 15px;
+    font-size: 16px;
+    margin-bottom: 18px;
+}
+
+.reset_button{
+    background-color: #232323; 
+    margin-left: 15px;
+    padding: 7px;
+    box-shadow: 2px 2px 5px rgb(213, 212, 212), 2px 2px 5px rgb(213, 212, 212);
+    border: 1px solid white;
+    border-radius: 15px;
+    margin-left: 15px;
+    font-size: 16px;
+    margin-bottom: 18px;
     cursor: pointer;
-    margin-left: -40px;
-    padding-right: 10px;
+    color: white;
+    width: 90px;
+    font-weight: 600;
 }
 
 .actions {
@@ -177,7 +186,7 @@
     background-color: #C46132;
     border: none;
     margin-bottom: 5px;
-    padding: 5px 5px;
+    padding: 7px;
     font-size: 14px;
     margin-left: 10px;
     border-radius: 5px;
@@ -185,6 +194,11 @@
     color: white;
     width: 130px;
     font-weight: 600;
+    
+}
+.actions button:hover {
+    background-color: #232323;
+    
     
 }
 .actions button a{
@@ -377,7 +391,7 @@
 
 }
 .edit-icon {
-    font-size: 18px;
+    font-size: 16px;
     margin-top: 10px;
     font-family: 'Inter', sans-serif;
     text-decoration: none;
@@ -385,8 +399,7 @@
     width: 160px; 
     height: 30px;
     font-weight: 700;
-    border-radius: 20px;
-    border: 2px solid #C46132;
+    
     box-shadow: 2px 3px 5px whitesmoke, 3px 3px 5px #C46132, 2px 3px 5px rgb(227, 226, 226);
 }
 .fieldslip_detail_header a{
@@ -677,7 +690,7 @@ a[href="/accounts/login/?next=%2F"]:hover {
 }
 th, td {
     text-align: left;
-    padding: 5px;
+    padding: 10px;
 }
 tr:nth-child(even) {
     background-color: #f2f2f2;
@@ -687,3 +700,30 @@ tr:nth-child(even) {
 }
 
 
+nav ul {
+    list-style: none;
+    display: flex;
+    gap: 15px;
+    padding: 0;
+  }
+  
+  nav ul li a {
+    text-decoration: none;
+    color: black;
+    padding: 5px 10px;
+    position: relative;
+  }
+  
+  nav ul li a.active {
+    color: blue; /* Highlight color */
+  }
+  
+  nav ul li a.active::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -2px;
+    height: 2px;
+    background-color: blue;
+  }
