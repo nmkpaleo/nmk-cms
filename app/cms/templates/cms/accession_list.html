@@ -1,33 +1,45 @@
 {% extends "base_generic.html" %}
 
+
+{% block title %}
+      <title>fieldslip-list</title>
+{% endblock %}
+
 {% block content %}
-    <div class="accession_list_body">
+
+    <div class="fieldslip_list_body">
         <div class="container"></div>
-            <h2 class="accession_list_h2">Accession</h2>
+        
+        <div class="actions">
+            <button><a href="{% url 'fieldslip-create' %}">New Field Slip</a></button> 
+            <button><a href="{% url 'fieldslip-export' %}">Export</a></button>
+            <button><a href="{% url 'fieldslip-import' %}">Import</a></button>
+        
+           <!-- <i class="fa-solid fa-magnifying-glass"></i>-->
+        </div>
             <div class="search-bar">
-                <input type="text" placeholder="Search by Specimen Number, Collector, Collection Date or Discoverer">
-                <div class="actions">
-                    <button class="add-new">+ ADD NEW</button>
-                    <button class="export">Export</button>
-                </div>
+                <input type="text" id="searchInput" placeholder="Search " >
+     
+                <select id="colors" name="fieldslip" class="fieldslip_select">
+                <option value="Field Number" >Field Number</option>
+                <option value="Collector" >Collector</option>
+                <option value="Collection Date" >Collection Date</option>
+                <option value="Discoverer" >Discoverer</option>
+                </select>
+
+                <button type="reset" class="reset_button">Reset</button>
+                
             </div>
-            <hr class="accession_list_hr">
+           
+            
 
-            <table>
-                <thead>
-                    <tr>
-                        <th>Specimen Number</th>  
-                        
-                    </tr>
-                    
-
-                </thead>
-
-                <tbody id="accession-list">
-                    <!-- Data rows go here -->
+            <table class="lists_table">
+                <th> </th>
+                <th>Specimen Number</th>                  
 
                     {% for accession in accessions %}
                     <tr >
+                        <td><span class="checkbox_list"><input type="checkbox"></span></td>
                         <td><a href="{% url 'accession-detail' accession.pk %}">{{ accession.specimen_no }}</a></td>
                     
                     </tr>
@@ -40,6 +52,6 @@
     
         <script src="script.js"></script>
     </div>
-        
+
 
 {% endblock %}

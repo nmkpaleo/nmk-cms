@@ -1,25 +1,36 @@
 {% extends "base_generic.html" %}
 
 {% block title %}
-      <title>taste</title>
+      <title>fieldslip-list</title>
 {% endblock %}
 
 {% block content %}
 
     <div class="fieldslip_list_body">
         <div class="container"></div>
+        
+        <div class="actions">
+            <button><a href="{% url 'fieldslip-create' %}">New Field Slip</a></button> 
+            <button><a href="{% url 'fieldslip-export' %}">Export</a></button>
+            <button><a href="{% url 'fieldslip-import' %}">Import</a></button>
+        
+           <!-- <i class="fa-solid fa-magnifying-glass"></i>-->
+        </div>
             <div class="search-bar">
-                <input type="text" id="searchInput" placeholder="Search by Field Number, Collector, Collection Date or Discoverer" onkeyup="searchFieldslips()"> 
+                <input type="text" id="searchInput" placeholder="Search " >
+     
+                <select id="colors" name="fieldslip" class="fieldslip_select">
+                <option value="Field Number" >Field Number</option>
+                <option value="Collector" >Collector</option>
+                <option value="Collection Date" >Collection Date</option>
+                <option value="Discoverer" >Discoverer</option>
+                </select>
+
+                <button type="reset" class="reset_button">Reset</button>
                 
-                <div class="actions">
-                    <button><a href="{% url 'fieldslip-create' %}">New Field Slip</a></button> 
-                    <button><a href="{% url 'fieldslip-export' %}">Export</a></button>
-                    <button><a href="{% url 'fieldslip-import' %}">Import</a></button>
-                
-                    
-                </div>
             </div>
            <!--<hr class="fieldslip_list_hr">--> 
+           <!-- , Collection Date or Discoverer" onkeyup="searchFieldslips()--> 
 
             <table class="lists_table">
             
@@ -54,13 +65,13 @@
                         <td>&nbsp;{{ fieldslip.verbatim_horizon }}</td>
                         <td>
                             {% if fieldslip.aerial_photo %}
-                                <img src="{{ fieldslip.aerial_photo.url }}" alt="Aerial Photo" style="max-width: 100px; height: auto;">
+                                <img src="{{ fieldslip.aerial_photo.url }}" alt="Aerial Photo" style="max-width: 100px; height: auto; ">
                             {% else %}
                                 No photo
                             {% endif %}
                         </td>
                         <td>
-                            <a href="{% url 'fieldslip-edit' fieldslip.pk %}" class="edit-icon">✏️</a>
+                            &emsp;<a href="{% url 'fieldslip-edit' fieldslip.pk %}" class="edit-icon">✏️</a>
                         </td>
                     </tr>
                 <!--</div>--> 
