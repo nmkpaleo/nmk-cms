@@ -2,6 +2,8 @@ from django.db import models
 from django.urls import reverse
 from django_userforeignkey.models.fields import UserForeignKey
 from django.contrib.auth.models import User
+import os # For file handling in media class
+from django.core.exceptions import ValidationError
 
 class BaseModel(models.Model):
     created_on = models.DateTimeField(auto_now_add=True)
@@ -339,26 +341,65 @@ class Media(BaseModel):
     ]
     
     # Dropdown choices for 'format' field
+    # Django ImageField accepts image file types that are supported by the Pillow library
     MEDIA_FORMAT_CHOICES = [
         ('jpg', 'JPG'),
+        ('jpeg', 'JPEG'),
         ('png', 'PNG'),
-        ('mp4', 'MP4'),
-        ('mp3', 'MP3'),
-        ('pdf', 'PDF'),
-        ('txt', 'TXT'),
-        ('docx', 'DOCX'),
-        ('other', 'Other')
+        ('gif', 'GIF'),      
+        ('tiff', 'TIFF'),
+        ('bmp', 'BMP'),
     ]
 
-    accession = models.ForeignKey('Accession', on_delete=models.CASCADE, related_name='media', help_text="Accession this media belongs to")
-    accession_row = models.ForeignKey('AccessionRow', on_delete=models.CASCADE, related_name='media', help_text="Accession row this media belongs to")
+    # Dropdown choices for 'license' field
+    LICENSE_CHOICES = [
+        ('CC0', 'Public Domain (CC0)'),
+        ('CC_BY', 'Creative Commons - Attribution (CC BY)'),
+        ('CC_BY_SA', 'Creative Commons - Attribution-ShareAlike (CC BY-SA)'),
+        ('CC_BY_NC', 'Creative Commons - Attribution-NonCommercial (CC BY-NC)'),
+        ('CC_BY_ND', 'Creative Commons - Attribution-NoDerivatives (CC BY-ND)'),
+        ('CC_BY_NC_SA', 'Creative Commons - Attribution-NonCommercial-ShareAlike (CC BY-NC-SA)'),
+        ('CC_BY_NC_ND', 'Creative Commons - Attribution-NonCommercial-NoDerivatives (CC BY-NC-ND)'),
+        ('GFDL', 'GNU Free Documentation License (GFDL)'),
+        ('OGL', 'Open Government License (OGL)'),
+        ('RF', 'Royalty-Free (RF)'),
+        ('RM', 'Rights-Managed (RM)'),
+        ('EDITORIAL', 'Editorial Use Only'),
+        ('CUSTOM_ATTRIBUTION', 'Attribution (Custom License)'),
+        ('SHAREWARE', 'Shareware/Donationware'),
+        ('EULA', 'End-User License Agreement (EULA)'),
+     ]
     
-    file_name = models.CharField(max_length=255, help_text="The name of the media file")
-    type = models.CharField(max_length=50, choices=MEDIA_TYPE_CHOICES, help_text="Type of the media (e.g., photo, video, etc.)")
-    format = models.CharField(max_length=50, choices=MEDIA_FORMAT_CHOICES, help_text="File format of the media (e.g., jpg, png, mp4, etc.)")
-    media_location = models.CharField(max_length=255, help_text="The physical or digital location of the media file")
-    license = models.CharField(max_length=255, help_text="License information for the media file")
-    rights_holder = models.CharField(max_length=255, help_text="The individual or organization holding rights to the media")
+    accession = models.ForeignKey('Accession', null=True, blank=True, on_delete=models.CASCADE, related_name='media', help_text="Accession this media belongs to")
+    accession_row = models.ForeignKey('AccessionRow', null=True, blank=True, on_delete=models.CASCADE, related_name='media', help_text="Accession row this media belongs to")    
+    file_name = models.CharField(max_length=255, null=True, blank=True, help_text="The name of the media file")
+    type = models.CharField(max_length=50, null=True, blank=True, choices=MEDIA_TYPE_CHOICES, help_text="Type of the media (e.g., photo, video, etc.)")
+    format = models.CharField(max_length=50, null=True, blank=True, choices=MEDIA_FORMAT_CHOICES, help_text="File format of the media (valid_formats are 'jpg', 'jpeg', 'png', 'gif', 'tiff' and 'bmp'")
+    media_location = models.ImageField(upload_to='media/')
+    license = models.CharField(max_length=30, choices=LICENSE_CHOICES
+                               ,default='CC0'  # Default to public domain
+                               , help_text="License information for the media file")
+    rights_holder = models.CharField(max_length=255, null=True, blank=True, help_text="The individual or organization holding rights to the media")
+
+    def save(self, *args, **kwargs):
+        # If a file is uploaded
+        if self.media_location:
+            # Get the file name without the directory
+            self.file_name = os.path.basename(self.media_location.name)
+            print(os.path.basename(self.media_location.name))
+            # Get the file extension
+            self.format = os.path.splitext(self.media_location.name)[1].lower().strip('.')
+            print(os.path.splitext(self.media_location.name)[1].lower().strip('.'))       
+        # Call the parent save method
+        super().save(*args, **kwargs)
+
+    def clean(self):
+        super().clean()
+        if self.media_location:
+            valid_formats = ['jpg', 'jpeg', 'png', 'gif', 'tiff', 'bmp']
+            extension = os.path.splitext(self.media_location.name)[1].lower().strip('.')
+            if extension not in valid_formats:
+                raise ValidationError(f"Invalid file format: {extension}. Supported formats are: {', '.join(valid_formats)}.")
 
     def get_absolute_url(self):
         return reverse('media-detail', args=[str(self.id)])
