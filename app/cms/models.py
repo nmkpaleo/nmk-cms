@@ -375,7 +375,7 @@ class Media(BaseModel):
     file_name = models.CharField(max_length=255, null=True, blank=True, help_text="The name of the media file")
     type = models.CharField(max_length=50, null=True, blank=True, choices=MEDIA_TYPE_CHOICES, help_text="Type of the media (e.g., photo, video, etc.)")
     format = models.CharField(max_length=50, null=True, blank=True, choices=MEDIA_FORMAT_CHOICES, help_text="File format of the media (valid_formats are 'jpg', 'jpeg', 'png', 'gif', 'tiff' and 'bmp'")
-    media_location = models.ImageField(upload_to='media/', null=True, blank=True)
+    media_location = models.ImageField(upload_to='media/')
     license = models.CharField(max_length=30, choices=LICENSE_CHOICES
                                ,default='CC0'  # Default to public domain
                                , help_text="License information for the media file")
