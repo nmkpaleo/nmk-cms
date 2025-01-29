@@ -92,5 +92,5 @@ class AccessionListView(ListView):
 class ReferenceListView(ListView):
     model = Reference
     template_name = 'cms/reference_list.html'
-    context_object_name = 'reference'
-    paginate_by = 1
+    context_object_name = 'references'
+    paginate_by = 10
