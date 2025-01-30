@@ -396,7 +396,7 @@ class Media(BaseModel):
     def clean(self):
         super().clean()
         if self.media_location:
-            valid_formats = ['jpg', 'jpeg', 'png', 'gif', 'tiff', 'bmp']
+            valid_formats = ['jpg', 'jpeg', 'png', 'gif', 'tif', 'tiff', 'bmp']
             extension = os.path.splitext(self.media_location.name)[1].lower().strip('.')
             if extension not in valid_formats:
                 raise ValidationError(f"Invalid file format: {extension}. Supported formats are: {', '.join(valid_formats)}.")
