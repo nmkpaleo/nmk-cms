@@ -20,6 +20,28 @@
                     {% endfor %}
                 </div>
             </div>
+
+            <div class="media_table"></div>
+                <h3>Related Media</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Media Type</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for media in accession.media_set.all %}
+                        <tr>
+                            <td>{{ media.type }}</td>
+                            <td>{{ media.format }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+
         </div>
 
 {% endblock %}

@@ -347,7 +347,6 @@ class Media(BaseModel):
         ('jpeg', 'JPEG'),
         ('png', 'PNG'),
         ('gif', 'GIF'),      
-        ('tiff', 'TIFF'),
         ('bmp', 'BMP'),
     ]
 
