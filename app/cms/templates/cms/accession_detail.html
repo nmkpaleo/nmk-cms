@@ -23,6 +23,9 @@
 
             <div class="media_table"></div>
                 <h2>Related Media</h2>
+                {% if user.is_authenticated and user.groups.all.0.name == "Collection Managers" %}
+                    <a href="{% url 'upload-media' accession.id %}">➕ Upload Media</a>
+                {% endif %}
                 {% if accession.media.all %}
                     <ul>
                         {% for media in accession.media.all %}

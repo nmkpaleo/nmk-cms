@@ -1,12 +1,16 @@
 from django.shortcuts import get_object_or_404
 from django.shortcuts import render, redirect
 from django.views.generic import DetailView, ListView
-from .models import FieldSlip, Accession, Reference
-from .forms import FieldSlipForm
-from .forms import FieldSlipForm
+from django.contrib.auth.decorators import login_required, user_passes_test
+from .models import Accession, FieldSlip, Media, Reference
+from .forms import FieldSlipForm, MediaUploadForm
 import csv
 from django.http import HttpResponse
 from .resources import FieldSlipResource
+
+# Helper function to check if user is in the "Collection Managers" group
+def is_collection_manager(user):
+    return user.groups.filter(name="Collection Managers").exists()
 
 def fieldslip_export(request):
     # Create a CSV response
@@ -94,3 +98,21 @@ class ReferenceListView(ListView):
     template_name = 'cms/reference_list.html'
     context_object_name = 'reference'
     paginate_by = 1
+
+@login_required
+@user_passes_test(is_collection_manager)
+def upload_media(request, accession_id):
+    accession = get_object_or_404(Accession, id=accession_id)
+
+    if request.method == 'POST':
+        form = MediaUploadForm(request.POST, request.FILES)
+        if form.is_valid():
+            media = form.save(commit=False)
+            media.accession = accession  # Link media to the correct accession
+            media.save()
+            return redirect('accession-detail', pk=accession_id)  # Redirect to accession detail page
+
+    else:
+        form = MediaUploadForm()
+
+    return render(request, 'cms/upload_media.html', {'form': form, 'accession': accession})
