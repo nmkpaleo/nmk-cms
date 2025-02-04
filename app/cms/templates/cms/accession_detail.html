@@ -22,26 +22,29 @@
             </div>
 
             <div class="media_table"></div>
-                <h3>Related Media</h3>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Media Type</th>
-                            <th>Description</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for media in accession.media_set.all %}
-                        <tr>
-                            <td>{{ media.type }}</td>
-                            <td>{{ media.format }}</td>
-                        </tr>
+                <h2>Related Media</h2>
+                {% if accession.media.all %}
+                    <ul>
+                        {% for media in accession.media.all %}
+                            <li>
+                                <strong>{{ media.file_name }}</strong> ({{ media.type }}) <br>
+                                {% if media.media_location %}
+                                    <a href="{{ media.media_location.url }}" target="_blank">
+                                        {% if media.type == "photo" %}
+                                            <img src="{{ media.media_location.url }}" alt="{{ media.file_name }}" width="150">
+                                        {% else %}
+                                            View File
+                                        {% endif %}
+                                    </a>
+                                {% endif %}
+                                <br>License: {{ media.get_license_display }}
+                            </li>
                         {% endfor %}
-                    </tbody>
-                </table>
+                    </ul>
+                {% else %}
+                    <p>No media files available for this accession.</p>
+                {% endif %}
             </div>
-            
-
         </div>
 
 {% endblock %}
