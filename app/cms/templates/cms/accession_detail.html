@@ -21,32 +21,49 @@
                 </div>
             </div>
 
-            <div class="media_table"></div>
-                <h2>Related Media</h2>
+            <div class="lists_table"></div>
                 {% if user.is_authenticated and user.groups.all.0.name == "Collection Managers" %}
                     <a href="{% url 'upload-media' accession.id %}">➕ Upload Media</a>
                 {% endif %}
-                {% if accession.media.all %}
-                    <ul>
-                        {% for media in accession.media.all %}
-                            <li>
-                                <strong>{{ media.file_name }}</strong> ({{ media.type }}) <br>
+            <table>
+                <caption>
+                  Related Media for Accession: {{ accession }}
+                </caption>
+                <thead>
+                  <tr>
+                    <th>File Name</th>
+                    <th>Type</th>
+                    <th>License</th>
+                    <th>Media</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% if accession.media.all %}
+                    {% for media in accession.media.all %}
+                        <tr>
+                            <td>{{ media.file_name }}</td>
+                            <td>{{ media.type }}</td>
+                            <td>{{ media.get_license_display }}</td>
+                            <td>
                                 {% if media.media_location %}
                                     <a href="{{ media.media_location.url }}" target="_blank">
-                                        {% if media.type == "photo" %}
-                                            <img src="{{ media.media_location.url }}" alt="{{ media.file_name }}" width="150">
-                                        {% else %}
-                                            View File
-                                        {% endif %}
+                                    {% if media.type == "photo" %}
+                                        <img src="{{ media.media_location.url }}" alt="{{ media.file_name }}" height="100">
+                                    {% else %}
+                                        View File
+                                    {% endif %}
                                     </a>
                                 {% endif %}
-                                <br>License: {{ media.get_license_display }}
-                            </li>
-                        {% endfor %}
-                    </ul>
-                {% else %}
-                    <p>No media files available for this accession.</p>
-                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                  {% else %}
+                    <tr>
+                      <td colspan="4">There are no media files available for this accession.</td>
+                    </tr>
+                  {% endif %}
+                </tbody>
+              </table>
             </div>
         </div>
 
