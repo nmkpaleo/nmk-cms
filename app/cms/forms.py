@@ -1,5 +1,5 @@
 from django import forms
-from .models import FieldSlip
+from .models import FieldSlip, Media
 
 class FieldSlipForm(forms.ModelForm):
     class Meta:
@@ -42,13 +42,7 @@ class FieldSlipForm(forms.ModelForm):
 
         }
 
-
-
-
-
-        
-
-
-
-
-
+class MediaUploadForm(forms.ModelForm):
+    class Meta:
+        model = Media
+        fields = ['media_location', 'type', 'format', 'license', 'rights_holder']
