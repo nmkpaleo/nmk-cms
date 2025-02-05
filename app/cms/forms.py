@@ -1,6 +1,5 @@
 from django import forms
-from .models import FieldSlip
-from .models import Reference
+from .models import FieldSlip, Media, Reference
 
 class FieldSlipForm(forms.ModelForm):
     class Meta:
@@ -44,7 +43,6 @@ class FieldSlipForm(forms.ModelForm):
         }
 
 
-
 class ReferenceForm(forms.ModelForm):
     class Meta:
         model = Reference
@@ -75,13 +73,8 @@ class ReferenceForm(forms.ModelForm):
         }
 
 
-
-
-
-
-        
-
-
-
-
+class MediaUploadForm(forms.ModelForm):
+    class Meta:
+        model = Media
+        fields = ['media_location', 'type', 'format', 'license', 'rights_holder']
 
