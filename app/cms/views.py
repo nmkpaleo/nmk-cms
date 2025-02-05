@@ -4,6 +4,7 @@ from django.views.generic import DetailView, ListView
 from .models import FieldSlip, Accession, Reference
 from .forms import FieldSlipForm
 from .forms import FieldSlipForm
+from .forms import ReferenceForm
 import csv
 from django.http import HttpResponse
 from .resources import FieldSlipResource
@@ -67,6 +68,21 @@ def fieldslip_edit(request, pk):
     else:
         form = FieldSlipForm(instance=fieldslip)
     return render(request, 'cms/fieldslip_form.html', {'form': form})
+
+
+def reference_edit(request, pk):
+    
+    reference = get_object_or_404(Reference, pk=pk)
+    if request.method == 'POST':
+        form = ReferenceForm(request.POST, request.FILES, instance=reference)
+        if form.is_valid():
+            form.save()
+            return redirect('reference-detail', pk=reference.pk)  # Redirect to the detail view
+    else:
+        form = ReferenceForm(instance=reference)
+    return render(request, 'cms/reference_form.html', {'form': form})
+
+
 
 class FieldSlipDetailView(DetailView):
     model = FieldSlip

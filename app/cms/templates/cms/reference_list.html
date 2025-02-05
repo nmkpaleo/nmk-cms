@@ -39,6 +39,7 @@
                 <th>First Author</th>
                 <th>Year</th>
                 <th>Title</th>
+                <th>Edit Reference</th>
     
               
 
@@ -50,6 +51,9 @@
                         </td> 
                         <td>{{ reference.year}}</td>
                         <td>{{ reference.title}}</td>
+                        <td>
+                            &emsp;<a href="{% url 'reference-edit' reference.pk %}" class="edit-icon">✏️</a>
+                        </td>
 
               </tr>
                     
