@@ -1,0 +1,69 @@
+{% extends "base_generic.html" %}
+
+{% block content %}
+
+<div class="form_container">
+
+    <h2 class="form-caption">Create New Field Slip</h2>
+
+    <form method="post" enctype="multipart/form-data">
+
+        {% csrf_token %}
+
+        <div class="template_form_columns">
+
+
+
+            <label class="template_form_label" for="id_field_number">Title</label>
+
+            {{ form.title }}
+
+
+            <label class="template_form_label" for="id_discoverer">First Author</label>
+
+            {{ form.first_author }}
+
+
+            <label class="template_form_label" for="id_collector">Year</label>
+
+            {{ form.year }}
+
+
+            <label class="template_form_label" for="id_collection_date">Journal</label>
+
+            {{ form.journal }}
+
+
+            <label class="template_form_label" for="id_verbatim_locality">Volume</label>
+
+            {{ form.volume }}
+
+
+            <label class="template_form_label" for="id_verbatim_taxon">Issue</label>
+
+            {{ form.issue }}
+  
+
+            <label class="template_form_label" for="id_verbatim_element">Pages</label>
+
+            {{ form.pages }}
+
+
+            <label class="template_form_label" for="id_verbatim_horizon">DOI</label>
+
+            {{ form.doi }}
+
+
+            <label class="template_form_label" for="id_verbatim_latitude">Citation</label>
+
+            {{ form.citation }}
+            
+        </div>
+
+        <button type="submit" class="template_form_submit">Submit</button>
+
+    </form>
+
+</div>
+
+{% endblock %}

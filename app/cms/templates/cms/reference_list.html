@@ -1,11 +1,71 @@
 {% extends "base_generic.html" %}
 
 {% block title %}
-      <title>taste</title>
+      <title>reference-list</title>
 {% endblock %}
 
 {% block content %}
 
-    <H1>hello</H1>
+<div class="template_list_body">
+    <div class="container"></div>
+    
+    <div class="actions">
+        <button><a href="{% url 'fieldslip-create' %}">New Field Slip</a></button> 
+        <button><a href="{% url 'fieldslip-export' %}">Export</a></button>
+        <button><a href="{% url 'fieldslip-import' %}">Import</a></button>
+    
+       <!-- <i class="fa-solid fa-magnifying-glass"></i>-->
+    </div>
+        <div class="search-bar">
+            <input type="text" id="searchInput" placeholder="Search " >
+ 
+            <select id="colors" name="dropdown-list" class="dropdown-list-select">
+            <option value="Field Number" >Reference</option>
+            <option value="Collector" >Collector</option>
+            <option value="Collection Date" >Collection Date</option>
+            <option value="Discoverer" >Discoverer</option>
+            </select>
+
+            <button type="reset" class="reset_button">Reset</button>
+            
+        </div>
+
+
+
+           
+
+            <table class="lists_table">
+ 
+                <th>First Author</th>
+                <th>Year</th>
+                <th>Title</th>
+                <th>Edit Reference</th>
+    
+              
+
+                    {% for reference in references %}
+                    <tr >
+                        <td>
+                            
+                            <a href="{% url 'reference-detail' reference.pk %}">{{ reference.first_author }}</a>
+                        </td> 
+                        <td>{{ reference.year}}</td>
+                        <td>{{ reference.title}}</td>
+                        <td>
+                            &emsp;<a href="{% url 'reference-edit' reference.pk %}" class="edit-icon">✏️</a>
+                        </td>
+
+              </tr>
+                    
+                    
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    
+        <script src="script.js"></script>
+    </div>
+
 
 {% endblock %}
+

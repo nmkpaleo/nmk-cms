@@ -6,7 +6,7 @@
 
 {% block content %}
 
-    <div class="fieldslip_list_body">
+    <div class="template_list_body">
         <div class="container"></div>
         
         <div class="actions">
@@ -19,7 +19,7 @@
             <div class="search-bar">
                 <input type="text" id="searchInput" placeholder="Search " >
      
-                <select id="colors" name="fieldslip" class="fieldslip_select">
+                <select id="colors" name="dropdown-list" class="dropdown-list-select">
                 <option value="Field Number" >Field Number</option>
                 <option value="Collector" >Collector</option>
                 <option value="Collection Date" >Collection Date</option>
@@ -35,7 +35,7 @@
             <table class="lists_table">
             
                <!-- <div class="fieldslip_headings">-->
-                <th> </th>
+
                   <th>Field Number</th>
                   <th>Collector</b>
                     <th>Collection Date</b>
@@ -52,7 +52,7 @@
 
                <!-- <div class="fieldslip_inputs">--> 
                    <tr>
-                    <td><span class="checkbox_list"><input type="checkbox"></span></td>
+ 
                         <td>
                             
                             <a href="{% url 'fieldslip-detail' fieldslip.pk %}">{{ fieldslip.field_number }}</a></td> 

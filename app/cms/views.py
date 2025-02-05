@@ -1,9 +1,11 @@
 from django.shortcuts import get_object_or_404
 from django.shortcuts import render, redirect
 from django.views.generic import DetailView, ListView
+
 from django.contrib.auth.decorators import login_required, user_passes_test
 from .models import Accession, FieldSlip, Media, Reference
-from .forms import FieldSlipForm, MediaUploadForm
+from .forms import FieldSlipForm, MediaUploadForm, ReferenceForm
+
 import csv
 from django.http import HttpResponse
 from .resources import FieldSlipResource
@@ -72,6 +74,21 @@ def fieldslip_edit(request, pk):
         form = FieldSlipForm(instance=fieldslip)
     return render(request, 'cms/fieldslip_form.html', {'form': form})
 
+
+def reference_edit(request, pk):
+    
+    reference = get_object_or_404(Reference, pk=pk)
+    if request.method == 'POST':
+        form = ReferenceForm(request.POST, request.FILES, instance=reference)
+        if form.is_valid():
+            form.save()
+            return redirect('reference-detail', pk=reference.pk)  # Redirect to the detail view
+    else:
+        form = ReferenceForm(instance=reference)
+    return render(request, 'cms/reference_form.html', {'form': form})
+
+
+
 class FieldSlipDetailView(DetailView):
     model = FieldSlip
     template_name = 'cms/fieldslip_detail.html'
@@ -93,11 +110,16 @@ class AccessionListView(ListView):
     context_object_name = 'accessions'
     paginate_by = 10
 
+class ReferenceDetailView(DetailView):
+    model = Reference
+    template_name = 'cms/reference_detail.html'
+    context_object_name = 'reference'
+
 class ReferenceListView(ListView):
     model = Reference
     template_name = 'cms/reference_list.html'
-    context_object_name = 'reference'
-    paginate_by = 1
+    context_object_name = 'references'
+    paginate_by = 10
 
 @login_required
 @user_passes_test(is_collection_manager)
@@ -116,3 +138,4 @@ def upload_media(request, accession_id):
         form = MediaUploadForm()
 
     return render(request, 'cms/upload_media.html', {'form': form, 'accession': accession})
+

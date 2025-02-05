@@ -1,8 +1,7 @@
 from django.urls import path
 from django.conf.urls.static import static
 from django.conf import settings
-from cms.views import fieldslip_create, fieldslip_edit, FieldSlipDetailView,FieldSlipListView,AccessionListView,AccessionDetailView,fieldslip_export, fieldslip_import, ReferenceListView, upload_media
-#from .views import fieldslip_create, FieldSlipDetailView, FieldSlipListView
+from cms.views import fieldslip_create, fieldslip_edit, FieldSlipDetailView,FieldSlipListView,AccessionListView,AccessionDetailView,fieldslip_export, fieldslip_import, ReferenceListView,ReferenceDetailView,reference_edit,upload_media
 
 urlpatterns = [
     
@@ -16,8 +15,13 @@ urlpatterns = [
 
     path('accessions/', AccessionListView.as_view(), name='accession-list'),
     path('accession/<int:pk>/', AccessionDetailView.as_view(), name='accession-detail'),
+
+    path('reference/', ReferenceListView.as_view(), name='reference-list'),
+    path('reference/<int:pk>/', ReferenceDetailView.as_view(), name='reference-detail'),
+    path('reference/<int:pk>/edit/', reference_edit, name='reference-edit')
+  
     path('accession/<int:accession_id>/upload_media/', upload_media, name='upload-media'),
-    path('reference/', ReferenceListView.as_view(), name='reference-list')
+
 
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 

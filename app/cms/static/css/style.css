@@ -118,7 +118,7 @@
 
 /* Fieldslip list */
 
-.fieldslip_list_body{
+.template_list_body{
     background-color: white;
 
 }
@@ -147,7 +147,7 @@
 
 
 
-.fieldslip_select{
+.dropdown-list-select{
     width: 150px;
     padding: 7px;
     box-shadow: 2px 2px 5px rgb(213, 212, 212), 2px 2px 5px rgb(213, 212, 212);
@@ -267,7 +267,7 @@
 
 }
 
-.fieldslip_caption {
+.form-caption {
 
     font-size: 30px;
 
@@ -285,7 +285,7 @@
 
 }
 
-.fieldslip_form_columns {
+.template_form_columns {
 
     display: flex;
 
@@ -295,7 +295,7 @@
 
 }
 
-.fieldslip_form_input {
+.template_form_input {
 
     border-radius: 5px;
 
@@ -315,13 +315,13 @@
 
 }
 
-.fieldslip_form_input_long {
+.template_form_input_long {
 
     width: 100%;
 
 }
 
-.fieldslip_form_label {
+.template_form_label {
 
     width: 100%;
 
@@ -335,7 +335,7 @@
 
 }
 
-.fieldslip_form_submit {
+.template_form_submit {
 
     border-radius: 25px;
 
@@ -371,18 +371,18 @@
 
 /* fieldslip details */
 
-.fieldslip_detail_container {
+.template-detail-container {
     max-width: 1200px;
     margin: 0 auto;
     text-align: center;
 }
-.fieldslip_detail_header{
+.template-detail-header{
     display: flex;
     justify-content: center;
     gap: 40px;
     
 }
-.fieldslip_detail_h2 {
+.template-detail-h2 {
     margin-bottom: 30px;
     color: #232323;
     font-family: 'Inter', sans-serif;
@@ -402,7 +402,7 @@
     
     box-shadow: 2px 3px 5px whitesmoke, 3px 3px 5px #C46132, 2px 3px 5px rgb(227, 226, 226);
 }
-.fieldslip_detail_header a{
+.template-detail-header a{
     color: #232323;
     
 }

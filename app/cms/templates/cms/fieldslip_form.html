@@ -4,99 +4,99 @@
 
 <div class="form_container">
 
-    <h2 class="fieldslip_caption">Create New Field Slip</h2>
+    <h2 class="form-caption">Create New Field Slip</h2>
 
     <form method="post" enctype="multipart/form-data">
 
         {% csrf_token %}
 
-        <div class="fieldslip_form_columns">
+        <div class="template_form_columns">
 
             <!-- Field Number -->
 
-            <label class="fieldslip_form_label" for="id_field_number">Field Number</label>
+            <label class="template_form_label" for="id_field_number">Field Number</label>
 
             {{ form.field_number }}
 
             <!-- Discoverer -->
 
-            <label class="fieldslip_form_label" for="id_discoverer">Discoverer</label>
+            <label class="template_form_label" for="id_discoverer">Discoverer</label>
 
             {{ form.discoverer }}
 
             <!-- Collector -->
 
-            <label class="fieldslip_form_label" for="id_collector">Collector</label>
+            <label class="template_form_label" for="id_collector">Collector</label>
 
             {{ form.collector }}
 
             <!-- Collection Date -->
 
-            <label class="fieldslip_form_label" for="id_collection_date">Collection Date</label>
+            <label class="template_form_label" for="id_collection_date">Collection Date</label>
 
             {{ form.collection_date }}
 
             <!-- Verbatim Locality -->
 
-            <label class="fieldslip_form_label" for="id_verbatim_locality">Verbatim Locality</label>
+            <label class="template_form_label" for="id_verbatim_locality">Verbatim Locality</label>
 
             {{ form.verbatim_locality }}
 
             <!-- Verbatim Taxon -->
 
-            <label class="fieldslip_form_label" for="id_verbatim_taxon">Verbatim Taxon</label>
+            <label class="template_form_label" for="id_verbatim_taxon">Verbatim Taxon</label>
 
             {{ form.verbatim_taxon }}
 
             <!-- Verbatim Element -->
 
-            <label class="fieldslip_form_label" for="id_verbatim_element">Verbatim Element</label>
+            <label class="template_form_label" for="id_verbatim_element">Verbatim Element</label>
 
             {{ form.verbatim_element }}
 
             <!-- Verbatim Horizon -->
 
-            <label class="fieldslip_form_label" for="id_verbatim_horizon">Verbatim Horizon</label>
+            <label class="template_form_label" for="id_verbatim_horizon">Verbatim Horizon</label>
 
             {{ form.verbatim_horizon }}
 
             <!-- Verbatim Latitude -->
 
-            <label class="fieldslip_form_label" for="id_verbatim_latitude">Verbatim Latitude</label>
+            <label class="template_form_label" for="id_verbatim_latitude">Verbatim Latitude</label>
 
             {{ form.verbatim_latitude }}
             <!-- Verbatim Longitude -->
 
-            <label class="fieldslip_form_label" for="id_verbatim_longitude">Verbatim Longitude</label>
+            <label class="template_form_label" for="id_verbatim_longitude">Verbatim Longitude</label>
 
             {{ form.verbatim_longitude }}
 
             <!-- Verbatim SRS -->
 
-            <label class="fieldslip_form_label" for="id_verbatim_SRS">Verbatim SRS</label>
+            <label class="template_form_label" for="id_verbatim_SRS">Verbatim SRS</label>
 
             {{ form.verbatim_SRS }}
 
             <!-- Verbatim Coordinate System -->
 
-            <label class="fieldslip_form_label" for="id_verbatim_coordinate_system">Verbatim Coordinate System</label>
+            <label class="template_form_label" for="id_verbatim_coordinate_system">Verbatim Coordinate System</label>
 
             {{ form.verbatim_coordinate_system }}
 
             <!-- Verbatim Elevation -->
 
-            <label class="fieldslip_form_label" for="id_verbatim_elevation">Verbatim Elevation</label>
+            <label class="template_form_label" for="id_verbatim_elevation">Verbatim Elevation</label>
 
             {{ form.verbatim_elevation }}
             <!-- Aerial Photo -->
 
-            <label class="fieldslip_form_label" for="id_aerial_photo">Aerial Photo</label>
+            <label class="template_form_label" for="id_aerial_photo">Aerial Photo</label>
 
             {{ form.aerial_photo }}
 
         </div>
 
-        <button type="submit" class="fieldslip_form_submit">Submit</button>
+        <button type="submit" class="template_form_submit">Submit</button>
 
     </form>
 
