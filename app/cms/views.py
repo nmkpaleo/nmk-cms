@@ -89,8 +89,14 @@ class AccessionListView(ListView):
     context_object_name = 'accessions'
     paginate_by = 10
 
+class ReferenceDetailView(DetailView):
+    model = Reference
+    template_name = 'cms/reference_detail.html'
+    context_object_name = 'reference'
+
 class ReferenceListView(ListView):
     model = Reference
     template_name = 'cms/reference_list.html'
     context_object_name = 'references'
     paginate_by = 10
+

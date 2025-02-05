@@ -1,0 +1,50 @@
+{% extends "base_generic.html" %}
+
+{% block content %}
+    
+
+        <div class="template-detail-container">
+            <div class="template-detail-header">
+                <h2 class="template-detail-h2">Reference Detail</h2>
+
+            </div>
+            <div class="grid-container">
+                <!-- Field Number Card -->
+                <div class="card">
+                    <p><strong>Title:</strong> <br> {{ reference.title }}</p>
+                    <p><strong>First Author: </strong> <br> {{ reference.first_author }}</p>
+                    <p><strong>Year:</strong> <br> {{ reference.year }} </p>                   
+                    
+                </div>
+
+                <div class="card">
+                    <p><strong>Journal:</strong> <br> {{ reference.journal }}</p>
+                    <p><strong>Volume: </strong> <br> {{ reference.volume }}</p>
+                    <p><strong>Issue:</strong> <br> {{ reference.issue}} </p>           
+                    <p><strong>Pages: </strong> <br> {{ reference.pages }}</p>
+                    <p><strong>DOI: </strong> <br> <a href="https://doi.org/10.1016/j.jhevol.2008.02.001" target="_blank">{{ reference.doi }}</a>
+            
+                    
+                </div>
+                
+                <div class="card">
+                    <p><strong>Citation:</strong> <br> {{ reference.citation }}</p>
+                    
+                </div>               
+    
+                
+            </div>
+        </div>
+<!--10.1016/j.jhevol.2008.02.001
+
+ 
+
+https://doi.org/10.1016/j.jhevol.2008.02.001
+
+
+
+
+-->
+{% endblock %}
+
+

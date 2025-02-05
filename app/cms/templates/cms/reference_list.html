@@ -6,7 +6,7 @@
 
 {% block content %}
 
-<div class="fieldslip_list_body">
+<div class="template_list_body">
     <div class="container"></div>
     
     <div class="actions">
@@ -19,7 +19,7 @@
         <div class="search-bar">
             <input type="text" id="searchInput" placeholder="Search " >
  
-            <select id="colors" name="fieldslip" class="fieldslip_select">
+            <select id="colors" name="dropdown-list" class="dropdown-list-select">
             <option value="Field Number" >Reference</option>
             <option value="Collector" >Collector</option>
             <option value="Collection Date" >Collection Date</option>
@@ -44,8 +44,10 @@
 
                     {% for reference in references %}
                     <tr >
-                        <!--<td>{{ accession.collection.abbreviation }}</td>-->
-                        <td>{{ reference.first_author}}</td>
+                        <td>
+                            
+                            <a href="{% url 'reference-detail' reference.pk %}">{{ reference.first_author }}</a>
+                        </td> 
                         <td>{{ reference.year}}</td>
                         <td>{{ reference.title}}</td>
 
