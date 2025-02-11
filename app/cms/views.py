@@ -1,10 +1,10 @@
 from django.shortcuts import get_object_or_404
 from django.shortcuts import render, redirect
-from django.views.generic import DetailView, ListView
+from django.views.generic import DetailView, FormView, ListView
 
 from django.contrib.auth.decorators import login_required, user_passes_test
 from .models import Accession, AccessionReference, FieldSlip, Media, Reference
-from .forms import FieldSlipForm, MediaUploadForm, ReferenceForm
+from .forms import AccessionReferenceForm, FieldSlipForm, MediaUploadForm, ReferenceForm
 
 import csv
 from django.http import HttpResponse
@@ -87,7 +87,20 @@ def reference_edit(request, pk):
         form = ReferenceForm(instance=reference)
     return render(request, 'cms/reference_form.html', {'form': form})
 
+class AddReferenceToAccessionView(FormView):
+    template_name = 'cms/add_accession_reference.html'
+    form_class = AccessionReferenceForm
 
+    def form_valid(self, form):
+        accession = self.kwargs.get('accession_id')  # Get accession ID from URL
+        reference = form.cleaned_data['reference']
+        page = form.cleaned_data['page']
+
+        AccessionReference.objects.create(
+            accession_id=accession, reference=reference, page=page
+        )
+        
+        return redirect('accession-detail', pk=accession)
 
 class FieldSlipDetailView(DetailView):
     model = FieldSlip
