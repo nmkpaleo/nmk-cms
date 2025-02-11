@@ -1,0 +1,16 @@
+{% extends "base_generic.html" %}
+{% load django_select2 %}
+
+{% block content %}
+    <h1>Add References to {{ accession.name }}</h1>
+
+    <form method="post">
+        {% csrf_token %}
+        {{ form.media }}  {# This loads Select2 JS/CSS #}
+        {{ form.as_p }}
+
+        <button type="submit">Add Reference</button>
+    </form>
+
+    <a href="{% url 'accession-detail' accession.id %}">Back to Accession</a>
+{% endblock %}

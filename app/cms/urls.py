@@ -1,7 +1,7 @@
 from django.urls import include, path
 from django.conf.urls.static import static
 from django.conf import settings
-from cms.views import fieldslip_create, fieldslip_edit, FieldSlipDetailView,FieldSlipListView,AccessionListView,AccessionDetailView,fieldslip_export, fieldslip_import, ReferenceListView,ReferenceDetailView,reference_edit,upload_media
+from cms.views import AddReferenceToAccessionView, fieldslip_create, fieldslip_edit, FieldSlipDetailView,FieldSlipListView,AccessionListView,AccessionDetailView,fieldslip_export, fieldslip_import, ReferenceListView,ReferenceDetailView,reference_edit,upload_media
 
 urlpatterns = [
     
@@ -15,6 +15,7 @@ urlpatterns = [
 
     path('accessions/', AccessionListView.as_view(), name='accession-list'),
     path('accession/<int:pk>/', AccessionDetailView.as_view(), name='accession-detail'),
+    path('accession/<int:accession_id>/add-reference/', AddReferenceToAccessionView.as_view(), name='add-reference'),
 
     path('reference/', ReferenceListView.as_view(), name='reference-list'),
     path('reference/<int:pk>/', ReferenceDetailView.as_view(), name='reference-detail'),
