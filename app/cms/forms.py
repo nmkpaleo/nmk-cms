@@ -2,6 +2,20 @@ from django import forms
 from django_select2.forms import ModelSelect2MultipleWidget
 from .models import Accession, AccessionReference, FieldSlip, Media, Reference
 
+class AccessionReferenceForm(forms.ModelForm):
+    reference = forms.ModelChoiceField(
+        queryset=Reference.objects.all(),
+        widget=ModelSelect2MultipleWidget(
+            model=Reference,
+            search_fields=['title__icontains'],  # Allows searching by title
+            attrs={'data-placeholder': 'Select References...'}
+        )
+    )
+
+    class Meta:
+        model = AccessionReference
+        fields = ['accession', 'reference', 'page']
+        
 class FieldSlipForm(forms.ModelForm):
     class Meta:
         model = FieldSlip
