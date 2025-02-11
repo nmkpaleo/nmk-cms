@@ -10,15 +10,15 @@ urlpatterns = [
     path('fieldslip/<int:pk>/', FieldSlipDetailView.as_view(), name='fieldslip-detail'),
     path('fieldslip/<int:pk>/edit/', fieldslip_edit, name='fieldslip-edit'), 
     path('fieldslips/', FieldSlipListView.as_view(), name='fieldslip-list'),
-    path('fieldslip/export/', fieldslip_export, name='fieldslip-export'),  # Add export URL
-    path('fieldslip/import/', fieldslip_import, name='fieldslip-import'),  # Add import URL
+    path('fieldslip/export/', fieldslip_export, name='fieldslip-export'),
+    path('fieldslip/import/', fieldslip_import, name='fieldslip-import'),
 
     path('accessions/', AccessionListView.as_view(), name='accession-list'),
     path('accession/<int:pk>/', AccessionDetailView.as_view(), name='accession-detail'),
 
     path('reference/', ReferenceListView.as_view(), name='reference-list'),
     path('reference/<int:pk>/', ReferenceDetailView.as_view(), name='reference-detail'),
-    path('reference/<int:pk>/edit/', reference_edit, name='reference-edit')
+    path('reference/<int:pk>/edit/', reference_edit, name='reference-edit'),
   
     path('accession/<int:accession_id>/upload_media/', upload_media, name='upload-media'),
 
