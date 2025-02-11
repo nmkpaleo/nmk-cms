@@ -71,6 +71,7 @@ INSTALLED_APPS = [
     'allauth.account',
     'allauth.socialaccount',
     'allauth.socialaccount.providers.orcid',
+    'django_select2',
 ]
 
 SITE_ID = 1
