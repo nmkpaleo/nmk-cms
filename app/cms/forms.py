@@ -1,5 +1,6 @@
 from django import forms
-from .models import FieldSlip, Media, Reference
+from django_select2.forms import ModelSelect2MultipleWidget
+from .models import Accession, AccessionReference, FieldSlip, Media, Reference
 
 class FieldSlipForm(forms.ModelForm):
     class Meta:

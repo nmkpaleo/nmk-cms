@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import include, path
 from django.conf.urls.static import static
 from django.conf import settings
 from cms.views import fieldslip_create, fieldslip_edit, FieldSlipDetailView,FieldSlipListView,AccessionListView,AccessionDetailView,fieldslip_export, fieldslip_import, ReferenceListView,ReferenceDetailView,reference_edit,upload_media
@@ -21,7 +21,7 @@ urlpatterns = [
     path('reference/<int:pk>/edit/', reference_edit, name='reference-edit'),
   
     path('accession/<int:accession_id>/upload_media/', upload_media, name='upload-media'),
-
+    path("select2/", include("django_select2.urls")),
 
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
