@@ -21,6 +21,22 @@
                 </div>
             </div>
 
+            <h3>Related References</h3>
+            {% if references %}
+                <ul>
+                    {% for ref in references %}
+                        <li>
+                            {{ ref.reference.title }} 
+                            {% if ref.page %}
+                                (Page: {{ ref.page }})
+                            {% endif %}
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p>No references found for this accession.</p>
+            {% endif %}
+
             <div class="lists_table"></div>
                 {% if user.is_authenticated and user.groups.all.0.name == "Collection Managers" %}
                     <a href="{% url 'upload-media' accession.id %}">➕ Upload Media</a>
