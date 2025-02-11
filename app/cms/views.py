@@ -3,7 +3,7 @@ from django.shortcuts import render, redirect
 from django.views.generic import DetailView, ListView
 
 from django.contrib.auth.decorators import login_required, user_passes_test
-from .models import Accession, FieldSlip, Media, Reference
+from .models import Accession, AccessionReference, FieldSlip, Media, Reference
 from .forms import FieldSlipForm, MediaUploadForm, ReferenceForm
 
 import csv
@@ -105,6 +105,11 @@ class AccessionDetailView(DetailView):
     template_name = 'cms/accession_detail.html'
     context_object_name = 'accession'
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['references'] = AccessionReference.objects.filter(accession=self.object).select_related('reference')
+        return context
+    
 class AccessionListView(ListView):
     model = Accession
     context_object_name = 'accessions'
