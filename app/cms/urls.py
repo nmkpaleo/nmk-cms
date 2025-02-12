@@ -15,7 +15,7 @@ urlpatterns = [
 
     path('accessions/', AccessionListView.as_view(), name='accession-list'),
     path('accession/<int:pk>/', AccessionDetailView.as_view(), name='accession-detail'),
-    path('accession/<int:accession_id>/add-reference/', AddReferenceToAccessionView.as_view(), name='add-reference'),
+    path('accession/<int:accession_id>/add-reference/', AddReferenceToAccessionView, name='add-reference'),
 
     path('reference/', ReferenceListView.as_view(), name='reference-list'),
     path('reference/<int:pk>/', ReferenceDetailView.as_view(), name='reference-detail'),

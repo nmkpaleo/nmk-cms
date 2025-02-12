@@ -12,6 +12,7 @@ services:
       - ./.env
     depends_on:
       - db
+      - redis
 
   db:
     image: mariadb
@@ -35,6 +36,12 @@ services:
       - PMA_HOST=${DB_HOST}
       - PMA_USER=${DB_USER}
       - PMA_PASSWORD=${DB_PASS}
+
+  redis:
+    image: redis:alpine
+    expose:
+      - "6379"
+    container_name: nmk-cms-redis
 
 volumes:
   db: null

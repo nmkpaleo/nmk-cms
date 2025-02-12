@@ -727,3 +727,16 @@ nav ul {
     height: 2px;
     background-color: blue;
   }
+
+    /* Ensures Select2 dropdown takes full width */
+.django-select2 {
+    width: 100% !important;
+}
+
+.select2-container {
+    width: 100% !important;
+}
+
+.select2-selection {
+    width: 100% !important;
+}

@@ -21,7 +21,10 @@
                 </div>
             </div>
 
-            <h3>Related References</h3>
+            <h3>Publications</h3>
+            {% if user.is_authenticated and user.groups.all.0.name == "Collection Managers" %}
+              <a href="{% url 'add-reference' accession.id %}">➕ Add Reference</a>
+            {% endif %}
             {% if references %}
                 <ul>
                     {% for ref in references %}
@@ -34,7 +37,7 @@
                     {% endfor %}
                 </ul>
             {% else %}
-                <p>No references found for this accession.</p>
+                <p>No publications found for this accession.</p>
             {% endif %}
 
             <div class="lists_table"></div>

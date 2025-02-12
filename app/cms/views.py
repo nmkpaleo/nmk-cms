@@ -43,9 +43,6 @@ def fieldslip_import(request):
 
     return render(request, 'cms/fieldslip_import.html')  # Render the import form
 
-
-
-
 def index(request):
     """View function for home page of site."""
     return render(request, 'index.html')
@@ -86,21 +83,6 @@ def reference_edit(request, pk):
     else:
         form = ReferenceForm(instance=reference)
     return render(request, 'cms/reference_form.html', {'form': form})
-
-class AddReferenceToAccessionView(FormView):
-    template_name = 'cms/add_accession_reference.html'
-    form_class = AccessionReferenceForm
-
-    def form_valid(self, form):
-        accession = self.kwargs.get('accession_id')  # Get accession ID from URL
-        reference = form.cleaned_data['reference']
-        page = form.cleaned_data['page']
-
-        AccessionReference.objects.create(
-            accession_id=accession, reference=reference, page=page
-        )
-        
-        return redirect('accession-detail', pk=accession)
 
 class FieldSlipDetailView(DetailView):
     model = FieldSlip
@@ -157,3 +139,21 @@ def upload_media(request, accession_id):
 
     return render(request, 'cms/upload_media.html', {'form': form, 'accession': accession})
 
+
+@login_required
+@user_passes_test(is_collection_manager)
+def AddReferenceToAccessionView(request, accession_id):
+    accession = get_object_or_404(Accession, id=accession_id)
+
+    if request.method == 'POST':
+        form = AccessionReferenceForm(request.POST)
+        if form.is_valid():
+            accession_reference = form.save(commit=False)
+            accession_reference.accession = accession  # Link reference to the correct accession
+            accession_reference.save()
+            return redirect('accession-detail', pk=accession_id)  # Redirect to accession detail page
+
+    else:
+        form = AccessionReferenceForm()
+
+    return render(request, 'cms/add_accession_reference.html', {'form': form, 'accession': accession})
