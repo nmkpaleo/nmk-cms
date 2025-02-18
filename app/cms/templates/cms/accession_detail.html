@@ -6,7 +6,7 @@
                 <h2 class="accession-detail-h2">Accession Detail</h2>
             </div>
             {% if user.is_authenticated and user.groups.all.0.name == "Collection Managers" %}
-                    <a href="{% url 'add_accession_row' accession.id %}">➕ Add specimen</a>
+                    <a href="{% url 'add_accession_row' accession.id %}">➕ Add Specimen Suffix</a>
                 {% endif %}
             <div class="grid-container">
               
