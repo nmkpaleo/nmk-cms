@@ -1,10 +1,10 @@
 from django.shortcuts import get_object_or_404
 from django.shortcuts import render, redirect
-from django.views.generic import DetailView, ListView
+from django.views.generic import DetailView, FormView, ListView
 
 from django.contrib.auth.decorators import login_required, user_passes_test
-from .models import Accession, FieldSlip, Media, Reference
-from .forms import FieldSlipForm, MediaUploadForm, ReferenceForm, AddAccessionRowForm
+from .models import Accession, AccessionReference, FieldSlip, Media, Reference
+from .forms import AddAccessionRowForm, AccessionReferenceForm, FieldSlipForm, MediaUploadForm, ReferenceForm
 
 import csv
 from django.http import HttpResponse
@@ -42,9 +42,6 @@ def fieldslip_import(request):
             return redirect('fieldslip-list')  # Redirect after successful import
 
     return render(request, 'cms/fieldslip_import.html')  # Render the import form
-
-
-
 
 def index(request):
     """View function for home page of site."""
@@ -87,8 +84,6 @@ def reference_edit(request, pk):
         form = ReferenceForm(instance=reference)
     return render(request, 'cms/reference_form.html', {'form': form})
 
-
-
 class FieldSlipDetailView(DetailView):
     model = FieldSlip
     template_name = 'cms/fieldslip_detail.html'
@@ -105,6 +100,11 @@ class AccessionDetailView(DetailView):
     template_name = 'cms/accession_detail.html'
     context_object_name = 'accession'
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['references'] = AccessionReference.objects.filter(accession=self.object).select_related('reference')
+        return context
+    
 class AccessionListView(ListView):
     model = Accession
     context_object_name = 'accessions'
@@ -139,8 +139,6 @@ def upload_media(request, accession_id):
 
     return render(request, 'cms/upload_media.html', {'form': form, 'accession': accession})
 
-
-
 @login_required
 @user_passes_test(is_collection_manager)
 def add_accession_row(request, accession_id):
@@ -159,3 +157,20 @@ def add_accession_row(request, accession_id):
 
     return render(request, 'cms/add_accession_row.html', {'form': form, 'accession': accession})
 
+@login_required
+@user_passes_test(is_collection_manager)
+def AddReferenceToAccessionView(request, accession_id):
+    accession = get_object_or_404(Accession, id=accession_id)
+
+    if request.method == 'POST':
+        form = AccessionReferenceForm(request.POST)
+        if form.is_valid():
+            accession_reference = form.save(commit=False)
+            accession_reference.accession = accession  # Link reference to the correct accession
+            accession_reference.save()
+            return redirect('accession-detail', pk=accession_id)  # Redirect to accession detail page
+
+    else:
+        form = AccessionReferenceForm()
+
+    return render(request, 'cms/add_accession_reference.html', {'form': form, 'accession': accession})

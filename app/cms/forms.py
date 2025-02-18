@@ -1,5 +1,34 @@
 from django import forms
-from .models import FieldSlip, Media, Reference, AccessionRow
+from django_select2 import forms as s2forms
+from django_select2.forms import ModelSelect2Widget
+from .models import Accession, AccessionReference, AccessionRow, FieldSlip, Media, Reference
+
+class ReferenceWidget(s2forms.ModelSelect2Widget):
+    search_fields = [
+        "title__icontains",
+        "first_author__icontains",
+        ]
+    
+class AccessionReferenceForm(forms.ModelForm):
+    class Meta:
+        model = AccessionReference
+        fields = ['reference', 'page']
+        widgets = {
+            "reference": ReferenceWidget,}
+
+class AccessionReferenceForm2(forms.ModelForm):
+    reference = forms.ModelChoiceField(
+        queryset=Reference.objects.all(),
+        widget=ModelSelect2Widget(
+            model=Reference,
+            search_fields=['title__icontains'],  # Allows searching by title
+            attrs={'data-placeholder': 'Select References...'}
+        )
+    )
+
+    class Meta:
+        model = AccessionReference
+        fields = ['reference', 'page']
 
 class FieldSlipForm(forms.ModelForm):
     class Meta:

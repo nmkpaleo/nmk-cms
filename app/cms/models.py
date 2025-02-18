@@ -181,14 +181,18 @@ class AccessionReference(BaseModel):
     page = models.CharField(max_length=10, blank=True, null=True)
 
     class Meta:
-        unique_together = ('accession', 'reference')
+        constraints = [
+            models.UniqueConstraint(
+                fields=['accession', 'reference'],
+                name='unique_accession_reference'
+            )
+        ]
 
     def get_absolute_url(self):
         return reverse('accessionreference-detail', args=[str(self.id)])
 
     def __str__(self):
-        return f"{self.accession} - {self.reference}"
-
+        return f"{self.accession} - {self.reference} (Page: {self.page or 'N/A'})"
 
 # AccessionRow Model
 class AccessionRow(BaseModel):
