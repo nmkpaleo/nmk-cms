@@ -1,7 +1,7 @@
 from django import forms
 from django_select2 import forms as s2forms
 from django_select2.forms import ModelSelect2Widget
-from .models import Accession, AccessionReference, FieldSlip, Media, Reference
+from .models import Accession, AccessionReference, AccessionRow, FieldSlip, Media, Reference
 
 class ReferenceWidget(s2forms.ModelSelect2Widget):
     search_fields = [
@@ -106,4 +106,9 @@ class MediaUploadForm(forms.ModelForm):
     class Meta:
         model = Media
         fields = ['media_location', 'type', 'format', 'license', 'rights_holder']
+
+class AddAccessionRowForm(forms.ModelForm):
+    class Meta:
+        model = AccessionRow
+        fields = ['storage', 'specimen_suffix']
 
