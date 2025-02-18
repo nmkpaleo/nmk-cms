@@ -4,7 +4,7 @@ from django.views.generic import DetailView, ListView
 
 from django.contrib.auth.decorators import login_required, user_passes_test
 from .models import Accession, FieldSlip, Media, Reference
-from .forms import FieldSlipForm, MediaUploadForm, ReferenceForm
+from .forms import FieldSlipForm, MediaUploadForm, ReferenceForm, AddAccessionRowForm
 
 import csv
 from django.http import HttpResponse
@@ -138,4 +138,24 @@ def upload_media(request, accession_id):
         form = MediaUploadForm()
 
     return render(request, 'cms/upload_media.html', {'form': form, 'accession': accession})
+
+
+
+@login_required
+@user_passes_test(is_collection_manager)
+def add_accession_row(request, accession_id):
+    accession = get_object_or_404(Accession, id=accession_id)
+
+    if request.method == 'POST':
+        form = AddAccessionRowForm(request.POST, request.FILES)
+        if form.is_valid():
+            accession_row = form.save(commit=False)
+            accession_row.accession = accession  # Link media to the correct accession
+            accession_row.save()
+            return redirect('accession-detail', pk=accession_id)  # Redirect to accession detail page
+
+    else:
+        form = AddAccessionRowForm()
+
+    return render(request, 'cms/add_accession_row.html', {'form': form, 'accession': accession})
 

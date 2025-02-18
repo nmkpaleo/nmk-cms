@@ -1,5 +1,5 @@
 from django import forms
-from .models import FieldSlip, Media, Reference
+from .models import FieldSlip, Media, Reference, AccessionRow
 
 class FieldSlipForm(forms.ModelForm):
     class Meta:
@@ -77,4 +77,9 @@ class MediaUploadForm(forms.ModelForm):
     class Meta:
         model = Media
         fields = ['media_location', 'type', 'format', 'license', 'rights_holder']
+
+class AddAccessionRowForm(forms.ModelForm):
+    class Meta:
+        model = AccessionRow
+        fields = ['storage', 'specimen_suffix']
 
