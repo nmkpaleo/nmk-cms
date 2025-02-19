@@ -107,7 +107,7 @@ class MediaUploadForm(forms.ModelForm):
         model = Media
         fields = ['media_location', 'type', 'format', 'license', 'rights_holder']
 
-class AccessionRowForm(forms.ModelForm):
+class AddAccessionRowForm(forms.ModelForm):
     specimen_suffix = forms.ChoiceField(choices=[], required=True)  # Empty choices initially
 
     class Meta:
