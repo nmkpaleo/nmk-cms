@@ -1,6 +1,7 @@
 from django.db import models
 from django.urls import reverse
 from django_userforeignkey.models.fields import UserForeignKey
+from django.db.models import UniqueConstraint
 from django.contrib.auth.models import User
 import os # For file handling in media class
 from django.core.exceptions import ValidationError
@@ -209,7 +210,9 @@ class AccessionRow(BaseModel):
         else:
             return f"{self.accession}: {self.specimen_suffix}" 
     class Meta:
-        unique_together = ('accession', 'specimen_suffix')
+        constraints = [
+            UniqueConstraint(fields=['accession', 'specimen_suffix'], name='unique_accession_specimen_suffix')
+        ]
 
 # NatureOfSpecimen Model
 class NatureOfSpecimen(BaseModel):
