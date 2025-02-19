@@ -204,7 +204,10 @@ class AccessionRow(BaseModel):
         return reverse('accessionrow-detail', args=[str(self.id)])
 
     def __str__(self):
-        return f"{self.accession} {self.specimen_suffix}" 
+        if not self.specimen_suffix:
+            return f"{self.accession}"
+        else:
+            return f"{self.accession}: {self.specimen_suffix}" 
     class Meta:
         unique_together = ('accession', 'specimen_suffix')
 
