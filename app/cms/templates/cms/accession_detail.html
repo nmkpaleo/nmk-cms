@@ -16,12 +16,15 @@
                     <p><strong>Accession number: </strong> <br> {{ accession.specimen_no }}</p>
                 </div>
                 <div class="lists_table">
-                    {% for row in accession.accessionrow_set.all %}
+                    {% for accessionrow in accession.accessionrow_set.all %}
                 <!-- Make this list below the Accession details as a Table. Also, add the storage field to the list -->
                 
                 <div class="card">
 
-                            <p><strong>Suffix: </strong> <br> {{ row.specimen_suffix }}</p>
+                            <p><strong>Suffix: </strong> <br>
+                                 <a href="{% url 'accession-row-detail' accessionrow.pk %}">{{ accessionrow.specimen_suffix }}</a>
+                            </p>
+                            
                         </div>
                     {% endfor %}
                 </div>
