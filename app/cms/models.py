@@ -5,6 +5,7 @@ from django.db.models import UniqueConstraint
 from django.contrib.auth.models import User
 import os # For file handling in media class
 from django.core.exceptions import ValidationError
+import string # For generating specimen number
 
 class BaseModel(models.Model):
     created_on = models.DateTimeField(auto_now_add=True)
@@ -199,16 +200,14 @@ class AccessionReference(BaseModel):
 class AccessionRow(BaseModel):
     accession = models.ForeignKey(Accession, on_delete=models.CASCADE)
     storage = models.ForeignKey(Storage, on_delete=models.SET_NULL, blank=True, null=True)
-    specimen_suffix = models.CharField(max_length=255, blank=True, null=True)
+    specimen_suffix = models.CharField(max_length=25, blank=True, null=True, default='-')
 
     def get_absolute_url(self):
         return reverse('accessionrow-detail', args=[str(self.id)])
 
     def __str__(self):
-        if not self.specimen_suffix:
-            return f"{self.accession}"
-        else:
-            return f"{self.accession}: {self.specimen_suffix}" 
+        return f"{self.accession}: {self.specimen_suffix}" if self.specimen_suffix else str(self.accession)
+
     class Meta:
         constraints = [
             UniqueConstraint(fields=['accession', 'specimen_suffix'], name='unique_accession_specimen_suffix')
@@ -217,6 +216,48 @@ class AccessionRow(BaseModel):
             models.Index(fields=['accession']),
             models.Index(fields=['specimen_suffix']),
         ]
+
+    def clean(self):
+        """ Validate specimen_suffix format and uniqueness """
+        self.validate_specimen_suffix()
+        self.ensure_unique_suffix()
+
+    def validate_specimen_suffix(self):
+        """ Ensure the specimen_suffix is valid """
+        valid_suffixes = self.generate_valid_suffixes()
+        if self.specimen_suffix != '-' and self.specimen_suffix not in valid_suffixes:
+            raise ValidationError(
+                {'specimen_suffix': f"Invalid specimen_suffix. Must be '-', A-Z, or within AA-FZ range."}
+            )
+
+    def ensure_unique_suffix(self):
+        """ Ensure the specimen_suffix is unique within the same accession """
+        if AccessionRow.objects.filter(accession=self.accession, specimen_suffix=self.specimen_suffix).exclude(id=self.id).exists():
+            raise ValidationError({'specimen_suffix': "This specimen_suffix already exists for this accession."})
+
+    def generate_valid_suffixes(self):
+        """ Generate all valid specimen_suffix values """
+        suffixes = list(string.ascii_uppercase)  # A-Z
+        for first in "ABCDEF":  # A to F for the first letter
+            for second in string.ascii_uppercase:  # A-Z for the second letter
+                suffixes.append(f"{first}{second}")
+        return suffixes
+
+    def save(self, *args, **kwargs):
+        """ Assign the next available suffix if specimen_suffix is not provided """
+        if not self.specimen_suffix or self.specimen_suffix == '-':
+            self.specimen_suffix = self.get_next_available_suffix()
+        super().save(*args, **kwargs)
+
+    def get_next_available_suffix(self):
+        """ Find the next available suffix for this accession """
+        existing_suffixes = AccessionRow.objects.filter(accession=self.accession).values_list('specimen_suffix', flat=True)
+        valid_suffixes = self.generate_valid_suffixes()
+        
+        for suffix in valid_suffixes:
+            if suffix not in existing_suffixes:
+                return suffix
+        raise ValidationError({'specimen_suffix': "No more available suffixes for this accession."})
 
 # NatureOfSpecimen Model
 class NatureOfSpecimen(BaseModel):
