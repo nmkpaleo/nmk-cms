@@ -107,8 +107,37 @@ class MediaUploadForm(forms.ModelForm):
         model = Media
         fields = ['media_location', 'type', 'format', 'license', 'rights_holder']
 
-class AddAccessionRowForm(forms.ModelForm):
+class AccessionRowForm(forms.ModelForm):
+    specimen_suffix = forms.ChoiceField(choices=[], required=True)  # Empty choices initially
+
     class Meta:
         model = AccessionRow
         fields = ['storage', 'specimen_suffix']
 
+    def __init__(self, *args, **kwargs):
+        """ Dynamically populate specimen_suffix choices based on the accession """
+        super().__init__(*args, **kwargs)
+        if 'instance' in kwargs and kwargs['instance']:
+            accession = kwargs['instance'].accession
+        elif 'initial' in kwargs and 'accession' in kwargs['initial']:
+            accession = kwargs['initial']['accession']
+        else:
+            accession = None
+
+        if accession:
+            self.fields['specimen_suffix'].choices = self.get_available_specimen_suffixes(accession)
+
+    def get_available_specimen_suffixes(self, accession):
+        """ Returns a list of available specimen_suffix options """
+        taken_suffixes = set(
+            AccessionRow.objects.filter(accession=accession)
+            .values_list('specimen_suffix', flat=True)
+        )
+        all_valid_suffixes = AccessionRow().generate_valid_suffixes()  # Get valid suffixes
+        available_suffixes = [("-", "-")]  # Default choice
+        
+        for suffix in all_valid_suffixes:
+            if suffix not in taken_suffixes:
+                available_suffixes.append((suffix, suffix))
+
+        return available_suffixes
