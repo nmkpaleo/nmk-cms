@@ -213,6 +213,10 @@ class AccessionRow(BaseModel):
         constraints = [
             UniqueConstraint(fields=['accession', 'specimen_suffix'], name='unique_accession_specimen_suffix')
         ]
+        indexes = [
+            models.Index(fields=['accession']),
+            models.Index(fields=['specimen_suffix']),
+        ]
 
 # NatureOfSpecimen Model
 class NatureOfSpecimen(BaseModel):
