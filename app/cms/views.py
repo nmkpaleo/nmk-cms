@@ -153,7 +153,7 @@ def add_accession_row(request, accession_id):
             return redirect('accession-detail', pk=accession_id)  # Redirect to accession detail page
 
     else:
-        form = AddAccessionRowForm()
+        form = AddAccessionRowForm(initial={'accession': accession})
 
     return render(request, 'cms/add_accession_row.html', {'form': form, 'accession': accession})
 
