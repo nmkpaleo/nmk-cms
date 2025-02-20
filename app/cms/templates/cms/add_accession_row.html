@@ -5,7 +5,14 @@
 
 <form method="post" enctype="multipart/form-data">
     {% csrf_token %}
-    {{ form.as_p }}
+    {{ form.accession }}  {# Hidden field for accession #}
+
+    <label for="id_storage">Storage:</label>
+    {{ form.storage }}
+
+    <label for="id_specimen_suffix">Specimen Suffix:</label>
+    {{ form.specimen_suffix }}
+
     <button type="submit">Add Specimen Suffix</button>
 </form>
 

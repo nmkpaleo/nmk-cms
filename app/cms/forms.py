@@ -109,22 +109,22 @@ class MediaUploadForm(forms.ModelForm):
 
 class AddAccessionRowForm(forms.ModelForm):
     specimen_suffix = forms.ChoiceField(choices=[], required=True)  # Empty choices initially
-
+    accession = forms.ModelChoiceField(
+        queryset=Accession.objects.all(),
+        widget=forms.HiddenInput()  # Ensure it's hidden in the form
+    )
     class Meta:
         model = AccessionRow
-        fields = ['storage', 'specimen_suffix']
+        fields = ['accession', 'storage', 'specimen_suffix']
 
     def __init__(self, *args, **kwargs):
         """ Dynamically populate specimen_suffix choices based on the accession """
+        accession = kwargs.pop('accession', None)  # Get accession from kwargs
         super().__init__(*args, **kwargs)
-        if 'instance' in kwargs and kwargs['instance']:
-            accession = kwargs['instance'].accession
-        elif 'initial' in kwargs and 'accession' in kwargs['initial']:
-            accession = kwargs['initial']['accession']
-        else:
-            accession = None
+        print(kwargs)
 
         if accession:
+            self.fields['accession'].initial = accession  # Set initial accession value
             self.fields['specimen_suffix'].choices = self.get_available_specimen_suffixes(accession)
 
     def get_available_specimen_suffixes(self, accession):
