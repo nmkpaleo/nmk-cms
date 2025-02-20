@@ -120,8 +120,8 @@ class AddAccessionRowForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         """ Dynamically populate specimen_suffix choices based on the accession """
         accession = kwargs.pop('accession', None)  # Get accession from kwargs
+
         super().__init__(*args, **kwargs)
-        print(kwargs)
 
         if accession:
             self.fields['accession'].initial = accession  # Set initial accession value
