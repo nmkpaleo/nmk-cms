@@ -1,7 +1,7 @@
 from django import forms
 from django_select2 import forms as s2forms
 from django_select2.forms import ModelSelect2Widget
-from .models import Accession, AccessionReference, AccessionRow, FieldSlip, Media, Reference
+from .models import Accession, AccessionReference, AccessionRow, FieldSlip, Media, NatureOfSpecimen, Reference
 
 class ReferenceWidget(s2forms.ModelSelect2Widget):
     search_fields = [
@@ -141,3 +141,8 @@ class AddAccessionRowForm(forms.ModelForm):
                 available_suffixes.append((suffix, suffix))
 
         return available_suffixes
+
+class NatureOfSpecimenForm(forms.ModelForm):
+    class Meta:
+        model = NatureOfSpecimen
+        fields = ['element', 'side', 'condition', 'verbatim_element', 'portion', 'fragments']
