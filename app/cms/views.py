@@ -1,13 +1,13 @@
-from django.shortcuts import get_object_or_404
-from django.shortcuts import render, redirect
-from django.views.generic import DetailView, FormView, ListView
+import csv
 
 from django.contrib.auth.decorators import login_required, user_passes_test
-from .models import Accession, AccessionReference, AccessionRow, FieldSlip, Media, Reference
-from .forms import AddAccessionRowForm, AccessionReferenceForm, FieldSlipForm, MediaUploadForm, ReferenceForm
-
-import csv
 from django.http import HttpResponse
+from django.shortcuts import get_object_or_404, render, redirect
+from django.urls import reverse_lazy
+from django.views.generic import CreateView, DetailView, FormView, ListView
+
+from .forms import AddAccessionRowForm, AccessionReferenceForm, FieldSlipForm, MediaUploadForm, NatureOfSpecimenForm, ReferenceForm
+from .models import Accession, AccessionReference, AccessionRow, FieldSlip, Media, NatureOfSpecimen, Reference
 from .resources import FieldSlipResource
 
 # Helper function to check if user is in the "Collection Managers" group
@@ -120,6 +120,20 @@ class AccessionRowDetailView(DetailView):
        # context['references'] = AccessionReference.objects.filter(accession=self.object).select_related('reference')
         return context
 
+class NatureOfSpecimenCreateView(CreateView):
+    model = NatureOfSpecimen
+    form_class = NatureOfSpecimenForm
+    template_name = 'cms/natureofspecimen_form.html'
+
+    def form_valid(self, form):
+        accession_row_id = self.kwargs.get('accession_row_id')
+        accession_row = get_object_or_404(AccessionRow, id=accession_row_id)
+        form.instance.accession_row = accession_row
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse_lazy('accessionrow-detail', kwargs={'pk': self.object.accession_row.id})
+
 class ReferenceDetailView(DetailView):
     model = Reference
     template_name = 'cms/reference_detail.html'
@@ -183,3 +197,4 @@ def AddReferenceToAccessionView(request, accession_id):
         form = AccessionReferenceForm()
 
     return render(request, 'cms/add_accession_reference.html', {'form': form, 'accession': accession})
+
