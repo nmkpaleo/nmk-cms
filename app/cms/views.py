@@ -117,7 +117,7 @@ class AccessionRowDetailView(DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-       # context['references'] = AccessionReference.objects.filter(accession=self.object).select_related('reference')
+        context['natureofspecimens'] = NatureOfSpecimen.objects.filter(accession_row=self.object)
         return context
 
 class NatureOfSpecimenCreateView(CreateView):
