@@ -20,7 +20,14 @@
                  
                 
             </div>
-
+            <h2>Nature of Specimens</h2>
+            <ul>
+              {% for specimen in natureofspecimens %}
+                <li>{{ specimen.element }} - {{ specimen.side }} - {{ specimen.condition }}</li>
+              {% endfor %}
+            </ul>
+            
+            <a href="{% url 'natureofspecimen-create' accessionrow.id %}">Add New Nature of Specimen</a>
         </div>
 
 {% endblock %}
