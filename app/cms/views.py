@@ -153,18 +153,17 @@ def upload_media(request, accession_id):
 @user_passes_test(is_collection_manager)
 def add_accession_row(request, accession_id):
     accession = get_object_or_404(Accession, id=accession_id)
-
+    
     if request.method == 'POST':
-        form = AddAccessionRowForm(request.POST, request.FILES)
+        form = AddAccessionRowForm(request.POST, request.FILES, accession=accession)
         if form.is_valid():
             accession_row = form.save(commit=False)
-            accession_row.accession = accession  # Link media to the correct accession
+            accession_row.accession = accession  # Link accession_row to the correct accession
             accession_row.save()
             return redirect('accession-detail', pk=accession_id)  # Redirect to accession detail page
 
     else:
-        form = AddAccessionRowForm()
-
+        form = AddAccessionRowForm(accession=accession)
     return render(request, 'cms/add_accession_row.html', {'form': form, 'accession': accession})
 
 @login_required
