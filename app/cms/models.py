@@ -203,7 +203,7 @@ class AccessionRow(BaseModel):
     specimen_suffix = models.CharField(max_length=25, blank=True, null=True, default='-')
 
     def get_absolute_url(self):
-        return reverse('accession-row-detail', args=[str(self.id)])
+        return reverse('accessionrow-detail', args=[str(self.id)])
 
     def __str__(self):
         return f"{self.accession}: {self.specimen_suffix}" if self.specimen_suffix else str(self.accession)

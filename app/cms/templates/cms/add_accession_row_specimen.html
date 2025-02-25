@@ -1,0 +1,27 @@
+{% extends "base_generic.html" %}
+
+{% block content %}
+<h2>Add Specimen for AccessionRow: {{ accession_row }}</h2>
+
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.media }}  {# This loads Select2 JS/CSS #}
+    {{ form.accession_row_id }}  {# Hidden field for accession row #}
+
+    <label for="id_verbatim_element">Verbatim element:</label>
+    {{ form.verbatim_element }}<br>
+    <label for="id_element">Element:</label>
+    {{ form.element }}<br>
+    <label for="id_side">Side:</label>
+    {{ form.side }}<br>
+    <label for="id_portion">Portion:</label>
+    {{ form.portion }}
+    <label for="id_condition">Condition:</label>
+    {{ form.condition }}
+    <label for="id_fragments">Fragments:</label>
+    {{ form.fragments }}
+    <button type="submit">Add Specimen</button>
+</form>
+
+<a href="{% url 'accessionrow-detail' accession_row.id %}">Back to Accession Row</a>
+{% endblock %}
