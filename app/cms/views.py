@@ -7,7 +7,7 @@ from django.urls import reverse_lazy, reverse
 from django.views.generic import CreateView, DetailView, FormView, ListView
 
 from .forms import AddAccessionRowForm, AccessionRowIdentificationForm, AccessionRowSpecimenForm, AccessionReferenceForm, FieldSlipForm, MediaUploadForm, NatureOfSpecimenForm, ReferenceForm
-from .models import Accession, AccessionReference, AccessionRow, FieldSlip, Media, NatureOfSpecimen, Identification, Reference
+from .models import Accession, AccessionReference, AccessionRow, FieldSlip, Media, NatureOfSpecimen, Identification, Reference, SpecimenGeology
 from .resources import FieldSlipResource
 
 # Helper function to check if user is in the "Collection Managers" group
@@ -103,6 +103,7 @@ class AccessionDetailView(DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['references'] = AccessionReference.objects.filter(accession=self.object).select_related('reference')
+        context['geologies'] = SpecimenGeology.objects.filter(accession=self.object).select_related('geology')
         return context
     
 class AccessionListView(ListView):
