@@ -1,13 +1,13 @@
-from django.shortcuts import get_object_or_404
-from django.shortcuts import render, redirect
-from django.views.generic import DetailView, FormView, ListView
+import csv
 
 from django.contrib.auth.decorators import login_required, user_passes_test
-from .models import Accession, AccessionReference, AccessionRow, FieldSlip, Media, Reference
-from .forms import AddAccessionRowForm, AccessionReferenceForm, FieldSlipForm, MediaUploadForm, ReferenceForm
-
-import csv
 from django.http import HttpResponse
+from django.shortcuts import get_object_or_404, render, redirect
+from django.urls import reverse_lazy, reverse
+from django.views.generic import CreateView, DetailView, FormView, ListView
+
+from .forms import AddAccessionRowForm, AccessionRowIdentificationForm, AccessionRowSpecimenForm, AccessionReferenceForm, FieldSlipForm, MediaUploadForm, NatureOfSpecimenForm, ReferenceForm
+from .models import Accession, AccessionReference, AccessionRow, FieldSlip, Media, NatureOfSpecimen, Identification, Reference
 from .resources import FieldSlipResource
 
 # Helper function to check if user is in the "Collection Managers" group
@@ -117,8 +117,26 @@ class AccessionRowDetailView(DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-       # context['references'] = AccessionReference.objects.filter(accession=self.object).select_related('reference')
+        context['natureofspecimens'] = NatureOfSpecimen.objects.filter(accession_row=self.object)
+        context['identifications'] = Identification.objects.filter(accession_row=self.object)
         return context
+
+class NatureOfSpecimenCreateView(CreateView):
+    model = NatureOfSpecimen
+    form_class = NatureOfSpecimenForm
+    template_name = 'cms/natureofspecimen_form.html'
+
+    def form_valid(self, form):
+        accession_row_id = self.kwargs.get('accession_row_id')
+        accession_row = get_object_or_404(AccessionRow, id=accession_row_id)
+        form.instance.accession_row = accession_row
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        print(f"KWARGS: ", self.kwargs)  # Debugging line
+        print(f"AccessionRow ID: ", self.object.accession_row.id)  # Debugging line
+#        return reverse_lazy('accessionrow-detail', kwargs={'pk': self.object.accession_row.id})
+        return reverse('accessionrow-detail', kwargs={'pk': self.object.accession_row.id})
 
 class ReferenceDetailView(DetailView):
     model = Reference
@@ -183,3 +201,40 @@ def AddReferenceToAccessionView(request, accession_id):
         form = AccessionReferenceForm()
 
     return render(request, 'cms/add_accession_reference.html', {'form': form, 'accession': accession})
+
+@login_required
+@user_passes_test(is_collection_manager)
+def AddIdentificationToAccessionRowView(request, accession_row_id):
+    accession_row = get_object_or_404(AccessionRow, id=accession_row_id)
+
+    if request.method == 'POST':
+        form = AccessionRowIdentificationForm(request.POST)
+        if form.is_valid():
+            accession_row_identification = form.save(commit=False)
+            accession_row_identification.accession_row = accession_row  # Link specimen to the correct accession_row
+            accession_row_identification.save()
+            return redirect('accessionrow-detail', pk=accession_row_id)  # Redirect to accession row detail page
+        else:
+            print("Form errors:", form.errors)  # Debugging output
+    else:
+        form = AccessionRowIdentificationForm()
+
+    return render(request, 'cms/add_accession_row_identification.html', {'form': form, 'accession_row': accession_row})
+@login_required
+@user_passes_test(is_collection_manager)
+def AddSpecimenToAccessionRowView(request, accession_row_id):
+    accession_row = get_object_or_404(AccessionRow, id=accession_row_id)
+
+    if request.method == 'POST':
+        form = AccessionRowSpecimenForm(request.POST)
+        if form.is_valid():
+            accession_row_specimen = form.save(commit=False)
+            accession_row_specimen.accession_row = accession_row  # Link specimen to the correct accession_row
+            accession_row_specimen.save()
+            return redirect('accessionrow-detail', pk=accession_row_id)  # Redirect to accession row detail page
+        else:
+            print("Form errors:", form.errors)  # Debugging output
+    else:
+        form = AccessionRowSpecimenForm()
+
+    return render(request, 'cms/add_accession_row_specimen.html', {'form': form, 'accession_row': accession_row})

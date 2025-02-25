@@ -1,7 +1,12 @@
 from django import forms
 from django_select2 import forms as s2forms
 from django_select2.forms import ModelSelect2Widget
-from .models import Accession, AccessionReference, AccessionRow, FieldSlip, Media, Reference
+from .models import Accession, AccessionReference, AccessionRow, FieldSlip, Identification, Media, NatureOfSpecimen, Reference
+
+class ElementWidget(s2forms.ModelSelect2Widget):
+    search_fields = [
+        "name__icontains",
+        ]
 
 class ReferenceWidget(s2forms.ModelSelect2Widget):
     search_fields = [
@@ -9,6 +14,11 @@ class ReferenceWidget(s2forms.ModelSelect2Widget):
         "first_author__icontains",
         ]
     
+class TaxonWidget(s2forms.ModelSelect2Widget):
+    search_fields = [
+        "taxon_name__icontains",
+        ]
+
 class AccessionReferenceForm(forms.ModelForm):
     class Meta:
         model = AccessionReference
@@ -141,3 +151,40 @@ class AddAccessionRowForm(forms.ModelForm):
                 available_suffixes.append((suffix, suffix))
 
         return available_suffixes
+
+class NatureOfSpecimenForm(forms.ModelForm):
+    class Meta:
+        model = NatureOfSpecimen
+        fields = ['element', 'side', 'condition', 'verbatim_element', 'portion', 'fragments']
+
+class AddSpecimenForm(forms.ModelForm):
+    accession_row = forms.ModelChoiceField(
+        queryset=AccessionRow.objects.all(),
+        widget=forms.HiddenInput()  # Ensure it's hidden in the form
+    )
+    class Meta:
+        model = NatureOfSpecimen
+        fields = ['element', 'side', 'condition', 'verbatim_element', 'portion', 'fragments']
+
+    def __init__(self, *args, **kwargs):
+        accession_row = kwargs.pop('accession_row', None)  # Get accession from kwargs
+
+        super().__init__(*args, **kwargs)
+
+        if accession_row:
+            self.fields['accession_row'].initial = accession_row  # Set initial accession_row value
+
+class AccessionRowIdentificationForm(forms.ModelForm):
+    class Meta:
+        model = Identification
+        fields = ['identified_by', 'taxon', 'reference', 'date_identified', 'identification_qualifier', 'verbatim_identification', 'identification_remarks']
+        widgets = {
+            "reference": ReferenceWidget,
+            "taxon": TaxonWidget,}
+
+class AccessionRowSpecimenForm(forms.ModelForm):
+    class Meta:
+        model = NatureOfSpecimen
+        fields = ['element', 'side', 'condition', 'verbatim_element', 'portion', 'fragments']
+        widgets = {
+            "element": ElementWidget,}
