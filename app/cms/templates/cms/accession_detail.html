@@ -1,100 +1,137 @@
 {% extends "base_generic.html" %}
 
 {% block content %}
-        <div class="template-detail-container">
-            <div class="template-detail-header">
-                <h2 class="accession-detail-h2">Accession Detail</h2>
-            </div>
-            {% if user.is_authenticated and user.groups.all.0.name == "Collection Managers" %}
-                    <a href="{% url 'add_accession_row' accession.id %}">➕ Add Specimen Suffix</a>
-                {% endif %}
-            <div class="grid-container">
-              
-                <!-- Accession Card -->
-                <div class="card">
-                    <p><strong>Specimen prefix: </strong> <br> {{ accession.collection.abbreviation }}</p>
-                    <p><strong>Accession number: </strong> <br> {{ accession.specimen_no }}</p>
-                </div>
-                <div class="lists_table">
-                    {% for accessionrow in accession.accessionrow_set.all %}
-                <!-- Make this list below the Accession details as a Table. Also, add the storage field to the list -->
-                
-                <div class="card">
+    <div class="template-detail-container">
+        <div class="template-detail-header">
+            <h2 class="accession-detail-h2">Accession Detail</h2>
+        </div>
+        <div class="grid-container">            
+            <!-- Accession Card -->
+            <div class="card">
+                <p><strong>Specimen prefix: </strong> {{ accession.collection.abbreviation }}</p>
+                <p><strong>Accession number: </strong> {{ accession.specimen_no }}</p>
 
-                            <p><strong>Suffix: </strong> <br>
-                                 <a href="{% url 'accessionrow-detail' accessionrow.pk %}">{{ accessionrow.specimen_suffix }}</a>
-                            </p>
-                            
+                {% if user.is_authenticated and user.groups.all.0.name == "Collection Managers" %}
+                    <a href="{% url 'add_accession_row' accession.id %}">➕ Add Horizon</a>
+                {% endif %}
+                <div class="lists_table">
+                    {% for geology in geologies %}                   
+                        <div class="card">        
+                            <p><strong>Upper Horizon: </strong>
+                                {{ geology.earliest_geological_context }}
+                            </p>                
+                            <p><strong>Lower Horizon: </strong>
+                                {{ geology.latest_geological_context }}
+                            </p>                
                         </div>
                     {% endfor %}
                 </div>
-            </div>
 
-            <h3>References</h3>
-            {% if user.is_authenticated and user.groups.all.0.name == "Collection Managers" %}
-              <a href="{% url 'add-reference' accession.id %}">➕ Add Reference</a>
-            {% endif %}
-            {% if references %}
-                <ul>
-                    {% for ref in references %}
-                        <li>
-                            {{ ref.reference.title }} 
-                            {% if ref.page %}
-                                (Page: {{ ref.page }})
-                            {% endif %}
-                        </li>
+                {% if user.is_authenticated and user.groups.all.0.name == "Collection Managers" %}
+                    <a href="{% url 'add_accession_row' accession.id %}">➕ Add Specimen Suffix</a>
+                {% endif %}
+                <div class="lists_table">
+                    {% for accessionrow in accession.accessionrow_set.all %}                   
+                        <div class="card">        
+                            <p><strong>Suffix: </strong> <br>
+                                <a href="{% url 'accessionrow-detail' accessionrow.pk %}">{{ accessionrow.specimen_suffix }}</a>
+                            </p>                
+                        </div>
                     {% endfor %}
-                </ul>
-            {% else %}
-                <p>No References found for this accession.</p>
-            {% endif %}
+                </div>
+                <h3>References</h3>
+                {% if user.is_authenticated and user.groups.all.0.name == "Collection Managers" %}
+                  <a href="{% url 'add-reference' accession.id %}">➕ Add Reference</a>
+                {% endif %}
+                {% if references %}
+                    <ul>
+                        {% for ref in references %}
+                            <li>
+                                {{ ref.reference.title }} 
+                                {% if ref.page %}
+                                    (Page: {{ ref.page }})
+                                {% endif %}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p>No References found for this accession.</p>
+                {% endif %}
+
+                <h3>Comments</h3>
+                {% if user.is_authenticated and user.groups.all.0.name == "Collection Managers" %}
+                  <a href="{% url 'add-comment' accession.id %}">➕ Add Comment</a>
+                {% endif %}
+                {% if comments %}
+                    <table>
+                        <tr>
+                            <th>Subject</th>
+                            <th>Comment</th>
+                            <th>Comment by</th>
+                            <th>Status</th>
+                        </tr>
+                    {% for comment in comments %}
+                        <tr>
+                            <td>{{ comment.subject }}</td>
+                            <td>{{ comment.comment }}</td>
+                            <td>{{ comment.comment_by }}</td>
+                            <td>{{ comment.get_status_display }}</td>
+                        </tr>
+                    {% endfor %}
+                    </table>
+                {% else %}
+                    <p>No Comments found for this accession.</p>
+                {% endif %}
+            </div>
+        </div>
+
 
             <div class="lists_table"></div>
                 {% if user.is_authenticated and user.groups.all.0.name == "Collection Managers" %}
                     <a href="{% url 'upload-media' accession.id %}">➕ Upload Media</a>
                 {% endif %}
-            <table>
-                <caption>
-                  Related Media for Accession: {{ accession }}
-                </caption>
-                <thead>
-                  <tr>
-                    <th>File Name</th>
-                    <th>Type</th>
-                    <th>License</th>
-                    <th>Media</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% if accession.media.all %}
-                    {% for media in accession.media.all %}
-                        <tr>
-                            <td>{{ media.file_name }}</td>
-                            <td>{{ media.type }}</td>
-                            <td>{{ media.get_license_display }}</td>
-                            <td>
-                                {% if media.media_location %}
-                                    <a href="{{ media.media_location.url }}" target="_blank">
-                                    {% if media.type == "photo" %}
-                                        <img src="{{ media.media_location.url }}" alt="{{ media.file_name }}" height="100">
-                                    {% else %}
-                                        View File
-                                    {% endif %}
-                                    </a>
-                                {% endif %}
-                            </td>
-                        </tr>
-                    {% endfor %}
-                  {% else %}
+                <table>
+                    <caption>
+                    Related Media for Accession: {{ accession }}
+                    </caption>
+                    <thead>
                     <tr>
-                      <td colspan="4">There are no media files available for this accession.</td>
+                        <th>File Name</th>
+                        <th>Type</th>
+                        <th>License</th>
+                        <th>Media</th>
                     </tr>
-                  {% endif %}
-                </tbody>
-              </table>
+                    </thead>
+                    <tbody>
+                    {% if accession.media.all %}
+                        {% for media in accession.media.all %}
+                            <tr>
+                                <td>{{ media.file_name }}</td>
+                                <td>{{ media.type }}</td>
+                                <td>{{ media.get_license_display }}</td>
+                                <td>
+                                    {% if media.media_location %}
+                                        <a href="{{ media.media_location.url }}" target="_blank">
+                                        {% if media.type == "photo" %}
+                                            <img src="{{ media.media_location.url }}" alt="{{ media.file_name }}" height="100">
+                                        {% else %}
+                                            View File
+                                        {% endif %}
+                                        </a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                        <td colspan="4">There are no media files available for this accession.</td>
+                        </tr>
+                    {% endif %}
+                    </tbody>
+                </table>
             </div>
         </div>
-
+    </div>
 {% endblock %}
 
 
