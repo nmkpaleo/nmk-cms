@@ -12,6 +12,7 @@
     {% load static %}
     <link rel="stylesheet" href="{% static 'css/style.css' %}" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css">
 
     {% block title %}
       <title>NMK CMS</title>
@@ -26,9 +27,11 @@
       <div class="row">
         <div class="main_navbar">
           <a href=""><img src="{% static 'images/logo.jpg' %}" class="logo_image" alt="NMK LOGO"></a>
+          
 
           {% block sidebar %}
             <ul class="sidebar-nav">
+              <!--<div class="close-icon" onclick="toggleMenu()">✖</div>-->
               <li><a href="{% url 'index' %}" class="active">Home</a></li>
               <li><a href="{% url 'fieldslip-list' %}">FieldSlips</a></li>
               <li><a href="{% url 'accession-list' %}">Accession</a></li>
@@ -46,9 +49,12 @@
               {% else %}
                 <a href="{% url 'account_login' %}?next={{ request.path }}" class="login_base_button">Login</a>
               {% endif %}
+              
             </ul>
           {% endblock %}
+          <div class="hamburger" onclick="toggleMenu()">☰</div>
         </div>
+        
         <div class="col-sm-10 ">
           {% block content %}
 
@@ -80,5 +86,6 @@
         </div>
       </div>
     </div>
+    <script src="{% static 'javascript.js' %}"></script>
   </body>
 </html>
