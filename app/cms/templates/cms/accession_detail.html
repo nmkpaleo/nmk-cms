@@ -36,7 +36,7 @@
                 <hr>
 
                 {% if user.is_authenticated and user.groups.all.0.name == "Collection Managers" %}
-                    <a href="{% url 'add_accession_row' accession.id %}">➕ Add Horizon</a>
+                    <a href="{% url 'add-geology' accession.id %}">➕ Add Horizon</a>
                 {% endif %}
 
                 <table>
