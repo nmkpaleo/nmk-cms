@@ -6,7 +6,7 @@ from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse_lazy, reverse
 from django.views.generic import CreateView, DetailView, FormView, ListView
 
-from .forms import AddAccessionRowForm, AccessionCommentForm, AccessionRowIdentificationForm, AccessionRowSpecimenForm, AccessionReferenceForm, FieldSlipForm, MediaUploadForm, NatureOfSpecimenForm, ReferenceForm
+from .forms import AccessionCommentForm, AccessionGeologyForm, AccessionRowIdentificationForm, AccessionRowSpecimenForm, AccessionReferenceForm, AddAccessionRowForm, FieldSlipForm, MediaUploadForm, NatureOfSpecimenForm, ReferenceForm
 from .models import Accession, AccessionReference, AccessionRow, Comment, FieldSlip, Media, NatureOfSpecimen, Identification, Reference, SpecimenGeology
 from .resources import FieldSlipResource
 

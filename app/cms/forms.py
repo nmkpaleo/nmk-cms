@@ -1,7 +1,7 @@
 from django import forms
 from django_select2 import forms as s2forms
 from django_select2.forms import ModelSelect2Widget
-from .models import Accession, AccessionReference, AccessionRow, Comment, FieldSlip, Identification, Media, NatureOfSpecimen, Reference
+from .models import Accession, AccessionReference, AccessionRow, Comment, FieldSlip, Identification, Media, NatureOfSpecimen, Reference, SpecimenGeology
 
 class ElementWidget(s2forms.ModelSelect2Widget):
     search_fields = [
@@ -23,6 +23,11 @@ class AccessionCommentForm(forms.ModelForm):
     class Meta:
         model = Comment
         fields = ['subject', 'comment', 'comment_by']
+
+class AccessionGeologyForm(forms.ModelForm):
+    class Meta:
+        model = SpecimenGeology
+        fields = ['earliest_geological_context', 'latest_geological_context']
 
 class AccessionReferenceForm(forms.ModelForm):
     class Meta:
