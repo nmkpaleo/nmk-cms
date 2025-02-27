@@ -1,0 +1,9 @@
+{% extends "base_generic.html" %}
+
+{% block content %}
+    <h1>Add Horizon to {{ accession }}</h1>
+
+    {% include "includes/base_form.html" with form=form submit_label="Add Horizon" method="post" action=request.path %}
+
+    <a href="{% url 'accession-detail' accession.id %}">Back to Accession</a>
+{% endblock %}
