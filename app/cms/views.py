@@ -6,8 +6,8 @@ from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse_lazy, reverse
 from django.views.generic import CreateView, DetailView, FormView, ListView
 
-from .forms import AddAccessionRowForm, AccessionRowIdentificationForm, AccessionRowSpecimenForm, AccessionReferenceForm, FieldSlipForm, MediaUploadForm, NatureOfSpecimenForm, ReferenceForm
-from .models import Accession, AccessionReference, AccessionRow, FieldSlip, Media, NatureOfSpecimen, Identification, Reference
+from .forms import AccessionCommentForm, AccessionGeologyForm, AccessionRowIdentificationForm, AccessionRowSpecimenForm, AccessionReferenceForm, AddAccessionRowForm, FieldSlipForm, MediaUploadForm, NatureOfSpecimenForm, ReferenceForm
+from .models import Accession, AccessionReference, AccessionRow, Comment, FieldSlip, Media, NatureOfSpecimen, Identification, Reference, SpecimenGeology
 from .resources import FieldSlipResource
 
 # Helper function to check if user is in the "Collection Managers" group
@@ -103,6 +103,8 @@ class AccessionDetailView(DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['references'] = AccessionReference.objects.filter(accession=self.object).select_related('reference')
+        context['geologies'] = SpecimenGeology.objects.filter(accession=self.object)
+        context['comments'] = Comment.objects.filter(specimen_no=self.object)
         return context
     
 class AccessionListView(ListView):
@@ -186,6 +188,25 @@ def add_accession_row(request, accession_id):
 
 @login_required
 @user_passes_test(is_collection_manager)
+def AddCommentToAccessionView(request, accession_id):
+    accession = get_object_or_404(Accession, id=accession_id)
+
+    if request.method == 'POST':
+        form = AccessionCommentForm(request.POST)
+        if form.is_valid():
+            accession_comment = form.save(commit=False)
+            accession_comment.specimen_no = accession  # Link comment to the correct accession (specimen no)
+            accession_comment.status = 'N'
+            accession_comment.save()
+            return redirect('accession-detail', pk=accession_id)  # Redirect to accession detail page
+
+    else:
+        form = AccessionCommentForm()
+
+    return render(request, 'cms/add_accession_comment.html', {'form': form, 'accession': accession})
+
+@login_required
+@user_passes_test(is_collection_manager)
 def AddReferenceToAccessionView(request, accession_id):
     accession = get_object_or_404(Accession, id=accession_id)
 
@@ -220,6 +241,7 @@ def AddIdentificationToAccessionRowView(request, accession_row_id):
         form = AccessionRowIdentificationForm()
 
     return render(request, 'cms/add_accession_row_identification.html', {'form': form, 'accession_row': accession_row})
+
 @login_required
 @user_passes_test(is_collection_manager)
 def AddSpecimenToAccessionRowView(request, accession_row_id):
@@ -238,3 +260,22 @@ def AddSpecimenToAccessionRowView(request, accession_row_id):
         form = AccessionRowSpecimenForm()
 
     return render(request, 'cms/add_accession_row_specimen.html', {'form': form, 'accession_row': accession_row})
+
+@login_required
+@user_passes_test(is_collection_manager)
+def AddGeologyToAccessionView(request, accession_id):
+    accession = get_object_or_404(Accession, id=accession_id)
+
+    if request.method == 'POST':
+        form = AccessionGeologyForm(request.POST)
+        if form.is_valid():
+            accession_geology = form.save(commit=False)
+            accession_geology.accession = accession
+            accession_geology.save()
+            return redirect('accession-detail', pk=accession_id)
+        else:
+            print("Form errors:", form.errors)  # Debugging output
+    else:
+        form = AccessionGeologyForm()
+
+    return render(request, 'cms/add_accession_geology.html', {'form': form, 'accession': accession})

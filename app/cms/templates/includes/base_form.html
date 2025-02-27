@@ -1,0 +1,32 @@
+{% if form.non_field_errors %}
+  <div class="form-errors">
+    {% for error in form.non_field_errors %}
+      <p class="error-message">{{ error }}</p>
+    {% endfor %}
+  </div>
+{% endif %}
+
+<form method="{{ method|default:'post' }}" action="{{ action|default:'' }}" class="form-container">
+  {% csrf_token %}
+
+  {# Render Hidden Fields #}
+  {% for hidden in form.hidden_fields %}
+    {{ hidden }}
+  {% endfor %}
+
+  {# Render Visible Fields #}
+  {% for field in form.visible_fields %}
+    <div class="form-group">
+      <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+      {{ field }}
+      {% if field.help_text %}
+        <small class="form-help-text">{{ field.help_text }}</small>
+      {% endif %}
+      {% for error in field.errors %}
+        <p class="error-message">{{ error }}</p>
+      {% endfor %}
+    </div>
+  {% endfor %}
+
+  <button type="submit" class="form-submit-button">{{ submit_label|default:'Submit' }}</button>
+</form>
