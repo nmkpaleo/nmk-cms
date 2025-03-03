@@ -2,8 +2,9 @@
 
 {% block content %}
     <h2>Add Taxon to Specimen: {{ accession_row }}</h2>
-    {% include "includes/base_form.html" with form=form submit_label="Add Taxon" method="post" action=request.path %}
+
     {{ form.media }}  {# This loads Select2 JS/CSS #}
+    {% include "includes/base_form.html" with form=form submit_label="Add Taxon" method="post" action=request.path %}
 
     <a href="{% url 'accessionrow-detail' accession_row.id %}">Back to Specimen</a>
 {% endblock %}
