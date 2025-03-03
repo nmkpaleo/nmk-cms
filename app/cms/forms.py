@@ -51,6 +51,11 @@ class AccessionReferenceForm2(forms.ModelForm):
         fields = ['reference', 'page']
 
 class FieldSlipForm(forms.ModelForm):
+    collection_date = forms.DateField(
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+        required=False
+    )
+
     class Meta:
         model = FieldSlip
         fields = [
@@ -60,37 +65,6 @@ class FieldSlipForm(forms.ModelForm):
             'verbatim_longitude', 'verbatim_SRS', 'verbatim_coordinate_system',
             'verbatim_elevation'
         ]
-        widgets = {
-
-            'field_number': forms.TextInput(attrs={'class': 'template_form_input'}),
-
-            'discoverer': forms.TextInput(attrs={'class': 'template_form_input'}),
-
-            'collector': forms.TextInput(attrs={'class': 'template_form_input'}),
-
-            'collection_date': forms.DateInput(attrs={'class': 'template_form_input', 'type': 'date'}),
-
-            'verbatim_locality': forms.TextInput(attrs={'class': 'template_form_input'}),
-
-            'verbatim_taxon': forms.TextInput(attrs={'class': 'template_form_input'}),
-            'verbatim_element': forms.TextInput(attrs={'class': 'template_form_input'}),
-
-            'verbatim_horizon': forms.TextInput(attrs={'class': 'template_form_input'}),
-
-            'verbatim_latitude': forms.TextInput(attrs={'class': 'template_form_input'}),
-
-            'verbatim_longitude': forms.TextInput(attrs={'class': 'template_form_input'}),
-
-            'verbatim_SRS': forms.TextInput(attrs={'class': 'template_form_input'}),
-
-            'verbatim_coordinate_system': forms.TextInput(attrs={'class': 'template_form_input'}),
-
-            'verbatim_elevation': forms.TextInput(attrs={'class': 'template_form_input'}),
-
-            'aerial_photo': forms.FileInput(attrs={'class': 'template_form_input'}),
-
-        }
-
 
 class ReferenceForm(forms.ModelForm):
     class Meta:
