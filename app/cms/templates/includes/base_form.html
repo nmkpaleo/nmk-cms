@@ -6,7 +6,8 @@
   </div>
 {% endif %}
 
-<form method="{{ method|default:'post' }}" action="{{ action|default:'' }}" class="form-container">
+<form method="{{ method|default:'post' }}" action="{{ action|default:'' }}" class="form-container" 
+      enctype="{{ enctype|default:'application/x-www-form-urlencoded' }}">
   {% csrf_token %}
 
   {# Render Hidden Fields #}
