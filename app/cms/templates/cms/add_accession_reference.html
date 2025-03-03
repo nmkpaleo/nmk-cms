@@ -3,12 +3,8 @@
 {% block content %}
     <h1>Add Reference to {{ accession }}</h1>
 
-    <form method="post" enctype="multipart/form-data">
-        {% csrf_token %}
-        {{ form.media }}  {# This loads Select2 JS/CSS #}
-        {{ form.as_p }}
-        <button type="submit">Add Reference</button>
-    </form>
+    {{ form.media }}  {# This loads Select2 JS/CSS #}
+    {% include "includes/base_form.html" with form=form submit_label="Add Reference" method="post" action=request.path %}
 
     <a href="{% url 'accession-detail' accession.id %}">Back to Accession</a>
 {% endblock %}
