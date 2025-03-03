@@ -123,23 +123,6 @@ class AccessionRowDetailView(DetailView):
         context['identifications'] = Identification.objects.filter(accession_row=self.object)
         return context
 
-class NatureOfSpecimenCreateView(CreateView):
-    model = NatureOfSpecimen
-    form_class = NatureOfSpecimenForm
-    template_name = 'cms/natureofspecimen_form.html'
-
-    def form_valid(self, form):
-        accession_row_id = self.kwargs.get('accession_row_id')
-        accession_row = get_object_or_404(AccessionRow, id=accession_row_id)
-        form.instance.accession_row = accession_row
-        return super().form_valid(form)
-
-    def get_success_url(self):
-        print(f"KWARGS: ", self.kwargs)  # Debugging line
-        print(f"AccessionRow ID: ", self.object.accession_row.id)  # Debugging line
-#        return reverse_lazy('accessionrow-detail', kwargs={'pk': self.object.accession_row.id})
-        return reverse('accessionrow-detail', kwargs={'pk': self.object.accession_row.id})
-
 class ReferenceDetailView(DetailView):
     model = Reference
     template_name = 'cms/reference_detail.html'

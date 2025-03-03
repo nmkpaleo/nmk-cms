@@ -21,7 +21,6 @@ urlpatterns = [
     path('accession/<int:accession_id>/add-reference/', AddReferenceToAccessionView, name='add-reference'),
     path('accession/<int:accession_id>/upload_media/', upload_media, name='upload-media'),
     path('accessionrow/<int:pk>/', AccessionRowDetailView.as_view(), name='accessionrow-detail'),
-    #path('accessionrow/<int:accession_row_id>/add-specimen/', NatureOfSpecimenCreateView.as_view(), name='natureofspecimen-create'),
     path('accessionrow/<int:accession_row_id>/add-specimen/', AddSpecimenToAccessionRowView, name='add-specimen'),
     path('accessionrow/<int:accession_row_id>/add-identification/', AddIdentificationToAccessionRowView, name='add-identification'),
 
