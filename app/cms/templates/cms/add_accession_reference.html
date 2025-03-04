@@ -1,10 +1,7 @@
 {% extends "base_generic.html" %}
 
 {% block content %}
-    <h1>Add Reference to {{ accession }}</h1>
-
-    {{ form.media }}  {# This loads Select2 JS/CSS #}
-    {% include "includes/base_form.html" with form=form submit_label="Add Reference" method="post" action=request.path %}
-
+    {% include "includes/base_form.html" with form=form submit_label="Save" method="post" action=request.path title="Reference to Accession: " access=accession_row %}
+    
     <a href="{% url 'accession-detail' accession.id %}">Back to Accession</a>
 {% endblock %}

@@ -1,9 +1,7 @@
 {% extends "base_generic.html" %}
 
 {% block content %}
-    <h1>Add Field Slip</h1>
-
-    {% include "includes/base_form.html" with form=form submit_label="Add Field Slip" method="post" action=request.path %}
-
+    {% include "includes/base_form.html" with form=form submit_label="Save" method="post" action=request.path title="Field Slip" %}
+    
     <a href="{% url 'fieldslip-list' %}">Back to Field Slip list</a>
 {% endblock %}

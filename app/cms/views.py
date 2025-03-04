@@ -72,6 +72,16 @@ def fieldslip_edit(request, pk):
     return render(request, 'cms/fieldslip_form.html', {'form': form})
 
 
+def reference_create(request):
+    if request.method == 'POST':
+        form = ReferenceForm(request.POST, request.FILES)
+        if form.is_valid():
+            form.save()
+            return redirect('reference-list')  #  to redirect to the list view
+    else:
+        form = ReferenceForm()
+    return render(request, 'cms/reference_form.html', {'form': form})
+
 def reference_edit(request, pk):
     
     reference = get_object_or_404(Reference, pk=pk)
@@ -164,7 +174,6 @@ def add_accession_row(request, accession_id):
             accession_row.accession = accession  # Link accession_row to the correct accession
             accession_row.save()
             return redirect('accession-detail', pk=accession_id)  # Redirect to accession detail page
-
     else:
         form = AddAccessionRowForm(accession=accession)
     return render(request, 'cms/add_accession_row.html', {'form': form, 'accession': accession})
