@@ -77,6 +77,12 @@ class Accession(BaseModel):
     comment = models.TextField(null=True, blank=True, help_text="Any additional comments")
     is_published = models.BooleanField(default=False)
 
+    # code to set is_published to True if the accession has references
+    def save(self, *args, **kwargs):
+        if self.accessionreference_set.exists():
+            self.is_published = True
+        super().save(*args, **kwargs)
+        
     def get_absolute_url(self):
         return reverse('accession-detail', args=[str(self.id)])
 
