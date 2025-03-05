@@ -322,7 +322,7 @@ class Person(BaseModel):
 class Identification(BaseModel):
     accession_row = models.ForeignKey(AccessionRow, on_delete=models.CASCADE)
     identified_by = models.ForeignKey(Person, on_delete=models.SET_NULL, null=True, blank=True)
-    taxon = models.ForeignKey('Taxon', on_delete=models.SET_NULL, null=True, blank=True)
+    taxon = models.CharField(max_length=255, blank=True, null=True)
     reference = models.ForeignKey(Reference, on_delete=models.SET_NULL, null=True, blank=True)
     date_identified = models.DateField(null=True, blank=True)
     identification_qualifier = models.CharField(max_length=255, blank=True, null=True)
