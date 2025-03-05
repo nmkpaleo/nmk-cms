@@ -128,18 +128,16 @@ class Comment(BaseModel):
 
 # FieldSlip Model
 class FieldSlip(BaseModel):
-    field_number = models.CharField(max_length=100)
+    field_number = models.CharField(max_length=100, null=False, blank=False)
     discoverer = models.CharField(max_length=255, null=True, blank=True)
     collector = models.CharField(max_length=255, null=True, blank=True)
     collection_date = models.DateField(null=True, blank=True)
     verbatim_locality = models.CharField(max_length=255, null=True, blank=True)
-    verbatim_taxon = models.CharField(max_length=255, null=True, blank=True)
-    verbatim_element = models.CharField(max_length=255, null=True, blank=True)
+    verbatim_taxon = models.CharField(max_length=255, null=False, blank=False)
+    verbatim_element = models.CharField(max_length=255, null=False, blank=False)
     verbatim_horizon = models.CharField(max_length=255, null=True, blank=True)
     verbatim_method = models.CharField(max_length=255, null=True, blank=True)
-    
-    aerial_photo = models.ImageField(upload_to='aerial_photos/', null=True, blank=True)
-
+    aerial_photo = models.CharField(max_length=25, null=True, blank=True)
     verbatim_latitude = models.CharField(max_length=255, null=True, blank=True)
     verbatim_longitude = models.CharField(max_length=255, null=True, blank=True)
     verbatim_SRS = models.CharField(max_length=255, null=True, blank=True)
@@ -152,6 +150,9 @@ class FieldSlip(BaseModel):
     def __str__(self):
         return self.field_number
 
+    class Meta:
+        ordering = ["field_number"]
+        verbose_name = "Field Slip"
 
 # Storage Model
 class Storage(BaseModel):
@@ -502,7 +503,7 @@ class SpecimenGeology(BaseModel):
     def get_absolute_url(self):
         return reverse('specimen-geology-detail', args=[str(self.id)])
 
-    def __str__(self):
+    def __str__(self):  
         return f"SpecimenGeology for Accession {self.accession}"
 
 class GeologicalContext(BaseModel):
