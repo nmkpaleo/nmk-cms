@@ -150,7 +150,7 @@ def upload_media(request, accession_id):
     accession = get_object_or_404(Accession, id=accession_id)
 
     if request.method == 'POST':
-        form = MediaUploadForm(request.POST, request.FILES)
+        form = MediaUploadForm(request.POST, request.FILES) # Important: request.FILES for file handling
         if form.is_valid():
             media = form.save(commit=False)
             media.accession = accession  # Link media to the correct accession
