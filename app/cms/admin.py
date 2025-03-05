@@ -144,9 +144,8 @@ class ReferenceAdmin(ImportExportModelAdmin):
 
 # SpecimenGeology
 class SpecimenGeologyAdmin(ImportExportModelAdmin):
-    list_display = ('accession', 'geological_context_type', 'earliest_geological_context', 'latest_geological_context')
-    search_fields = ('accession__specimen_prefix', 'geological_context_type')
-    list_filter = ('geological_context_type',)
+    list_display = ('accession', 'earliest_geological_context', 'latest_geological_context')
+    search_fields = ('accession__specimen_prefix')
     ordering = ('accession',)
 
 # Storage Model
