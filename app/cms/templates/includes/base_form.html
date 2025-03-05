@@ -13,9 +13,9 @@
 {% if title %}
   <h1>
     {% if form.instance.pk %}
-      Edit {{ title }}
+      Edit {{ title }}{% if access %}: {{ access }}{% endif %}
     {% else %}
-      New {{ title }}
+      New {{ title }}{% if access %}: {{ access }}{% endif %}
     {% endif %}
   </h1>
 {% endif %}
