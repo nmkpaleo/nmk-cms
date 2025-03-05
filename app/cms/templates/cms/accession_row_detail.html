@@ -26,7 +26,6 @@
             
       <h2>Elements</h2>
       <table>
-        {% for specimen in natureofspecimens %}
         <tr>
           <th>Element</th>
           <th>Side</th>
@@ -35,6 +34,7 @@
           <th>Portion</th>
           <th>Fragments</th>
         </tr>
+        {% for specimen in natureofspecimens %}
         <tr>
           <td>{{ specimen.element }}</td>
           <td>{{ specimen.side }}</td>
