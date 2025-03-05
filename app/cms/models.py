@@ -75,6 +75,7 @@ class Accession(BaseModel):
     
     type_status = models.CharField(max_length=50, choices=options, null=True, blank=True, help_text="Please select the type status")
     comment = models.TextField(null=True, blank=True, help_text="Any additional comments")
+    is_published = models.BooleanField(default=False)
 
     def get_absolute_url(self):
         return reverse('accession-detail', args=[str(self.id)])
