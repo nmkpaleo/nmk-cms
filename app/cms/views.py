@@ -7,7 +7,7 @@ from django.urls import reverse_lazy, reverse
 from django.views.generic import CreateView, DetailView, FormView, ListView
 
 from .forms import AccessionCommentForm, AccessionGeologyForm, AccessionRowIdentificationForm, AccessionRowSpecimenForm, AccessionReferenceForm, AddAccessionRowForm, FieldSlipForm, MediaUploadForm, NatureOfSpecimenForm, ReferenceForm
-from .models import Accession, AccessionReference, AccessionRow, Comment, FieldSlip, Media, NatureOfSpecimen, Identification, Reference, SpecimenGeology
+from .models import Accession, AccessionReference, AccessionRow, Comment, FieldSlip, Media, NatureOfSpecimen, Identification, Reference, SpecimenGeology, Taxon
 from .resources import FieldSlipResource
 
 # Helper function to check if user is in the "Collection Managers" group
@@ -227,6 +227,7 @@ def AddReferenceToAccessionView(request, accession_id):
 @user_passes_test(is_collection_manager)
 def AddIdentificationToAccessionRowView(request, accession_row_id):
     accession_row = get_object_or_404(AccessionRow, id=accession_row_id)
+    taxonomy = []
 
     if request.method == 'POST':
         form = AccessionRowIdentificationForm(request.POST)
@@ -234,13 +235,27 @@ def AddIdentificationToAccessionRowView(request, accession_row_id):
             accession_row_identification = form.save(commit=False)
             accession_row_identification.accession_row = accession_row  # Link specimen to the correct accession_row
             accession_row_identification.save()
+
+            # Search for taxonomy records where taxon_name matches the user input
+            taxon_name = accession_row_identification.taxon
+            if taxon_name:
+                taxonomy = Taxon.objects.filter(taxon_name__icontains=taxon_name)
+
             return redirect('accessionrow-detail', pk=accession_row_id)  # Redirect to accession row detail page
         else:
             print("Form errors:", form.errors)  # Debugging output
     else:
         form = AccessionRowIdentificationForm()
 
-    return render(request, 'cms/add_accession_row_identification.html', {'form': form, 'accession_row': accession_row})
+    return render(
+        request,
+        'cms/add_accession_row_identification.html',
+        {
+            'form': form,
+            'accession_row': accession_row,
+            'taxonomy': taxonomy,
+        }
+    )
 
 @login_required
 @user_passes_test(is_collection_manager)

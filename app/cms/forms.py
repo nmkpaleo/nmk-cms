@@ -188,14 +188,13 @@ class AccessionRowIdentificationForm(forms.ModelForm):
     class Meta:
         model = Identification
         fields = ['identified_by', 'taxon', 'reference', 'date_identified', 'identification_qualifier', 'verbatim_identification', 'identification_remarks']
-        widgets = {
-            "reference": ReferenceWidget,
-            "taxon": TaxonWidget,}
+        widgets = {"reference": ReferenceWidget}
         labels = {
             'identification_qualifier': 'Taxon Qualifier',
             'verbatim_identification': 'Taxon Verbatim',
             'identification_remarks': 'Remarks',
         }
+
 class AccessionRowSpecimenForm(forms.ModelForm):
     class Meta:
         model = NatureOfSpecimen
