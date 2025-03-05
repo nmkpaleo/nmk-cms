@@ -77,12 +77,12 @@ class Accession(BaseModel):
     comment = models.TextField(null=True, blank=True, help_text="Any additional comments")
     is_published = models.BooleanField(default=False)
 
-    # code to set is_published to True if the accession has references
+    # set is_published to True if the accession has references
     def save(self, *args, **kwargs):
         if self.accessionreference_set.exists():
             self.is_published = True
         super().save(*args, **kwargs)
-        
+
     def get_absolute_url(self):
         return reverse('accession-detail', args=[str(self.id)])
 
@@ -470,19 +470,40 @@ class Media(BaseModel):
 
 class SpecimenGeology(BaseModel):
     # ForeignKey relationships to Accession and GeologicalContext
-    accession = models.ForeignKey('Accession', on_delete=models.CASCADE, related_name='specimen_geologies', help_text="Accession this specimen geology belongs to")
-    earliest_geological_context = models.ForeignKey('GeologicalContext', on_delete=models.SET_NULL, null=True, blank=True, related_name='earliest_geological_contexts', help_text="Earliest geological context of the specimen")
-    latest_geological_context = models.ForeignKey('GeologicalContext', on_delete=models.SET_NULL, null=True, blank=True, related_name='latest_geological_contexts', help_text="Latest geological context of the specimen")
-    
-    # Field to specify geological context type
-    geological_context_type = models.CharField(max_length=255, help_text="The geological context type of the specimen")
+    accession = models.ForeignKey(
+        'Accession', 
+        on_delete=models.CASCADE, 
+        related_name='specimen_geologies', 
+        help_text="Accession this specimen geology belongs to"
+    )
+    earliest_geological_context = models.ForeignKey(
+        'GeologicalContext', 
+        on_delete=models.CASCADE,
+        related_name='specimens_with_earliest_context', 
+        help_text="Earliest geological context of the specimen"
+    )
+    latest_geological_context = models.ForeignKey(
+        'GeologicalContext', 
+        on_delete=models.CASCADE,  # Required field now
+        related_name='specimens_with_latest_context', 
+        help_text="Latest geological context of the specimen"
+    )    
+
+    class Meta:
+        verbose_name = "Specimen Geology"
+        verbose_name_plural = "Specimen Geologies"
+        ordering = ['accession']
+        indexes = [
+            models.Index(fields=['accession']),
+            models.Index(fields=['earliest_geological_context']),
+            models.Index(fields=['latest_geological_context']),
+        ]
 
     def get_absolute_url(self):
         return reverse('specimen-geology-detail', args=[str(self.id)])
 
     def __str__(self):
-        return f"SpecimenGeology for Accession {self.accession} - {self.geological_context_type}"
-
+        return f"SpecimenGeology for Accession {self.accession}"
 
 class GeologicalContext(BaseModel):
     # ForeignKey to self for hierarchical relationship (parent-child)
