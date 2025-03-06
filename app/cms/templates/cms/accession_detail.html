@@ -1,4 +1,5 @@
-{% extends "base_generic.html" %}
+{% extends "base_generic.html" %}   
+{% load custom_filters %}
 
 {% block content %}
     <div class="template-detail-container">
@@ -70,6 +71,7 @@
                             <th>Taxon</th>
                             <th>Family</th>
                             <th>Subfamily</th>
+                            <th>Tribe</th>
                             <th>Genus</th>
                             <th>Species</th>
                         </tr>
@@ -79,31 +81,33 @@
                             <tr>
                                 <td><a href="{% url 'accessionrow-detail' accessionrow.pk %}">{{ accessionrow.specimen_suffix }}</a></td>
                                 <td>{{ accessionrow.storage }}</td>
-
-                                {% with accessionrow.identification_set.all as identifications %}
-                                    {% if identifications %}
-                                        <td>{{ identifications.0.taxon.taxon_name }}
-                                            {% if identifications|length > 1 %}
-                                                <span title="This specimen has previous identifications">(*)</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>{{ identifications.0.taxon.family }}</td>
-                                        <td>{{ identifications.0.taxon.subfamily }}</td>
-                                        <td>{{ identifications.0.taxon.genus }}</td>
-                                        <td>{{ identifications.0.taxon.species }}</td>
+                        
+                                {% with first_identifications|get_item:accessionrow.id as first_identification %}
+                                    {% if first_identification %}
+                                        {% with taxonomy|get_item:first_identification.id as matched_taxon %}
+                                            <td>
+                                                {{ first_identification.taxon }}
+                                                {% if identification_counts|get_item:accessionrow.id > 1 %}
+                                                    <span title="This specimen has previous identifications">(*)</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>{{ matched_taxon.family|default:"-" }}</td>
+                                            <td>{{ matched_taxon.subfamily|default:"-" }}</td>
+                                            <td>{{ matched_taxon.genus|default:"-" }}</td>
+                                            <td>{{ matched_taxon.species|default:"-" }}</td>
+                                        {% endwith %}
                                     {% else %}
                                         <td>No Taxon identified</td>
-                                        <td></td>
-                                        <td></td>
-                                        <td></td>
-                                        <td></td>
+                                        <td>-</td>
+                                        <td>-</td>
+                                        <td>-</td>
+                                        <td>-</td>
                                     {% endif %}
-                                {% endwith %}                                
+                                {% endwith %}
                             </tr>
-                        {% endfor %}
+                        {% endfor %}                    
                     </tbody>
-                </table>
-                <hr>
+                </table>                <hr>
                 {% if user.is_authenticated and user.groups.all.0.name == "Collection Managers" %}
                   <a href="{% url 'add-reference' accession.id %}">➕ Add Reference</a>
                 {% endif %}
