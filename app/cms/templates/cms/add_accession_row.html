@@ -1,20 +1,7 @@
 {% extends "base_generic.html" %}
 
 {% block content %}
-<h2>Add Row for Accession: {{ accession }}</h2>
-
-<form method="post" enctype="multipart/form-data">
-    {% csrf_token %}
-    {{ form.accession }}  {# Hidden field for accession #}
-
-    <label for="id_storage">Storage:</label>
-    {{ form.storage }}
-
-    <label for="id_specimen_suffix">Specimen Suffix:</label>
-    {{ form.specimen_suffix }}
-
-    <button type="submit">Add Specimen Suffix</button>
-</form>
-
-<a href="{% url 'accession-detail' accession.id %}">Back to Accession</a>
+    {% include "includes/base_form.html" with form=form submit_label="Save" method="post" action=request.path title="Specimen to Accession: " access=accession %}
+    
+    <a href="{% url 'accession-detail' accession.id %}">Back to Accession</a>
 {% endblock %}

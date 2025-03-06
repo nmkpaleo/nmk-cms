@@ -1,13 +1,7 @@
 {% extends "base_generic.html" %}
 
 {% block content %}
-<h2>Upload Media for Accession: {{ accession }}</h2>
-
-<form method="post" enctype="multipart/form-data">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Upload Media</button>
-</form>
-
-<a href="{% url 'accession-detail' accession.id %}">Back to Accession</a>
+    {% include "includes/base_form.html" with form=form submit_label="Save" method="post" enctype="multipart/form-data" action=request.path title="Media to Accession: " access=accession %}
+    
+    <a href="{% url 'accession-detail' accession.id %}">Back to Accession</a>
 {% endblock %}
