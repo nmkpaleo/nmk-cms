@@ -93,11 +93,13 @@
                                             </td>
                                             <td>{{ matched_taxon.family|default:"-" }}</td>
                                             <td>{{ matched_taxon.subfamily|default:"-" }}</td>
+                                            <td>{{ matched_taxon.tribe|default:"-" }}</td>
                                             <td>{{ matched_taxon.genus|default:"-" }}</td>
                                             <td>{{ matched_taxon.species|default:"-" }}</td>
                                         {% endwith %}
                                     {% else %}
                                         <td>No Taxon identified</td>
+                                        <td>-</td>
                                         <td>-</td>
                                         <td>-</td>
                                         <td>-</td>
