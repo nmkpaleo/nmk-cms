@@ -7,7 +7,7 @@ from django.urls import reverse_lazy, reverse
 from django.views.generic import CreateView, DetailView, FormView, ListView
 
 from .forms import AccessionCommentForm, AccessionGeologyForm, AccessionRowIdentificationForm, AccessionRowSpecimenForm, AccessionReferenceForm, AddAccessionRowForm, FieldSlipForm, MediaUploadForm, NatureOfSpecimenForm, ReferenceForm
-from .models import Accession, AccessionReference, AccessionRow, Comment, FieldSlip, Media, NatureOfSpecimen, Identification, Reference, SpecimenGeology
+from .models import Accession, AccessionReference, AccessionRow, Comment, FieldSlip, Media, NatureOfSpecimen, Identification, Reference, SpecimenGeology, Taxon
 from .resources import FieldSlipResource
 
 # Helper function to check if user is in the "Collection Managers" group
@@ -115,6 +115,35 @@ class AccessionDetailView(DetailView):
         context['references'] = AccessionReference.objects.filter(accession=self.object).select_related('reference')
         context['geologies'] = SpecimenGeology.objects.filter(accession=self.object)
         context['comments'] = Comment.objects.filter(specimen_no=self.object)
+        # Retrieve all accession rows related to the accession
+        accession_rows = AccessionRow.objects.filter(accession=self.object)
+
+        # Store first identification and identification count per accession row
+        first_identifications = {}
+        identification_counts = {}
+        taxonomy_dict = {}
+
+        for accession_row in accession_rows:
+            # Get all identifications for this accession row (already sorted)
+            row_identifications = Identification.objects.filter(accession_row=accession_row).order_by('-date_identified')
+
+            # Store the first identification if available
+            first_identification = row_identifications.first()
+            if first_identification:
+                first_identifications[accession_row.id] = first_identification
+                identification_counts[accession_row.id] = row_identifications.count()
+
+                # Retrieve taxonomy based on taxon_name
+                taxon_name = first_identification.taxon
+                if taxon_name:
+                    taxonomy_dict[first_identification.id] = Taxon.objects.filter(taxon_name__iexact=taxon_name).first()
+
+        # Pass filtered data to template
+        context['accession_rows'] = accession_rows
+        context['first_identifications'] = first_identifications  # First identifications per accession row
+        context['identification_counts'] = identification_counts  # Number of identifications per accession row
+        context['taxonomy'] = taxonomy_dict  # Maps first identifications to Taxon objects
+        
         return context
     
 class AccessionListView(ListView):
@@ -219,6 +248,7 @@ def AddReferenceToAccessionView(request, accession_id):
 @user_passes_test(is_collection_manager)
 def AddIdentificationToAccessionRowView(request, accession_row_id):
     accession_row = get_object_or_404(AccessionRow, id=accession_row_id)
+    taxonomy = []
 
     if request.method == 'POST':
         form = AccessionRowIdentificationForm(request.POST)
@@ -232,7 +262,14 @@ def AddIdentificationToAccessionRowView(request, accession_row_id):
     else:
         form = AccessionRowIdentificationForm()
 
-    return render(request, 'cms/add_accession_row_identification.html', {'form': form, 'accession_row': accession_row})
+    return render(
+        request,
+        'cms/add_accession_row_identification.html',
+        {
+            'form': form,
+            'accession_row': accession_row,
+        }
+    )
 
 @login_required
 @user_passes_test(is_collection_manager)
