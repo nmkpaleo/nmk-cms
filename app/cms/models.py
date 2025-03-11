@@ -10,23 +10,30 @@ import string # For generating specimen number
 User = get_user_model()
 
 class BaseModel(models.Model):
-    created_on = models.DateTimeField(auto_now_add=True)
-    modified_on = models.DateTimeField(auto_now=True)
-    created_by = UserForeignKey(
-        auto_user_add=True,
-        verbose_name="The user that is automatically assigned",
-        related_name="%(class)s_createdby",
-    )
-    modified_by = UserForeignKey(
-        auto_user_add=True,
-        verbose_name="The user that is automatically assigned",
-        related_name="%(class)s_modifiedby",
+    created_on = models.DateTimeField(auto_now_add=True, verbose_name="Date Created")
+    modified_on = models.DateTimeField(auto_now=True, verbose_name="Date Modified")
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
         null=True,
         blank=True,
+        related_name="%(app_label)s_%(class)s_created",
+        verbose_name="Created by"
+    )
+    modified_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="%(app_label)s_%(class)s_modified",
+        verbose_name="Modified by"
     )
 
     class Meta:
         abstract = True
+        ordering = ["-created_on"]
+        verbose_name = "Base Record"
+        verbose_name_plural = "Base Records"
 
 
 # Locality Model
