@@ -194,11 +194,12 @@ class FieldSlip(BaseModel):
         return reverse('fieldslip-detail', args=[str(self.id)])
 
     def __str__(self):
-        return self.field_number
+        return self.field_number if self.field_number else "Unnamed Field Slip"
 
     class Meta:
         ordering = ["field_number"]
         verbose_name = "Field Slip"
+        verbose_name_plural = "Field Slips"
 
 # Storage Model
 class Storage(BaseModel):
