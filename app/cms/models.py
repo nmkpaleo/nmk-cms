@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django_userforeignkey.models.fields import UserForeignKey
 from django.db.models import UniqueConstraint
@@ -6,6 +7,7 @@ from django.contrib.auth.models import User
 import os # For file handling in media class
 from django.core.exceptions import ValidationError
 import string # For generating specimen number
+User = get_user_model()
 
 class BaseModel(models.Model):
     created_on = models.DateTimeField(auto_now_add=True)
