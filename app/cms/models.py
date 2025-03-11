@@ -231,6 +231,39 @@ class Reference(BaseModel):
     def __str__(self):
         return self.citation
 
+
+class AccessionFieldSlip(BaseModel):
+    """
+    Links Accession and FieldSlip in a many-to-many relationship.
+    """
+    accession = models.ForeignKey(
+        "Accession",
+        on_delete=models.CASCADE,
+        related_name="accession_fieldslips",
+        help_text="Select the accession."
+    )
+    fieldslip = models.ForeignKey(
+        "FieldSlip",
+        on_delete=models.CASCADE,
+        related_name="fieldslip_accessions",
+        help_text="Select the field slip."
+    )
+    
+    notes = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Additional notes."
+    )
+
+    class Meta:
+        unique_together = ("accession", "fieldslip")  # Ensures no duplicate relations
+        ordering = ["accession", "fieldslip"]
+        verbose_name = "Accession-FieldSlip Link"
+        verbose_name_plural = "Accession-FieldSlip Links"
+
+    def __str__(self):
+        return f"{self.accession} ↔ {self.fieldslip}"
+
 # AccessionReference Model
 class AccessionReference(BaseModel):
     accession = models.ForeignKey(Accession, on_delete=models.CASCADE)
