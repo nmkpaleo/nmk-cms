@@ -65,12 +65,31 @@ class Collection(BaseModel):
 
 # Accession Model
 class Accession(BaseModel):
-    collection = models.ForeignKey(Collection, on_delete=models.CASCADE, help_text="Please select the collection")
-    specimen_prefix = models.ForeignKey(Locality, on_delete=models.CASCADE, help_text="Please select the specimen prefix")
-    specimen_no = models.PositiveIntegerField(help_text="Please enter the specimen number")
-    accessioned_by = models.ForeignKey(User, on_delete=models.CASCADE, help_text="Please select the user who accessioned the specimen")
+    """
+    Represents an accessioned specimen linked to a collection and locality.
+    """
+    collection = models.ForeignKey(
+        "Collection",
+        on_delete=models.CASCADE,
+        help_text="Select the collection this specimen belongs to."
+    )
+    specimen_prefix = models.ForeignKey(
+        "Locality",
+        on_delete=models.CASCADE,
+        help_text="Select the specimen prefix."
+    )
+    specimen_no = models.PositiveIntegerField(
+        help_text="Enter the specimen number."
+    )
+    accessioned_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        help_text="User who accessioned the specimen."
+    )
 
-    options = (
+    TYPE_STATUS_CHOICES = [
         ('Type', 'Type'),
         ('Holotype', 'Holotype'),
         ('Isotype', 'Isotype'),
@@ -80,24 +99,42 @@ class Accession(BaseModel):
         ('Paratype', 'Paratype'),
         ('Neotype', 'Neotype'),
         ('Topotype', 'Topotype'),
+    ]
+
+    type_status = models.CharField(
+        max_length=50,
+        choices=TYPE_STATUS_CHOICES,
+        null=True,
+        blank=True,
+        help_text="Select the type status."
     )
-    
-    type_status = models.CharField(max_length=50, choices=options, null=True, blank=True, help_text="Please select the type status")
-    comment = models.TextField(null=True, blank=True, help_text="Any additional comments")
+    comment = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Additional comments (if any)."
+    )
     is_published = models.BooleanField(default=False)
 
-    # set is_published to True if the accession has references
     def save(self, *args, **kwargs):
-        if self.accessionreference_set.exists():
-            self.is_published = True
+        """
+        Auto-updates `is_published` based on related references.
+        If references exist, it sets to True. If none exist, it sets to False.
+        """
+        self.is_published = self.accessionreference_set.exists()
         super().save(*args, **kwargs)
 
     def get_absolute_url(self):
         return reverse('accession-detail', args=[str(self.id)])
 
     def __str__(self):
-        return f"{self.collection.abbreviation}-{self.specimen_prefix.abbreviation} {self.specimen_no}"
+        collection_abbr = self.collection.abbreviation if self.collection else "N/A"
+        prefix_abbr = self.specimen_prefix.abbreviation if self.specimen_prefix else "N/A"
+        return f"{collection_abbr}-{prefix_abbr} {self.specimen_no}"
 
+    class Meta:
+        ordering = ["collection.abbreviation", "specimen_prefix.abbreviation", "specimen_no"]
+        verbose_name = "Accession"
+        verbose_name_plural = "Accessions"
 
 # Subject Model
 class Subject(BaseModel):
