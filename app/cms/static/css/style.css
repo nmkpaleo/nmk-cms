@@ -297,6 +297,7 @@
     flex-wrap: wrap;
 
     justify-content: space-between;
+    
 
 }
 
@@ -317,6 +318,7 @@
     margin-bottom: 20px;
 
     font-family: 'Poppins', sans-serif;
+    
 
 }
 
@@ -329,6 +331,7 @@
 .template_form_label {
 
     width: 100%;
+    
 
     margin-bottom: 5px;
 
@@ -878,7 +881,10 @@ nav ul {
 
     .hidden-mobile {
         display: none;
+
     }
+    
+
     .search-bar{
         margin-top: 40px;
     }
@@ -926,6 +932,7 @@ nav ul {
         align-items: center;
         gap: 5px; /* Space between icon and text */
     }
+
   /* Change a color */
   .actions button a  {
      color: rgb(8, 8, 8);
@@ -944,4 +951,27 @@ nav ul {
     .table-container {
         margin-bottom: 80px;
     }
+
+    /* FIELD DETAILS MOBILE VIEW */
+
+    .grid-container {
+        display: flex;
+        flex-direction: column; /* Stack cards vertically */
+        align-items: center; /* Center cards */
+        gap: 20px; /* Reduce gap for better spacing */
+        width: 80%; /* Take full width */
+        margin-left: 25px; /* Remove fixed margin */
+        padding: 0 10px; /* Add padding to prevent cards from touching edges */
+    }
+
+    .card {
+        
+        width: 100%; /* Make cards responsive */
+        max-width: 400px; /* Prevent cards from becoming too wide */
+    }    
+
+    .template_form_input{
+        width: 80%;
+    }
+ 
 }
