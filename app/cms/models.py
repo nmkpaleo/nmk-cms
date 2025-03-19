@@ -132,7 +132,7 @@ class Accession(BaseModel):
         return f"{collection_abbr}-{prefix_abbr} {self.specimen_no}"
 
     class Meta:
-        ordering = ["collection.abbreviation", "specimen_prefix.abbreviation", "specimen_no"]
+        ordering = ["collection", "specimen_prefix", "specimen_no"]
         verbose_name = "Accession"
         verbose_name_plural = "Accessions"
 
@@ -239,13 +239,13 @@ class AccessionFieldSlip(BaseModel):
     accession = models.ForeignKey(
         "Accession",
         on_delete=models.CASCADE,
-        related_name="accession_fieldslips",
+        related_name="fieldslip_links",
         help_text="Select the accession."
     )
     fieldslip = models.ForeignKey(
         "FieldSlip",
         on_delete=models.CASCADE,
-        related_name="fieldslip_accessions",
+        related_name="accession_links",
         help_text="Select the field slip."
     )
     

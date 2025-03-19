@@ -1,7 +1,7 @@
 from django.urls import include, path
 from django.conf.urls.static import static
 from django.conf import settings
-from cms.views import add_accession_row, AddCommentToAccessionView, AddGeologyToAccessionView, AddIdentificationToAccessionRowView, AddSpecimenToAccessionRowView, AddReferenceToAccessionView, AccessionRowDetailView, fieldslip_create, fieldslip_edit, FieldSlipDetailView,FieldSlipListView,AccessionListView,AccessionDetailView,fieldslip_export, fieldslip_import, ReferenceListView,ReferenceDetailView,reference_create, reference_edit,upload_media
+from cms.views import add_accession_row, add_fieldslip_to_accession, AddCommentToAccessionView, AddGeologyToAccessionView, AddIdentificationToAccessionRowView, AddSpecimenToAccessionRowView, AddReferenceToAccessionView, AccessionRowDetailView, create_fieldslip_for_accession, fieldslip_create, fieldslip_edit, FieldSlipDetailView,FieldSlipListView,AccessionListView,AccessionDetailView,fieldslip_export, fieldslip_import, ReferenceListView,ReferenceDetailView,reference_create, reference_edit,upload_media
 
 urlpatterns = [
     

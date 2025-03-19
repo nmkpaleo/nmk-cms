@@ -1,7 +1,17 @@
 from django import forms
 from django_select2 import forms as s2forms
-from django_select2.forms import ModelSelect2Widget
-from .models import Accession, AccessionReference, AccessionRow, Comment, FieldSlip, Identification, Media, NatureOfSpecimen, Reference, SpecimenGeology
+from django_select2.forms import ModelSelect2Widget, Select2Widget
+
+from .models import Accession, AccessionFieldSlip, AccessionReference, AccessionRow, Comment, FieldSlip, Identification, Media, NatureOfSpecimen, Reference, SpecimenGeology
+
+class FieldSlipWidget(s2forms.ModelSelect2Widget):
+    search_fields = ["field_number__icontains", "verbatim_locality__icontains"]
+
+    def label_from_instance(self, obj):
+        """
+        Custom label for dropdown: Show field_number + verbatim_locality
+        """
+        return f"{obj.field_number} - {obj.verbatim_locality if obj.verbatim_locality else 'No locality'}"
 
 class ElementWidget(s2forms.ModelSelect2Widget):
     search_fields = [
@@ -23,6 +33,13 @@ class AccessionCommentForm(forms.ModelForm):
     class Meta:
         model = Comment
         fields = ['subject', 'comment', 'comment_by']
+
+class AccessionFieldSlipForm(forms.ModelForm):
+    class Meta:
+        model = AccessionFieldSlip
+        fields = ["fieldslip", "notes"]
+        widgets = {
+            "fieldslip": FieldSlipWidget,}
 
 class AccessionGeologyForm(forms.ModelForm):
     class Meta:
