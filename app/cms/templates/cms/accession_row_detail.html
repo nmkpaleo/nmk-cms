@@ -1,76 +1,79 @@
 {% extends "base_generic.html" %}
 
 {% block content %}
-        <div class="template-detail-container">
-            <div class="template-detail-header">
-                <h2 class="accession-detail-h2">AccessionRow Detail</h2>
-            </div>
-           
-            <div class="grid-container">
-              
-                <!-- Accession Card -->
-                <div class="card">
-                    <p><strong>Accession: </strong> <br> {{ accessionrow.accession}}</p>
-                    <p><strong>Specimen Suffix: </strong> <br> {{ accessionrow.specimen_suffix }}</p>
-                    <p><strong>Storage: </strong> <br> {{ accessionrow.storage }}</p>
-  
-                </div>
-                
-                <a href="{% url 'accession-detail' accessionrow.accession.id %}">Back to Accession</a>
-                 
-                
-            </div>
+<div class="template-detail-container">
+  <div class="grid-container">
+    <div class="card">
+      <table>
+        <caption>Specimen Detail</caption>
+        <tbody>
+          <tr>
+            <th>Accession:</th>
+            <td>{{ accessionrow.accession }}</td>
+          </tr>
+          <tr>
+            <th>Specimen Suffix:</th>
+            <td>{{ accessionrow.specimen_suffix }}</td>
+          </tr>
+          <tr>
+            <th>Storage:</th>
+            <td>{{ accessionrow.storage }}</td>
+          </tr>
+        </tbody>
+      </table>
 
-            <a href="{% url 'add-specimen' accessionrow.id %}">Add New Nature of Specimen</a>
+      <a href="{% url 'add-specimen' accessionrow.id %}">Add Elemet to Specimen</a>
             
-            <h2>Nature of Specimens</h2>
-            <table>
-              {% for specimen in natureofspecimens %}
-              <tr>
-                <th>Element</th>
-                <th>Side</th>
-                <th>Condition</th>
-                <th>Description</th>
-                <th>Portion</th>
-                <th>Fragments</th>
-              </tr>
-              <tr>
-                <td>{{ specimen.element }}</td>
-                <td>{{ specimen.side }}</td>
-                <td>{{ specimen.condition }}</td>
-                <td>{{ specimen.verbatim_element }}</td>
-                <td>{{ specimen.portion }}</td>
-                <td>{{ specimen.fragments }}</td>
-              </tr>
-              {% endfor %}
-            </table>
+      <h2>Elements</h2>
+      <table>
+        <tr>
+          <th>Element</th>
+          <th>Side</th>
+          <th>Condition</th>
+          <th>Description</th>
+          <th>Portion</th>
+          <th>Fragments</th>
+        </tr>
+        {% for specimen in natureofspecimens %}
+        <tr>
+          <td>{{ specimen.element }}</td>
+          <td>{{ specimen.side }}</td>
+          <td>{{ specimen.condition }}</td>
+          <td>{{ specimen.verbatim_element }}</td>
+          <td>{{ specimen.portion }}</td>
+          <td>{{ specimen.fragments }}</td>
+        </tr>
+        {% endfor %}
+      </table>
 
-            <a href="{% url 'add-identification' accessionrow.id %}">Add New Identification</a>
-            <h2>Identification</h2>
-            <table>
-              {% for identification in identifications %}
-              <tr>
-                <th>Identified by</th>
-                <th>Date</th>
-                <th>Verbatim identification</th>
-                <th>Taxon</th>
-                <th>Qualifier</th>
-                <th>Remarks</th>
-                <th>Reference</th>
-              </tr>
-              <tr>
-                <td>{{ identification.identified_by }}</td>
-                <td>{{ identification.date_identified }}</td>
-                <td>{{ identification.verbatim_identification }}</td>
-                <td>{{ identification.taxon }}</td>
-                <td>{{ identification.identification_qualifier }}</td>
-                <td>{{ identification.identification_remarks }}</td>
-                <td>{{ identification.reference }}</td>
-              </tr>
-              {% endfor %}
-            </table>
-
-        </div>
+      <a href="{% url 'add-identification' accessionrow.id %}">Add New Identification</a>
+      <h2>Identification</h2>
+      <table>
+        {% for identification in identifications %}
+        <tr>
+          <th>Identified by</th>
+          <th>Date</th>
+          <th>Verbatim identification</th>
+          <th>Taxon</th>
+          <th>Qualifier</th>
+          <th>Remarks</th>
+          <th>Reference</th>
+        </tr>
+        <tr>
+          <td>{{ identification.identified_by }}</td>
+          <td>{{ identification.date_identified }}</td>
+          <td>{{ identification.verbatim_identification }}</td>
+          <td>{{ identification.taxon }}</td>
+          <td>{{ identification.identification_qualifier }}</td>
+          <td>{{ identification.identification_remarks }}</td>
+          <td>{{ identification.reference }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+      <a href="{% url 'accession-detail' accessionrow.accession.id %}">Back to Accession</a>
+    </div>  
+  </div>
+</div>
 
 {% endblock %}
 

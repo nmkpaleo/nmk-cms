@@ -1,29 +1,7 @@
 {% extends "base_generic.html" %}
 
 {% block content %}
-<h2>Add Identification for AccessionRow: {{ accession_row }}</h2>
-
-<form method="post" enctype="multipart/form-data">
-    {% csrf_token %}
-    {{ form.media }}  {# This loads Select2 JS/CSS #}
-    {{ form.accession_row_id }}  {# Hidden field for accession row #}
-
-    <label for="id_identified_by">Identified by:</label>
-    {{ form.identified_by }}<br>
-    <label for="id_taxon">Taxon:</label>
-    {{ form.taxon }}<br>
-    <label for="id_reference">Reference:</label>
-    {{ form.reference }}<br>
-    <label for="id_date_identified">Date identified:</label>
-    {{ form.date_identified }}
-    <label for="id_identification_qualifier">Qualifier:</label>
-    {{ form.identification_qualifier }}
-    <label for="id_verbatim_identification">Description:</label>
-    {{ form.verbatim_identification }}
-    <label for="id_identification_remarks">Remarks:</label>
-    {{ form.identification_remarks }}
-    <button type="submit">Add Identification</button>
-</form>
-
-<a href="{% url 'accessionrow-detail' accession_row.id %}">Back to Accession Row</a>
+    {% include "includes/base_form.html" with form=form submit_label="Save" method="post" action=request.path title="Taxon to Specimen: " access=accession_row %}
+    
+    <a href="{% url 'accessionrow-detail' accession_row.id %}">Back to Specimen</a>
 {% endblock %}

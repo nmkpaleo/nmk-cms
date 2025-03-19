@@ -1,7 +1,7 @@
 from django import forms
 from django_select2 import forms as s2forms
 from django_select2.forms import ModelSelect2Widget
-from .models import Accession, AccessionReference, AccessionRow, FieldSlip, Identification, Media, NatureOfSpecimen, Reference
+from .models import Accession, AccessionReference, AccessionRow, Comment, FieldSlip, Identification, Media, NatureOfSpecimen, Reference, SpecimenGeology
 
 class ElementWidget(s2forms.ModelSelect2Widget):
     search_fields = [
@@ -18,6 +18,16 @@ class TaxonWidget(s2forms.ModelSelect2Widget):
     search_fields = [
         "taxon_name__icontains",
         ]
+
+class AccessionCommentForm(forms.ModelForm):
+    class Meta:
+        model = Comment
+        fields = ['subject', 'comment', 'comment_by']
+
+class AccessionGeologyForm(forms.ModelForm):
+    class Meta:
+        model = SpecimenGeology
+        fields = ['earliest_geological_context', 'latest_geological_context']
 
 class AccessionReferenceForm(forms.ModelForm):
     class Meta:
@@ -41,6 +51,11 @@ class AccessionReferenceForm2(forms.ModelForm):
         fields = ['reference', 'page']
 
 class FieldSlipForm(forms.ModelForm):
+    collection_date = forms.DateField(
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+        required=False
+    )
+
     class Meta:
         model = FieldSlip
         fields = [
@@ -50,37 +65,6 @@ class FieldSlipForm(forms.ModelForm):
             'verbatim_longitude', 'verbatim_SRS', 'verbatim_coordinate_system',
             'verbatim_elevation'
         ]
-        widgets = {
-
-            'field_number': forms.TextInput(attrs={'class': 'template_form_input'}),
-
-            'discoverer': forms.TextInput(attrs={'class': 'template_form_input'}),
-
-            'collector': forms.TextInput(attrs={'class': 'template_form_input'}),
-
-            'collection_date': forms.DateInput(attrs={'class': 'template_form_input', 'type': 'date'}),
-
-            'verbatim_locality': forms.TextInput(attrs={'class': 'template_form_input'}),
-
-            'verbatim_taxon': forms.TextInput(attrs={'class': 'template_form_input'}),
-            'verbatim_element': forms.TextInput(attrs={'class': 'template_form_input'}),
-
-            'verbatim_horizon': forms.TextInput(attrs={'class': 'template_form_input'}),
-
-            'verbatim_latitude': forms.TextInput(attrs={'class': 'template_form_input'}),
-
-            'verbatim_longitude': forms.TextInput(attrs={'class': 'template_form_input'}),
-
-            'verbatim_SRS': forms.TextInput(attrs={'class': 'template_form_input'}),
-
-            'verbatim_coordinate_system': forms.TextInput(attrs={'class': 'template_form_input'}),
-
-            'verbatim_elevation': forms.TextInput(attrs={'class': 'template_form_input'}),
-
-            'aerial_photo': forms.FileInput(attrs={'class': 'template_form_input'}),
-
-        }
-
 
 class ReferenceForm(forms.ModelForm):
     class Meta:
@@ -115,7 +99,7 @@ class ReferenceForm(forms.ModelForm):
 class MediaUploadForm(forms.ModelForm):
     class Meta:
         model = Media
-        fields = ['media_location', 'type', 'format', 'license', 'rights_holder']
+        fields = ['media_location', 'type', 'license', 'rights_holder']
 
 class AddAccessionRowForm(forms.ModelForm):
     specimen_suffix = forms.ChoiceField(choices=[], required=True)  # Empty choices initially
@@ -178,9 +162,12 @@ class AccessionRowIdentificationForm(forms.ModelForm):
     class Meta:
         model = Identification
         fields = ['identified_by', 'taxon', 'reference', 'date_identified', 'identification_qualifier', 'verbatim_identification', 'identification_remarks']
-        widgets = {
-            "reference": ReferenceWidget,
-            "taxon": TaxonWidget,}
+        widgets = {"reference": ReferenceWidget}
+        labels = {
+            'identification_qualifier': 'Taxon Qualifier',
+            'verbatim_identification': 'Taxon Verbatim',
+            'identification_remarks': 'Remarks',
+        }
 
 class AccessionRowSpecimenForm(forms.ModelForm):
     class Meta:

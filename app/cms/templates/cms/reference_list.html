@@ -10,10 +10,7 @@
     <div class="container"></div>
     
     <div class="actions">
-        <button><a href="{% url 'fieldslip-create' %}" >New Field Slip</a></button> 
-        <button><a href="{% url 'fieldslip-export' %}">Export</a></button>
-        <button><a href="{% url 'fieldslip-import' %}">Import</a></button>
-    
+        <button><a href="{% url 'reference-create' %}">New Reference</a></button>     
        <!-- <i class="fa-solid fa-magnifying-glass"></i>-->
     </div>
         <div class="search-bar">
@@ -30,19 +27,12 @@
             
             
         </div>
-
-
-
-           
-
             <table class="lists_table">
  
                 <th>First Author</th>
                 <th>Year</th>
                 <th>Title</th>
                 <th>Edit Reference</th>
-    
-              
 
                     {% for reference in references %}
                     <tr >
@@ -57,8 +47,7 @@
                         </td>
 
               </tr>
-                    
-                    
+                                        
                     {% endfor %}
                 </tbody>
             </table>
