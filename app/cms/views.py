@@ -1,18 +1,65 @@
 import csv
 
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
+from django.forms import modelformset_factory
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse_lazy, reverse
 from django.views.generic import CreateView, DetailView, FormView, ListView
 
-from .forms import AccessionCommentForm, AccessionGeologyForm, AccessionRowIdentificationForm, AccessionRowSpecimenForm, AccessionReferenceForm, AddAccessionRowForm, FieldSlipForm, MediaUploadForm, NatureOfSpecimenForm, ReferenceForm
-from .models import Accession, AccessionReference, AccessionRow, Comment, FieldSlip, Media, NatureOfSpecimen, Identification, Reference, SpecimenGeology, Taxon
+from .forms import AccessionCommentForm, AccessionFieldSlipForm, AccessionGeologyForm, AccessionRowIdentificationForm, AccessionRowSpecimenForm, AccessionReferenceForm, AddAccessionRowForm, FieldSlipForm, MediaUploadForm, NatureOfSpecimenForm, ReferenceForm
+from .models import Accession, AccessionFieldSlip, AccessionReference, AccessionRow, Comment, FieldSlip, Media, NatureOfSpecimen, Identification, Reference, SpecimenGeology, Taxon
 from .resources import FieldSlipResource
 
 # Helper function to check if user is in the "Collection Managers" group
 def is_collection_manager(user):
     return user.groups.filter(name="Collection Managers").exists()
+
+def add_fieldslip_to_accession(request, pk):
+    """
+    Adds an existing FieldSlip to an Accession.
+    """
+    accession = get_object_or_404(Accession, pk=pk)
+    
+    if request.method == "POST":
+        form = AccessionFieldSlipForm(request.POST)
+        if form.is_valid():
+            relation = form.save(commit=False)
+            relation.accession = accession
+            relation.save()
+            messages.success(request, "FieldSlip added successfully!")
+            return redirect("accession-detail", pk=accession.pk)
+
+    messages.error(request, "Error adding FieldSlip.")
+    return redirect("accession-detail", pk=accession.pk)
+
+def create_fieldslip_for_accession(request, pk):
+    """ Opens a modal for FieldSlip creation and links it to an Accession """
+    accession = get_object_or_404(Accession, pk=pk)
+
+    if request.method == "POST":
+        form = FieldSlipForm(request.POST)
+        if form.is_valid():
+            fieldslip = form.save()
+            AccessionFieldSlip.objects.create(accession=accession, fieldslip=fieldslip)
+            messages.success(request, "New FieldSlip created and linked successfully!")
+
+            # Instead of closing a pop-up window, return a script to close the modal
+            return HttpResponse('<script>window.parent.closeModalAndRefresh();</script>')
+
+        else:
+            messages.error(request, "There were errors in your submission. Please correct them.")
+
+    else:
+        form = FieldSlipForm()
+
+    return render(request, "includes/base_form.html", {
+        "form": form,
+        "action": request.path,
+        "title": "New FieldSlip",
+        "submit_label": "Create FieldSlip",
+    })
 
 def fieldslip_export(request):
     # Create a CSV response
@@ -112,11 +159,13 @@ class AccessionDetailView(DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        context["related_fieldslips"] = self.object.fieldslip_links.all()
         context['references'] = AccessionReference.objects.filter(accession=self.object).select_related('reference')
         context['geologies'] = SpecimenGeology.objects.filter(accession=self.object)
         context['comments'] = Comment.objects.filter(specimen_no=self.object)
-        # Retrieve all accession rows related to the accession
         accession_rows = AccessionRow.objects.filter(accession=self.object)
+        # Form for adding existing FieldSlips
+        context["add_fieldslip_form"] = AccessionFieldSlipForm()
 
         # Store first identification and identification count per accession row
         first_identifications = {}

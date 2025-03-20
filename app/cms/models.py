@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django_userforeignkey.models.fields import UserForeignKey
 from django.db.models import UniqueConstraint
@@ -6,25 +7,33 @@ from django.contrib.auth.models import User
 import os # For file handling in media class
 from django.core.exceptions import ValidationError
 import string # For generating specimen number
+User = get_user_model()
 
 class BaseModel(models.Model):
-    created_on = models.DateTimeField(auto_now_add=True)
-    modified_on = models.DateTimeField(auto_now=True)
-    created_by = UserForeignKey(
-        auto_user_add=True,
-        verbose_name="The user that is automatically assigned",
-        related_name="%(class)s_createdby",
-    )
-    modified_by = UserForeignKey(
-        auto_user_add=True,
-        verbose_name="The user that is automatically assigned",
-        related_name="%(class)s_modifiedby",
+    created_on = models.DateTimeField(auto_now_add=True, verbose_name="Date Created")
+    modified_on = models.DateTimeField(auto_now=True, verbose_name="Date Modified")
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
         null=True,
         blank=True,
+        related_name="%(app_label)s_%(class)s_created",
+        verbose_name="Created by"
+    )
+    modified_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="%(app_label)s_%(class)s_modified",
+        verbose_name="Modified by"
     )
 
     class Meta:
         abstract = True
+        ordering = ["-created_on"]
+        verbose_name = "Base Record"
+        verbose_name_plural = "Base Records"
 
 
 # Locality Model
@@ -56,12 +65,31 @@ class Collection(BaseModel):
 
 # Accession Model
 class Accession(BaseModel):
-    collection = models.ForeignKey(Collection, on_delete=models.CASCADE, help_text="Please select the collection")
-    specimen_prefix = models.ForeignKey(Locality, on_delete=models.CASCADE, help_text="Please select the specimen prefix")
-    specimen_no = models.PositiveIntegerField(help_text="Please enter the specimen number")
-    accessioned_by = models.ForeignKey(User, on_delete=models.CASCADE, help_text="Please select the user who accessioned the specimen")
+    """
+    Represents an accessioned specimen linked to a collection and locality.
+    """
+    collection = models.ForeignKey(
+        "Collection",
+        on_delete=models.CASCADE,
+        help_text="Select the collection this specimen belongs to."
+    )
+    specimen_prefix = models.ForeignKey(
+        "Locality",
+        on_delete=models.CASCADE,
+        help_text="Select the specimen prefix."
+    )
+    specimen_no = models.PositiveIntegerField(
+        help_text="Enter the specimen number."
+    )
+    accessioned_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        help_text="User who accessioned the specimen."
+    )
 
-    options = (
+    TYPE_STATUS_CHOICES = [
         ('Type', 'Type'),
         ('Holotype', 'Holotype'),
         ('Isotype', 'Isotype'),
@@ -71,24 +99,42 @@ class Accession(BaseModel):
         ('Paratype', 'Paratype'),
         ('Neotype', 'Neotype'),
         ('Topotype', 'Topotype'),
+    ]
+
+    type_status = models.CharField(
+        max_length=50,
+        choices=TYPE_STATUS_CHOICES,
+        null=True,
+        blank=True,
+        help_text="Select the type status."
     )
-    
-    type_status = models.CharField(max_length=50, choices=options, null=True, blank=True, help_text="Please select the type status")
-    comment = models.TextField(null=True, blank=True, help_text="Any additional comments")
+    comment = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Additional comments (if any)."
+    )
     is_published = models.BooleanField(default=False)
 
-    # set is_published to True if the accession has references
     def save(self, *args, **kwargs):
-        if self.accessionreference_set.exists():
-            self.is_published = True
+        """
+        Auto-updates `is_published` based on related references.
+        If references exist, it sets to True. If none exist, it sets to False.
+        """
+        self.is_published = self.accessionreference_set.exists()
         super().save(*args, **kwargs)
 
     def get_absolute_url(self):
         return reverse('accession-detail', args=[str(self.id)])
 
     def __str__(self):
-        return f"{self.collection.abbreviation}-{self.specimen_prefix.abbreviation} {self.specimen_no}"
+        collection_abbr = self.collection.abbreviation if self.collection else "N/A"
+        prefix_abbr = self.specimen_prefix.abbreviation if self.specimen_prefix else "N/A"
+        return f"{collection_abbr}-{prefix_abbr} {self.specimen_no}"
 
+    class Meta:
+        ordering = ["collection", "specimen_prefix", "specimen_no"]
+        verbose_name = "Accession"
+        verbose_name_plural = "Accessions"
 
 # Subject Model
 class Subject(BaseModel):
@@ -128,31 +174,32 @@ class Comment(BaseModel):
 
 # FieldSlip Model
 class FieldSlip(BaseModel):
-    field_number = models.CharField(max_length=100, null=False, blank=False)
-    discoverer = models.CharField(max_length=255, null=True, blank=True)
-    collector = models.CharField(max_length=255, null=True, blank=True)
-    collection_date = models.DateField(null=True, blank=True)
-    verbatim_locality = models.CharField(max_length=255, null=True, blank=True)
-    verbatim_taxon = models.CharField(max_length=255, null=False, blank=False)
-    verbatim_element = models.CharField(max_length=255, null=False, blank=False)
-    verbatim_horizon = models.CharField(max_length=255, null=True, blank=True)
-    verbatim_method = models.CharField(max_length=255, null=True, blank=True)
-    aerial_photo = models.CharField(max_length=25, null=True, blank=True)
-    verbatim_latitude = models.CharField(max_length=255, null=True, blank=True)
-    verbatim_longitude = models.CharField(max_length=255, null=True, blank=True)
-    verbatim_SRS = models.CharField(max_length=255, null=True, blank=True)
-    verbatim_coordinate_system = models.CharField(max_length=255, null=True, blank=True)
-    verbatim_elevation = models.CharField(max_length=255, null=True, blank=True)
+    field_number = models.CharField(max_length=100, null=False, blank=False, help_text="Field number assigned to the specimen.")
+    discoverer = models.CharField(max_length=255, null=True, blank=True, help_text="Person who discovered the specimen.")
+    collector = models.CharField(max_length=255, null=True, blank=True, help_text="Person who collected the specimen.")
+    collection_date = models.DateField(null=True, blank=True, help_text="Date the specimen was collected.")
+    verbatim_locality = models.CharField(max_length=255, null=True, blank=True, help_text="Original locality description as recorded.")
+    verbatim_taxon = models.CharField(max_length=255, null=False, blank=False, help_text="Taxon name as recorded in the field.")
+    verbatim_element = models.CharField(max_length=255, null=False, blank=False, help_text="Skeletal element or fossil part recorded in the field.")
+    verbatim_horizon = models.CharField(max_length=255, null=True, blank=True, help_text="Geological horizon as recorded in the field.")
+    verbatim_method = models.CharField(max_length=255, null=True, blank=True, help_text="Method used for discovery or collection (sieving etc.).")
+    aerial_photo = models.CharField(max_length=25, null=True, blank=True, help_text="Aerial photo reference (if applicable).")
+    verbatim_latitude = models.CharField(max_length=255, null=True, blank=True, help_text="Latitude as recorded in the field.")
+    verbatim_longitude = models.CharField(max_length=255, null=True, blank=True, help_text="Longitude as recorded in the field.")
+    verbatim_SRS = models.CharField(max_length=255, null=True, blank=True, help_text="Spatial reference system used in the field.")
+    verbatim_coordinate_system = models.CharField(max_length=255, null=True, blank=True, help_text="Coordinate system used in the field (WGS84 etc.).")
+    verbatim_elevation = models.CharField(max_length=255, null=True, blank=True, help_text="Elevation as recorded.")
 
     def get_absolute_url(self):
         return reverse('fieldslip-detail', args=[str(self.id)])
 
     def __str__(self):
-        return self.field_number
+        return self.field_number if self.field_number else "Unnamed Field Slip"
 
     class Meta:
         ordering = ["field_number"]
         verbose_name = "Field Slip"
+        verbose_name_plural = "Field Slips"
 
 # Storage Model
 class Storage(BaseModel):
@@ -183,6 +230,39 @@ class Reference(BaseModel):
 
     def __str__(self):
         return self.citation
+
+
+class AccessionFieldSlip(BaseModel):
+    """
+    Links Accession and FieldSlip in a many-to-many relationship.
+    """
+    accession = models.ForeignKey(
+        "Accession",
+        on_delete=models.CASCADE,
+        related_name="fieldslip_links",
+        help_text="Select the accession."
+    )
+    fieldslip = models.ForeignKey(
+        "FieldSlip",
+        on_delete=models.CASCADE,
+        related_name="accession_links",
+        help_text="Select the field slip."
+    )
+    
+    notes = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Additional notes."
+    )
+
+    class Meta:
+        unique_together = ("accession", "fieldslip")  # Ensures no duplicate relations
+        ordering = ["accession", "fieldslip"]
+        verbose_name = "Accession-FieldSlip Link"
+        verbose_name_plural = "Accession-FieldSlip Links"
+
+    def __str__(self):
+        return f"{self.accession} ↔ {self.fieldslip}"
 
 # AccessionReference Model
 class AccessionReference(BaseModel):
