@@ -34,25 +34,32 @@ def add_fieldslip_to_accession(request, pk):
     messages.error(request, "Error adding FieldSlip.")
     return redirect("accession-detail", pk=accession.pk)
 
-
 def create_fieldslip_for_accession(request, pk):
-    """
-    Creates a new FieldSlip and links it to an Accession.
-    """
+    """ Opens a modal for FieldSlip creation and links it to an Accession """
     accession = get_object_or_404(Accession, pk=pk)
-    
-    FieldSlipFormSet = modelformset_factory(FieldSlip, form=FieldSlipForm, extra=1)
-    if request.method == "POST":
-        formset = FieldSlipFormSet(request.POST)
-        if formset.is_valid():
-            fieldslips = formset.save()
-            for fieldslip in fieldslips:
-                AccessionFieldSlip.objects.create(accession=accession, fieldslip=fieldslip)
-            messages.success(request, "New FieldSlip(s) created and linked successfully!")
-            return redirect("accession-detail", pk=accession.pk)
 
-    messages.error(request, "Error creating FieldSlip(s).")
-    return redirect("accession-detail", pk=accession.pk)
+    if request.method == "POST":
+        form = FieldSlipForm(request.POST)
+        if form.is_valid():
+            fieldslip = form.save()
+            AccessionFieldSlip.objects.create(accession=accession, fieldslip=fieldslip)
+            messages.success(request, "New FieldSlip created and linked successfully!")
+
+            # Instead of closing a pop-up window, return a script to close the modal
+            return HttpResponse('<script>window.parent.closeModalAndRefresh();</script>')
+
+        else:
+            messages.error(request, "There were errors in your submission. Please correct them.")
+
+    else:
+        form = FieldSlipForm()
+
+    return render(request, "includes/base_form.html", {
+        "form": form,
+        "action": request.path,
+        "title": "New FieldSlip",
+        "submit_label": "Create FieldSlip",
+    })
 
 def fieldslip_export(request):
     # Create a CSV response
@@ -159,9 +166,6 @@ class AccessionDetailView(DetailView):
         accession_rows = AccessionRow.objects.filter(accession=self.object)
         # Form for adding existing FieldSlips
         context["add_fieldslip_form"] = AccessionFieldSlipForm()
-        # Formset for adding new FieldSlips
-        FieldSlipFormSet = modelformset_factory(FieldSlip, form=FieldSlipForm, extra=1)
-        context["fieldslip_formset"] = FieldSlipFormSet(queryset=FieldSlip.objects.none())
 
         # Store first identification and identification count per accession row
         first_identifications = {}

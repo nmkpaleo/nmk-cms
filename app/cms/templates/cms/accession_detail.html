@@ -252,19 +252,47 @@
                     {{ add_fieldslip_form }}
                     <button type="submit" class="btn btn-primary">Add FieldSlip</button>
                 </form>
-            
                 <h3>Create and Link New FieldSlip</h3>
-                <form method="POST" action="{% url 'create-fieldslip-for-accession' accession.pk %}">
-                    {% csrf_token %}
-                    {{ fieldslip_formset.management_form }}
-                    {% for form in fieldslip_formset %}
-                        {{ form.as_p }}
-                    {% endfor %}
-                    <button type="submit" class="btn btn-success">Create FieldSlip</button>
-                </form>            
+
+                <!-- Button to open the modal -->
+                <button onclick="openFieldSlipModal()" class="w3-button w3-blue">➕ Add a New FieldSlip</button>
+                
+                <!-- Modal (hidden by default) -->
+                <div id="fieldSlipModal" class="w3-modal">
+                    <div class="w3-modal-content w3-card-4 w3-animate-top" style="max-width: 800px;">
+                        <header class="w3-container w3-blue">
+                            <span onclick="closeFieldSlipModal()" class="w3-button w3-display-topright">&times;</span>
+                            <h2>Create and Link New FieldSlip</h2>
+                        </header>
+                        <div class="w3-container">
+                            <iframe id="fieldSlipFrame" src="" width="100%" height="500px" style="border: none;"></iframe>
+                        </div>
+                        <footer class="w3-container w3-padding w3-light-grey">
+                            <button onclick="closeFieldSlipModal()" class="w3-button w3-red">Cancel</button>
+                        </footer>
+                    </div>
+                </div>           
             </div>
         </div>
     </div>
 {% endblock %}
 
+{% block extra_scripts %}
+<script>
+    function openFieldSlipModal() {
+        var url = "{% url 'create-fieldslip-for-accession' accession.pk %}";
+        document.getElementById("fieldSlipFrame").src = url;
+        document.getElementById("fieldSlipModal").style.display = "block";
+    }
 
+    function closeFieldSlipModal() {
+        document.getElementById("fieldSlipModal").style.display = "none";
+        document.getElementById("fieldSlipFrame").src = ""; // Reset iframe content
+    }
+
+    function closeModalAndRefresh() {
+        closeFieldSlipModal();
+        location.reload(); // Refresh main page after successful save
+    }
+</script>
+{% endblock %}

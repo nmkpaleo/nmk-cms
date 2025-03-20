@@ -213,3 +213,6 @@ DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000
 
 # Email configuration
 EMAIL_BACKEND = get_var("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
+
+# This tells Django to allow iframes only on the same origin (localhost:8000).
+X_FRAME_OPTIONS = 'SAMEORIGIN'
