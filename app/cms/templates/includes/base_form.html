@@ -1,7 +1,7 @@
 {% if form.non_field_errors %}
   <div class="form-errors">
     {% for error in form.non_field_errors %}
-      <p class="error-message">{{ error }}</p>
+      <p class="error-message w3-text-red">{{ error }}</p>
     {% endfor %}
   </div>
 {% endif %}
@@ -12,27 +12,22 @@
 
 {% if title %}
   <h1>
-    {% if form.instance.pk %}
-      Edit {{ title }}{% if access %}: {{ access }}{% endif %}
-    {% else %}
-      New {{ title }}{% if access %}: {{ access }}{% endif %}
-    {% endif %}
+    {% if form.instance.pk %}Edit {{ title }}{% else %}New {{ title }}{% endif %}
   </h1>
 {% endif %}
 
-<form method="{{ method|default:'post' }}" action="{{ action|default:'' }}" class="form-container" 
+<form method="{{ method|default:'post' }}" action="{{ action|default:'' }}" class="form-container"
       enctype="{{ enctype|default:'application/x-www-form-urlencoded' }}">
   {% csrf_token %}
 
-  {# Render Hidden Fields #}
-  {% for hidden in form.hidden_fields %}
-    {{ hidden }}
-  {% endfor %}
+  {# Handle formsets #}
+  {% if form.management_form %}
+    {{ form.management_form }}
+  {% endif %}
 
-  {# Render Form Fields in a Table #}
   <table class="form-table" width="100%">
-    {% for field in form.visible_fields %}
-      <tr class="form-group {% if field.field.required %}required{% endif %}">
+    {% for field in form %}
+      <tr class="form-group {% if field.errors %}has-errors{% endif %}">
         <td><label for="{{ field.id_for_label }}" class="form-label">{{ field.label }} {% if field.field.required %}<span class="required-marker">*</span>{% endif %}</label></td>
         <td>
           {{ field }}
@@ -40,9 +35,9 @@
             <small class="form-help-text">{{ field.help_text }}</small>
           {% endif %}
           {% if field.errors %}
-            <ul class="error-list">
+            <ul class="error-list w3-text-red">
               {% for error in field.errors %}
-                <li class="error-message">{{ error }}</li>
+                <li class="error-message w3-text-red">{{ error }}</li>
               {% endfor %}
             </ul>
           {% endif %}
@@ -51,20 +46,8 @@
     {% endfor %}
     <tr>
       <td colspan="2" class="form-submit-row">
-        <button type="submit" class="form-submit-button">{{ submit_label|default:'Submit' }}</button>
+        <button type="submit" class="form-submit-button w3-button w3-green">Create FieldSlip</button>
       </td>
     </tr>
   </table>
 </form>
-
-{% block extra_js %}
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      document.querySelectorAll('.form-group input').forEach(input => {
-        input.addEventListener('focus', function() {
-          this.classList.add('focused');
-        });
-      });
-    });
-  </script>
-{% endblock %}

@@ -1,7 +1,7 @@
 from django.urls import include, path
 from django.conf.urls.static import static
 from django.conf import settings
-from cms.views import add_accession_row, AddCommentToAccessionView, AddGeologyToAccessionView, AddIdentificationToAccessionRowView, AddSpecimenToAccessionRowView, AddReferenceToAccessionView, AccessionRowDetailView, fieldslip_create, fieldslip_edit, FieldSlipDetailView,FieldSlipListView,AccessionListView,AccessionDetailView,fieldslip_export, fieldslip_import, ReferenceListView,ReferenceDetailView,reference_create, reference_edit,upload_media
+from cms.views import add_accession_row, add_fieldslip_to_accession, AddCommentToAccessionView, AddGeologyToAccessionView, AddIdentificationToAccessionRowView, AddSpecimenToAccessionRowView, AddReferenceToAccessionView, AccessionRowDetailView, create_fieldslip_for_accession, fieldslip_create, fieldslip_edit, FieldSlipDetailView,FieldSlipListView,AccessionListView,AccessionDetailView,fieldslip_export, fieldslip_import, ReferenceListView,ReferenceDetailView,reference_create, reference_edit,upload_media
 
 urlpatterns = [
     
@@ -14,6 +14,8 @@ urlpatterns = [
 
     path('accessions/', AccessionListView.as_view(), name='accession-list'),
     path('accession/<int:pk>/', AccessionDetailView.as_view(), name='accession-detail'),
+    path('accession/<int:pk>/add-fieldslip/', add_fieldslip_to_accession, name='add-fieldslip-to-accession'),
+    path('accession/<int:pk>/create-fieldslip/', create_fieldslip_for_accession, name='create-fieldslip-for-accession'),
     path('accession/<int:accession_id>/add_accession_row/', add_accession_row, name='add_accession_row'),
     path('accession/<int:accession_id>/add-comment/', AddCommentToAccessionView, name='add-comment'),
     path('accession/<int:accession_id>/add-geology/', AddGeologyToAccessionView, name='add-geology'),
