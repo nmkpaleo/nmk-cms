@@ -3,7 +3,7 @@ asgiref>=3.5.2
 sqlparse==0.5.0
 debugpy==1.5.1
 mysqlclient==2.1.0
-gunicorn==22.0.0
+gunicorn==23.0.0
 django-userforeignkey~=0.5.0
 django-import-export>=3.3.7
 pillow>=10.4.0
