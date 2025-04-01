@@ -2,14 +2,23 @@ import csv
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.forms import modelformset_factory
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse_lazy, reverse
-from django.views.generic import CreateView, DetailView, FormView, ListView
+from django.utils.timezone import now
+from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, FormView
 
-from .forms import AccessionCommentForm, AccessionFieldSlipForm, AccessionGeologyForm, AccessionRowIdentificationForm, AccessionRowSpecimenForm, AccessionReferenceForm, AddAccessionRowForm, FieldSlipForm, MediaUploadForm, NatureOfSpecimenForm, ReferenceForm
-from .models import Accession, AccessionFieldSlip, AccessionReference, AccessionRow, Comment, FieldSlip, Media, NatureOfSpecimen, Identification, Reference, SpecimenGeology, Taxon
+from .forms import (AccessionCommentForm, AccessionFieldSlipForm, AccessionGeologyForm,
+                    AccessionRowIdentificationForm, AccessionRowSpecimenForm,
+                    AccessionReferenceForm, AddAccessionRowForm, FieldSlipForm,
+                    MediaUploadForm, NatureOfSpecimenForm, PreparationForm, PreparationApprovalForm,
+                    ReferenceForm)
+from .models import (Accession,
+                     AccessionFieldSlip, AccessionReference, AccessionRow,
+                     Comment, FieldSlip, Media, NatureOfSpecimen, Identification,
+                     Preparation, Reference, SpecimenGeology, Taxon)
 from .resources import FieldSlipResource
 
 # Helper function to check if user is in the "Collection Managers" group
@@ -357,3 +366,93 @@ def AddGeologyToAccessionView(request, accession_id):
         form = AccessionGeologyForm()
 
     return render(request, 'cms/add_accession_geology.html', {'form': form, 'accession': accession})
+
+class PreparationListView(LoginRequiredMixin, ListView):
+    """ List all preparations. """
+    model = Preparation
+    template_name = "cms/preparation_list.html"
+    context_object_name = "preparations"
+    paginate_by = 10
+    ordering = ["-created_on"]
+
+
+class PreparationDetailView(LoginRequiredMixin, DetailView):
+    """ Show details of a single preparation. """
+    model = Preparation
+    template_name = "cms/preparation_detail.html"
+    context_object_name = "preparation"
+
+
+class PreparationCreateView(LoginRequiredMixin, CreateView):
+    """ Create a new preparation record. """
+    model = Preparation
+    form_class = PreparationForm
+    template_name = "cms/preparation_form.html"
+
+    def form_valid(self, form):
+        """ Auto-assign the current user as the preparator if not set. """
+        if not form.instance.preparator:
+            form.instance.preparator = self.request.user
+        return super().form_valid(form)
+
+
+class PreparationUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
+    """ Update an existing preparation. """
+    model = Preparation
+    form_class = PreparationForm
+    template_name = "cms/preparation_form.html"
+
+    def test_func(self):
+        preparation = self.get_object()
+        user = self.request.user
+
+        # Allow admins always
+        if user.is_superuser:
+            return True
+
+        # Allow curators if they are not the preparator
+        return user != preparation.preparator and user.groups.filter(name="Curators").exists()
+
+
+class PreparationDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
+    """ Delete a preparation record. """
+    model = Preparation
+    success_url = reverse_lazy("preparation-list")
+    template_name = "cms/preparation_confirm_delete.html"
+
+    def test_func(self):
+        preparation = self.get_object()
+        user = self.request.user
+
+        # Allow admins always
+        if user.is_superuser:
+            return True
+
+        # Allow curators if they are not the preparator
+        return user != preparation.preparator and user.groups.filter(name="Curators").exists()
+
+
+class PreparationApproveView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
+    """ Allows a curator to approve or decline a preparation. """
+    model = Preparation
+    form_class = PreparationApprovalForm
+    template_name = "cms/preparation_approve.html"
+
+    def test_func(self):
+        preparation = self.get_object()
+        user = self.request.user
+
+        # Allow admins always
+        if user.is_superuser:
+            return True
+
+        # Allow curators if they are not the preparator
+        return user != preparation.preparator and user.groups.filter(name="Curators").exists()
+
+    def form_valid(self, form):
+        """ Auto-set approval date when curator approves or declines. """
+        preparation = form.save(commit=False)
+        preparation.curator = self.request.user
+        preparation.approval_date = now()
+        preparation.save()
+        return redirect("preparation-detail", pk=preparation.pk)

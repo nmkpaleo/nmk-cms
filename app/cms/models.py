@@ -852,9 +852,14 @@ class Preparation(BaseModel):
     )
 
     def clean(self):
-        """ Validation to ensure curator is different from the preparator. """
-        if self.curator and self.preparator and self.curator == self.preparator:
-            raise ValidationError("The curator must be different from the preparator.")
+        """
+        Validation to ensure curator is different from the preparator,
+        unless the curator is a superuser.
+        """
+        user = get_current_user()
+        if self.curator and self.preparator:
+            if self.curator == self.preparator and (not user or not user.is_superuser):
+                raise ValidationError("The curator must be different from the preparator.")
 
     def save(self, *args, **kwargs):
         """ 

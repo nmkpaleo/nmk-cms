@@ -1,0 +1,40 @@
+{% extends "base_generic.html" %}
+
+{% block content %}
+<h2>Preparation Records</h2>
+<a href="{% url 'preparation-create' %}" class="btn btn-primary">New Preparation</a>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>Specimen</th>
+            <th>Preparator</th>
+            <th>Status</th>
+            <th>Curator</th>
+            <th>Approval Status</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for preparation in preparations %}
+        <tr>
+            <td>{{ preparation.accession_row }}</td>
+            <td>{{ preparation.preparator }}</td>
+            <td>{{ preparation.status }}</td>
+            <td>{{ preparation.curator|default:"N/A" }}</td>
+            <td>{{ preparation.approval_status }}</td>
+            <td>
+                <a href="{% url 'preparation-detail' preparation.id %}" class="btn btn-sm btn-info">View</a>
+                {% if request.user == preparation.preparator %}
+                <a href="{% url 'preparation-edit' preparation.id %}" class="btn btn-sm btn-warning">Edit</a>
+                <a href="{% url 'preparation-delete' preparation.id %}" class="btn btn-sm btn-danger">Delete</a>
+                {% endif %}
+                {% if request.user != preparation.preparator and request.user.groups.all.0.name == "Curators" %}
+                <a href="{% url 'preparation-approve' preparation.id %}" class="btn btn-sm btn-success">Curate</a>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

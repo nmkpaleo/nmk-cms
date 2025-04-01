@@ -1,0 +1,53 @@
+{% extends "base_generic.html" %}
+{% block content %}
+<div class="template-detail-container">
+  <div class="template-detail-header">
+    <h2>Preparation Details</h2>
+
+    {% if user.is_superuser or user.groups.first.name == "Collection Managers" %}
+      <a href="{% url 'preparation-edit' preparation.pk %}" class="btn btn-warning">Edit</a>
+      <a href="{% url 'preparation-delete' preparation.pk %}" class="btn btn-danger">Delete</a>
+    {% endif %}
+    {% if request.user.is_superuser %}
+    <!-- Admin can always curate, even if they are the preparator -->
+    <a href="{% url 'preparation-approve' preparation.id %}" class="btn btn-success">Curate</a>
+  
+    {% elif request.user.groups.all.0.name == "Curators" and request.user != preparation.preparator %}
+        <!-- Curators can curate if they're not the preparator -->
+        <a href="{% url 'preparation-approve' preparation.id %}" class="btn btn-success">Curate</a>
+    {% endif %}
+
+  </div>
+    <div class="grid-container">
+        <div class="card">
+            <p><strong>Specimen:</strong> {{ preparation.accession_row }}</p>
+            <p><strong>Preparator:</strong> {{ preparation.preparator }}</p>
+            <p><strong>Status:</strong> {{ preparation.status }}</p>
+            <p><strong>Preparation Type:</strong> {{ preparation.preparation_type }}</p>
+            <p><strong>Started On:</strong> {{ preparation.started_on }}</p>
+            <p><strong>Completed On:</strong> {{ preparation.completed_on|default:"Not completed" }}</p>
+        </div>
+
+        <div class="card">
+            <p><strong>Condition Before:</strong> {{ preparation.condition_before }}</p>
+            <p><strong>Condition After:</strong> {{ preparation.condition_after }}</p>
+            <p><strong>Method:</strong> {{ preparation.preparation_method }}</p>
+            <p><strong>Chemicals Used:</strong> {{ preparation.chemicals_used }}</p>
+            <p><strong>Materials Used:</strong> 
+                {% for material in preparation.materials_used.all %}
+                    {{ material.name }},
+                {% empty %}
+                    None
+                {% endfor %}
+            </p>
+        </div>
+
+        <div class="card">
+            <p><strong>Curator:</strong> {{ preparation.curator|default:"Not assigned" }}</p>
+            <p><strong>Approval Status:</strong> {{ preparation.approval_status }}</p>
+            <p><strong>Approval Date:</strong> {{ preparation.approval_date|default:"Pending" }}</p>
+            <p><strong>Curator Comments:</strong> {{ preparation.curator_comments|default:"No comments" }}</p>
+        </div>
+    </div>  
+</div>
+{% endblock %}

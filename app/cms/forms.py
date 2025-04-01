@@ -2,7 +2,27 @@ from django import forms
 from django_select2 import forms as s2forms
 from django_select2.forms import ModelSelect2Widget, Select2Widget
 
-from .models import Accession, AccessionFieldSlip, AccessionReference, AccessionRow, Comment, FieldSlip, Identification, Media, NatureOfSpecimen, Reference, SpecimenGeology
+from .models import (Accession, AccessionFieldSlip, AccessionReference,
+                     AccessionRow, Comment, FieldSlip, Identification, Media,
+                     NatureOfSpecimen, Preparation, Reference, SpecimenGeology)
+
+class AccessionRowWidget(s2forms.ModelSelect2Widget):
+    search_fields = [
+        "accession__collection__description__icontains",
+        "accession__specimen_prefix__abbreviation__icontains",
+        "accession__specimen_no__icontains",
+        "specimen_suffix__icontains"
+    ]
+
+    def label_from_instance(self, obj):
+        """
+        Custom label for dropdown: Show full accession with suffix and collection name
+        """
+        collection = obj.accession.collection.description if obj.accession.collection else "Unknown Collection"
+        prefix = obj.accession.specimen_prefix.abbreviation
+        number = obj.accession.specimen_no
+        suffix = obj.specimen_suffix or "-"
+        return f"{prefix} {number}{suffix} ({collection})"
 
 class FieldSlipWidget(s2forms.ModelSelect2Widget):
     search_fields = ["field_number__icontains", "verbatim_locality__icontains"]
@@ -192,3 +212,26 @@ class AccessionRowSpecimenForm(forms.ModelForm):
         fields = ['element', 'side', 'condition', 'verbatim_element', 'portion', 'fragments']
         widgets = {
             "element": ElementWidget,}
+
+class PreparationForm(forms.ModelForm):
+    """ Form for creating/updating preparation records. """
+    
+    class Meta:
+        model = Preparation
+        fields = [
+            "accession_row", "preparation_type", "reason", "preparator", "curator", "status", "started_on", "completed_on",
+            "original_storage", "temporary_storage", "condition_before", "condition_after",
+            "preparation_method", "chemicals_used", "materials_used", "notes"
+        ]
+        widgets = {
+            "started_on": forms.DateInput(attrs={"type": "date"}),
+            "completed_on": forms.DateInput(attrs={"type": "date"}),
+            "accession_row": AccessionRowWidget
+        }
+
+class PreparationApprovalForm(forms.ModelForm):
+    """ Form for curators to approve or decline a preparation. """
+    
+    class Meta:
+        model = Preparation
+        fields = ["approval_status", "curator_comments"]

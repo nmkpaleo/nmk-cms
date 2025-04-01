@@ -38,6 +38,7 @@
               <li><a href="{% url 'accession-list' %}">Accession</a></li>
               <!--<li><a href="">Contact</a></li>-->
               <li><a href="{% url 'reference-list' %}">Reference</a></li>
+              <li><a href="{% url 'preparation-list' %}">Preparations</a></li>
               
               {% if user.is_authenticated %}
                 <li>User: {{ user.get_username }}</li>
