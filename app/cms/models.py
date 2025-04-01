@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.utils import timezone
 from django_userforeignkey.models.fields import UserForeignKey
 from django.db.models import UniqueConstraint
 from django.contrib.auth.models import User
@@ -607,3 +608,249 @@ class GeologicalContext(BaseModel):
 
     def __str__(self):
         return f"{self.name} ({self.unit_name})"
+    
+class PreparationMaterial(BaseModel):
+    """ Materials used in the preparation process. """
+    name = models.CharField(max_length=255, unique=True, help_text="Name of the preparation material (e.g., Paraloid B72, Cyanoacrylate).")
+    description = models.TextField(blank=True, null=True, help_text="Details about the material (e.g., properties, best use cases).")
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse('preparationmaterial-detail', args=[str(self.id)])
+
+
+class PreparationStatus(models.TextChoices):
+    """ Enum for tracking the preparation workflow stages. """
+    PENDING = "Pending", "Pending"
+    IN_PROGRESS = "In Progress", "In Progress"
+    COMPLETED = "Completed", "Completed"
+    APPROVED = "Approved", "Approved"
+    DECLINED = "Declined", "Declined"
+
+
+class Preparation(BaseModel):
+    """ Tracks preparation and maintenance of specimens with curation approval. """
+    
+    accession_row = models.ForeignKey(
+        AccessionRow, 
+        on_delete=models.CASCADE, 
+        related_name="preparations",
+        help_text="The specimen undergoing preparation."
+    )
+    preparator = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name="preparations",
+        help_text="The museum staff responsible for the preparation."
+    )
+
+    preparation_type = models.CharField(
+        max_length=50, 
+        choices=[
+            ('cleaning', 'Cleaning'),
+            ('consolidation', 'Consolidation'),
+            ('casting', 'Casting'),
+            ('repair', 'Repair'),
+            ('restoration', 'Restoration'),
+            ('conservation', 'Conservation'),
+            ('mounting', 'Mounting'),
+            ('other', 'Other')
+        ], 
+        help_text="The type of preparation or maintenance performed."
+    )
+
+    reason = models.TextField(
+        null=True, 
+        blank=True, 
+        help_text="The reason for the preparation (e.g., exhibition, conservation, research)."
+    )
+
+    started_on = models.DateField(
+        help_text="Date when preparation started."
+    )
+    completed_on = models.DateField(
+        null=True, 
+        blank=True, 
+        help_text="Date when preparation was completed."
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=PreparationStatus.choices,
+        default=PreparationStatus.PENDING,
+        help_text="Current status of the preparation process."
+    )
+
+    original_storage = models.ForeignKey(
+        Storage, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name="original_preparations",
+        help_text="Where the specimen was stored before preparation."
+    )
+    temporary_storage = models.ForeignKey(
+        Storage, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name="temporary_preparations",
+        help_text="Where the specimen was moved during preparation."
+    )
+
+    condition_before = models.TextField(
+        null=True, 
+        blank=True, 
+        help_text="Condition of the specimen before preparation."
+    )
+
+    condition_after = models.TextField(
+        null=True, 
+        blank=True, 
+        help_text="Condition of the specimen after preparation."
+    )
+
+    preparation_method = models.TextField(
+        null=True, 
+        blank=True, 
+        help_text="Describe the preparation technique used (e.g., mechanical cleaning, acid preparation)."
+    )
+
+    chemicals_used = models.TextField(
+        null=True, 
+        blank=True, 
+        help_text="List any chemicals or adhesives applied during the preparation."
+    )
+
+    materials_used = models.ManyToManyField(
+        PreparationMaterial, 
+        blank=True, 
+        related_name="preparations",
+        help_text="List of materials used in the preparation process."
+    )
+
+    media = models.ManyToManyField(
+        Media, 
+        blank=True, 
+        related_name="preparations",
+        help_text="Attach any media files related to the preparation (e.g., photos, videos)."
+    )
+
+    # === Curation Process ===
+    curator = models.ForeignKey(
+        User, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name="curated_preparations",
+        help_text="The curator who reviews and approves/declines the preparation."
+    )
+
+    approval_status = models.CharField(
+        max_length=20,
+        choices=[
+            ('pending', 'Pending'),
+            ('approved', 'Approved'),
+            ('declined', 'Declined')
+        ],
+        default='pending',
+        help_text="Approval decision by the curator."
+    )
+
+    approval_date = models.DateTimeField(
+        null=True, 
+        blank=True, 
+        help_text="Timestamp when the curator made a decision."
+    )
+
+    curator_comments = models.TextField(
+        null=True, 
+        blank=True, 
+        help_text="Curator's comments on the preparation (approval or rejection reasons)."
+    )
+
+    report_link = models.URLField(
+        null=True, 
+        blank=True, 
+        help_text="Link to an external report or documentation for this preparation."
+    )
+
+    notes = models.TextField(
+        null=True, 
+        blank=True, 
+        help_text="Additional notes or observations about the preparation."
+    )
+
+    def clean(self):
+        """ Validation to ensure curator is different from the preparator. """
+        if self.curator and self.preparator and self.curator == self.preparator:
+            raise ValidationError("The curator must be different from the preparator.")
+
+    def save(self, *args, **kwargs):
+        """ 
+        Custom save method to enforce validation and track curation decisions. 
+        """
+        self.clean()  # Ensure validations are checked
+
+        # Log status changes in PreparationLog
+        if self.pk:
+            old_instance = Preparation.objects.get(pk=self.pk)
+            changes = []
+            for field in ["status", "approval_status", "approved", "completed_on", "approval_date"]:
+                old_value = getattr(old_instance, field)
+                new_value = getattr(self, field)
+                if old_value != new_value:
+                    changes.append(f"{field} changed from '{old_value}' to '{new_value}'")
+
+            if changes:
+                PreparationLog.objects.create(
+                    preparation=self,
+                    changed_by=self.modified_by,
+                    changes=", ".join(changes)
+                )
+
+        # Automatically set approval date if a curator approves or declines
+        if self.approval_status in ["approved", "declined"] and not self.approval_date:
+            self.approval_date = timezone.now()
+
+        super().save(*args, **kwargs)
+
+    def get_absolute_url(self):
+        return reverse('preparation-detail', args=[str(self.id)])
+
+    def __str__(self):
+        return f"{self.accession_row} - {self.preparation_type} by {self.preparator}"
+
+
+class PreparationLog(BaseModel):
+    """ Tracks changes to preparation records, including curation decisions. """
+    preparation = models.ForeignKey(
+        Preparation, 
+        on_delete=models.CASCADE, 
+        related_name="logs",
+        help_text="The preparation record that was modified."
+    )
+    changed_by = models.ForeignKey(
+        User, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        help_text="User who made the change."
+    )
+    changes = models.TextField(
+        help_text="Description of changes made."
+    )
+    changed_on = models.DateTimeField(
+        auto_now_add=True, 
+        help_text="Timestamp of the change."
+    )
+
+    class Meta:
+        ordering = ["-changed_on"]
+
+    def __str__(self):
+        return f"Change in {self.preparation} on {self.changed_on}"
