@@ -5,10 +5,17 @@ from import_export.fields import Field
 from import_export.widgets import ForeignKeyWidget, DateWidget
 from .models import (
     NatureOfSpecimen, Element, Person, Identification, Taxon,Media, SpecimenGeology, GeologicalContext,
-    AccessionReference, Locality, Collection, Accession, AccessionRow, Subject, Comment, FieldSlip, Reference, Storage, User
+    AccessionReference, Locality, Collection, Accession, AccessionRow, Subject, Comment, FieldSlip, Reference, Storage, User,
+    Preparation, PreparationLog
 )
+
 from .resources import *
 import logging
+
+from django import forms
+from django.core.exceptions import ValidationError
+from django.utils.html import format_html
+from django.utils.timezone import now
 
 # Configure the logger
 logging.basicConfig(level=logging.INFO)  # You can adjust the level as needed (DEBUG, WARNING, ERROR, etc.)
@@ -185,6 +192,104 @@ class UserAdmin(ImportExportModelAdmin):
     resource_class = UserResource
     list_display = ('username', 'first_name', 'last_name', 'email')
     search_fields = ('username', 'first_name', 'last_name', 'email')
+
+class PreparationLogInline(admin.TabularInline):
+    """ Inline display of PreparationLog entries within Preparation admin. """
+    model = PreparationLog
+    extra = 0
+    readonly_fields = ("changed_on", "changed_by", "changes")
+    can_delete = False
+
+    def has_add_permission(self, request, obj=None):
+        return False  # Prevents adding new log entries manually
+
+class PreparationAdminForm(forms.ModelForm):
+    """ Custom form for validation and dynamic field handling in admin. """
+    
+    class Meta:
+        model = Preparation
+        fields = "__all__"
+
+    def clean(self):
+        cleaned_data = super().clean()
+        preparator = cleaned_data.get("preparator")
+        curator = cleaned_data.get("curator")
+        status = cleaned_data.get("status")
+        approval_status = cleaned_data.get("approval_status")
+
+        # Ensure Curator is different from Preparator
+        if preparator and curator and preparator == curator:
+            raise ValidationError({"curator": "The curator must be different from the preparator."})
+
+        # Ensure curation is only done for completed preparations
+        if approval_status in ["approved", "declined"] and status != "Completed":
+            raise ValidationError({"approval_status": "Preparation must be 'Completed' before approval or rejection."})
+
+        return cleaned_data
+
+
+@admin.register(Preparation)
+class PreparationAdmin(admin.ModelAdmin):
+    """ Custom admin panel for Preparation model. """
+    
+    form = PreparationAdminForm
+    list_display = ("accession_row", "preparator", "status", "curator", "approval_status", "approval_date", "admin_colored_status")
+    list_filter = ("status", "approval_status", "preparator", "curator")
+    search_fields = ("accession_row__accession__specimen_no", "preparator__username", "curator__username")
+    readonly_fields = ("approval_date", "created_on", "modified_on", "admin_status_info")
+    inlines = [PreparationLogInline]
+    
+    fieldsets = (
+        ("Preparation Details", {
+            "fields": ("accession_row", "preparator", "preparation_type", "reason", "status", "started_on", "completed_on", "notes"),
+        }),
+        ("Storage & Condition", {
+            "fields": ("original_storage", "temporary_storage", "condition_before", "condition_after", "preparation_method", "chemicals_used", "materials_used"),
+            "classes": ("collapse",),
+        }),
+        ("Curation & Approval", {
+            "fields": ("curator", "approval_status", "approval_date", "curator_comments"),
+            "classes": ("collapse",),
+        }),
+        ("Audit Info", {
+            "fields": ("created_on", "modified_on", "admin_status_info"),
+        }),
+    )
+
+    def save_model(self, request, obj, form, change):
+        """ Custom save logic to track status changes and auto-fill fields. """
+        if not obj.preparator:
+            obj.preparator = request.user  # Assign current user if no preparator set
+        
+        if obj.approval_status in ["approved", "declined"] and not obj.approval_date:
+            obj.approval_date = now()  # Auto-fill approval date if approved/declined
+
+        super().save_model(request, obj, form, change)
+
+    def admin_colored_status(self, obj):
+        """ Displays colored status for better visibility in admin. """
+        color_map = {
+            "Pending": "orange",
+            "In Progress": "blue",
+            "Completed": "green",
+            "Approved": "darkgreen",
+            "Declined": "red",
+        }
+        return format_html(f'<span style="color: {color_map.get(obj.status, "black")}; font-weight: bold;">{obj.status}</span>')
+    
+    admin_colored_status.short_description = "Status"
+
+    def admin_status_info(self, obj):
+        """ Displays summary of preparation status in admin view. """
+        return format_html(
+            "<b>Status:</b> {}<br><b>Curator:</b> {}<br><b>Approval Date:</b> {}",
+            obj.status,
+            obj.curator.username if obj.curator else "Not Assigned",
+            obj.approval_date.strftime("%Y-%m-%d %H:%M") if obj.approval_date else "Not Approved",
+        )
+
+    admin_status_info.short_description = "Status Overview"
+
 
 # Register the models with the customized admin interface
 admin.site.register(Accession, AccessionAdmin)
