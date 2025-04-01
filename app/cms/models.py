@@ -1,3 +1,4 @@
+from crum import get_current_user
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.urls import reverse
@@ -13,6 +14,7 @@ User = get_user_model()
 class BaseModel(models.Model):
     created_on = models.DateTimeField(auto_now_add=True, verbose_name="Date Created")
     modified_on = models.DateTimeField(auto_now=True, verbose_name="Date Modified")
+    
     created_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
@@ -36,6 +38,13 @@ class BaseModel(models.Model):
         verbose_name = "Base Record"
         verbose_name_plural = "Base Records"
 
+    def save(self, *args, **kwargs):
+        user = get_current_user()
+        if user and not self.pk and not self.created_by:
+            self.created_by = user
+        if user:
+            self.modified_by = user
+        super().save(*args, **kwargs)
 
 # Locality Model
 class Locality(BaseModel):
@@ -857,7 +866,7 @@ class Preparation(BaseModel):
         if self.pk:
             old_instance = Preparation.objects.get(pk=self.pk)
             changes = []
-            for field in ["status", "approval_status", "approved", "completed_on", "approval_date"]:
+            for field in ["status", "approval_status", "completed_on", "approval_date"]:
                 old_value = getattr(old_instance, field)
                 new_value = getattr(self, field)
                 if old_value != new_value:

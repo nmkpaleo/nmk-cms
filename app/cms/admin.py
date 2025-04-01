@@ -6,7 +6,7 @@ from import_export.widgets import ForeignKeyWidget, DateWidget
 from .models import (
     NatureOfSpecimen, Element, Person, Identification, Taxon,Media, SpecimenGeology, GeologicalContext,
     AccessionReference, Locality, Collection, Accession, AccessionRow, Subject, Comment, FieldSlip, Reference, Storage, User,
-    Preparation, PreparationLog
+    Preparation, PreparationLog, PreparationMaterial
 )
 
 from .resources import *
@@ -290,6 +290,10 @@ class PreparationAdmin(admin.ModelAdmin):
 
     admin_status_info.short_description = "Status Overview"
 
+@admin.register(PreparationMaterial)
+class PreparationMaterialAdmin(admin.ModelAdmin):
+    list_display = ("name", "description")
+    search_fields = ("name",)
 
 # Register the models with the customized admin interface
 admin.site.register(Accession, AccessionAdmin)
