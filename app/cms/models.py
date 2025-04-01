@@ -51,6 +51,9 @@ class Locality(BaseModel):
     def __str__(self):
         return self.name
 
+    class Meta:
+        verbose_name = "Locality"
+        verbose_name_plural = "Localities"
 
 # Collection Model
 class Collection(BaseModel):
@@ -59,6 +62,10 @@ class Collection(BaseModel):
 
     def get_absolute_url(self):
         return reverse('collection-detail', args=[str(self.id)])
+
+    class Meta:
+        verbose_name = "Collection"
+        verbose_name_plural = "Collections"
 
     def __str__(self):
         return self.description
@@ -144,6 +151,10 @@ class Subject(BaseModel):
     def get_absolute_url(self):
         return reverse('subject-detail', args=[str(self.id)])
 
+    class Meta:
+        verbose_name = "Subject"
+        verbose_name_plural = "Subjects"
+
     def __str__(self):
         return self.subject_name
 
@@ -168,6 +179,10 @@ class Comment(BaseModel):
 
     def get_absolute_url(self):
         return reverse('comment-detail', args=[str(self.id)])
+
+    class Meta:
+        verbose_name = "Comment"
+        verbose_name_plural = "Comments"
 
     def __str__(self):
         return self.comment
@@ -210,6 +225,10 @@ class Storage(BaseModel):
     def get_absolute_url(self):
         return reverse('storage-detail', args=[str(self.id)])
 
+    class Meta:
+        verbose_name = "Storage"
+        verbose_name_plural = "Storages"
+
     def __str__(self):
         return self.area
 
@@ -228,6 +247,10 @@ class Reference(BaseModel):
 
     def get_absolute_url(self):
         return reverse('reference-detail', args=[str(self.id)])
+
+    class Meta:
+        verbose_name = "Reference"
+        verbose_name_plural = "References"
 
     def __str__(self):
         return self.citation
@@ -282,6 +305,10 @@ class AccessionReference(BaseModel):
     def get_absolute_url(self):
         return reverse('accessionreference-detail', args=[str(self.id)])
 
+    class Meta:
+        verbose_name = "Accession Reference"
+        verbose_name_plural = "Accession References"
+
     def __str__(self):
         return f"{self.accession} - {self.reference} (Page: {self.page or 'N/A'})"
 
@@ -305,6 +332,8 @@ class AccessionRow(BaseModel):
             models.Index(fields=['accession']),
             models.Index(fields=['specimen_suffix']),
         ]
+        verbose_name = "Accession Row"
+        verbose_name_plural = "Accession Rows"
 
     def clean(self):
         """ Validate specimen_suffix format and uniqueness """
@@ -361,6 +390,10 @@ class NatureOfSpecimen(BaseModel):
     def get_absolute_url(self):
         return reverse('natureofspecimen-detail', args=[str(self.id)])
 
+    class Meta:
+        verbose_name = "Nature Of Specimen"
+        verbose_name_plural = "Nature Of Specimens"
+
     def __str__(self):
         return f"NatureOfSpecimen for AccessionRow {self.accession_row}"
 
@@ -382,6 +415,10 @@ class Element(BaseModel):
     def get_absolute_url(self):
         return reverse('element-detail', args=[str(self.id)])
 
+    class Meta:
+        verbose_name = "Element"
+        verbose_name_plural = "Elements"
+
     def __str__(self):
         return self.name
 
@@ -394,6 +431,10 @@ class Person(BaseModel):
 
     def get_absolute_url(self):
         return reverse('person-detail', args=[str(self.id)])
+
+    class Meta:
+        verbose_name = "Person"
+        verbose_name_plural = "Persons"
 
     def __str__(self):
         return f"{self.first_name} {self.last_name}"
@@ -412,6 +453,10 @@ class Identification(BaseModel):
 
     def get_absolute_url(self):
         return reverse('identification-detail', args=[str(self.id)])
+
+    class Meta:
+        verbose_name = "Identification"
+        verbose_name_plural = "Identifications"
 
     def __str__(self):
         return f"Identification for AccessionRow {self.accession_row}"
@@ -547,6 +592,10 @@ class Media(BaseModel):
     def get_absolute_url(self):
         return reverse('media-detail', args=[str(self.id)])
 
+    class Meta:
+        verbose_name = "Media"
+        verbose_name_plural = "Medias"
+
     def __str__(self):
         return f"{self.file_name} ({self.type})"
 
@@ -606,6 +655,10 @@ class GeologicalContext(BaseModel):
     def get_absolute_url(self):
         return reverse('geologicalcontext-detail', args=[str(self.id)])
 
+    class Meta:
+        verbose_name = "Geological Context"
+        verbose_name_plural = "Geological Contexties"
+
     def __str__(self):
         return f"{self.name} ({self.unit_name})"
     
@@ -613,6 +666,10 @@ class PreparationMaterial(BaseModel):
     """ Materials used in the preparation process. """
     name = models.CharField(max_length=255, unique=True, help_text="Name of the preparation material (e.g., Paraloid B72, Cyanoacrylate).")
     description = models.TextField(blank=True, null=True, help_text="Details about the material (e.g., properties, best use cases).")
+
+    class Meta:
+        verbose_name = "Preparation Material"
+        verbose_name_plural = "Preparation Materials"
 
     def __str__(self):
         return self.name
@@ -822,6 +879,10 @@ class Preparation(BaseModel):
     def get_absolute_url(self):
         return reverse('preparation-detail', args=[str(self.id)])
 
+    class Meta:
+        verbose_name = "Preparation"
+        verbose_name_plural = "Preparations"
+        
     def __str__(self):
         return f"{self.accession_row} - {self.preparation_type} by {self.preparator}"
 
@@ -850,6 +911,8 @@ class PreparationLog(BaseModel):
     )
 
     class Meta:
+        verbose_name = "Preparation Log"
+        verbose_name_plural = "Preparation Logs"
         ordering = ["-changed_on"]
 
     def __str__(self):
