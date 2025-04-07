@@ -2,9 +2,56 @@
 
 {% block content %}
 <h2>Preparation Records</h2>
-<a href="{% url 'preparation-create' %}" class="btn btn-primary">New Preparation</a>
 
-<table class="table">
+<div class="w3-container w3-margin-top">
+
+  <button onclick="toggleAccordion('prepFilterPanel')" class="w3-button w3-block w3-light-grey w3-left-align">
+    🔍 Show/Hide Filters
+  </button>
+
+  <div id="prepFilterPanel" class="w3-hide w3-animate-opacity w3-padding w3-light-grey w3-round-large w3-margin-top">
+    <form method="get">
+<!-- Row 1: quarters -->
+<div class="w3-row-padding">
+  <div class="w3-quarter">
+    <label>Specimen</label>
+    {{ filter.form.accession_label }}
+  </div>
+  <div class="w3-quarter">
+    <label>Status</label>
+    {{ filter.form.status }}
+  </div>
+  <div class="w3-quarter">
+    <label>Approval Status</label>
+    {{ filter.form.approval_status }}
+  </div>
+  <div class="w3-quarter">
+    <label>Preparator</label>
+    {{ filter.form.preparator }}
+  </div>
+</div>
+
+<!-- Row 2: halves -->
+<div class="w3-row-padding">
+  <div class="w3-half">
+    <label>Started Between</label>
+    {{ filter.form.started_on }}
+  </div>
+  <div class="w3-half">
+    <label>Completed Between</label>
+    {{ filter.form.completed_on }}
+  </div>
+</div>
+      <div class="w3-container w3-padding-16">
+        <button type="submit" class="w3-button w3-blue w3-margin-right">Apply Filters</button>
+        <a href="{% url 'preparation-list' %}" class="w3-button w3-gray">Clear</a>
+      </div>
+    </form>
+  </div>
+</div>
+  
+  <a href="{% url 'preparation-create' %}" class="btn btn-primary">New Preparation</a>
+  <table class="table">
     <thead>
         <tr>
             <th>Specimen</th>
@@ -37,4 +84,19 @@
         {% endfor %}
     </tbody>
 </table>
+{% endblock %}
+
+{% block script %}
+  <script>
+    function toggleAccordion(id) {
+      var panel = document.getElementById(id);
+      if (panel.classList.contains("w3-show")) {
+        panel.classList.remove("w3-show");
+        panel.classList.add("w3-hide");
+      } else {
+        panel.classList.remove("w3-hide");
+        panel.classList.add("w3-show");
+      }
+    }
+  </script>  
 {% endblock %}

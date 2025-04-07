@@ -1,23 +1,18 @@
 {% extends "base_generic.html" %}
+
 {% block content %}
+{% load user_tags %}
+
 <div class="template-detail-container">
-  <div class="template-detail-header">
-    <h2>Preparation Details</h2>
+    <div class="template-detail-header">
+        <h2>Preparation Details</h2>
+        {% if user.is_superuser or user.groups.first.name == "Collection Managers" %}
+        <a href="{% url 'preparation-edit' preparation.pk %}" class="edit-icon">
+            Edit Preparation ✏️
+        </a>
+        {% endif %}
+    </div>
 
-    {% if user.is_superuser or user.groups.first.name == "Collection Managers" %}
-      <a href="{% url 'preparation-edit' preparation.pk %}" class="btn btn-warning">Edit</a>
-      <a href="{% url 'preparation-delete' preparation.pk %}" class="btn btn-danger">Delete</a>
-    {% endif %}
-    {% if request.user.is_superuser %}
-    <!-- Admin can always curate, even if they are the preparator -->
-    <a href="{% url 'preparation-approve' preparation.id %}" class="btn btn-success">Curate</a>
-  
-    {% elif request.user.groups.all.0.name == "Curators" and request.user != preparation.preparator %}
-        <!-- Curators can curate if they're not the preparator -->
-        <a href="{% url 'preparation-approve' preparation.id %}" class="btn btn-success">Curate</a>
-    {% endif %}
-
-  </div>
     <div class="grid-container">
         <div class="card">
             <p><strong>Specimen:</strong> {{ preparation.accession_row }}</p>
@@ -42,12 +37,95 @@
             </p>
         </div>
 
-        <div class="card">
-            <p><strong>Curator:</strong> {{ preparation.curator|default:"Not assigned" }}</p>
-            <p><strong>Approval Status:</strong> {{ preparation.approval_status }}</p>
-            <p><strong>Approval Date:</strong> {{ preparation.approval_date|default:"Pending" }}</p>
-            <p><strong>Curator Comments:</strong> {{ preparation.curator_comments|default:"No comments" }}</p>
-        </div>
-    </div>  
+      <div class="card">
+        {% if request.user.is_superuser %}
+          <!-- Admin can always curate, even if they are the preparator -->
+          <a href="{% url 'preparation-approve' preparation.id %}" class="btn btn-success">Curate</a>
+    
+        {% elif request.user.groups.all.0.name == "Curators" and request.user != preparation.preparator %}
+          <!-- Curators can curate if they're not the preparator -->
+          <a href="{% url 'preparation-approve' preparation.id %}" class="btn btn-success">Curate</a>
+        {% endif %}
+
+        <p><strong>Curator:</strong> {{ preparation.curator|default:"Not assigned" }}</p>
+        <p><strong>Approval Status:</strong> {{ preparation.approval_status }}</p>
+        <p><strong>Approval Date:</strong> {{ preparation.approval_date|default:"Pending" }}</p>
+        <p><strong>Curator Comments:</strong> {{ preparation.curator_comments|default:"No comments" }}</p>
+      </div>
+    </div>
+  
+    <h3>Preparation Log</h3>
+
+    {% if preparation.logs.all %}
+      <table class="table table-striped">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>User</th>
+            <th>Changes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in preparation.logs.all %}
+            <tr>
+              <td>{{ log.changed_on|date:"Y-m-d H:i" }}</td>
+              <td>{{ log.changed_by|default:"System or Unknown" }}</td>
+              <td>{{ log.changes }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No changes have been logged for this preparation yet.</p>
+    {% endif %}
+
+    {% if user.is_authenticated %}
+        {% if user|has_group:"Collection Managers" or user.is_superuser %}
+        <a href="{% url 'preparation-upload-media-form' preparation.id %}">➕ Upload Media</a>
+        {% endif %}
+    {% endif %}
+
+    <table>
+        <caption>Media</caption>
+        <thead>
+          <tr>
+            <th>File Name</th>
+            <th>Type</th>
+            <th>Context</th>
+            <th>License</th>
+            <th>Uploaded By</th>
+            <th>Created On</th>
+            <th>Preview</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if preparation.preparationmedia_set.all %}
+            {% for item in preparation.preparationmedia_set.all %}
+              <tr>
+                <td>{{ item.media.file_name|default:item.media.media_location.name }}</td>
+                <td>{{ item.media.type }}</td>
+                <td>{{ item.get_context_display }}</td>
+                <td>{{ item.media.get_license_display }}</td>
+                <td>{{ item.media.created_by|default:"Unknown" }}</td>
+                <td>{{ item.media.created_on|date:"Y-m-d H:i" }}</td>
+                <td>
+                  {% if item.media.media_location %}
+                    <a href="{{ item.media.media_location.url }}" target="_blank">
+                        <img src="{{ item.media.media_location.url }}"
+                                alt="{{ item.media.file_name }}"
+                                style="max-height: 80px; max-width: 120px; object-fit: contain; border: 1px solid #ccc;" />
+                    </a>
+                    {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="7">There are no media files available for this preparation.</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+      
 </div>
 {% endblock %}

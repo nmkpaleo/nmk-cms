@@ -235,3 +235,22 @@ class PreparationApprovalForm(forms.ModelForm):
     class Meta:
         model = Preparation
         fields = ["approval_status", "curator_comments"]
+
+class PreparationMediaUploadForm(forms.Form):
+    media_files = forms.FileField(
+        widget=forms.FileInput(attrs={'multiple': False}),
+        label="Upload media files"
+    )
+    context = forms.ChoiceField(
+        choices=[
+            ("before", "Before Preparation"),
+            ("after", "After Preparation"),
+            ("in_progress", "In Progress"),
+            ("other", "Other")
+        ],
+        initial="before"
+    )
+    notes = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={'rows': 2})
+    )

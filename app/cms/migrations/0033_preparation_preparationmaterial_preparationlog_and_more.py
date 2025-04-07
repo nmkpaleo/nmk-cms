@@ -86,11 +86,6 @@ class Migration(migrations.Migration):
         ),
         migrations.AddField(
             model_name='preparation',
-            name='media',
-            field=models.ManyToManyField(blank=True, help_text='Attach any media files related to the preparation (e.g., photos, videos).', related_name='preparations', to='cms.media'),
-        ),
-        migrations.AddField(
-            model_name='preparation',
             name='modified_by',
             field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(app_label)s_%(class)s_modified', to=settings.AUTH_USER_MODEL, verbose_name='Modified by'),
         ),

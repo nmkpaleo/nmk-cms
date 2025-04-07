@@ -800,10 +800,11 @@ class Preparation(BaseModel):
     )
 
     media = models.ManyToManyField(
-        Media, 
-        blank=True, 
+        Media,
+        through="PreparationMedia",
         related_name="preparations",
-        help_text="Attach any media files related to the preparation (e.g., photos, videos)."
+        blank=True,
+        help_text="Attach categorized media (before/after/in-progress)."
     )
 
     # === Curation Process ===
@@ -931,3 +932,30 @@ class PreparationLog(BaseModel):
 
     def __str__(self):
         return f"Change in {self.preparation} on {self.changed_on}"
+    
+class PreparationMedia(BaseModel):
+    preparation = models.ForeignKey("Preparation", on_delete=models.CASCADE)
+    media = models.ForeignKey("Media", on_delete=models.CASCADE)
+
+    MEDIA_CONTEXT_CHOICES = [
+        ("before", "Before Preparation"),
+        ("after", "After Preparation"),
+        ("in_progress", "In Progress"),
+        ("other", "Other")
+    ]
+    context = models.CharField(
+        max_length=20,
+        choices=MEDIA_CONTEXT_CHOICES,
+        default="other",
+        help_text="Indicates when this media was captured."
+    )
+
+    notes = models.TextField(null=True, blank=True, help_text="Optional comments or observations about this media.")
+
+    class Meta:
+        unique_together = ("preparation", "media")
+        verbose_name = "Preparation Media"
+        verbose_name_plural = "Preparation Media"
+
+    def __str__(self):
+        return f"{self.preparation} - {self.get_context_display()}"

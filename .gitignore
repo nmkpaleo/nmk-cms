@@ -1,3 +1,4 @@
+config.json
 .env*
 nginx/certs/*
 nginx/certbot/*

@@ -1,4 +1,12 @@
 import csv
+from django.db.models.functions import Concat
+from django.db.models import Value, CharField
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
+from django.utils.decorators import method_decorator
+from django.views import View
+from django_filters.views import FilterView
+from .filters import PreparationFilter
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
@@ -14,12 +22,20 @@ from .forms import (AccessionCommentForm, AccessionFieldSlipForm, AccessionGeolo
                     AccessionRowIdentificationForm, AccessionRowSpecimenForm,
                     AccessionReferenceForm, AddAccessionRowForm, FieldSlipForm,
                     MediaUploadForm, NatureOfSpecimenForm, PreparationForm, PreparationApprovalForm,
-                    ReferenceForm)
+                    PreparationMediaUploadForm, ReferenceForm)
 from .models import (Accession,
                      AccessionFieldSlip, AccessionReference, AccessionRow,
                      Comment, FieldSlip, Media, NatureOfSpecimen, Identification,
-                     Preparation, Reference, SpecimenGeology, Taxon)
+                     Preparation, PreparationMedia, Reference, SpecimenGeology, Taxon)
 from .resources import FieldSlipResource
+
+class PreparationAccessMixin(UserPassesTestMixin):
+    def test_func(self):
+        user = self.request.user
+        return (
+            user.is_superuser or
+            user.groups.filter(name__in=["Curators", "Collection Managers"]).exists()
+        )
 
 # Helper function to check if user is in the "Collection Managers" group
 def is_collection_manager(user):
@@ -367,14 +383,33 @@ def AddGeologyToAccessionView(request, accession_id):
 
     return render(request, 'cms/add_accession_geology.html', {'form': form, 'accession': accession})
 
-class PreparationListView(LoginRequiredMixin, ListView):
+class PreparationListView(LoginRequiredMixin, PreparationAccessMixin, FilterView):
     """ List all preparations. """
     model = Preparation
     template_name = "cms/preparation_list.html"
     context_object_name = "preparations"
-    paginate_by = 10
+    paginate_by = 20
     ordering = ["-created_on"]
+    filterset_class = PreparationFilter
 
+    def test_func(self):
+        user = self.request.user
+        return (
+            user.is_superuser or 
+            user.groups.filter(name__in=["Curators", "Collection Managers"]).exists()
+        )
+    
+    def get_queryset(self):
+        qs = super().get_queryset()
+        return qs.annotate(
+            accession_label=Concat(
+                'accession_row__accession__specimen_prefix__abbreviation',
+                Value(' '),
+                'accession_row__accession__specimen_no',
+                'accession_row__specimen_suffix',
+                output_field=CharField()
+            )
+        )
 
 class PreparationDetailView(LoginRequiredMixin, DetailView):
     """ Show details of a single preparation. """
@@ -382,6 +417,12 @@ class PreparationDetailView(LoginRequiredMixin, DetailView):
     template_name = "cms/preparation_detail.html"
     context_object_name = "preparation"
 
+    def test_func(self):
+        user = self.request.user
+        return (
+            user.is_superuser or 
+            user.groups.filter(name__in=["Curators", "Collection Managers"]).exists()
+        )
 
 class PreparationCreateView(LoginRequiredMixin, CreateView):
     """ Create a new preparation record. """
@@ -395,6 +436,12 @@ class PreparationCreateView(LoginRequiredMixin, CreateView):
             form.instance.preparator = self.request.user
         return super().form_valid(form)
 
+    def test_func(self):
+        user = self.request.user
+        return (
+            user.is_superuser or 
+            user.groups.filter(name__in=["Curators", "Collection Managers"]).exists()
+        )
 
 class PreparationUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     """ Update an existing preparation. """
@@ -412,7 +459,6 @@ class PreparationUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView)
 
         # Allow curators if they are not the preparator
         return user != preparation.preparator and user.groups.filter(name="Curators").exists()
-
 
 class PreparationDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
     """ Delete a preparation record. """
@@ -456,3 +502,53 @@ class PreparationApproveView(LoginRequiredMixin, UserPassesTestMixin, UpdateView
         preparation.approval_date = now()
         preparation.save()
         return redirect("preparation-detail", pk=preparation.pk)
+
+class PreparationMediaUploadView(View):
+    def get(self, request, pk):
+        preparation = get_object_or_404(Preparation, pk=pk)
+
+        # Permission check
+        if not request.user.is_authenticated or (
+            not request.user.is_superuser and
+            not request.user.groups.filter(name__in=["Curators", "Collection Managers"]).exists()
+        ):
+            return redirect("preparation-detail", pk=pk)
+
+        form = PreparationMediaUploadForm()
+        return render(request, "cms/preparation_media_upload.html", {
+            "form": form,
+            "preparation": preparation,
+        })
+
+    def post(self, request, pk):
+        preparation = get_object_or_404(Preparation, pk=pk)
+
+        if not request.user.is_authenticated or (
+            not request.user.is_superuser and
+            not request.user.groups.filter(name__in=["Curators", "Collection Managers"]).exists()
+        ):
+            return redirect("preparation-detail", pk=pk)
+
+        form = PreparationMediaUploadForm(request.POST, request.FILES)
+        if form.is_valid():
+            files = request.FILES.getlist("media_files")
+            context = form.cleaned_data["context"]
+            notes = form.cleaned_data["notes"]
+
+            for file in files:
+                media = Media.objects.create(
+                    media_location=file,
+#                    created_by=request.user
+                )
+                PreparationMedia.objects.create(
+                    preparation=preparation,
+                    media=media,
+                    context=context,
+                    notes=notes
+                )
+            return redirect("preparation-detail", pk=pk)
+
+        return render(request, "cms/preparation_media_upload.html", {
+            "form": form,
+            "preparation": preparation,
+        })

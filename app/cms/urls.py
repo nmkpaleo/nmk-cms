@@ -17,6 +17,7 @@ from cms.views import (
     PreparationCreateView, PreparationUpdateView, PreparationDeleteView, 
     PreparationApproveView
 )
+from .views import PreparationMediaUploadView
 
 urlpatterns = [
     
@@ -56,4 +57,8 @@ urlpatterns += [
     path("preparation/<int:pk>/edit/", PreparationUpdateView.as_view(), name="preparation-edit"),
     path("preparation/<int:pk>/delete/", PreparationDeleteView.as_view(), name="preparation-delete"),
     path("preparation/<int:pk>/approve/", PreparationApproveView.as_view(), name="preparation-approve"),
+]
+
+urlpatterns += [
+    path("preparation/<int:pk>/upload-media-form/", PreparationMediaUploadView.as_view(), name="preparation-upload-media-form"),
 ]

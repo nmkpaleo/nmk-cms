@@ -6,9 +6,8 @@ from import_export.widgets import ForeignKeyWidget, DateWidget
 from .models import (
     NatureOfSpecimen, Element, Person, Identification, Taxon,Media, SpecimenGeology, GeologicalContext,
     AccessionReference, Locality, Collection, Accession, AccessionRow, Subject, Comment, FieldSlip, Reference, Storage, User,
-    Preparation, PreparationLog, PreparationMaterial
+    Preparation, PreparationLog, PreparationMaterial, PreparationMedia
 )
-
 from .resources import *
 import logging
 
@@ -125,7 +124,8 @@ class LocalityAdmin(ImportExportModelAdmin):
 
 # Media
 class MediaAdmin(ImportExportModelAdmin):
-    list_display = ('file_name', 'type', 'format', 'media_location', 'license', 'rights_holder')
+    list_display = ('file_name', 'type', 'format', 'media_location', 'license', 'rights_holder', "created_by", "created_on")
+    readonly_fields = ("created_by", "modified_by", "created_on", "modified_on")
     search_fields = ('file_name', 'type', 'format', 'media_location', 'license', 'rights_holder')
     list_filter = ('type', 'format')
     ordering = ('file_name',)
@@ -227,6 +227,12 @@ class PreparationAdminForm(forms.ModelForm):
 
         return cleaned_data
 
+class PreparationMediaInline(admin.TabularInline):
+    model = PreparationMedia
+    extra = 1
+    autocomplete_fields = ["media"]
+    fields = ("media", "context", "notes")
+
 
 @admin.register(Preparation)
 class PreparationAdmin(admin.ModelAdmin):
@@ -237,7 +243,7 @@ class PreparationAdmin(admin.ModelAdmin):
     list_filter = ("status", "approval_status", "preparator", "curator")
     search_fields = ("accession_row__accession__specimen_no", "preparator__username", "curator__username")
     readonly_fields = ("approval_date", "created_on", "modified_on", "admin_status_info")
-    inlines = [PreparationLogInline]
+    inlines = [PreparationMediaInline, PreparationLogInline]
     
     fieldsets = (
         ("Preparation Details", {
