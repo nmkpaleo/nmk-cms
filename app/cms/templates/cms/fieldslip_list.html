@@ -10,9 +10,28 @@
         <div class="container"></div>
         
         <div class="actions">
-            <button><a href="{% url 'fieldslip-create' %}">New Field Slip</a></button> 
-            <button><a href="{% url 'fieldslip-export' %}">Export</a></button>
-            <button><a href="{% url 'fieldslip-import' %}">Import</a></button>
+
+            <button><a href="{% url 'fieldslip-create' %}">
+                <div class="icon-text">
+                <i class="bi bi-plus-square"></i>
+                <span>New Field Slip</span>
+                </div></a>
+            </button>
+
+            <button><a href="{% url 'fieldslip-import' %}">
+                <div class="icon-text">
+                    <i class="bi bi-download"></i>
+                    <span>Import</span>
+                </div></a>
+            </button>
+
+            <button><a href="{% url 'fieldslip-export' %}"> 
+                <div class="icon-text">
+                    <i class="bi bi-upload"></i>
+                    <span> Export</span>
+                </div></a>
+            </button>
+            
         
            <!-- <i class="fa-solid fa-magnifying-glass"></i>-->
         </div>
@@ -26,12 +45,12 @@
                 <option value="Discoverer" >Discoverer</option>
                 </select>
 
-                <button type="reset" class="reset_button">Reset</button>
+               <!-- <button type="reset" class="reset_button">Reset</button>-->
                 
             </div>
            <!--<hr class="fieldslip_list_hr">--> 
            <!-- , Collection Date or Discoverer" onkeyup="searchFieldslips()--> 
-
+        <div class="table-container">
             <table class="lists_table">
             
                <!-- <div class="fieldslip_headings">-->
@@ -39,19 +58,20 @@
                   <th>Field Number</th>
                   <th>Collector</b>
                     <th>Collection Date</b>
-                    <th>Verbatim Locality</b>
-                    <th>Verbatim Taxon</b>
-                    <th>Verbatim Element</b>
-                    <th>Verbatim Horizon</b>
-                    <th>Aerial Photo</b>
-                    <th>Edit Fieldslip</b>
+                    <th class="hidden-mobile">Verbatim Locality</b>
+                    <th class="hidden-mobile">Verbatim Taxon</b>
+                    <th class="hidden-mobile">Verbatim Element</b>
+                    <th class="hidden-mobile">Verbatim Horizon</b>
+                    <th class="hidden-mobile">Aerial Photo</b>
+                    <th class="hidden-mobile">Edit Fieldslip</b>
+                    <th> <button id="toggleColumns">Show More</button></th>
                <!--</div>--> 
 
      
                 {% for fieldslip in fieldslips %}
 
                <!-- <div class="fieldslip_inputs">--> 
-                   <tr>
+                   <tr class="template_data">
  
                         <td>
                             
@@ -59,11 +79,11 @@
                         <td>{{ fieldslip.collector }}</td>
                         
                         <td>{{ fieldslip.collection_date }}</td>
-                        <td>&nbsp;{{ fieldslip.verbatim_locality }}</td>
-                        <td>&nbsp;{{ fieldslip.verbatim_taxon }}</td>
-                        <td>&nbsp;{{ fieldslip.verbatim_element }}</td>
-                        <td>&nbsp;{{ fieldslip.verbatim_horizon }}</td>
-                        <td>
+                        <td class="hidden-mobile">&nbsp;{{ fieldslip.verbatim_locality }}</td>
+                        <td class="hidden-mobile">&nbsp;{{ fieldslip.verbatim_taxon }}</td>
+                        <td class="hidden-mobile">&nbsp;{{ fieldslip.verbatim_element }}</td>
+                        <td class="hidden-mobile">&nbsp;{{ fieldslip.verbatim_horizon }}</td>
+                        <td class="hidden-mobile">
                             {% if fieldslip.aerial_photo %}
                                 <img src="{{ fieldslip.aerial_photo.url }}" alt="Aerial Photo" style="max-width: 100px; height: auto; ">
                             {% else %}
@@ -78,9 +98,10 @@
                 {% endfor %}
             </table>
             </tbody>
+            
         </div>
 
-        <script src="script.js"></script>
+        
         <script>
             function searchFieldslips() {
                 const input = document.getElementById('searchInput');
