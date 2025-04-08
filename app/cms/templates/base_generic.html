@@ -41,7 +41,10 @@
               <li><a href="{% url 'accession-list' %}">Accession</a></li>
               <!--<li><a href="">Contact</a></li>-->
               <li><a href="{% url 'reference-list' %}">Reference</a></li>
-              
+              {% if user.is_superuser or user.groups.first.name in "Curators Collection Managers" %}
+                <li><a href="{% url 'preparation-list' %}">Preparations</a></li>
+              {% endif %}
+
               {% if user.is_authenticated %}
                 <li>User: {{ user.get_username }}</li>
                 <li>

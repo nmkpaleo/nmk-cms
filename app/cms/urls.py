@@ -1,7 +1,23 @@
 from django.urls import include, path
 from django.conf.urls.static import static
 from django.conf import settings
-from cms.views import add_accession_row, add_fieldslip_to_accession, AddCommentToAccessionView, AddGeologyToAccessionView, AddIdentificationToAccessionRowView, AddSpecimenToAccessionRowView, AddReferenceToAccessionView, AccessionRowDetailView, create_fieldslip_for_accession, fieldslip_create, fieldslip_edit, FieldSlipDetailView,FieldSlipListView,AccessionListView,AccessionDetailView,fieldslip_export, fieldslip_import, ReferenceListView,ReferenceDetailView,reference_create, reference_edit,upload_media
+from cms.views import (
+    add_accession_row, AccessionRowDetailView,
+    add_fieldslip_to_accession,
+    AddCommentToAccessionView,
+    AddGeologyToAccessionView,
+    AddIdentificationToAccessionRowView,
+    AddSpecimenToAccessionRowView,
+    AddReferenceToAccessionView,
+    create_fieldslip_for_accession, fieldslip_create, fieldslip_edit, FieldSlipDetailView, FieldSlipListView, fieldslip_export, fieldslip_import,
+    AccessionListView, AccessionDetailView,
+    ReferenceListView, ReferenceDetailView, reference_create, reference_edit,
+    upload_media,
+    PreparationListView, PreparationDetailView, 
+    PreparationCreateView, PreparationUpdateView, PreparationDeleteView, 
+    PreparationApproveView
+)
+from .views import PreparationMediaUploadView
 
 urlpatterns = [
     
@@ -33,3 +49,16 @@ urlpatterns = [
     path("select2/", include("django_select2.urls")),
 
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+urlpatterns += [
+    path("preparations/", PreparationListView.as_view(), name="preparation-list"),
+    path("preparation/<int:pk>/", PreparationDetailView.as_view(), name="preparation-detail"),
+    path("preparation/new/", PreparationCreateView.as_view(), name="preparation-create"),
+    path("preparation/<int:pk>/edit/", PreparationUpdateView.as_view(), name="preparation-edit"),
+    path("preparation/<int:pk>/delete/", PreparationDeleteView.as_view(), name="preparation-delete"),
+    path("preparation/<int:pk>/approve/", PreparationApproveView.as_view(), name="preparation-approve"),
+]
+
+urlpatterns += [
+    path("preparation/<int:pk>/upload-media-form/", PreparationMediaUploadView.as_view(), name="preparation-upload-media-form"),
+]

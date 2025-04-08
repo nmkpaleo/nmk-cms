@@ -64,6 +64,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.sites",
     "django.contrib.staticfiles",
+    "django_filters",
     "cms",
     'django_userforeignkey',
     'import_export' ,
@@ -85,6 +86,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
+    "crum.CurrentRequestUserMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"

@@ -1,0 +1,6 @@
+{% extends "base_generic.html" %}
+
+{% block content %}
+    {% include "includes/base_form.html" with form=form submit_label="Save" method="post" action=request.path title="Preparation" %}
+    <a href="{% url 'preparation-list' %}">Back to Preparations list</a>
+{% endblock %}

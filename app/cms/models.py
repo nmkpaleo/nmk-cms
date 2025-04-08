@@ -1,6 +1,8 @@
+from crum import get_current_user
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.utils import timezone
 from django_userforeignkey.models.fields import UserForeignKey
 from django.db.models import UniqueConstraint
 from django.contrib.auth.models import User
@@ -12,6 +14,7 @@ User = get_user_model()
 class BaseModel(models.Model):
     created_on = models.DateTimeField(auto_now_add=True, verbose_name="Date Created")
     modified_on = models.DateTimeField(auto_now=True, verbose_name="Date Modified")
+    
     created_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
@@ -35,6 +38,13 @@ class BaseModel(models.Model):
         verbose_name = "Base Record"
         verbose_name_plural = "Base Records"
 
+    def save(self, *args, **kwargs):
+        user = get_current_user()
+        if user and not self.pk and not self.created_by:
+            self.created_by = user
+        if user:
+            self.modified_by = user
+        super().save(*args, **kwargs)
 
 # Locality Model
 class Locality(BaseModel):
@@ -50,6 +60,9 @@ class Locality(BaseModel):
     def __str__(self):
         return self.name
 
+    class Meta:
+        verbose_name = "Locality"
+        verbose_name_plural = "Localities"
 
 # Collection Model
 class Collection(BaseModel):
@@ -58,6 +71,10 @@ class Collection(BaseModel):
 
     def get_absolute_url(self):
         return reverse('collection-detail', args=[str(self.id)])
+
+    class Meta:
+        verbose_name = "Collection"
+        verbose_name_plural = "Collections"
 
     def __str__(self):
         return self.description
@@ -143,6 +160,10 @@ class Subject(BaseModel):
     def get_absolute_url(self):
         return reverse('subject-detail', args=[str(self.id)])
 
+    class Meta:
+        verbose_name = "Subject"
+        verbose_name_plural = "Subjects"
+
     def __str__(self):
         return self.subject_name
 
@@ -167,6 +188,10 @@ class Comment(BaseModel):
 
     def get_absolute_url(self):
         return reverse('comment-detail', args=[str(self.id)])
+
+    class Meta:
+        verbose_name = "Comment"
+        verbose_name_plural = "Comments"
 
     def __str__(self):
         return self.comment
@@ -209,6 +234,10 @@ class Storage(BaseModel):
     def get_absolute_url(self):
         return reverse('storage-detail', args=[str(self.id)])
 
+    class Meta:
+        verbose_name = "Storage"
+        verbose_name_plural = "Storages"
+
     def __str__(self):
         return self.area
 
@@ -227,6 +256,10 @@ class Reference(BaseModel):
 
     def get_absolute_url(self):
         return reverse('reference-detail', args=[str(self.id)])
+
+    class Meta:
+        verbose_name = "Reference"
+        verbose_name_plural = "References"
 
     def __str__(self):
         return self.citation
@@ -281,6 +314,10 @@ class AccessionReference(BaseModel):
     def get_absolute_url(self):
         return reverse('accessionreference-detail', args=[str(self.id)])
 
+    class Meta:
+        verbose_name = "Accession Reference"
+        verbose_name_plural = "Accession References"
+
     def __str__(self):
         return f"{self.accession} - {self.reference} (Page: {self.page or 'N/A'})"
 
@@ -304,6 +341,8 @@ class AccessionRow(BaseModel):
             models.Index(fields=['accession']),
             models.Index(fields=['specimen_suffix']),
         ]
+        verbose_name = "Accession Row"
+        verbose_name_plural = "Accession Rows"
 
     def clean(self):
         """ Validate specimen_suffix format and uniqueness """
@@ -360,6 +399,10 @@ class NatureOfSpecimen(BaseModel):
     def get_absolute_url(self):
         return reverse('natureofspecimen-detail', args=[str(self.id)])
 
+    class Meta:
+        verbose_name = "Nature Of Specimen"
+        verbose_name_plural = "Nature Of Specimens"
+
     def __str__(self):
         return f"NatureOfSpecimen for AccessionRow {self.accession_row}"
 
@@ -381,6 +424,10 @@ class Element(BaseModel):
     def get_absolute_url(self):
         return reverse('element-detail', args=[str(self.id)])
 
+    class Meta:
+        verbose_name = "Element"
+        verbose_name_plural = "Elements"
+
     def __str__(self):
         return self.name
 
@@ -393,6 +440,10 @@ class Person(BaseModel):
 
     def get_absolute_url(self):
         return reverse('person-detail', args=[str(self.id)])
+
+    class Meta:
+        verbose_name = "Person"
+        verbose_name_plural = "Persons"
 
     def __str__(self):
         return f"{self.first_name} {self.last_name}"
@@ -411,6 +462,10 @@ class Identification(BaseModel):
 
     def get_absolute_url(self):
         return reverse('identification-detail', args=[str(self.id)])
+
+    class Meta:
+        verbose_name = "Identification"
+        verbose_name_plural = "Identifications"
 
     def __str__(self):
         return f"Identification for AccessionRow {self.accession_row}"
@@ -546,6 +601,10 @@ class Media(BaseModel):
     def get_absolute_url(self):
         return reverse('media-detail', args=[str(self.id)])
 
+    class Meta:
+        verbose_name = "Media"
+        verbose_name_plural = "Medias"
+
     def __str__(self):
         return f"{self.file_name} ({self.type})"
 
@@ -605,5 +664,298 @@ class GeologicalContext(BaseModel):
     def get_absolute_url(self):
         return reverse('geologicalcontext-detail', args=[str(self.id)])
 
+    class Meta:
+        verbose_name = "Geological Context"
+        verbose_name_plural = "Geological Contexties"
+
     def __str__(self):
         return f"{self.name} ({self.unit_name})"
+    
+class PreparationMaterial(BaseModel):
+    """ Materials used in the preparation process. """
+    name = models.CharField(max_length=255, unique=True, help_text="Name of the preparation material (e.g., Paraloid B72, Cyanoacrylate).")
+    description = models.TextField(blank=True, null=True, help_text="Details about the material (e.g., properties, best use cases).")
+
+    class Meta:
+        verbose_name = "Preparation Material"
+        verbose_name_plural = "Preparation Materials"
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse('preparationmaterial-detail', args=[str(self.id)])
+
+
+class PreparationStatus(models.TextChoices):
+    """ Enum for tracking the preparation workflow stages. """
+    PENDING = "Pending", "Pending"
+    IN_PROGRESS = "In Progress", "In Progress"
+    COMPLETED = "Completed", "Completed"
+    APPROVED = "Approved", "Approved"
+    DECLINED = "Declined", "Declined"
+
+
+class Preparation(BaseModel):
+    """ Tracks preparation and maintenance of specimens with curation approval. """
+    
+    accession_row = models.ForeignKey(
+        AccessionRow, 
+        on_delete=models.CASCADE, 
+        related_name="preparations",
+        help_text="The specimen undergoing preparation."
+    )
+    preparator = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name="preparations",
+        help_text="The museum staff responsible for the preparation."
+    )
+
+    preparation_type = models.CharField(
+        max_length=50, 
+        choices=[
+            ('cleaning', 'Cleaning'),
+            ('consolidation', 'Consolidation'),
+            ('casting', 'Casting'),
+            ('repair', 'Repair'),
+            ('restoration', 'Restoration'),
+            ('conservation', 'Conservation'),
+            ('mounting', 'Mounting'),
+            ('other', 'Other')
+        ], 
+        help_text="The type of preparation or maintenance performed."
+    )
+
+    reason = models.TextField(
+        null=True, 
+        blank=True, 
+        help_text="The reason for the preparation (e.g., exhibition, conservation, research)."
+    )
+
+    started_on = models.DateField(
+        help_text="Date when preparation started."
+    )
+    completed_on = models.DateField(
+        null=True, 
+        blank=True, 
+        help_text="Date when preparation was completed."
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=PreparationStatus.choices,
+        default=PreparationStatus.PENDING,
+        help_text="Current status of the preparation process."
+    )
+
+    original_storage = models.ForeignKey(
+        Storage, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name="original_preparations",
+        help_text="Where the specimen was stored before preparation."
+    )
+    temporary_storage = models.ForeignKey(
+        Storage, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name="temporary_preparations",
+        help_text="Where the specimen was moved during preparation."
+    )
+
+    condition_before = models.TextField(
+        null=True, 
+        blank=True, 
+        help_text="Condition of the specimen before preparation."
+    )
+
+    condition_after = models.TextField(
+        null=True, 
+        blank=True, 
+        help_text="Condition of the specimen after preparation."
+    )
+
+    preparation_method = models.TextField(
+        null=True, 
+        blank=True, 
+        help_text="Describe the preparation technique used (e.g., mechanical cleaning, acid preparation)."
+    )
+
+    chemicals_used = models.TextField(
+        null=True, 
+        blank=True, 
+        help_text="List any chemicals or adhesives applied during the preparation."
+    )
+
+    materials_used = models.ManyToManyField(
+        PreparationMaterial, 
+        blank=True, 
+        related_name="preparations",
+        help_text="List of materials used in the preparation process."
+    )
+
+    media = models.ManyToManyField(
+        Media,
+        through="PreparationMedia",
+        related_name="preparations",
+        blank=True,
+        help_text="Attach categorized media (before/after/in-progress)."
+    )
+
+    # === Curation Process ===
+    curator = models.ForeignKey(
+        User, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name="curated_preparations",
+        help_text="The curator who reviews and approves/declines the preparation."
+    )
+
+    approval_status = models.CharField(
+        max_length=20,
+        choices=[
+            ('pending', 'Pending'),
+            ('approved', 'Approved'),
+            ('declined', 'Declined')
+        ],
+        default='pending',
+        help_text="Approval decision by the curator."
+    )
+
+    approval_date = models.DateTimeField(
+        null=True, 
+        blank=True, 
+        help_text="Timestamp when the curator made a decision."
+    )
+
+    curator_comments = models.TextField(
+        null=True, 
+        blank=True, 
+        help_text="Curator's comments on the preparation (approval or rejection reasons)."
+    )
+
+    report_link = models.URLField(
+        null=True, 
+        blank=True, 
+        help_text="Link to an external report or documentation for this preparation."
+    )
+
+    notes = models.TextField(
+        null=True, 
+        blank=True, 
+        help_text="Additional notes or observations about the preparation."
+    )
+
+    def clean(self):
+        """
+        Validation to ensure curator is different from the preparator,
+        unless the curator is a superuser.
+        """
+        user = get_current_user()
+        if self.curator and self.preparator:
+            if self.curator == self.preparator and (not user or not user.is_superuser):
+                raise ValidationError("The curator must be different from the preparator.")
+
+    def save(self, *args, **kwargs):
+        """ 
+        Custom save method to enforce validation and track curation decisions. 
+        """
+        self.clean()  # Ensure validations are checked
+
+        # Log status changes in PreparationLog
+        if self.pk:
+            old_instance = Preparation.objects.get(pk=self.pk)
+            changes = []
+            for field in ["status", "approval_status", "completed_on", "approval_date"]:
+                old_value = getattr(old_instance, field)
+                new_value = getattr(self, field)
+                if old_value != new_value:
+                    changes.append(f"{field} changed from '{old_value}' to '{new_value}'")
+
+            if changes:
+                PreparationLog.objects.create(
+                    preparation=self,
+                    changed_by=self.modified_by,
+                    changes=", ".join(changes)
+                )
+
+        # Automatically set approval date if a curator approves or declines
+        if self.approval_status in ["approved", "declined"] and not self.approval_date:
+            self.approval_date = timezone.now()
+
+        super().save(*args, **kwargs)
+
+    def get_absolute_url(self):
+        return reverse('preparation-detail', args=[str(self.id)])
+
+    class Meta:
+        verbose_name = "Preparation"
+        verbose_name_plural = "Preparations"
+        
+    def __str__(self):
+        return f"{self.accession_row} - {self.preparation_type} by {self.preparator}"
+
+
+class PreparationLog(BaseModel):
+    """ Tracks changes to preparation records, including curation decisions. """
+    preparation = models.ForeignKey(
+        Preparation, 
+        on_delete=models.CASCADE, 
+        related_name="logs",
+        help_text="The preparation record that was modified."
+    )
+    changed_by = models.ForeignKey(
+        User, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        help_text="User who made the change."
+    )
+    changes = models.TextField(
+        help_text="Description of changes made."
+    )
+    changed_on = models.DateTimeField(
+        auto_now_add=True, 
+        help_text="Timestamp of the change."
+    )
+
+    class Meta:
+        verbose_name = "Preparation Log"
+        verbose_name_plural = "Preparation Logs"
+        ordering = ["-changed_on"]
+
+    def __str__(self):
+        return f"Change in {self.preparation} on {self.changed_on}"
+    
+class PreparationMedia(BaseModel):
+    preparation = models.ForeignKey("Preparation", on_delete=models.CASCADE)
+    media = models.ForeignKey("Media", on_delete=models.CASCADE)
+
+    MEDIA_CONTEXT_CHOICES = [
+        ("before", "Before Preparation"),
+        ("after", "After Preparation"),
+        ("in_progress", "In Progress"),
+        ("other", "Other")
+    ]
+    context = models.CharField(
+        max_length=20,
+        choices=MEDIA_CONTEXT_CHOICES,
+        default="other",
+        help_text="Indicates when this media was captured."
+    )
+
+    notes = models.TextField(null=True, blank=True, help_text="Optional comments or observations about this media.")
+
+    class Meta:
+        unique_together = ("preparation", "media")
+        verbose_name = "Preparation Media"
+        verbose_name_plural = "Preparation Media"
+
+    def __str__(self):
+        return f"{self.preparation} - {self.get_context_display()}"
