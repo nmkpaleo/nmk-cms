@@ -137,7 +137,8 @@ class Accession(BaseModel):
         Auto-updates `is_published` based on related references.
         If references exist, it sets to True. If none exist, it sets to False.
         """
-        self.is_published = self.accessionreference_set.exists()
+        if self.pk:  # Only check related objects if this object has a primary key
+            self.is_published = self.accessionreference_set.exists()
         super().save(*args, **kwargs)
 
     def get_absolute_url(self):

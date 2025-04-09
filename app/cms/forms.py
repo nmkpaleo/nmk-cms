@@ -49,6 +49,14 @@ class TaxonWidget(s2forms.ModelSelect2Widget):
         "taxon_name__icontains",
         ]
 
+class AccessionForm(forms.ModelForm):
+    class Meta:
+        model = Accession
+        fields = [
+            'collection', 'specimen_prefix', 'specimen_no', 'accessioned_by',
+            'type_status', 'comment', 'is_published'
+        ]
+
 class AccessionCommentForm(forms.ModelForm):
     class Meta:
         model = Comment

@@ -1,63 +1,82 @@
 {% extends "base_generic.html" %}
 
-
 {% block title %}
-      <title>fieldslip-list</title>
+      <title>Accession list</title>
 {% endblock %}
 
 {% block content %}
 
+<div class="w3-container w3-margin-top">
+    <h2>Accessions</h2>
+  
+    <button onclick="toggleAccordion('accessionFilterPanel')" class="w3-button w3-block w3-light-grey w3-left-align">
+      🔍 Show/Hide Filters
+    </button>
+  
+    <div id="accessionFilterPanel" class="w3-hide w3-animate-opacity w3-padding w3-light-grey w3-round-large w3-margin-top">
+      <form method="get">
+        <div class="w3-row-padding">
+          <div class="w3-third">
+            <label>Specimen Number</label>
+            {{ filter.form.specimen_no }}
+          </div>
+          <div class="w3-third">
+            <label>Specimen Prefix</label>
+            {{ filter.form.specimen_prefix }}
+          </div>
+          <div class="w3-third">
+            <label>Comment</label>
+            {{ filter.form.comment }}
+          </div>
+        </div>
+  
+        <div class="w3-container w3-padding-16">
+          <button type="submit" class="w3-button w3-blue w3-margin-right">Apply Filters</button>
+          <a href="{% url 'accession-list' %}" class="w3-button w3-gray">Clear</a>
+        </div>
+      </form>
+    </div>
+  </div>
+  
 <div class="template_list_body">
     <div class="container"></div>
-    
-    <div class="actions">
-        <button><a href="{% url 'fieldslip-create' %}">New Field Slip</a></button> 
-        <button><a href="{% url 'fieldslip-export' %}">Export</a></button>
-        <button><a href="{% url 'fieldslip-import' %}">Import</a></button>
-    
-       <!-- <i class="fa-solid fa-magnifying-glass"></i>-->
-    </div>
-        <div class="search-bar">
-            <input type="text" id="searchInput" placeholder="Search " >
- 
-            <select id="colors" name="dropdown-list" class="dropdown-list-select">
-            <option value="Field Number" >Specimen Number</option>
-            <option value="Collector" >Collection</option>
-            <option value="Collection Date" >Specimen Prefix</option>
-            <option value="Discoverer" >accessioned By</option>
-            </select>
-
-
-            
+        <div class="actions">
+            <button><a href="{% url 'accession-create' %}">New Accession</a></button> 
+            <!-- <i class="fa-solid fa-magnifying-glass"></i>-->
         </div>
-
-
-
-           
-
-            <table class="lists_table">
-               
+        <table class="lists_table">
+            <thead>
                 <th>Collection</th>
                 <th>Specimen Prefix</th>
                 <th>Specimen Number</th>    
-                <th>accessioned By</th>               
-
-                    {% for accession in accessions %}
+                <th>accessioned By</th>
+            </thead>
+            <tbody>
+                {% for accession in accessions %}
                     <tr >
-                        <!--<td>{{ accession.collection.abbreviation }}</td>-->
-
                         <td>{{ accession.collection.abbreviation }}</td>
                         <td>&nbsp;{{ accession.specimen_prefix.abbreviation }}</td>
                         <td><a href="{% url 'accession-detail' accession.pk %}">{{ accession.specimen_no }}</a></td>
                         <td>&nbsp;{{ accession.accessioned_by }}</td>
-
-              </tr>
-                    
-                    
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+                    </tr>
+                 {% endfor %}
+            </tbody>
+        </table>
     </div>
+</div>
 {% endblock %}
 
+{% block script %}
+    <script>
+    function toggleAccordion(id) {
+    var panel = document.getElementById(id);
+    if (panel.classList.contains("w3-show")) {
+        panel.classList.remove("w3-show");
+        panel.classList.add("w3-hide");
+    } else {
+        panel.classList.remove("w3-hide");
+        panel.classList.add("w3-show");
+    }
+    }
+    </script>
+{% endblock %}

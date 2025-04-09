@@ -57,6 +57,7 @@ if TRUSTED_ORIGINS_ENV:
 # Application definition
 
 INSTALLED_APPS = [
+    "cms.apps.CmsConfig",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -65,7 +66,6 @@ INSTALLED_APPS = [
     "django.contrib.sites",
     "django.contrib.staticfiles",
     "django_filters",
-    "cms",
     'django_userforeignkey',
     'import_export' ,
     'allauth',
