@@ -552,3 +552,22 @@ class PreparationMediaUploadView(View):
             "form": form,
             "preparation": preparation,
         })
+    
+    class PreparationListView(LoginRequiredMixin, FilterView):
+        model = Preparation
+        template_name = "cms/preparation_list.html"
+        context_object_name = "preparations"
+        paginate_by = 20
+        filterset_class = PreparationFilter
+
+        def get_queryset(self):
+            qs = super().get_queryset()
+            return qs.annotate(
+                accession_label=Concat(
+                    'accession_row__accession__specimen_prefix__abbreviation',
+                    Value(' '),
+                    'accession_row__accession__specimen_no',
+                    'accession_row__specimen_suffix',
+                    output_field=CharField()
+                )
+            )
