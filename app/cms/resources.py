@@ -36,9 +36,9 @@ class AccessionResource(resources.ModelResource):
         model = Accession
         skip_unchanged = True
         report_skipped = False
-        import_id_fields = ('collection', 'specimen_prefix', 'specimen_no',)
-        fields = ('collection', 'specimen_prefix', 'specimen_no', 'accessioned_by', 'accession')
-        export_order = ('accession', 'collection', 'specimen_prefix', 'specimen_no', 'accessioned_by')
+        import_id_fields = ('collection', 'specimen_prefix', 'specimen_no', 'instance_number')
+        fields = ('collection', 'specimen_prefix', 'specimen_no', 'instance_number', 'accessioned_by', 'accession')
+        export_order = ('accession', 'collection', 'specimen_prefix', 'specimen_no', 'instance_number', 'accessioned_by')
 
 class AccessionReferenceResource(resources.ModelResource):
     accession_id= fields.Field(

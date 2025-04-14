@@ -1,8 +1,11 @@
 from django.contrib import admin
+from django.db.models import Count, OuterRef, Exists
+
 from import_export.admin import ImportExportModelAdmin
 from import_export import resources, fields
 from import_export.fields import Field
 from import_export.widgets import ForeignKeyWidget, DateWidget
+
 from .models import (
     NatureOfSpecimen, Element, Person, Identification, Taxon,Media, SpecimenGeology, GeologicalContext,
     AccessionReference, Locality, Collection, Accession, AccessionRow, Subject, Comment, FieldSlip, Reference, Storage, User,
@@ -20,11 +23,51 @@ from django.utils.timezone import now
 logging.basicConfig(level=logging.INFO)  # You can adjust the level as needed (DEBUG, WARNING, ERROR, etc.)
 logger = logging.getLogger(__name__)  # Creates a logger specific to the current module
 
+from django.contrib import admin
+from django.db.models import Count, OuterRef, Exists
+from cms.models import Accession
+
+class DuplicateFilter(admin.SimpleListFilter):
+    title = 'By Duplicate specimen_no + prefix'
+    parameter_name = 'duplicates'
+
+    def lookups(self, request, model_admin):
+        return [
+            ('yes', 'Yes – Show Duplicates'),
+            ('no', 'No – Show Unique Only'),
+        ]
+
+    def queryset(self, request, queryset):
+        duplicate_subquery = (
+            Accession.objects
+            .filter(
+                specimen_no=OuterRef('specimen_no'),
+                specimen_prefix=OuterRef('specimen_prefix')
+            )
+            .values('specimen_no', 'specimen_prefix')
+            .annotate(dups=Count('id'))
+            .filter(dups__gt=1)
+        )
+
+        # Always annotate
+        annotated = queryset.annotate(
+            has_duplicates=Exists(duplicate_subquery)
+        )
+
+        if self.value() == 'yes':
+            return annotated.filter(has_duplicates=True)
+        elif self.value() == 'no':
+            return annotated.filter(has_duplicates=False)
+        else:
+            return annotated  # ✅ return the annotated base queryset
+
 # Accession Model
 class AccessionAdmin(ImportExportModelAdmin):
     resource_class = AccessionResource
-    list_display = ('collection_abbreviation', 'specimen_prefix_abbreviation', 'specimen_no', 'accessioned_by')
-    list_filter = ('collection', 'specimen_prefix', 'accessioned_by')
+    list_display = ('collection_abbreviation', 'specimen_prefix_abbreviation',
+                    'specimen_no', 'instance_number','accessioned_by',
+                    'is_duplicate_display',)
+    list_filter = ('collection', 'specimen_prefix', 'accessioned_by', DuplicateFilter)
     search_fields = ('specimen_no', 'collection__abbreviation', 'specimen_prefix__abbreviation', 'accessioned_by__username')
     ordering = ('specimen_no', 'specimen_prefix__abbreviation')
 
@@ -35,6 +78,16 @@ class AccessionAdmin(ImportExportModelAdmin):
     def specimen_prefix_abbreviation(self, obj):
         return obj.specimen_prefix.abbreviation if obj.specimen_prefix else None
     specimen_prefix_abbreviation.short_description = 'Specimen Prefix'
+
+    def is_duplicate_display(self, obj):
+        count = Accession.objects.filter(
+            specimen_no=obj.specimen_no,
+            specimen_prefix=obj.specimen_prefix
+        ).count()
+        if count > 1:
+            return format_html('<span style="color: orange;">Yes ({})</span>', count)
+        return format_html('<span style="color: green;">No</span>')
+    is_duplicate_display.short_description = 'Duplicate?'
 
 class AccessionReferenceAdmin(ImportExportModelAdmin):
     resource_class = AccessionReferenceResource

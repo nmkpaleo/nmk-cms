@@ -151,12 +151,14 @@ class Accession(BaseModel):
     def __str__(self):
         collection_abbr = self.collection.abbreviation if self.collection else "N/A"
         prefix_abbr = self.specimen_prefix.abbreviation if self.specimen_prefix else "N/A"
-        return f"{collection_abbr}-{prefix_abbr} {self.specimen_no}"
+        base = f"{collection_abbr}-{prefix_abbr} {self.specimen_no}"
+        return f"{base} (#{self.instance_number})" if self.instance_number > 1 else base
 
     class Meta:
         ordering = ["collection", "specimen_prefix", "specimen_no"]
         verbose_name = "Accession"
         verbose_name_plural = "Accessions"
+        unique_together = ('specimen_no', 'specimen_prefix', 'instance_number')
 
 # Subject Model
 class Subject(BaseModel):
