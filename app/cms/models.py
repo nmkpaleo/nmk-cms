@@ -98,6 +98,10 @@ class Accession(BaseModel):
     specimen_no = models.PositiveIntegerField(
         help_text="Enter the specimen number."
     )
+    instance_number = models.PositiveIntegerField(
+        default=1,
+        help_text="Instance of the specimen number for handling known duplicates."
+    )
     accessioned_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
