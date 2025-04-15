@@ -1,10 +1,18 @@
 from django import forms
 from django_select2 import forms as s2forms
 from django_select2.forms import ModelSelect2Widget, Select2Widget
+from django.contrib.auth.models import User
 
 from .models import (Accession, AccessionFieldSlip, AccessionReference,
-                     AccessionRow, Comment, FieldSlip, Identification, Media,
+                     AccessionRow, Collection, Comment, FieldSlip, Identification,
+                     Locality, Media,
                      NatureOfSpecimen, Preparation, Reference, SpecimenGeology)
+
+class AccessionBatchForm(forms.Form):
+    user = forms.ModelChoiceField(queryset=User.objects.all())
+    count = forms.IntegerField(min_value=1, max_value=500)
+    collection = forms.ModelChoiceField(queryset=Collection.objects.all())
+    specimen_prefix = forms.ModelChoiceField(queryset=Locality.objects.all())
 
 class AccessionRowWidget(s2forms.ModelSelect2Widget):
     search_fields = [
