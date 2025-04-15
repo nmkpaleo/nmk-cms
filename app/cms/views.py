@@ -9,6 +9,7 @@ from django_filters.views import FilterView
 from .filters import AccessionFilter, PreparationFilter
 
 from django.contrib import messages
+from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.forms import modelformset_factory
@@ -18,16 +19,17 @@ from django.urls import reverse_lazy, reverse
 from django.utils.timezone import now
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, FormView
 
-from .forms import (AccessionCommentForm, AccessionForm, AccessionFieldSlipForm, AccessionGeologyForm,
+from cms.forms import (AccessionBatchForm, AccessionCommentForm, AccessionForm, AccessionFieldSlipForm, AccessionGeologyForm,
                     AccessionRowIdentificationForm, AccessionRowSpecimenForm,
                     AccessionReferenceForm, AddAccessionRowForm, FieldSlipForm,
                     MediaUploadForm, NatureOfSpecimenForm, PreparationForm, PreparationApprovalForm,
                     PreparationMediaUploadForm, ReferenceForm)
-from .models import (Accession,
+from cms.models import (Accession,
                      AccessionFieldSlip, AccessionReference, AccessionRow,
                      Comment, FieldSlip, Media, NatureOfSpecimen, Identification,
                      Preparation, PreparationMedia, Reference, SpecimenGeology, Taxon)
-from .resources import FieldSlipResource
+from cms.resources import FieldSlipResource
+from cms.utils import generate_accessions_from_series
 
 class PreparationAccessMixin(UserPassesTestMixin):
     def test_func(self):
@@ -143,6 +145,22 @@ def fieldslip_edit(request, pk):
         form = FieldSlipForm(instance=fieldslip)
     return render(request, 'cms/fieldslip_form.html', {'form': form})
 
+@staff_member_required
+def generate_accession_batch_view(request):
+    if request.method == "POST":
+        form = AccessionBatchForm(request.POST)
+        if form.is_valid():
+            accessions = generate_accessions_from_series(
+                user=form.cleaned_data['user'],
+                count=form.cleaned_data['count'],
+                collection=form.cleaned_data['collection'],
+                specimen_prefix=form.cleaned_data['specimen_prefix']
+            )
+            messages.success(request, f"Successfully created {len(accessions)} accessions for {form.cleaned_data['user']}.")
+            return redirect("admin:index")
+    else:
+        form = AccessionBatchForm()
+    return render(request, "cms/accession_batch_form.html", {"form": form})
 
 def reference_create(request):
     if request.method == 'POST':
