@@ -11,7 +11,8 @@ from cms.views import (
     AddIdentificationToAccessionRowView,
     AddSpecimenToAccessionRowView,
     AddReferenceToAccessionView,
-    create_fieldslip_for_accession, fieldslip_create, fieldslip_edit, FieldSlipDetailView, FieldSlipListView, fieldslip_export, fieldslip_import,
+    create_fieldslip_for_accession, fieldslip_create, fieldslip_edit, FieldSlipDetailView, FieldSlipListView,
+    fieldslip_export, fieldslip_import, generate_accession_batch_view,
     AccessionListView, AccessionDetailView,
     ReferenceListView, ReferenceDetailView, reference_create, reference_edit,
     upload_media,
@@ -43,6 +44,7 @@ urlpatterns = [
     path('accessionrow/<int:pk>/', AccessionRowDetailView.as_view(), name='accessionrow-detail'),
     path('accessionrow/<int:accession_row_id>/add-specimen/', AddSpecimenToAccessionRowView, name='add-specimen'),
     path('accessionrow/<int:accession_row_id>/add-identification/', AddIdentificationToAccessionRowView, name='add-identification'),
+    path("accession/generate-batch/", generate_accession_batch_view, name="generate-accession-batch"),
 
     path('reference/', ReferenceListView.as_view(), name='reference-list'),
     path('reference/<int:pk>/', ReferenceDetailView.as_view(), name='reference-detail'),
