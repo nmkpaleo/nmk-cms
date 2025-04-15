@@ -160,6 +160,37 @@ class Accession(BaseModel):
         verbose_name_plural = "Accessions"
         unique_together = ('specimen_no', 'specimen_prefix', 'instance_number')
 
+class AccessionNumberSeries(models.Model):
+    name = models.CharField(max_length=100)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="accession_series")
+    start_from = models.PositiveIntegerField()
+    end_at = models.PositiveIntegerField()
+    current_number = models.PositiveIntegerField()
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['user', 'start_from']
+
+    def clean(self):
+        conflicts = AccessionNumberSeries.objects.exclude(pk=self.pk).filter(
+            start_from__lte=self.end_at,
+            end_at__gte=self.start_from,
+        )
+        if conflicts.exists():
+            raise ValidationError("This accession number range overlaps with an existing series.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def get_next_batch(self, count):
+        if self.current_number + count - 1 > self.end_at:
+            raise ValidationError("Not enough numbers left in this series.")
+        batch = list(range(self.current_number, self.current_number + count))
+        self.current_number += count
+        self.save()
+        return batch
+
 # Subject Model
 class Subject(BaseModel):
     subject_name = models.CharField(max_length=50)
