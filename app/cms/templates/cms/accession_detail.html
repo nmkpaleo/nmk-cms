@@ -6,11 +6,11 @@
         <div class="template-detail-header">
             <h2 class="accession-detail-h2">Accession Detail</h2>
         </div>
-        <div class="grid-container">            
+        <div class="grid-containerr">            
             <!-- Accession Card -->            
-            <div class="card">
+            <div class="cards">
                 <table>
-                    <caption>Accession</caption>
+                    <caption><b><u>Accession</u></b></caption>
                     <tbody>
                         <tr>
                             <th>ACC No.:</th>
@@ -34,14 +34,15 @@
                         </tr>
                     </tbody>
                 </table>
-                <hr>
+            </div>
+            <div class="cards">
 
                 {% if user.is_authenticated and user.groups.all.0.name == "Collection Managers" %}
                     <a href="{% url 'add-geology' accession.id %}">➕ Add Horizon</a>
                 {% endif %}
 
                 <table>
-                    <caption>Horizon</caption>
+                    <caption><b><u>Horizon</u></b></caption>
                     <thead>
                         <tr>
                             <th>Upper</th>
@@ -58,12 +59,12 @@
                     </tbody>
                 </table>
                 
-                <hr>
+                <hr class="accession_hr">
                 {% if user.is_authenticated and user.groups.all.0.name == "Collection Managers" %}
                     <a href="{% url 'add_accession_row' accession.id %}">➕ Add Specimen</a>
                 {% endif %}
                 <table>
-                    <caption>Specimen details</caption>
+                    <caption><em>Specimen details</em></caption>
                     <thead>
                         <tr>
                             <th>Specimen</th>
@@ -109,7 +110,8 @@
                             </tr>
                         {% endfor %}                    
                     </tbody>
-                </table>                <hr>
+                </table>                
+                <hr class="accession_hr">
                 {% if user.is_authenticated and user.groups.all.0.name == "Collection Managers" %}
                   <a href="{% url 'add-reference' accession.id %}">➕ Add Reference</a>
                 {% endif %}
@@ -143,13 +145,13 @@
                 {% else %}
                     <p>No References found for this accession.</p>
                 {% endif %}
-                <hr>                
+                <hr class="accession_hr">                
 
                 {% if user.is_authenticated and user.groups.all.0.name == "Collection Managers" %}
                     <a href="{% url 'upload-media' accession.id %}">➕ Upload Media</a>
                 {% endif %}
                 <table>
-                    <caption>Media</caption>
+                    <caption><em>Media</em></caption>
                     <thead>
                     <tr>
                         <th>File Name</th>
@@ -185,7 +187,7 @@
                     {% endif %}
                     </tbody>
                 </table>
-                <hr>
+                <hr class="accession_hr">
 
                 {% if user.is_authenticated and user.groups.all.0.name == "Collection Managers" %}
                   <a href="{% url 'add-comment' accession.id %}">➕ Add Comment</a>
@@ -216,9 +218,10 @@
                     <p>No Comments found for this accession.</p>
                 {% endif %}            
             </div>
-            <div class="card">
-                <h3>Related FieldSlips</h3>
+            <div class="cards">
+                
                 <table class="table">
+                    <caption><b><u>Related FieldSlips</u></b></caption>
                     <thead>
                         <tr>
                             <th>Field Number</th>
@@ -245,17 +248,17 @@
                     </tbody>
                 </table>
             
-                <h3>Add Existing FieldSlip</h3>
+                <h5><strong><u>Add Existing FieldSlip</u></strong></h5>
                 {{ add_fieldslip_form.media }}
                 <form method="POST" action="{% url 'add-fieldslip-to-accession' accession.pk %}">
                     {% csrf_token %}
                     {{ add_fieldslip_form }}
                     <button type="submit" class="btn btn-primary">Add FieldSlip</button>
                 </form>
-                <h3>Create and Link New FieldSlip</h3>
+                <h5><strong><u>Create and Link New FieldSlip</u></strong></h5>
 
                 <!-- Button to open the modal -->
-                <button onclick="openFieldSlipModal()" class="w3-button w3-blue">➕ Add a New FieldSlip</button>
+                <button onclick="openFieldSlipModal()" class="accesssin_FieldSlip">➕ Add a New FieldSlip</button>
                 
                 <!-- Modal (hidden by default) -->
                 <div id="fieldSlipModal" class="w3-modal">

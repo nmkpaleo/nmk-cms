@@ -118,6 +118,122 @@
     background-color: #E9AF42;
 }
 
+
+/* template lists*/
+.template_buttons{
+    display: flex;
+    justify-content: space-between;
+}
+
+.search-bar {
+    margin-left: 20px;
+    margin-top: 11px;
+}
+
+.search-bar input {
+    width: 150px;
+    padding: 7px;
+    box-shadow: 2px 2px 5px rgb(213, 212, 212), 2px 2px 5px rgb(213, 212, 212);
+    border: 1px solid #fffefe;
+    border-radius: 15px;
+    font-size: 16px;
+    margin-bottom: 18px;
+}
+.search-bar input:hover{
+    border: 2px dashed #C46132;
+}
+.dropdown-list-select:hover{
+    border: 2px dotted #C46132;
+}
+
+
+.actions button {
+    background-color: #C46132;
+    width: 150px;
+    padding: 7px;
+    box-shadow: 2px 2px 5px rgb(213, 212, 212), 2px 2px 5px rgb(213, 212, 212);
+    border: 1px solid #fffefe;
+    border-radius: 15px;
+    font-size: 16px;
+    margin: 10px 50px 0px 0px;
+    
+
+    
+}
+.actions button:hover {
+    background-color: #232323;
+    
+    
+}
+.actions button a{
+    color: white;
+    text-decoration: none;
+}
+
+/* template import */
+.template_import{
+    background-image: url(../images/nmk-image.jpg);
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    height: 90vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.import_body{
+    background-color: white;
+    width: 40%;
+    height: 80vh;
+    border-radius: 25px;
+    box-shadow: 2px 2px 5px rgb(213, 212, 212), 2px 2px 5px rgb(213, 212, 212);    
+}
+.import_body h2{
+    font-family: 'Inter', sans-serif;
+    color: #232323;
+    font-size: 30px;
+    font-weight: 900;
+    text-align: center;
+    text-decoration: underline;
+    margin-bottom: 20px;   
+}
+
+.import_CSV{
+    margin: 10px 0px 0px 180px;
+    text-shadow: 2px 2px 3px #b85729, 2px 0px 3px #C46132;
+    
+    
+}
+.import_area{
+    border-radius: 30px;
+    border: 2px dashed rgb(156, 155, 155);
+    height: 300px;
+    margin: 20px;
+}
+
+.Import_submit{
+    width: 170px !important;
+    margin-left: 180px !important;
+    
+}
+
+.import_icon{
+    font-size: 40px;
+    margin: 10px 0px 15px 200px;
+    color: rgb(167, 165, 165);
+}
+.Import_p{
+    color: #888;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+.import_file{
+    margin-top: 35px;
+    margin-left: 150px;
+    
+}
+
 /* Fieldslip list */
 
 .template_list_body{
@@ -131,21 +247,9 @@
 }
 
 
-.search-bar {
-    margin-left: 20px;
-    margin-top: 11px;
-}
 
-.search-bar input {
-    width: 150px;
-    padding: 7px;
-    box-shadow: 2px 2px 5px rgb(213, 212, 212), 2px 2px 5px rgb(213, 212, 212);
-    border: 1px solid #fffefe;
-    border-radius: 15px;
-    
-    font-size: 16px;
-    margin-bottom: 18px;
-}
+
+
 
 
 
@@ -176,37 +280,7 @@
     font-weight: 600;
 }
 
-.actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 40px;
-    margin-right: 30px;
-    
-}
 
-.actions button {
-    background-color: #C46132;
-    border: none;
-    margin-bottom: 5px;
-    padding: 7px;
-    font-size: 14px;
-    margin-left: 10px;
-    border-radius: 5px;
-    cursor: pointer;
-    color: white;
-    width: 130px;
-    font-weight: 600;
-    
-}
-.actions button:hover {
-    background-color: #232323;
-    
-    
-}
-.actions button a{
-    color: white;
-    text-decoration: none;
-}
 #toggleColumns{
     display: none;
 }
@@ -463,6 +537,50 @@
         grid-template-columns: 1fr;
     }
 }
+
+
+/* accession details*/
+.cards {
+    background-color: white;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 5px 4px 6px #D6D2D2, -5px -4px 6px #D9D9D9, 5px -4px 6px #E4E3E3;
+    text-align: left;
+    width: 80%;
+    margin-left: 100px;
+    margin-bottom: 30px;
+
+}
+
+.cards caption{
+    color: #b85729;
+}
+
+.accession_hr{
+
+    background-color: rgb(161, 160, 160);
+    height:  2px;
+    
+}
+
+.accesssin_FieldSlip{
+    font-size: 20px;
+    font-family: 'Inter', sans-serif;
+    padding: 5px;
+    width: 250px;
+    color: whitesmoke;    
+    margin-top: 20px;
+    border-radius: 10px;
+    border: 2px solid #C46132;
+    background-color: #C46132;
+    box-shadow: 2px 3px 5px whitesmoke, 3px 3px 5px #C46132, 2px 3px 5px rgb(227, 226, 226);
+}
+.accesssin_FieldSlip:hover{
+    background-color: #000;
+    border: none;
+}
+
+
 
 /* login_page */
 

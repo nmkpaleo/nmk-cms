@@ -9,33 +9,9 @@
     <div class="template_list_body">
         <div class="container"></div>
         
-        <div class="actions">
-
-            <button><a href="{% url 'fieldslip-create' %}">
-                <div class="icon-text">
-                <i class="bi bi-plus-square"></i>
-                <span>New Field Slip</span>
-                </div></a>
-            </button>
-
-            <button><a href="{% url 'fieldslip-import' %}">
-                <div class="icon-text">
-                    <i class="bi bi-download"></i>
-                    <span>Import</span>
-                </div></a>
-            </button>
-
-            <button><a href="{% url 'fieldslip-export' %}"> 
-                <div class="icon-text">
-                    <i class="bi bi-upload"></i>
-                    <span> Export</span>
-                </div></a>
-            </button>
-            
-        
-           <!-- <i class="fa-solid fa-magnifying-glass"></i>-->
-        </div>
-            <div class="search-bar">
+      
+        <div class="template_buttons">           
+              <div class="search-bar">
                 <input type="text" id="searchInput" placeholder="Search " >
      
                 <select id="colors" name="dropdown-list" class="dropdown-list-select">
@@ -44,10 +20,28 @@
                 <option value="Collection Date" >Collection Date</option>
                 <option value="Discoverer" >Discoverer</option>
                 </select>
+               </div>
+            
 
-               <!-- <button type="reset" class="reset_button">Reset</button>-->
+           <!--  <div class="actions">
+                <button><a href="{% url 'fieldslip-create' %}">
+                    <div class="icon-text">
+                    <i class="bi bi-plus-square"></i>
+                    <span>New FieldSlip</span>
+                    </div></a>
+                </button>
+    
+               <button><a href="{% url 'fieldslip-import' %}">
+                    <div class="icon-text">
+                        <i class="bi bi-download"></i>
+                        <span>Import</span>
+                    </div></a>
+                </button>-->
+    
                 
             </div>
+        </div>
+
            <!--<hr class="fieldslip_list_hr">--> 
            <!-- , Collection Date or Discoverer" onkeyup="searchFieldslips()--> 
         <div class="table-container">
