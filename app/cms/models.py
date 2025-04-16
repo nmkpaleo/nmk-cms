@@ -44,19 +44,23 @@ class BaseModel(models.Model):
 
     def clean(self):
         user = get_current_user()
-        if not self.pk and not self.created_by:
-            if not user or isinstance(user, AnonymousUser):
-                raise ValidationError("You must be logged in to create a record.")
-        super().clean()
+        if not user or isinstance(user, AnonymousUser):
+            raise ValidationError("You must be logged in to perform this action.")
 
     def save(self, *args, **kwargs):
-        self.clean()  # Perform validation before saving
+        self.clean()  # ensure validation before saving
         user = get_current_user()
         if user and not isinstance(user, AnonymousUser):
             if not self.pk and not self.created_by:
                 self.created_by = user
             self.modified_by = user
         super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        user = get_current_user()
+        if not user or isinstance(user, AnonymousUser):
+            raise ValidationError("You must be logged in to delete this record.")
+        super().delete(*args, **kwargs)
 
 # Locality Model
 class Locality(BaseModel):
