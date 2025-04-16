@@ -6,7 +6,7 @@ from django.http import JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
 from django_filters.views import FilterView
-from .filters import PreparationFilter
+from .filters import AccessionFilter, PreparationFilter
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
@@ -18,7 +18,7 @@ from django.urls import reverse_lazy, reverse
 from django.utils.timezone import now
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, FormView
 
-from .forms import (AccessionCommentForm, AccessionFieldSlipForm, AccessionGeologyForm,
+from .forms import (AccessionCommentForm, AccessionForm, AccessionFieldSlipForm, AccessionGeologyForm,
                     AccessionRowIdentificationForm, AccessionRowSpecimenForm,
                     AccessionReferenceForm, AddAccessionRowForm, FieldSlipForm,
                     MediaUploadForm, NatureOfSpecimenForm, PreparationForm, PreparationApprovalForm,
@@ -219,11 +219,31 @@ class AccessionDetailView(DetailView):
         context['taxonomy'] = taxonomy_dict  # Maps first identifications to Taxon objects
         
         return context
-    
-class AccessionListView(ListView):
+
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db.models import Q
+
+from django.views.generic import ListView
+from django_filters.views import FilterView
+
+class AccessionListView(FilterView):
     model = Accession
     context_object_name = 'accessions'
+    template_name = 'cms/accession_list.html'
     paginate_by = 10
+    filterset_class = AccessionFilter
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        user = self.request.user
+
+        if user.is_authenticated and (
+            user.is_superuser or
+            user.groups.filter(name__in=["Collection Managers", "Curators"]).exists()
+        ):
+            return qs  # Show all
+
+        return qs.filter(is_published=True)  # Public users only see published accessions
 
 class AccessionRowDetailView(DetailView):
     model = AccessionRow
@@ -264,6 +284,26 @@ def upload_media(request, accession_id):
         form = MediaUploadForm()
 
     return render(request, 'cms/upload_media.html', {'form': form, 'accession': accession})
+
+@login_required
+@user_passes_test(is_collection_manager)
+def accession_create(request):
+    if request.method == 'POST':
+        form = AccessionForm(request.POST, request.FILES)
+        if form.is_valid():
+            accession = form.save(commit=False)
+
+            # Safe place to modify the object before saving
+            # e.g., accession.created_by = request.user
+
+            accession.save()  # Now the PK is assigned
+            form.save_m2m()   # In case future fields need this
+
+            return redirect('accession-list')
+    else:
+        form = AccessionForm()
+
+    return render(request, 'cms/accession_form.html', {'form': form})
 
 @login_required
 @user_passes_test(is_collection_manager)

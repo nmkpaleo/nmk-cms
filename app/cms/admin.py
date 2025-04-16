@@ -317,9 +317,11 @@ admin.site.register(Reference, ReferenceAdmin)
 admin.site.register(Storage, StorageAdmin)
 admin.site.register(Subject, SubjectAdmin)
 admin.site.register(Taxon, TaxonAdmin)
-# User needs to unregister the default User model and register the custom User model
-admin.site.unregister(User)
-admin.site.register(User, UserAdmin)
+# Unregister safely (may already be registered)
+if admin.site.is_registered(User):
+    admin.site.unregister(User)
+# Optional: Register with custom admin if you need to modify
+    admin.site.register(User, UserAdmin)
 admin.site.register(Media, MediaAdmin)
 admin.site.register(SpecimenGeology, SpecimenGeologyAdmin)
 admin.site.register(GeologicalContext, GeologicalContextAdmin)

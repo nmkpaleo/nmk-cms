@@ -1,9 +1,36 @@
 import django_filters
 from django import forms
-from .models import Preparation
+from .models import Accession, Locality, Preparation
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
+
+class AccessionFilter(django_filters.FilterSet):
+    specimen_no = django_filters.CharFilter(
+        lookup_expr='exact',
+        label="Specimen No.",
+        widget=forms.TextInput(attrs={'class': 'w3-input'})
+    )
+    specimen_prefix = django_filters.ModelChoiceFilter(
+        queryset=Locality.objects.all(),
+        label="Prefix",
+        widget=forms.Select(attrs={'class': 'w3-select'})
+    )
+    specimen_suffix = django_filters.CharFilter(
+        lookup_expr='icontains',
+        label="Suffix",
+        widget=forms.TextInput(attrs={'class': 'w3-input'})
+    )
+    comment = django_filters.CharFilter(
+        lookup_expr='icontains',
+        label="Comment",
+        widget=forms.TextInput(attrs={'class': 'w3-input'})
+    )
+
+    class Meta:
+        model = Accession
+        fields = ['specimen_no', 'specimen_prefix', 'specimen_suffix', 'comment']
+
 
 class PreparationFilter(django_filters.FilterSet):
     ...
