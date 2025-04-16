@@ -7,7 +7,7 @@ from import_export.fields import Field
 from import_export.widgets import ForeignKeyWidget, DateWidget
 
 from .models import (
-    NatureOfSpecimen, Element, Person, Identification, Taxon,Media, SpecimenGeology, GeologicalContext,
+    AccessionNumberSeries, NatureOfSpecimen, Element, Person, Identification, Taxon,Media, SpecimenGeology, GeologicalContext,
     AccessionReference, Locality, Collection, Accession, AccessionRow, Subject, Comment, FieldSlip, Reference, Storage, User,
     Preparation, PreparationLog, PreparationMaterial, PreparationMedia
 )
@@ -88,6 +88,12 @@ class AccessionAdmin(ImportExportModelAdmin):
             return format_html('<span style="color: orange;">Yes ({})</span>', count)
         return format_html('<span style="color: green;">No</span>')
     is_duplicate_display.short_description = 'Duplicate?'
+
+@admin.register(AccessionNumberSeries)
+class AccessionNumberSeriesAdmin(admin.ModelAdmin):
+    list_display = ('name', 'user', 'start_from', 'end_at', 'current_number', 'is_active')
+    list_filter = ('user', 'is_active')
+    search_fields = ('name', 'user__username')
 
 class AccessionReferenceAdmin(ImportExportModelAdmin):
     resource_class = AccessionReferenceResource

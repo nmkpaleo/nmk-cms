@@ -12,6 +12,7 @@ from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.core.exceptions import ValidationError
 from django.forms import modelformset_factory
 from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, render, redirect
@@ -24,7 +25,7 @@ from cms.forms import (AccessionBatchForm, AccessionCommentForm, AccessionForm, 
                     AccessionReferenceForm, AddAccessionRowForm, FieldSlipForm,
                     MediaUploadForm, NatureOfSpecimenForm, PreparationForm, PreparationApprovalForm,
                     PreparationMediaUploadForm, ReferenceForm)
-from cms.models import (Accession,
+from cms.models import (Accession, AccessionNumberSeries,
                      AccessionFieldSlip, AccessionReference, AccessionRow,
                      Comment, FieldSlip, Media, NatureOfSpecimen, Identification,
                      Preparation, PreparationMedia, Reference, SpecimenGeology, Taxon)
@@ -147,20 +148,47 @@ def fieldslip_edit(request, pk):
 
 @staff_member_required
 def generate_accession_batch_view(request):
-    if request.method == "POST":
-        form = AccessionBatchForm(request.POST)
-        if form.is_valid():
+    form = AccessionBatchForm(request.POST or None)
+    series_remaining = None
+    series_range = None
+
+    if request.method == "POST" and form.is_valid():
+        user = form.cleaned_data['user']
+        try:
+            # Get user's active accession number series
+            series = AccessionNumberSeries.objects.get(user=user, is_active=True)
+            series_remaining = series.end_at - series.current_number + 1
+            series_range = f"from {series.current_number} to {series.end_at}"
+
+            # Try to generate accessions
             accessions = generate_accessions_from_series(
-                user=form.cleaned_data['user'],
+                user=user,
                 count=form.cleaned_data['count'],
                 collection=form.cleaned_data['collection'],
                 specimen_prefix=form.cleaned_data['specimen_prefix']
             )
-            messages.success(request, f"Successfully created {len(accessions)} accessions for {form.cleaned_data['user']}.")
+
+            messages.success(
+                request,
+                f"Successfully created {len(accessions)} accessions for {user}."
+            )
             return redirect("admin:index")
-    else:
-        form = AccessionBatchForm()
-    return render(request, "cms/accession_batch_form.html", {"form": form})
+
+        except AccessionNumberSeries.DoesNotExist:
+            form.add_error('user', "No active accession number series found for this user.")
+
+        except ValidationError as e:
+            form.add_error('count', f"{e.message} (Available range: {series_range})")
+
+    # On GET or error: show form again
+    return render(request, "cms/accession_batch_form.html", {
+        "form": form,
+        "series_remaining": series_remaining,
+        "series_range": series_range,
+        "title": "Accession Numbers",
+        "method": "post",
+        "action": request.path,
+    })
 
 def reference_create(request):
     if request.method == 'POST':
