@@ -91,9 +91,9 @@ class AccessionAdmin(ImportExportModelAdmin):
 
 @admin.register(AccessionNumberSeries)
 class AccessionNumberSeriesAdmin(admin.ModelAdmin):
-    list_display = ('name', 'user', 'start_from', 'end_at', 'current_number', 'is_active')
+    list_display = ('user', 'start_from', 'end_at', 'current_number', 'is_active')
     list_filter = ('user', 'is_active')
-    search_fields = ('name', 'user__username')
+    search_fields = ('user__username')
 
 class AccessionReferenceAdmin(ImportExportModelAdmin):
     resource_class = AccessionReferenceResource

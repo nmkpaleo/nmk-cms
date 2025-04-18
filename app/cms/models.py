@@ -161,7 +161,6 @@ class Accession(BaseModel):
         unique_together = ('specimen_no', 'specimen_prefix', 'instance_number')
 
 class AccessionNumberSeries(models.Model):
-    name = models.CharField(max_length=100)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="accession_series")
     start_from = models.PositiveIntegerField()
     end_at = models.PositiveIntegerField()
