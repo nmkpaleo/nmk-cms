@@ -38,7 +38,7 @@ services:
       - PMA_PASSWORD=${DB_PASS}
 
   redis:
-    image: redis:alpine
+    image: redis:7.2.4-alpine
     expose:
       - "6379"
     container_name: nmk-cms-redis

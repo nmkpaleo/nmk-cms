@@ -6,18 +6,22 @@ from import_export import resources, fields
 from import_export.fields import Field
 from import_export.widgets import ForeignKeyWidget, DateWidget
 
+from .forms import AccessionNumberSeriesAdminForm
+
 from .models import (
     AccessionNumberSeries, NatureOfSpecimen, Element, Person, Identification, Taxon,Media, SpecimenGeology, GeologicalContext,
     AccessionReference, Locality, Collection, Accession, AccessionRow, Subject, Comment, FieldSlip, Reference, Storage, User,
     Preparation, PreparationLog, PreparationMaterial, PreparationMedia
 )
 from .resources import *
+
 import logging
 
 from django import forms
 from django.core.exceptions import ValidationError
 from django.utils.html import format_html
 from django.utils.timezone import now
+from django.contrib.auth import get_user_model
 
 # Configure the logger
 logging.basicConfig(level=logging.INFO)  # You can adjust the level as needed (DEBUG, WARNING, ERROR, etc.)
@@ -26,6 +30,8 @@ logger = logging.getLogger(__name__)  # Creates a logger specific to the current
 from django.contrib import admin
 from django.db.models import Count, OuterRef, Exists
 from cms.models import Accession
+
+User = get_user_model()
 
 class DuplicateFilter(admin.SimpleListFilter):
     title = 'By Duplicate specimen_no + prefix'
@@ -89,11 +95,35 @@ class AccessionAdmin(ImportExportModelAdmin):
         return format_html('<span style="color: green;">No</span>')
     is_duplicate_display.short_description = 'Duplicate?'
 
+
 @admin.register(AccessionNumberSeries)
 class AccessionNumberSeriesAdmin(admin.ModelAdmin):
+    form = AccessionNumberSeriesAdminForm
     list_display = ('user', 'start_from', 'end_at', 'current_number', 'is_active')
     list_filter = ('user', 'is_active')
-    search_fields = ('user__username')
+    search_fields = ('user__username',)
+
+    class Media:
+        js = ("js/set_start_from.js",)
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        field = super().formfield_for_foreignkey(db_field, request, **kwargs)
+        if db_field.name == "user":
+            # ✅ Generate series map again here
+            from django.contrib.auth import get_user_model
+            from cms.models import AccessionNumberSeries
+            import json
+
+            User = get_user_model()
+            series_map = {}
+            for user in User.objects.all():
+                qs = AccessionNumberSeries.objects.filter(user=user).order_by('-end_at')
+                base = 1_000_000 if user.username.lower() == 'mary' else 1
+                next_start = qs.first().end_at + 1 if qs.exists() else base
+                series_map[user.pk] = next_start
+
+            field.widget.attrs['data-series-starts'] = json.dumps(series_map)
+        return field
 
 class AccessionReferenceAdmin(ImportExportModelAdmin):
     resource_class = AccessionReferenceResource
