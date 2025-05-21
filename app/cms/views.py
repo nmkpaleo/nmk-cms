@@ -161,26 +161,26 @@ def generate_accession_batch_view(request):
             series_range = f"from {series.current_number} to {series.end_at}"
 
             # Try to generate accessions
-            accessions = generate_accessions_from_series(
-                user=user,
-                count=form.cleaned_data['count'],
-                collection=form.cleaned_data['collection'],
-                specimen_prefix=form.cleaned_data['specimen_prefix']
-            )
+            try:
+                accessions = generate_accessions_from_series(
+                    series_user=user,
+                    count=form.cleaned_data['count'],
+                    collection=form.cleaned_data['collection'],
+                    specimen_prefix=form.cleaned_data['specimen_prefix'],
+                    creator_user=request.user
+                )
+                messages.success(
+                    request,
+                    f"Successfully created {len(accessions)} accessions for {user}."
+                )
+                return redirect("accession-list")
 
-            messages.success(
-                request,
-                f"Successfully created {len(accessions)} accessions for {user}."
-            )
-            return redirect("admin:index")
+            except ValueError as ve:
+                form.add_error('count', f"{ve} (Available range: {series_range})")
 
         except AccessionNumberSeries.DoesNotExist:
             form.add_error('user', "No active accession number series found for this user.")
 
-        except ValidationError as e:
-            form.add_error('count', f"{e.message} (Available range: {series_range})")
-
-    # On GET or error: show form again
     return render(request, "cms/accession_batch_form.html", {
         "form": form,
         "series_remaining": series_remaining,

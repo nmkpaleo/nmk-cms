@@ -15,6 +15,7 @@ from .models import (
 )
 from .resources import *
 
+import json
 import logging
 
 from django import forms
@@ -99,31 +100,61 @@ class AccessionAdmin(ImportExportModelAdmin):
 @admin.register(AccessionNumberSeries)
 class AccessionNumberSeriesAdmin(admin.ModelAdmin):
     form = AccessionNumberSeriesAdminForm
+    change_form_template = "admin/cms/accessionnumberseries/change_form.html"
     list_display = ('user', 'start_from', 'end_at', 'current_number', 'is_active')
-    list_filter = ('user', 'is_active')
-    search_fields = ('user__username',)
+    list_filter = ('is_active', 'user')
+
+    fieldsets = (
+        (None, {
+            'fields': ('user', 'start_from', 'current_number', 'count', 'is_active')
+        }),
+    )
+    
+    def get_readonly_fields(self, request, obj=None):
+        if obj:
+            return [f.name for f in self.model._meta.fields if f.editable and f.name != "id"] + ['count']
+        return super().get_readonly_fields(request, obj)
+
+    def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
+        extra_context = extra_context or {}
+        extra_context['add'] = object_id is None  # True if adding
+        return super().changeform_view(request, object_id, form_url, extra_context=extra_context)
 
     class Media:
-        js = ("js/set_start_from.js",)
+        js = (
+            "js/set_start_from.js",
+            "js/accession_series_live_preview.js",
+        )
 
-    def formfield_for_foreignkey(self, db_field, request, **kwargs):
-        field = super().formfield_for_foreignkey(db_field, request, **kwargs)
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        formfield = super().formfield_for_dbfield(db_field, request, **kwargs)
+
         if db_field.name == "user":
-            # ✅ Generate series map again here
+            # Compute shared vs Mary series
             from django.contrib.auth import get_user_model
-            from cms.models import AccessionNumberSeries
-            import json
-
             User = get_user_model()
-            series_map = {}
-            for user in User.objects.all():
-                qs = AccessionNumberSeries.objects.filter(user=user).order_by('-end_at')
-                base = 1_000_000 if user.username.lower() == 'mary' else 1
-                next_start = qs.first().end_at + 1 if qs.exists() else base
-                series_map[user.pk] = next_start
 
-            field.widget.attrs['data-series-starts'] = json.dumps(series_map)
-        return field
+        try:
+            mary_series = AccessionNumberSeries.objects.filter(user__username__iexact="mary")
+            shared_series = AccessionNumberSeries.objects.exclude(user__username__iexact="mary")
+
+            mary_end = mary_series.order_by('-end_at').first()
+            shared_end = shared_series.order_by('-end_at').first()
+
+            series_map = {
+                "mary": mary_end.end_at + 1 if mary_end and mary_end.end_at else 1_000_000,
+                "shared": shared_end.end_at + 1 if shared_end and shared_end.end_at else 1,
+            }
+
+            if hasattr(formfield.widget, 'attrs'):
+                formfield.widget.attrs["data-series-starts"] = json.dumps(series_map)
+
+        except Exception as e:
+            # Just log the issue, don't block the form rendering or validation
+            import logging
+            logging.warning(f"Series mapping failed: {e}")
+
+        return formfield
 
 class AccessionReferenceAdmin(ImportExportModelAdmin):
     resource_class = AccessionReferenceResource

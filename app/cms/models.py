@@ -160,7 +160,7 @@ class Accession(BaseModel):
         verbose_name_plural = "Accessions"
         unique_together = ('specimen_no', 'specimen_prefix', 'instance_number')
 
-class AccessionNumberSeries(models.Model):
+class AccessionNumberSeries(BaseModel):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="accession_series")
     start_from = models.PositiveIntegerField()
     end_at = models.PositiveIntegerField()
@@ -171,12 +171,48 @@ class AccessionNumberSeries(models.Model):
         ordering = ['user', 'start_from']
 
     def clean(self):
-        conflicts = AccessionNumberSeries.objects.exclude(pk=self.pk).filter(
-            start_from__lte=self.end_at,
-            end_at__gte=self.start_from,
-        )
-        if conflicts.exists():
-            raise ValidationError("This accession number range overlaps with an existing series.")
+        if not hasattr(self, "user") or self.user is None:
+            return  # Let the form validator complain that user is required
+
+        if self.start_from is None or self.end_at is None:
+            return
+
+        if self.start_from >= self.end_at:
+            raise ValidationError("Start number must be less than end number.")
+        
+        # Determine if this is Mary or shared user series
+        is_mary = self.user.username.strip().lower() == "mary"
+
+        # Build appropriate queryset to check overlaps
+        if is_mary:
+            # Only check overlap among Mary's series
+            conflicting_series = AccessionNumberSeries.objects.exclude(pk=self.pk).filter(
+                user__username__iexact="mary",
+                start_from__lte=self.end_at,
+                end_at__gte=self.start_from,
+            )
+        else:
+            # Shared users (everyone except Mary)
+            conflicting_series = AccessionNumberSeries.objects.exclude(pk=self.pk).exclude(
+                user__username__iexact="mary"
+            ).filter(
+                start_from__lte=self.end_at,
+                end_at__gte=self.start_from,
+            )
+
+        if conflicting_series.exists():
+            raise ValidationError(
+                "This accession number range overlaps with another range in the same series pool."
+            )
+
+        # Only allow one active series per user
+        if self.is_active:
+            active_existing = AccessionNumberSeries.objects.exclude(pk=self.pk).filter(
+                user=self.user,
+                is_active=True
+            )
+            if active_existing.exists():
+                raise ValidationError("This user already has an active accession number series.")
 
     def save(self, *args, **kwargs):
         self.full_clean()
