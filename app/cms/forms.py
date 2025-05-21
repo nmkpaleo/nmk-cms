@@ -262,6 +262,22 @@ class ReferenceForm(forms.ModelForm):
 
         }
 
+class LocalityForm(forms.ModelForm):
+    class Meta:
+        model = Locality
+        fields = [
+
+            'abbreviation', 'name'
+        ]
+        widgets = {
+
+            'abbreviation': forms.TextInput(attrs={'class': 'template_form_input'}),
+
+            'name': forms.TextInput(attrs={'class': 'template_form_input'})
+
+        }
+
+
 
 class MediaUploadForm(forms.ModelForm):
     class Meta:

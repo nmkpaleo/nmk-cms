@@ -30,7 +30,7 @@
     <div class="container-fluid">
       <div class="row">
         <div class="main_navbar">
-          <a href=""><img src="{% static 'images/logo.jpg' %}" class="logo_image" alt="NMK LOGO"></a>
+          <a href="{% url 'index' %}"><img src="{% static 'images/logo.jpg' %}" class="logo_image" alt="NMK LOGO"></a>
           
 
           {% block sidebar %}
@@ -44,6 +44,7 @@
               {% if user.is_superuser or user.groups.first.name in "Curators Collection Managers" %}
                 <li><a href="{% url 'preparation-list' %}">Preparations</a></li>
               {% endif %}
+              <li><a href="{% url 'locality-list' %}">Locality</a></li>
 
               {% if user.is_authenticated %}
                 <li>User: {{ user.get_username }}</li>

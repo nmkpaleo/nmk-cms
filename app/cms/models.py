@@ -1,6 +1,8 @@
 from crum import get_current_user
 from django.db import models
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AnonymousUser
+from django.core.exceptions import ValidationError
 from django.urls import reverse
 from django.utils import timezone
 from django_userforeignkey.models.fields import UserForeignKey
@@ -10,6 +12,8 @@ import os # For file handling in media class
 from django.core.exceptions import ValidationError
 import string # For generating specimen number
 User = get_user_model()
+
+
 
 class BaseModel(models.Model):
     created_on = models.DateTimeField(auto_now_add=True, verbose_name="Date Created")
@@ -38,13 +42,25 @@ class BaseModel(models.Model):
         verbose_name = "Base Record"
         verbose_name_plural = "Base Records"
 
-    def save(self, *args, **kwargs):
+    def clean(self):
         user = get_current_user()
-        if user and not self.pk and not self.created_by:
-            self.created_by = user
-        if user:
+        if not user or isinstance(user, AnonymousUser):
+            raise ValidationError("You must be logged in to perform this action.")
+
+    def save(self, *args, **kwargs):
+        self.clean()  # ensure validation before saving
+        user = get_current_user()
+        if user and not isinstance(user, AnonymousUser):
+            if not self.pk and not self.created_by:
+                self.created_by = user
             self.modified_by = user
         super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        user = get_current_user()
+        if not user or isinstance(user, AnonymousUser):
+            raise ValidationError("You must be logged in to delete this record.")
+        super().delete(*args, **kwargs)
 
 # Locality Model
 class Locality(BaseModel):
@@ -336,6 +352,7 @@ class Reference(BaseModel):
 
     def __str__(self):
         return self.citation
+
 
 
 class AccessionFieldSlip(BaseModel):

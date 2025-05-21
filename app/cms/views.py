@@ -8,6 +8,9 @@ from django.views import View
 from django_filters.views import FilterView
 from .filters import AccessionFilter, PreparationFilter
 
+from django.views.generic import DetailView
+from django.core.paginator import Paginator
+
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required, user_passes_test
@@ -24,11 +27,12 @@ from cms.forms import (AccessionBatchForm, AccessionCommentForm, AccessionForm, 
                     AccessionRowIdentificationForm, AccessionRowSpecimenForm,
                     AccessionReferenceForm, AddAccessionRowForm, FieldSlipForm,
                     MediaUploadForm, NatureOfSpecimenForm, PreparationForm, PreparationApprovalForm,
-                    PreparationMediaUploadForm, ReferenceForm)
+
+                    PreparationMediaUploadForm, ReferenceForm, LocalityForm)
 from cms.models import (Accession, AccessionNumberSeries,
                      AccessionFieldSlip, AccessionReference, AccessionRow,
                      Comment, FieldSlip, Media, NatureOfSpecimen, Identification,
-                     Preparation, PreparationMedia, Reference, SpecimenGeology, Taxon)
+                     Preparation, PreparationMedia, Reference, SpecimenGeology, Taxon , Locality)
 from cms.resources import FieldSlipResource
 from cms.utils import generate_accessions_from_series
 
@@ -212,6 +216,20 @@ def reference_edit(request, pk):
         form = ReferenceForm(instance=reference)
     return render(request, 'cms/reference_form.html', {'form': form})
 
+
+def locality_edit(request, pk):
+    
+    locality = get_object_or_404(Locality, pk=pk)
+    if request.method == 'POST':
+        form = LocalityForm(request.POST, request.FILES, instance=locality)
+        if form.is_valid():
+            form.save()
+            return redirect('locality-detail', pk=locality.pk)  # Redirect to the detail view
+    else:
+        form = LocalityForm(instance=locality)
+    return render(request, 'cms/locality_form.html', {'form': form})
+
+
 class FieldSlipDetailView(DetailView):
     model = FieldSlip
     template_name = 'cms/fieldslip_detail.html'
@@ -312,6 +330,35 @@ class ReferenceListView(ListView):
     template_name = 'cms/reference_list.html'
     context_object_name = 'references'
     paginate_by = 10
+
+
+class LocalityListView(ListView):
+    model = Locality
+    template_name = 'cms/locality_list.html'
+    context_object_name = 'localitys'
+    paginate_by = 10
+
+class LocalityDetailView(DetailView):
+    model = Locality
+    template_name = 'cms/locality_detail.html'
+    context_object_name = 'locality'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        accessions = self.object.accession_set.all()
+        paginator = Paginator(accessions, 5)  
+        page_number = self.request.GET.get('page')
+        accessions = paginator.get_page(page_number)
+
+
+        context['accessions'] = accessions     # so your base template's pagination still works
+       
+        return context
+
+    
+    
+
 
 @login_required
 @user_passes_test(is_collection_manager)
