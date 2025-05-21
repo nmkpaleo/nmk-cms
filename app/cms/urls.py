@@ -13,7 +13,7 @@ from cms.views import (
     AddReferenceToAccessionView,
     create_fieldslip_for_accession, fieldslip_create, fieldslip_edit, FieldSlipDetailView, FieldSlipListView, fieldslip_export, fieldslip_import,
     AccessionListView, AccessionDetailView,
-    ReferenceListView, ReferenceDetailView, reference_create, reference_edit,
+    ReferenceListView, ReferenceDetailView, reference_create, reference_edit, LocalityListView,LocalityDetailView,locality_edit,
     upload_media,
     PreparationListView, PreparationDetailView, 
     PreparationCreateView, PreparationUpdateView, PreparationDeleteView, 
@@ -50,6 +50,12 @@ urlpatterns = [
     path('reference/new/', reference_create, name='reference-create'),
   
     path("select2/", include("django_select2.urls")),
+
+
+    path('locality/', LocalityListView.as_view(), name='locality-list'),
+    path('locality/<int:pk>/', LocalityDetailView.as_view(), name='locality-detail'),
+    path('locality/<int:pk>/edit/', locality_edit, name='locality-edit'),
+
 
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 

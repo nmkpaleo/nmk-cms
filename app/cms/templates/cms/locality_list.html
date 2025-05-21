@@ -1,0 +1,58 @@
+{% extends "base_generic.html" %}
+
+{% block title %}
+      <title>locality-list</title>
+{% endblock %}
+
+{% block content %}
+
+    <div class="template_list_body">
+        <div class="container"></div>
+        
+      
+        <div class="template_buttons">           
+              <div class="search-bar">
+                <input type="text" id="searchInput" placeholder="Search " >
+     
+                <select id="colors" name="dropdown-list" class="dropdown-list-select">
+                <option value="Field Number" >Abbreviation</option>
+                <option value="Collector" >Name</option>
+                </select>
+               </div>
+        
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table class="lists_table">
+
+
+                  <th>Abbreviation</th>
+                  <th>Name</b>
+                    
+
+     
+                {% for locality in localitys %}
+
+                   <tr class="template_data">
+
+                        
+                        <td><a href="{% url 'locality-detail' locality.pk %}">{{ locality.abbreviation }}</a></td>
+                        
+                        <td>{{ locality.name }}</td>
+
+                        <td>
+                            <a href="{% url 'locality-edit' locality.pk %}" class="edit-icon">✏️</a>
+                        </td>
+
+                    </tr>
+  
+                {% endfor %}
+            </table>
+            </tbody>
+            
+        </div>
+
+    </div>
+
+{% endblock %}

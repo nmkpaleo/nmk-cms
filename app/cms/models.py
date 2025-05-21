@@ -282,6 +282,7 @@ class Reference(BaseModel):
         return self.citation
 
 
+
 class AccessionFieldSlip(BaseModel):
     """
     Links Accession and FieldSlip in a many-to-many relationship.

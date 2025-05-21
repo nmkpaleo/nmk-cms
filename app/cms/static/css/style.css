@@ -312,6 +312,7 @@
 .pagination{
     margin-top: 25px;
     margin-left: 10px;
+    
     font-family: 'Poppins', sans-serif;
 }
 .pagination_previous,  .pagination_next{
@@ -546,7 +547,7 @@
     border-radius: 10px;
     box-shadow: 5px 4px 6px #D6D2D2, -5px -4px 6px #D9D9D9, 5px -4px 6px #E4E3E3;
     text-align: left;
-    width: 80%;
+    width: 90%;
     margin-left: 100px;
     margin-bottom: 30px;
 
@@ -1092,4 +1093,10 @@ nav ul {
         width: 80%;
     }
  
+}
+
+/*LOCALITY PAGINATION */
+.step-link{
+    color: #000;
+    text-decoration: none;
 }

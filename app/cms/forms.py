@@ -4,7 +4,7 @@ from django_select2.forms import ModelSelect2Widget, Select2Widget
 
 from .models import (Accession, AccessionFieldSlip, AccessionReference,
                      AccessionRow, Comment, FieldSlip, Identification, Media,
-                     NatureOfSpecimen, Preparation, Reference, SpecimenGeology)
+                     NatureOfSpecimen, Preparation, Reference, Locality, SpecimenGeology)
 
 class AccessionRowWidget(s2forms.ModelSelect2Widget):
     search_fields = [
@@ -139,6 +139,22 @@ class ReferenceForm(forms.ModelForm):
             'citation': forms.TextInput(attrs={'class': 'template_form_input'})
 
         }
+
+class LocalityForm(forms.ModelForm):
+    class Meta:
+        model = Locality
+        fields = [
+
+            'abbreviation', 'name'
+        ]
+        widgets = {
+
+            'abbreviation': forms.TextInput(attrs={'class': 'template_form_input'}),
+
+            'name': forms.TextInput(attrs={'class': 'template_form_input'})
+
+        }
+
 
 
 class MediaUploadForm(forms.ModelForm):

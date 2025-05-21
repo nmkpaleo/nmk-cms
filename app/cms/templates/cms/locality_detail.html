@@ -1,0 +1,101 @@
+{% extends "base_generic.html" %}
+
+{% block content %}
+    
+
+        <div class="template-detail-container">
+            <div class="template-detail-header">
+                <h2 class="template-detail-h2">Locality Detail {{ locality.accession_set.count }} </h2>
+                <a href="{% url 'locality-edit' locality.pk %}" class="edit-icon">
+                    Edit Form ✏️
+                </a>
+            </div>
+            <div class="grid-container">
+                <!-- Field Number Card -->
+                <div class="card">
+                    <p><strong>Abbreviation: </strong> <br> {{ locality.abbreviation }}</p>
+                                     
+                </div>
+    
+                <!-- Verbatim Taxon Card -->
+                <div class="card">
+                    <p><strong>Name:</strong> <br> {{ locality.name }} </p>
+                </div>
+
+                <div class="cards">
+                    <table>
+                        <caption><em><h2>Accession details</h2></em></caption>
+                        <thead>
+                            <tr>
+                                <th><u>Collection</u></th>
+                                <th><u>Specimen  Number</u></th>
+                                <th><u>Accesioned by</u></th>
+                                
+                            </tr>
+                                      
+                                <tr>
+                                    
+                                    {% for accession in accessions %}
+                                        <tr >
+                                            <td>{{ accession.collection.abbreviation }}</td>
+                                            
+                                            <td><a href="{% url 'accession-detail' accession.pk %}">{{ accession.specimen_no }}</a></td>
+                                            <td>&nbsp;{{ accession.accessioned_by }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                       
+
+
+
+
+                        </tbody>
+
+
+                        </thead>
+                        <tbody>
+                            
+                            <tr><th></th></tr>
+                    </table>                
+                    <hr class="accession_hr">
+                    <div class="pagination">
+
+                                            <span class="step-links">
+
+                                                {% if accessions.has_previous %}
+
+                                                    <a href="?page=1"  class="pagination_previous">&laquo; first</a>
+
+                                                    <a href="?page={{ accessions.previous_page_number }}" class="pagination_previous">previous</a>
+
+                                                {% endif %}
+
+                                        
+
+                                                <span class="current">
+
+                                                    Page {{ accessions.number }} of {{ accessions.paginator.num_pages }}.
+
+                                                </span>
+
+                                        
+
+                                                {% if accessions.has_next %}
+
+                                                    <a href="?page={{ accessions.next_page_number }}" class="pagination_next">next</a>
+
+                                                    <a href="?page={{ accessions.paginator.num_pages }}" class="pagination_next">last &raquo;</a>
+
+                                                {% endif %}
+
+                                            </span>
+
+                                        </div>
+
+                </div>
+    
+            </div>
+        </div>
+
+{% endblock %}
+
+
