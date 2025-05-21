@@ -2,7 +2,7 @@ from venv import logger
 from .models import Accession, AccessionReference, AccessionRow, Collection, Element, FieldSlip, GeologicalContext, Identification, Locality, Media, NatureOfSpecimen, Person, Reference, SpecimenGeology, Storage, Taxon, User
 from import_export import resources, fields
 #from import_export.fields import Field
-from import_export.widgets import ForeignKeyWidget, DateWidget
+from import_export.widgets import BooleanWidget, ForeignKeyWidget, DateWidget
 
 class AccessionResource(resources.ModelResource):
     accession = fields.Field()
@@ -26,19 +26,35 @@ class AccessionResource(resources.ModelResource):
         widget=ForeignKeyWidget(User, 'username')
     )
 
+    has_duplicates = fields.Field(
+        column_name='has_duplicates',
+        attribute='has_duplicates',
+        widget=BooleanWidget(),
+        readonly=True  # 👈 this makes it export-only, not importable
+    )
+
+    class Meta:
+        model = Accession
+        skip_unchanged = True
+        report_skipped = False
+        import_id_fields = ('collection', 'specimen_prefix', 'specimen_no', 'instance_number')
+        fields = ('collection', 'specimen_prefix', 'specimen_no',
+                  'instance_number', 'accessioned_by', 'accession')
+        export_order = ('accession', 'collection', 'specimen_prefix',
+                        'specimen_no', 'instance_number',
+                        'accessioned_by', 'has_duplicates') # Add 'has_duplicates' to export order
+
     def dehydrate_accession(self, accession):
         museum = getattr(accession.collection, "abbreviation", "unknown")
         specimen_prefix = getattr(accession.specimen_prefix, "abbreviation", "unknown")
         specimen_no = getattr(accession, "specimen_no", "unknown")
         return '%s-%s %s' % (museum, specimen_prefix, specimen_no)
     
-    class Meta:
-        model = Accession
-        skip_unchanged = True
-        report_skipped = False
-        import_id_fields = ('collection', 'specimen_prefix', 'specimen_no',)
-        fields = ('collection', 'specimen_prefix', 'specimen_no', 'accessioned_by', 'accession')
-        export_order = ('accession', 'collection', 'specimen_prefix', 'specimen_no', 'accessioned_by')
+    def dehydrate_has_duplicates(self, obj):
+        return Accession.objects.filter(
+            specimen_no=obj.specimen_no,
+            specimen_prefix=obj.specimen_prefix
+        ).count() > 1
 
 class AccessionReferenceResource(resources.ModelResource):
     accession_id= fields.Field(

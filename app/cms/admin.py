@@ -1,30 +1,80 @@
 from django.contrib import admin
+from django.db.models import Count, OuterRef, Exists
+
 from import_export.admin import ImportExportModelAdmin
 from import_export import resources, fields
 from import_export.fields import Field
 from import_export.widgets import ForeignKeyWidget, DateWidget
+
+from .forms import AccessionNumberSeriesAdminForm
+
 from .models import (
-    NatureOfSpecimen, Element, Person, Identification, Taxon,Media, SpecimenGeology, GeologicalContext,
+    AccessionNumberSeries, NatureOfSpecimen, Element, Person, Identification, Taxon,Media, SpecimenGeology, GeologicalContext,
     AccessionReference, Locality, Collection, Accession, AccessionRow, Subject, Comment, FieldSlip, Reference, Storage, User,
     Preparation, PreparationLog, PreparationMaterial, PreparationMedia
 )
 from .resources import *
+
+import json
 import logging
 
 from django import forms
 from django.core.exceptions import ValidationError
 from django.utils.html import format_html
 from django.utils.timezone import now
+from django.contrib.auth import get_user_model
 
 # Configure the logger
 logging.basicConfig(level=logging.INFO)  # You can adjust the level as needed (DEBUG, WARNING, ERROR, etc.)
 logger = logging.getLogger(__name__)  # Creates a logger specific to the current module
 
+from django.contrib import admin
+from django.db.models import Count, OuterRef, Exists
+from cms.models import Accession
+
+User = get_user_model()
+
+class DuplicateFilter(admin.SimpleListFilter):
+    title = 'By Duplicate specimen_no + prefix'
+    parameter_name = 'duplicates'
+
+    def lookups(self, request, model_admin):
+        return [
+            ('yes', 'Yes – Show Duplicates'),
+            ('no', 'No – Show Unique Only'),
+        ]
+
+    def queryset(self, request, queryset):
+        duplicate_subquery = (
+            Accession.objects
+            .filter(
+                specimen_no=OuterRef('specimen_no'),
+                specimen_prefix=OuterRef('specimen_prefix')
+            )
+            .values('specimen_no', 'specimen_prefix')
+            .annotate(dups=Count('id'))
+            .filter(dups__gt=1)
+        )
+
+        # Always annotate
+        annotated = queryset.annotate(
+            has_duplicates=Exists(duplicate_subquery)
+        )
+
+        if self.value() == 'yes':
+            return annotated.filter(has_duplicates=True)
+        elif self.value() == 'no':
+            return annotated.filter(has_duplicates=False)
+        else:
+            return annotated  # ✅ return the annotated base queryset
+
 # Accession Model
 class AccessionAdmin(ImportExportModelAdmin):
     resource_class = AccessionResource
-    list_display = ('collection_abbreviation', 'specimen_prefix_abbreviation', 'specimen_no', 'accessioned_by')
-    list_filter = ('collection', 'specimen_prefix', 'accessioned_by')
+    list_display = ('collection_abbreviation', 'specimen_prefix_abbreviation',
+                    'specimen_no', 'instance_number','accessioned_by',
+                    'is_duplicate_display',)
+    list_filter = ('collection', 'specimen_prefix', 'accessioned_by', DuplicateFilter)
     search_fields = ('specimen_no', 'collection__abbreviation', 'specimen_prefix__abbreviation', 'accessioned_by__username')
     ordering = ('specimen_no', 'specimen_prefix__abbreviation')
 
@@ -35,6 +85,76 @@ class AccessionAdmin(ImportExportModelAdmin):
     def specimen_prefix_abbreviation(self, obj):
         return obj.specimen_prefix.abbreviation if obj.specimen_prefix else None
     specimen_prefix_abbreviation.short_description = 'Specimen Prefix'
+
+    def is_duplicate_display(self, obj):
+        count = Accession.objects.filter(
+            specimen_no=obj.specimen_no,
+            specimen_prefix=obj.specimen_prefix
+        ).count()
+        if count > 1:
+            return format_html('<span style="color: orange;">Yes ({})</span>', count)
+        return format_html('<span style="color: green;">No</span>')
+    is_duplicate_display.short_description = 'Duplicate?'
+
+
+@admin.register(AccessionNumberSeries)
+class AccessionNumberSeriesAdmin(admin.ModelAdmin):
+    form = AccessionNumberSeriesAdminForm
+    change_form_template = "admin/cms/accessionnumberseries/change_form.html"
+    list_display = ('user', 'start_from', 'end_at', 'current_number', 'is_active')
+    list_filter = ('is_active', 'user')
+
+    fieldsets = (
+        (None, {
+            'fields': ('user', 'start_from', 'current_number', 'count', 'is_active')
+        }),
+    )
+    
+    def get_readonly_fields(self, request, obj=None):
+        if obj:
+            return [f.name for f in self.model._meta.fields if f.editable and f.name != "id"] + ['count']
+        return super().get_readonly_fields(request, obj)
+
+    def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
+        extra_context = extra_context or {}
+        extra_context['add'] = object_id is None  # True if adding
+        return super().changeform_view(request, object_id, form_url, extra_context=extra_context)
+
+    class Media:
+        js = (
+            "js/set_start_from.js",
+            "js/accession_series_live_preview.js",
+        )
+
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        formfield = super().formfield_for_dbfield(db_field, request, **kwargs)
+
+        if db_field.name == "user":
+            # Compute shared vs Mary series
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+
+        try:
+            mary_series = AccessionNumberSeries.objects.filter(user__username__iexact="mary")
+            shared_series = AccessionNumberSeries.objects.exclude(user__username__iexact="mary")
+
+            mary_end = mary_series.order_by('-end_at').first()
+            shared_end = shared_series.order_by('-end_at').first()
+
+            series_map = {
+                "mary": mary_end.end_at + 1 if mary_end and mary_end.end_at else 1_000_000,
+                "shared": shared_end.end_at + 1 if shared_end and shared_end.end_at else 1,
+            }
+
+            if hasattr(formfield.widget, 'attrs'):
+                formfield.widget.attrs["data-series-starts"] = json.dumps(series_map)
+
+        except Exception as e:
+            # Just log the issue, don't block the form rendering or validation
+            import logging
+            logging.warning(f"Series mapping failed: {e}")
+
+        return formfield
 
 class AccessionReferenceAdmin(ImportExportModelAdmin):
     resource_class = AccessionReferenceResource

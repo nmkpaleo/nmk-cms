@@ -1,0 +1,13 @@
+{% extends "admin/change_form.html" %}
+
+{% block submit_buttons_bottom %}
+  {% if original %}
+    <div class="submit-row">
+      <a class="button" href="{% url 'admin:cms_accessionnumberseries_changelist' %}">
+        Back to Accession Number Series List
+      </a>
+    </div>
+  {% else %}
+    {{ block.super }}
+  {% endif %}
+{% endblock %}

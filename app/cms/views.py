@@ -12,8 +12,10 @@ from django.views.generic import DetailView
 from django.core.paginator import Paginator
 
 from django.contrib import messages
+from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.core.exceptions import ValidationError
 from django.forms import modelformset_factory
 from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, render, redirect
@@ -21,16 +23,18 @@ from django.urls import reverse_lazy, reverse
 from django.utils.timezone import now
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, FormView
 
-from .forms import (AccessionCommentForm, AccessionForm, AccessionFieldSlipForm, AccessionGeologyForm,
+from cms.forms import (AccessionBatchForm, AccessionCommentForm, AccessionForm, AccessionFieldSlipForm, AccessionGeologyForm,
                     AccessionRowIdentificationForm, AccessionRowSpecimenForm,
                     AccessionReferenceForm, AddAccessionRowForm, FieldSlipForm,
                     MediaUploadForm, NatureOfSpecimenForm, PreparationForm, PreparationApprovalForm,
+
                     PreparationMediaUploadForm, ReferenceForm, LocalityForm)
-from .models import (Accession,
+from cms.models import (Accession, AccessionNumberSeries,
                      AccessionFieldSlip, AccessionReference, AccessionRow,
                      Comment, FieldSlip, Media, NatureOfSpecimen, Identification,
-                     Preparation, PreparationMedia, Reference, SpecimenGeology, Taxon, Locality)
-from .resources import FieldSlipResource
+                     Preparation, PreparationMedia, Reference, SpecimenGeology, Taxon , Locality)
+from cms.resources import FieldSlipResource
+from cms.utils import generate_accessions_from_series
 
 class PreparationAccessMixin(UserPassesTestMixin):
     def test_func(self):
@@ -146,6 +150,49 @@ def fieldslip_edit(request, pk):
         form = FieldSlipForm(instance=fieldslip)
     return render(request, 'cms/fieldslip_form.html', {'form': form})
 
+@staff_member_required
+def generate_accession_batch_view(request):
+    form = AccessionBatchForm(request.POST or None)
+    series_remaining = None
+    series_range = None
+
+    if request.method == "POST" and form.is_valid():
+        user = form.cleaned_data['user']
+        try:
+            # Get user's active accession number series
+            series = AccessionNumberSeries.objects.get(user=user, is_active=True)
+            series_remaining = series.end_at - series.current_number + 1
+            series_range = f"from {series.current_number} to {series.end_at}"
+
+            # Try to generate accessions
+            try:
+                accessions = generate_accessions_from_series(
+                    series_user=user,
+                    count=form.cleaned_data['count'],
+                    collection=form.cleaned_data['collection'],
+                    specimen_prefix=form.cleaned_data['specimen_prefix'],
+                    creator_user=request.user
+                )
+                messages.success(
+                    request,
+                    f"Successfully created {len(accessions)} accessions for {user}."
+                )
+                return redirect("accession-list")
+
+            except ValueError as ve:
+                form.add_error('count', f"{ve} (Available range: {series_range})")
+
+        except AccessionNumberSeries.DoesNotExist:
+            form.add_error('user', "No active accession number series found for this user.")
+
+    return render(request, "cms/accession_batch_form.html", {
+        "form": form,
+        "series_remaining": series_remaining,
+        "series_range": series_range,
+        "title": "Accession Numbers",
+        "method": "post",
+        "action": request.path,
+    })
 
 def reference_create(request):
     if request.method == 'POST':

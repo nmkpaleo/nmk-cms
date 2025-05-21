@@ -1,11 +1,133 @@
 from django import forms
+from django.contrib.auth import get_user_model
 from django_select2 import forms as s2forms
 from django_select2.forms import ModelSelect2Widget, Select2Widget
+from django.contrib.auth.models import User
 
-from .models import (Accession, AccessionFieldSlip, AccessionReference,
-                     AccessionRow, Comment, FieldSlip, Identification, Media,
-                     NatureOfSpecimen, Preparation, Reference, Locality, SpecimenGeology)
+from .models import (Accession, AccessionFieldSlip, AccessionNumberSeries, AccessionReference,
+                     AccessionRow, Collection, Comment, FieldSlip, Identification,
+                     Locality, Media,
+                     NatureOfSpecimen, Preparation, Reference, SpecimenGeology)
 
+import json
+
+User = get_user_model()
+
+class AccessionBatchForm(forms.Form):
+    user = forms.ModelChoiceField(queryset=User.objects.all())
+    count = forms.IntegerField(min_value=1, max_value=500)
+    collection = forms.ModelChoiceField(queryset=Collection.objects.all())
+    specimen_prefix = forms.ModelChoiceField(queryset=Locality.objects.all())
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        active_users = User.objects.filter(accession_series__is_active=True).distinct()
+        self.fields['user'].queryset = active_users.order_by('username')
+        self.fields['user'].help_text = "Only users with active accession number series are shown."
+        self.fields['user'].label_from_instance = self.user_label_with_remaining
+
+    def user_label_with_remaining(self, user):
+        series = user.accession_series.filter(is_active=True).first()
+        if series:
+            remaining = series.end_at - series.current_number + 1
+            return f"{user.get_full_name() or user.username} ({remaining} accessions available)"
+        return user.get_full_name() or user.username
+
+class AccessionNumberSeriesAdminForm(forms.ModelForm):
+    count = forms.IntegerField(
+        label="Count",
+        min_value=1,
+        required=True,
+        help_text="Number of accession numbers to generate.",
+    )
+
+    class Meta:
+        model = AccessionNumberSeries
+        fields = ['user', 'start_from', 'current_number', 'is_active']  # exclude 'count'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        from django.contrib.auth import get_user_model
+        import json
+        from .models import AccessionNumberSeries
+        User = get_user_model()
+
+        # Always add count to the form manually
+        self.fields['count'] = forms.IntegerField(
+            label="Count",
+            min_value=1,
+            required=True,
+            help_text="Number of accession numbers to generate or total range size."
+        )
+
+        if self.instance.pk:
+            # Change view: show disabled count value
+            total = (
+                self.instance.end_at - self.instance.start_from + 1
+                if self.instance.end_at and self.instance.start_from
+                else 0
+            )
+            self.fields['count'].initial = total
+            self.fields['count'].disabled = True
+        else:
+            # Add view: make start_from and current_number readonly
+            for field_name in ['start_from', 'current_number']:
+                if field_name in self.fields:
+                    self.fields[field_name].widget.attrs['readonly'] = True
+            self.fields['is_active'].initial = True
+            self.fields['is_active'].widget = forms.HiddenInput()
+            
+        # Inject JS data for user field
+        if 'user' in self.fields:
+            mary_series = AccessionNumberSeries.objects.filter(user__username__iexact='mary').order_by('-end_at').first()
+            shared_series = AccessionNumberSeries.objects.exclude(user__username__iexact='mary').order_by('-end_at').first()
+
+            series_map = {
+                "mary": mary_series.end_at + 1 if mary_series and mary_series.end_at else 1_000_000,
+                "shared": shared_series.end_at + 1 if shared_series and shared_series.end_at else 1
+            }
+
+            self.fields['user'].widget.attrs['data-series-starts'] = json.dumps(series_map)
+            self.fields['user'].label_from_instance = lambda obj: obj.username  # ensure username shown
+
+    def _build_series_map(self):
+        series_map = {}
+        for user in User.objects.all():
+            qs = AccessionNumberSeries.objects.filter(user=user).order_by('-end_at')
+            base = 1_000_000 if user.username.lower() == 'mary' else 1
+
+            if qs.exists() and qs.first().end_at is not None:
+                next_start = qs.first().end_at + 1
+            else:
+                next_start = base
+
+            series_map[user.username.lower()] = next_start
+            self.fields['user'].widget.attrs['data-series-starts'] = json.dumps({
+                "mary": 1_000_000,
+                "default": 1
+            })
+            self.fields['user'].label_from_instance = lambda obj: obj.username
+
+        return json.dumps(series_map)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        user = cleaned_data.get("user")
+
+        if not self.instance.pk and user:
+            from .models import AccessionNumberSeries
+            if AccessionNumberSeries.objects.filter(user=user, is_active=True).exists():
+                self.add_error("user", "This user already has an active accession number series.")
+        return cleaned_data
+
+    def save(self, commit=True):
+        if not self.instance.pk:
+            count = self.cleaned_data.get("count")
+            if count:
+                self.instance.end_at = self.instance.start_from + count - 1
+        return super().save(commit=commit)
+        
 class AccessionRowWidget(s2forms.ModelSelect2Widget):
     search_fields = [
         "accession__collection__description__icontains",
@@ -278,3 +400,4 @@ class PreparationMediaUploadForm(forms.Form):
         required=False,
         widget=forms.Textarea(attrs={'rows': 2})
     )
+    

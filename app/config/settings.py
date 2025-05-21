@@ -181,16 +181,19 @@ USE_I18N = True
 
 USE_TZ = True
 
+# Set false for Pythonanywhere and similar non-Docker environments
+USE_REDIS = os.getenv("USE_REDIS", "false").lower() == "true"
+
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
     },
     'select2': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': 'redis://redis:6379',
+        'BACKEND': 'django_redis.cache.RedisCache' if USE_REDIS else 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'redis://redis:6379' if USE_REDIS else '',
         'OPTIONS': {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-        }
+        } if USE_REDIS else {},
     }
 }
 
