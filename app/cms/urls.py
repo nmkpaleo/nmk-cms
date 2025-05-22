@@ -22,6 +22,11 @@ from cms.views import (
 )
 from .views import PreparationMediaUploadView
 
+# urls.py
+from cms.views import AccessionWizard
+from cms.forms import AccessionForm
+
+
 urlpatterns = [
     
     path('fieldslip/new/', fieldslip_create, name='fieldslip-create'),
@@ -41,10 +46,10 @@ urlpatterns = [
     path('accession/<int:accession_id>/add-geology/', AddGeologyToAccessionView, name='add-geology'),
     path('accession/<int:accession_id>/add-reference/', AddReferenceToAccessionView, name='add-reference'),
     path('accession/<int:accession_id>/upload_media/', upload_media, name='upload-media'),
-    path('accessionrow/<int:pk>/', AccessionRowDetailView.as_view(), name='accessionrow-detail'),
+    path("accession/generate-batch/", generate_accession_batch_view, name="generate-accession-batch"),
     path('accessionrow/<int:accession_row_id>/add-specimen/', AddSpecimenToAccessionRowView, name='add-specimen'),
     path('accessionrow/<int:accession_row_id>/add-identification/', AddIdentificationToAccessionRowView, name='add-identification'),
-    path("accession/generate-batch/", generate_accession_batch_view, name="generate-accession-batch"),
+    path('accession-wizard/', AccessionWizard.as_view([AccessionForm]), name='accession-wizard'),
 
     path('reference/', ReferenceListView.as_view(), name='reference-list'),
     path('reference/<int:pk>/', ReferenceDetailView.as_view(), name='reference-detail'),
