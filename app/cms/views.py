@@ -35,6 +35,7 @@ from cms.models import (Accession, AccessionNumberSeries,
                      Preparation, PreparationMedia, Reference, SpecimenGeology, Taxon , Locality)
 from cms.resources import FieldSlipResource
 from cms.utils import generate_accessions_from_series
+from formtools.wizard.views import SessionWizardView
 
 class PreparationAccessMixin(UserPassesTestMixin):
     def test_func(self):
@@ -320,6 +321,14 @@ class AccessionRowDetailView(DetailView):
         context['identifications'] = Identification.objects.filter(accession_row=self.object)
         return context
 
+class AccessionWizard(SessionWizardView):
+    form_list = [AccessionForm]
+    template_name = 'cms/accession_wizard.html'
+
+    def done(self, form_list, **kwargs):
+        accession = form_list[0].save()
+        return redirect('accession-detail', pk=accession.pk)
+    
 class ReferenceDetailView(DetailView):
     model = Reference
     template_name = 'cms/reference_detail.html'
