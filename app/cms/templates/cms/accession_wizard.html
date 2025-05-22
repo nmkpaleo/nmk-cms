@@ -1,0 +1,25 @@
+{% extends "base_generic.html" %}
+{% block content %}
+  <div class="w3-container w3-card w3-white w3-round-large w3-padding-large">
+    <h2>Step {{ wizard.steps.step1 }} of {{ wizard.steps.count }}</h2>
+    <form action="" method="post">{% csrf_token %}
+      {{ wizard.management_form }}
+      {% for field in wizard.form %}
+        <div class="w3-margin-bottom">
+          <label class="w3-text-blue"><b>{{ field.label }}</b></label>
+          {{ field }}
+          {% if field.errors %}
+            <div class="w3-text-red">{{ field.errors }}</div>
+          {% endif %}
+        </div>
+      {% endfor %}
+
+      <div class="w3-margin-top">
+        {% if wizard.steps.prev %}
+          <button name="wizard_goto_step" type="submit" value="{{ wizard.steps.prev }}" class="w3-button w3-gray">Previous</button>
+        {% endif %}
+        <button type="submit" class="w3-button w3-green">Next</button>
+      </div>
+    </form>
+  </div>
+{% endblock %}
