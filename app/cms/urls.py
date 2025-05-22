@@ -22,10 +22,8 @@ from cms.views import (
 )
 from .views import PreparationMediaUploadView
 
-# urls.py
+from cms.forms import AccessionForm, SpecimenCompositeForm
 from cms.views import AccessionWizard
-from cms.forms import AccessionForm
-
 
 urlpatterns = [
     
@@ -49,7 +47,7 @@ urlpatterns = [
     path("accession/generate-batch/", generate_accession_batch_view, name="generate-accession-batch"),
     path('accessionrow/<int:accession_row_id>/add-specimen/', AddSpecimenToAccessionRowView, name='add-specimen'),
     path('accessionrow/<int:accession_row_id>/add-identification/', AddIdentificationToAccessionRowView, name='add-identification'),
-    path('accession-wizard/', AccessionWizard.as_view([AccessionForm]), name='accession-wizard'),
+    path('accession-wizard/', AccessionWizard.as_view([AccessionForm, SpecimenCompositeForm]), name='accession-wizard'),
 
     path('reference/', ReferenceListView.as_view(), name='reference-list'),
     path('reference/<int:pk>/', ReferenceDetailView.as_view(), name='reference-detail'),

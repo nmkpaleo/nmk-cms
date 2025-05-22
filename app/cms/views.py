@@ -1,10 +1,11 @@
 import csv
-from django.db.models.functions import Concat
+from django.db import transaction
 from django.db.models import Value, CharField
-from django.views.decorators.csrf import csrf_exempt
+from django.db.models.functions import Concat
 from django.http import JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.csrf import csrf_exempt
 from django_filters.views import FilterView
 from .filters import AccessionFilter, PreparationFilter
 
@@ -26,13 +27,15 @@ from django.views.generic import ListView, DetailView, CreateView, UpdateView, D
 from cms.forms import (AccessionBatchForm, AccessionCommentForm, AccessionForm, AccessionFieldSlipForm, AccessionGeologyForm,
                     AccessionRowIdentificationForm, AccessionRowSpecimenForm,
                     AccessionReferenceForm, AddAccessionRowForm, FieldSlipForm,
-                    MediaUploadForm, NatureOfSpecimenForm, PreparationForm, PreparationApprovalForm,
+                    MediaUploadForm, NatureOfSpecimenForm, PreparationForm,
+                    PreparationApprovalForm, PreparationMediaUploadForm,
+                    SpecimenCompositeForm, ReferenceForm, LocalityForm)
 
-                    PreparationMediaUploadForm, ReferenceForm, LocalityForm)
 from cms.models import (Accession, AccessionNumberSeries,
                      AccessionFieldSlip, AccessionReference, AccessionRow,
                      Comment, FieldSlip, Media, NatureOfSpecimen, Identification,
                      Preparation, PreparationMedia, Reference, SpecimenGeology, Taxon , Locality)
+
 from cms.resources import FieldSlipResource
 from cms.utils import generate_accessions_from_series
 from formtools.wizard.views import SessionWizardView
@@ -322,11 +325,42 @@ class AccessionRowDetailView(DetailView):
         return context
 
 class AccessionWizard(SessionWizardView):
-    form_list = [AccessionForm]
+    form_list = [AccessionForm, SpecimenCompositeForm]
     template_name = 'cms/accession_wizard.html'
 
     def done(self, form_list, **kwargs):
-        accession = form_list[0].save()
+        accession_form = form_list[0]
+        specimen_form = form_list[1]
+        user = self.request.user
+
+        with transaction.atomic():
+            # Step 1: Save Accession
+            accession = accession_form.save(commit=False)
+            accession.accessioned_by = user
+            accession.save()
+
+            # Step 2: Create AccessionRow
+            row = AccessionRow.objects.create(
+                accession=accession,
+                storage=specimen_form.cleaned_data['storage'],
+            )
+
+            # Create NatureOfSpecimen
+            NatureOfSpecimen.objects.create(
+                accession_row=row,
+                element=specimen_form.cleaned_data['element'],
+                side=specimen_form.cleaned_data['side'],
+                condition=specimen_form.cleaned_data['condition'],
+                fragments=specimen_form.cleaned_data['fragments'] or 0,
+            )
+
+            # Create Identification
+            Identification.objects.create(
+                accession_row=row,
+                taxon=specimen_form.cleaned_data['taxon'],
+                identified_by=specimen_form.cleaned_data['identified_by'],
+            )
+
         return redirect('accession-detail', pk=accession.pk)
     
 class ReferenceDetailView(DetailView):

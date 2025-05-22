@@ -5,9 +5,9 @@ from django_select2.forms import ModelSelect2Widget, Select2Widget
 from django.contrib.auth.models import User
 
 from .models import (Accession, AccessionFieldSlip, AccessionNumberSeries, AccessionReference,
-                     AccessionRow, Collection, Comment, FieldSlip, Identification,
+                     AccessionRow, Collection, Comment, Element, FieldSlip, Identification,
                      Locality, Media,
-                     NatureOfSpecimen, Preparation, Reference, SpecimenGeology)
+                     NatureOfSpecimen, Person, Preparation, Reference, SpecimenGeology)
 
 import json
 
@@ -401,3 +401,11 @@ class PreparationMediaUploadForm(forms.Form):
         widget=forms.Textarea(attrs={'rows': 2})
     )
     
+class SpecimenCompositeForm(forms.Form):
+    storage = forms.ModelChoiceField(queryset=AccessionRow._meta.get_field('storage').related_model.objects.all(), required=False)
+    element = forms.ModelChoiceField(queryset=Element.objects.all(), required=True)
+    side = forms.CharField(max_length=50, required=False)
+    condition = forms.CharField(max_length=255, required=False)
+    fragments = forms.IntegerField(min_value=0, required=False)
+    taxon = forms.CharField(max_length=255, required=False)
+    identified_by = forms.ModelChoiceField(queryset=Person.objects.all(), required=False)
