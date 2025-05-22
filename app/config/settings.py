@@ -67,6 +67,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "django_filters",
     'django_userforeignkey',
+    'formtools',
     'import_export' ,
     'allauth',
     'allauth.account',
