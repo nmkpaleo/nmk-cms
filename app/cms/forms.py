@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 from django_select2 import forms as s2forms
 from django_select2.forms import ModelSelect2Widget, Select2Widget
 from django.contrib.auth.models import User
+from django.urls import reverse_lazy
 
 from .models import (Accession, AccessionFieldSlip, AccessionNumberSeries, AccessionReference,
                      AccessionRow, Collection, Comment, Element, FieldSlip, Identification,
@@ -146,14 +147,12 @@ class AccessionRowWidget(s2forms.ModelSelect2Widget):
         suffix = obj.specimen_suffix or "-"
         return f"{prefix} {number}{suffix} ({collection})"
 
-class FieldSlipWidget(s2forms.ModelSelect2Widget):
+class FieldSlipWidget(ModelSelect2Widget):
     search_fields = ["field_number__icontains", "verbatim_locality__icontains"]
+    url = reverse_lazy("fieldslip-autocomplete")
 
     def label_from_instance(self, obj):
-        """
-        Custom label for dropdown: Show field_number + verbatim_locality
-        """
-        return f"{obj.field_number} - {obj.verbatim_locality if obj.verbatim_locality else 'No locality'}"
+        return f"{obj.field_number} - {obj.verbatim_locality or 'No locality'}"
 
 class ElementWidget(s2forms.ModelSelect2Widget):
     search_fields = [
