@@ -661,7 +661,13 @@ class Media(BaseModel):
     accession_row = models.ForeignKey('AccessionRow', null=True, blank=True, on_delete=models.CASCADE, related_name='media', help_text="Accession row this media belongs to")    
     file_name = models.CharField(max_length=255, null=True, blank=True, help_text="The name of the media file")
     type = models.CharField(max_length=50, null=True, blank=True, choices=MEDIA_TYPE_CHOICES, help_text="Type of the media (e.g., photo, video, etc.)")
-    format = models.CharField(max_length=50, null=True, blank=True, choices=MEDIA_FORMAT_CHOICES, help_text="File format of the media (valid_formats are 'jpg', 'jpeg', 'png', 'gif', 'tiff' and 'bmp'")
+    format = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        choices=MEDIA_FORMAT_CHOICES,
+        help_text="File format of the media (supported formats: 'jpg', 'jpeg', 'png', 'gif', 'bmp')"
+    )
     media_location = models.ImageField(upload_to='media/')
     license = models.CharField(max_length=30, choices=LICENSE_CHOICES
                                ,default='CC0'  # Default to public domain
