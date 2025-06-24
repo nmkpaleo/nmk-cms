@@ -1,4 +1,4 @@
-from django.db import transaction
+om django.db import transaction
 from tablib import Dataset
 from .models import (
     Accession, AccessionRow, AccessionReference, NatureOfSpecimen,
@@ -98,3 +98,17 @@ def import_flat_file(file_obj):
                 )
 
     return dataset.height
+
+  def create_specimen_geology(accession, earliest_geological_context,
+                            latest_geological_context):
+    """Create a SpecimenGeology instance.
+
+    The previous version of this helper accepted a ``geological_context_type``
+    argument which no longer exists on the ``SpecimenGeology`` model.  This
+    implementation omits that argument and only saves the required fields.
+    """
+    return SpecimenGeology.objects.create(
+        accession=accession,
+        earliest_geological_context=earliest_geological_context,
+        latest_geological_context=latest_geological_context,
+    )
