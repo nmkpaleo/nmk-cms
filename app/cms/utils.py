@@ -5,7 +5,7 @@ def generate_accessions_from_series(series_user, count, collection, specimen_pre
     try:
         series = AccessionNumberSeries.objects.get(user=series_user, is_active=True)
     except AccessionNumberSeries.DoesNotExist:
-        raise ValueError("No active accession number series found for user {series_user.username}.")
+        raise ValueError(f"No active accession number series found for user {series_user.username}.")
 
     start = series.current_number
     end = start + count - 1
