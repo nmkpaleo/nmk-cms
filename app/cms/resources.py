@@ -608,8 +608,18 @@ class SpecimenGeologyResource(resources.ModelResource):
 
     class Meta:
         model = SpecimenGeology
-        fields = ('id', 'accession', 'earliest_geological_context', 'latest_geological_context', 'geological_context_type')
-        export_order = ('id', 'accession', 'earliest_geological_context', 'latest_geological_context', 'geological_context_type')
+        fields = (
+            'id',
+            'accession',
+            'earliest_geological_context',
+            'latest_geological_context',
+        )
+        export_order = (
+            'id',
+            'accession',
+            'earliest_geological_context',
+            'latest_geological_context',
+        )
 
 class GeologicalContextResource(resources.ModelResource):
     parent_geological_context = fields.Field(
