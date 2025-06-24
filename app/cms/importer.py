@@ -1,4 +1,4 @@
-om django.db import transaction
+from django.db import transaction
 from tablib import Dataset
 from .models import (
     Accession, AccessionRow, AccessionReference, NatureOfSpecimen,
@@ -99,7 +99,7 @@ def import_flat_file(file_obj):
 
     return dataset.height
 
-  def create_specimen_geology(accession, earliest_geological_context,
+def create_specimen_geology(accession, earliest_geological_context,
                             latest_geological_context):
     """Create a SpecimenGeology instance.
 
