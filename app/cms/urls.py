@@ -12,7 +12,7 @@ from cms.views import (
     AddSpecimenToAccessionRowView,
     AddReferenceToAccessionView,
     create_fieldslip_for_accession,
-    FieldSlipAutocompleteView, fieldslip_create, fieldslip_edit, FieldSlipDetailView, FieldSlipListView,
+    FieldSlipAutocomplete, fieldslip_create, fieldslip_edit, FieldSlipDetailView, FieldSlipListView,
     fieldslip_export, fieldslip_import, generate_accession_batch_view,
     AccessionListView, AccessionDetailView,
     ReferenceListView, ReferenceDetailView, reference_create, reference_edit, LocalityListView,LocalityDetailView,locality_edit,
@@ -23,7 +23,9 @@ from cms.views import (
 )
 from .views import PreparationMediaUploadView
 
-from cms.forms import AccessionForm, SpecimenCompositeForm, AccessionFieldSlipForm
+from cms.forms import (AccessionForm,
+                       AccessionNumberSelectForm,
+                       SpecimenCompositeForm)
 from cms.views import AccessionWizard
 
 from django_select2.views import AutoResponseView
@@ -51,9 +53,8 @@ urlpatterns = [
     path('accessionrow/<int:pk>/', AccessionRowDetailView.as_view(), name='accessionrow-detail'),
     path('accessionrow/<int:accession_row_id>/add-specimen/', AddSpecimenToAccessionRowView, name='add-specimen'),
     path('accessionrow/<int:accession_row_id>/add-identification/', AddIdentificationToAccessionRowView, name='add-identification'),
-    path('accession-wizard/', AccessionWizard.as_view([AccessionForm,
-                                                       SpecimenCompositeForm,
-                                                       AccessionFieldSlipForm]), name='accession-wizard'),
+    path('accession-wizard/', AccessionWizard.as_view([AccessionNumberSelectForm, AccessionForm,
+                                                       SpecimenCompositeForm]), name='accession-wizard'),
 
     path('reference/', ReferenceListView.as_view(), name='reference-list'),
     path('reference/<int:pk>/', ReferenceDetailView.as_view(), name='reference-detail'),
@@ -82,13 +83,7 @@ urlpatterns += [
 urlpatterns += [
     path("preparation/<int:pk>/upload-media-form/", PreparationMediaUploadView.as_view(), name="preparation-upload-media-form"),
 ]
-urlpatterns += [
-    path("select2/fieldslip-autocomplete/", FieldSlipAutocompleteView.as_view(), name="fieldslip-autocomplete"),
-]
-urlpatterns += [
-    path("select2/fieldslip-autocomplete/", AutoResponseView.as_view(), name="fieldslip-autocomplete"),
-]
 
 urlpatterns += [
-    path("select2/fields/auto.json", AutoResponseView.as_view(), name="django_select2-json"),
+    path("autocomplete/fieldslip/", FieldSlipAutocomplete.as_view(), name="fieldslip-autocomplete"),
 ]

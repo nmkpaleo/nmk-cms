@@ -1,3 +1,4 @@
+from dal import autocomplete
 from django import forms
 from django.contrib.auth import get_user_model
 from django_select2 import forms as s2forms
@@ -33,6 +34,14 @@ class AccessionBatchForm(forms.Form):
             remaining = series.end_at - series.current_number + 1
             return f"{user.get_full_name() or user.username} ({remaining} accessions available)"
         return user.get_full_name() or user.username
+
+class AccessionNumberSelectForm(forms.Form):
+    accession_number = forms.ChoiceField(label="Select Accession Number", choices=[])
+    
+    def __init__(self, *args, **kwargs):
+        available_numbers = kwargs.pop("available_numbers", [])
+        super().__init__(*args, **kwargs)
+        self.fields["accession_number"].choices = [(n, n) for n in available_numbers]
 
 class AccessionNumberSeriesAdminForm(forms.ModelForm):
     count = forms.IntegerField(
@@ -147,9 +156,38 @@ class AccessionRowWidget(s2forms.ModelSelect2Widget):
         suffix = obj.specimen_suffix or "-"
         return f"{prefix} {number}{suffix} ({collection})"
 
-class FieldSlipWidget(ModelSelect2Widget):
+class AccessionMediaUploadForm(forms.ModelForm):
+    class Meta:
+        model = Media
+        fields = ['media_location', 'type', 'license', 'rights_holder']
+        widgets = {
+            'media_location': forms.ClearableFileInput(attrs={'multiple': False}),
+        }
+
+class FieldSlipWidget(autocomplete.ModelSelect2):
     search_fields = ["field_number__icontains", "verbatim_locality__icontains"]
-    url = reverse_lazy("fieldslip-autocomplete")
+
+    def __init__(self, *args, **kwargs):
+        kwargs["url"] = reverse_lazy("fieldslip-autocomplete")
+        kwargs["attrs"] = {
+            "data-placeholder": "Search Field Slips...",
+            "data-minimum-input-length": 1,
+        }
+        super().__init__(*args, **kwargs)
+
+    class Media:
+        # ONLY load DAL’s compatible JS and CSS
+        js = (
+            "autocomplete_light/jquery.init.js",
+            "autocomplete_light/autocomplete_light.js",
+            "autocomplete_light/autocomplete.init.js",
+        )
+        css = {
+            'screen': [
+                'autocomplete_light/select2.css',
+                'autocomplete_light/autocomplete.css',
+            ]
+        }
 
     def label_from_instance(self, obj):
         return f"{obj.field_number} - {obj.verbatim_locality or 'No locality'}"
@@ -175,9 +213,22 @@ class AccessionForm(forms.ModelForm):
         model = Accession
         fields = [
             'collection', 'specimen_prefix', 'specimen_no', 'accessioned_by',
-            'type_status', 'comment', 'is_published'
+            'type_status', 'comment',
         ]
+        widgets = {
+            'accessioned_by': forms.HiddenInput(),
+#            'specimen_no': forms.TextInput(attrs={'readonly': True, 'disabled': True}),  # still display, not editable
+            'specimen_no': forms.TextInput(attrs={'readonly': True}),
+        }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Make 'specimen_no' disabled (visible but not editable)
+#        self.fields['specimen_no'].disabled = True
+        # Custom label for Locality field in dropdown
+        self.fields['specimen_prefix'].label_from_instance = lambda obj: f"{obj.abbreviation} - {obj.name}"
+        
 class AccessionCommentForm(forms.ModelForm):
     class Meta:
         model = Comment
@@ -188,7 +239,8 @@ class AccessionFieldSlipForm(forms.ModelForm):
         model = AccessionFieldSlip
         fields = ["fieldslip", "notes"]
         widgets = {
-            "fieldslip": FieldSlipWidget,}
+            "fieldslip": FieldSlipWidget(url=reverse_lazy("fieldslip-autocomplete")),
+        }
 
 class AccessionGeologyForm(forms.ModelForm):
     class Meta:
@@ -401,7 +453,12 @@ class PreparationMediaUploadForm(forms.Form):
     )
     
 class SpecimenCompositeForm(forms.Form):
-    storage = forms.ModelChoiceField(queryset=AccessionRow._meta.get_field('storage').related_model.objects.all(), required=False)
+    storage = forms.ModelChoiceField(
+        queryset=AccessionRow._meta.get_field('storage').related_model.objects.all(),
+        required=True,
+        empty_label="Select a storage location",
+    )
+
     element = forms.ModelChoiceField(queryset=Element.objects.all(), required=True)
     side = forms.CharField(max_length=50, required=False)
     condition = forms.CharField(max_length=255, required=False)

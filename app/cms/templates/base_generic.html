@@ -1,16 +1,17 @@
 {% load static %}
 <!doctype html>
 <html lang="en">
-  <head>    
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
     <!-- Add W3.CSS -->
     <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
 
     <!-- Add jQuery (Required for Select2) -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
-    <!-- Ensure Select2 JS is included -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
-  
+    {{ form.media.css }}
     {% block script %}{% endblock %}
     <!-- Add additional CSS in static file -->
     {% load static %}
@@ -18,11 +19,18 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css">
 
+    <style>
+      .select2-container {
+        width: 100% !important;
+        z-index: 10000; /* ensure it appears above wizard overlay if any */
+      }
+      .select2-dropdown {
+        z-index: 10000;
+      }
+    </style>
     {% block title %}
       <title>NMK CMS</title>
     {% endblock %}
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
   
   </head>
 
@@ -97,7 +105,9 @@
 
     <script src="{% static 'javascript.js' %}"></script>
 
-    {% block extra_scripts %}{% endblock %}
+    {% block extra_scripts %}
+      {{ form.media.js }}
+    {% endblock %}
 
   </body>
 </html>

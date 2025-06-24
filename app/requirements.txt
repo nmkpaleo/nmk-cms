@@ -14,6 +14,7 @@ pillow>=10.4.0
 #cryptography==36.0.1
 #defusedxml==0.7.1
 django-allauth>=0.49.0
+django-autocomplete-light>=3.9.2
 django-crum>=0.7
 django-filter>=25.1
 django-formtools>=2.5.1

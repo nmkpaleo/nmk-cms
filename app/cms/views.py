@@ -1,4 +1,5 @@
 import csv
+from dal import autocomplete
 from django import forms
 from django.db import transaction
 from django.db.models import Value, CharField
@@ -8,12 +9,13 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from django_filters.views import FilterView
-from django_select2.views import ModelSelect2View
 
 from .filters import AccessionFilter, PreparationFilter
 
 from django.views.generic import DetailView
+from django.core.files.storage import FileSystemStorage
 from django.core.paginator import Paginator
+from django.conf import settings
 
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
@@ -27,8 +29,11 @@ from django.urls import reverse_lazy, reverse
 from django.utils.timezone import now
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, FormView
 
-from cms.forms import (AccessionBatchForm, AccessionCommentForm, AccessionForm, AccessionFieldSlipForm, AccessionGeologyForm,
-                    AccessionRowIdentificationForm, AccessionRowSpecimenForm,
+from cms.forms import (AccessionBatchForm, AccessionCommentForm,
+                    AccessionForm, AccessionFieldSlipForm, AccessionGeologyForm,
+                    AccessionNumberSelectForm,
+                    AccessionRowIdentificationForm, AccessionMediaUploadForm,
+                    AccessionRowSpecimenForm,
                     AccessionReferenceForm, AddAccessionRowForm, FieldSlipForm,
                     MediaUploadForm, NatureOfSpecimenForm, PreparationForm,
                     PreparationApprovalForm, PreparationMediaUploadForm,
@@ -44,14 +49,15 @@ from cms.resources import FieldSlipResource
 from cms.utils import generate_accessions_from_series
 from formtools.wizard.views import SessionWizardView
 
-class FieldSlipAutocompleteView(ModelSelect2View):
+class FieldSlipAutocomplete(autocomplete.Select2QuerySetView):
     def get_queryset(self):
-        if not self.request.user.is_authenticated:
-            return FieldSlip.objects.none()
-
         qs = FieldSlip.objects.all()
         if self.q:
-            qs = qs.filter(field_number__icontains=self.q) | qs.filter(verbatim_locality__icontains=self.q)
+            qs = qs.filter(
+                field_number__icontains=self.q
+            ) | qs.filter(
+                verbatim_locality__icontains=self.q
+            )
         return qs
     
 class PreparationAccessMixin(UserPassesTestMixin):
@@ -339,49 +345,71 @@ class AccessionRowDetailView(DetailView):
         return context
 
 class AccessionWizard(SessionWizardView):
-    form_list = [AccessionForm, SpecimenCompositeForm, AccessionFieldSlipForm]
+    file_storage = FileSystemStorage(location=settings.MEDIA_ROOT)
+    form_list = [AccessionNumberSelectForm, AccessionForm, SpecimenCompositeForm]
     template_name = 'cms/accession_wizard.html'
 
-    def post(self, *args, **kwargs):
+
+    def get_form_kwargs(self, step=None):
+        kwargs = super().get_form_kwargs(step)
+        if step == '0' or step == 0:
+            user = self.request.user
+            try:
+                series = AccessionNumberSeries.objects.get(user=user, is_active=True)
+                used = set(
+                    Accession.objects.filter(
+                        accessioned_by=user,
+                        specimen_no__gte=series.start_from,
+                        specimen_no__lte=series.end_at
+                    ).values_list('specimen_no', flat=True)
+                )
+                available = [
+                    n for n in range(series.start_from, series.end_at + 1)
+                    if n not in used
+                ][:10]  # Limit to 10 available numbers
+            except AccessionNumberSeries.DoesNotExist:
+                available = []
+            kwargs["available_numbers"] = available
+        return kwargs
+
+    def get_form_initial(self, step):
+        initial = super().get_form_initial(step) or {}
+        # Pass accession_number from step 0 to step 1
+        if step == '1':
+            step0_data = self.get_cleaned_data_for_step('0') or {}
+            if 'accession_number' in step0_data:
+                initial['specimen_no'] = step0_data['accession_number']
+        # Pass specimen_no from step 1 to step 2 if needed
+        if step == '2':
+            step1_data = self.get_cleaned_data_for_step('1') or {}
+            if 'specimen_no' in step1_data:
+                initial['specimen_no'] = step1_data['specimen_no']
+        return initial
+
+    def process_step(self, form):
+        """
+        Save cleaned data for each step in storage.
+        """
         step = self.steps.current
-        request = self.request
-
-        form = self.get_form(data=request.POST, files=request.FILES)
-
-        if form.is_valid():
-            cleaned = {}
-            for key, value in form.cleaned_data.items():
-                # Convert model instances to their pk
-                if hasattr(value, 'pk'):
-                    cleaned[key] = value.pk
-                else:
-                    cleaned[key] = value
-
-            # Store by step
-            step_key = f"step_{step}_data"
-            self.storage.extra_data[step_key] = cleaned
-            print(f"📦 Saved Step {step} data:", cleaned)
-
-        return super().post(*args, **kwargs)
-
-    def serialize_form_data(self, step, cleaned_data):
-        # Convert cleaned_data into Django’s expected step_data format
-        from django.http import QueryDict
-
-        qdict = QueryDict('', mutable=True)
-        for k, v in cleaned_data.items():
-            qdict[k] = str(v) if v is not None else ''
-        return qdict
+        cleaned = {}
+        for key, value in form.cleaned_data.items():
+            # Store PK for model instances, else value
+            if hasattr(value, 'pk'):
+                cleaned[key] = value.pk
+            else:
+                cleaned[key] = value
+        self.storage.extra_data[f"step_{step}_data"] = cleaned
+        return super().process_step(form)
 
     def get_form(self, step=None, data=None, files=None):
+        """
+        Restore initial values for fields from storage if available.
+        """
         form = super().get_form(step, data, files)
-
         if step and data is None:
-            restored = self.storage.extra_data.get(f"step_{step}_data")
-            print(f"🎯 Restoring Step {step} from extra_data:", restored)
-
-            if restored:
-                for key, value in restored.items():
+            initial = self.get_form_initial(step)
+            if initial:
+                for key, value in initial.items():
                     if key in form.fields:
                         field = form.fields[key]
                         if isinstance(field, forms.ModelChoiceField):
@@ -391,25 +419,29 @@ class AccessionWizard(SessionWizardView):
                                 pass
                         else:
                             form.fields[key].initial = value
-
         return form
 
     def done(self, form_list, **kwargs):
-        accession_form = form_list[0]
-        specimen_form = form_list[1]
-        fieldslip_form = form_list[2]
+        """
+        Finalize wizard: create Accession, AccessionRow, NatureOfSpecimen, and Identification.
+        """
+        select_form = form_list[0]
+        accession_form = form_list[1]
+        specimen_form = form_list[2]
         user = self.request.user
-
+        accession_number = select_form.cleaned_data['accession_number']
         with transaction.atomic():
+
             accession = accession_form.save(commit=False)
             accession.accessioned_by = user
+            accession.specimen_no = accession_number  # <-- Set value from wizard step 1!
             accession.save()
-            storage_pk = specimen_form.cleaned_data['storage']
-            storage = Storage.objects.get(pk=storage_pk) if storage_pk else None
+    
+            storage = specimen_form.cleaned_data.get('storage')
 
             row = AccessionRow.objects.create(
                 accession=accession,
-                storage = storage
+                storage=storage
             )
 
             NatureOfSpecimen.objects.create(
@@ -417,20 +449,13 @@ class AccessionWizard(SessionWizardView):
                 element=specimen_form.cleaned_data['element'],
                 side=specimen_form.cleaned_data['side'],
                 condition=specimen_form.cleaned_data['condition'],
-                fragments=specimen_form.cleaned_data['fragments'] or 0,
+                fragments=specimen_form.cleaned_data.get('fragments') or 0,
             )
 
             Identification.objects.create(
                 accession_row=row,
                 taxon=specimen_form.cleaned_data['taxon'],
                 identified_by=specimen_form.cleaned_data['identified_by'],
-            )
-
-            # Link to FieldSlip
-            AccessionFieldSlip.objects.create(
-                accession=accession,
-                fieldslip=fieldslip_form.cleaned_data['fieldslip'],
-                notes=fieldslip_form.cleaned_data['notes'],
             )
 
         return redirect('accession-detail', pk=accession.pk)
