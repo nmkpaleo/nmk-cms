@@ -335,7 +335,7 @@ class ReferenceListView(ListView):
 class LocalityListView(ListView):
     model = Locality
     template_name = 'cms/locality_list.html'
-    context_object_name = 'localitys'
+    context_object_name = 'localities'
     paginate_by = 10
 
 class LocalityDetailView(DetailView):
