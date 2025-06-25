@@ -148,3 +148,15 @@ class FieldSlipFilter(django_filters.FilterSet):
             'verbatim_element',
             'verbatim_horizon',
         ]
+
+
+class LocalityFilter(django_filters.FilterSet):
+    name = django_filters.CharFilter(
+        lookup_expr="icontains",
+        label="Name",
+        widget=forms.TextInput(attrs={"class": "w3-input"})
+    )
+
+    class Meta:
+        model = Locality
+        fields = ["name"]
