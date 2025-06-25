@@ -6,7 +6,7 @@ from django.http import JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
 from django_filters.views import FilterView
-from .filters import AccessionFilter, PreparationFilter
+from .filters import AccessionFilter, PreparationFilter, ReferenceFilter
 
 from django.views.generic import DetailView
 from django.core.paginator import Paginator
@@ -325,11 +325,12 @@ class ReferenceDetailView(DetailView):
     template_name = 'cms/reference_detail.html'
     context_object_name = 'reference'
 
-class ReferenceListView(ListView):
+class ReferenceListView(FilterView):
     model = Reference
     template_name = 'cms/reference_list.html'
     context_object_name = 'references'
     paginate_by = 10
+    filterset_class = ReferenceFilter
 
 
 class LocalityListView(ListView):
