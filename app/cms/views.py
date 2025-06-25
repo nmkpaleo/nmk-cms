@@ -240,7 +240,6 @@ class FieldSlipListView(LoginRequiredMixin, UserPassesTestMixin, FilterView):
     template_name = 'cms/fieldslip_list.html'
     context_object_name = 'fieldslips'
     paginate_by = 10
-    filterset_class = FieldSlipFilter
 
     def test_func(self):
         user = self.request.user
@@ -341,8 +340,10 @@ class ReferenceListView(FilterView):
 class LocalityListView(ListView):
     model = Locality
     template_name = 'cms/locality_list.html'
+
     context_object_name = 'localities'
     paginate_by = 10
+
 
 class LocalityDetailView(DetailView):
     model = Locality
@@ -527,7 +528,7 @@ class PreparationListView(LoginRequiredMixin, PreparationAccessMixin, FilterView
     model = Preparation
     template_name = "cms/preparation_list.html"
     context_object_name = "preparations"
-    paginate_by = 20
+    paginate_by = 2
     ordering = ["-created_on"]
     filterset_class = PreparationFilter
 
