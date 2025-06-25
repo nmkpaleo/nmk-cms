@@ -1,4 +1,5 @@
 {% extends "base_generic.html" %}
+{% load user_tags %}
 
 {% block content %}
     
@@ -6,9 +7,11 @@
         <div class="template-detail-container">
             <div class="template-detail-header">
                 <h2 class="template-detail-h2">Locality Detail {{ locality.accession_set.count }} </h2>
+                {% if user.is_superuser or user|has_group:"Collection Managers" %}
                 <a href="{% url 'locality-edit' locality.pk %}" class="edit-icon">
                     Edit Form ✏️
                 </a>
+                {% endif %}
             </div>
             <div class="grid-container">
                 <!-- Field Number Card -->
