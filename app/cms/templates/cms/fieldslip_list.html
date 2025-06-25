@@ -6,11 +6,55 @@
 
 {% block content %}
 
+<div class="w3-container w3-margin-top">
+    <h2>Field Slips</h2>
+
+    <button onclick="toggleAccordion('fieldslipFilterPanel')" class="w3-button w3-block w3-light-grey w3-left-align">
+        🔍 Show/Hide Filters
+    </button>
+
+    <div id="fieldslipFilterPanel" class="w3-hide w3-animate-opacity w3-padding w3-light-grey w3-round-large w3-margin-top">
+        <form method="get">
+            <div class="w3-row-padding">
+                <div class="w3-third">
+                    <label>Collector</label>
+                    {{ filter.form.collector }}
+                </div>
+                <div class="w3-third">
+                    <label>Collection Date</label>
+                    {{ filter.form.collection_date }}
+                </div>
+                <div class="w3-third">
+                    <label>Verbatim Locality</label>
+                    {{ filter.form.verbatim_locality }}
+                </div>
+            </div>
+
+            <div class="w3-row-padding">
+                <div class="w3-third">
+                    <label>Verbatim Taxon</label>
+                    {{ filter.form.verbatim_taxon }}
+                </div>
+                <div class="w3-third">
+                    <label>Verbatim Element</label>
+                    {{ filter.form.verbatim_element }}
+                </div>
+                <div class="w3-third">
+                    <label>Verbatim Horizon</label>
+                    {{ filter.form.verbatim_horizon }}
+                </div>
+            </div>
+
+            <div class="w3-container w3-padding-16">
+                <button type="submit" class="w3-button w3-blue w3-margin-right">Apply Filters</button>
+                <a href="{% url 'fieldslip-list' %}" class="w3-button w3-gray">Clear</a>
+            </div>
+        </form>
+    </div>
+</div>
+
     <div class="template_list_body">
-        <div class="container"></div>
-        
-      
-        
+        <div class="container"></div>       
         </div>
  
         <div class="table-container">
@@ -63,33 +107,21 @@
             </tbody>
             
         </div>
-
-        
-        <script>
-            function searchFieldslips() {
-                const input = document.getElementById('searchInput');
-                const filter = input.value.toLowerCase();
-                const table = document.getElementById('fieldslip-list');
-                const rows = table.getElementsByTagName('tr');
-
-                for (let i = 0; i < rows.length; i++) {
-                    const cells = rows[i].getElementsByTagName('td');
-                    let found = false;
-
-                    for (let j = 0; j < cells.length; j++) {
-                        if (cells[j]) {
-                            const textValue = cells[j].textContent || cells[j].innerText;
-                            if (textValue.toLowerCase().indexOf(filter) > -1) {
-                                found = true;
-                                break;
-                            }
-                        }
-                    }
-
-                    rows[i].style.display = found ? "" : "none";
-                }
-            }
-        </script>
     </div>
 
+{% endblock %}
+
+{% block script %}
+<script>
+function toggleAccordion(id) {
+    var panel = document.getElementById(id);
+    if (panel.classList.contains("w3-show")) {
+        panel.classList.remove("w3-show");
+        panel.classList.add("w3-hide");
+    } else {
+        panel.classList.remove("w3-hide");
+        panel.classList.add("w3-show");
+    }
+}
+</script>
 {% endblock %}
