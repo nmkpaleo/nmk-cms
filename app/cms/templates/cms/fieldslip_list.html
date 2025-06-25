@@ -10,44 +10,13 @@
         <div class="container"></div>
         
       
-        <div class="template_buttons">           
-              <div class="search-bar">
-                <input type="text" id="searchInput" placeholder="Search " >
-     
-                <select id="colors" name="dropdown-list" class="dropdown-list-select">
-                <option value="Field Number" >Field Number</option>
-                <option value="Collector" >Collector</option>
-                <option value="Collection Date" >Collection Date</option>
-                <option value="Discoverer" >Discoverer</option>
-                </select>
-               </div>
-            
-
-           <!--  <div class="actions">
-                <button><a href="{% url 'fieldslip-create' %}">
-                    <div class="icon-text">
-                    <i class="bi bi-plus-square"></i>
-                    <span>New FieldSlip</span>
-                    </div></a>
-                </button>
-    
-               <button><a href="{% url 'fieldslip-import' %}">
-                    <div class="icon-text">
-                        <i class="bi bi-download"></i>
-                        <span>Import</span>
-                    </div></a>
-                </button>-->
-    
-                
-            </div>
+        
         </div>
-
-           <!--<hr class="fieldslip_list_hr">--> 
-           <!-- , Collection Date or Discoverer" onkeyup="searchFieldslips()--> 
+ 
         <div class="table-container">
             <table class="lists_table">
             
-               <!-- <div class="fieldslip_headings">-->
+               
 
                   <th>Field Number</th>
                   <th>Collector</b>
@@ -59,12 +28,12 @@
                     <th class="hidden-mobile">Aerial Photo</b>
                     <th class="hidden-mobile">Edit Fieldslip</b>
                     <th> <button id="toggleColumns">Show More</button></th>
-               <!--</div>--> 
+              
 
      
                 {% for fieldslip in fieldslips %}
 
-               <!-- <div class="fieldslip_inputs">--> 
+     
                    <tr class="template_data">
  
                         <td>

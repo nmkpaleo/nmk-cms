@@ -239,7 +239,7 @@ class FieldSlipListView(ListView):
     model = FieldSlip
     template_name = 'cms/fieldslip_list.html'
     context_object_name = 'fieldslips'
-    paginate_by = 10
+    paginate_by = 4
 
 class AccessionDetailView(DetailView):
     model = Accession
@@ -336,7 +336,7 @@ class LocalityListView(ListView):
     model = Locality
     template_name = 'cms/locality_list.html'
     context_object_name = 'localitys'
-    paginate_by = 10
+    paginate_by = 1
 
 class LocalityDetailView(DetailView):
     model = Locality
@@ -521,7 +521,7 @@ class PreparationListView(LoginRequiredMixin, PreparationAccessMixin, FilterView
     model = Preparation
     template_name = "cms/preparation_list.html"
     context_object_name = "preparations"
-    paginate_by = 20
+    paginate_by = 2
     ordering = ["-created_on"]
     filterset_class = PreparationFilter
 
