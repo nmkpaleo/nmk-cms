@@ -6,7 +6,7 @@ from django.http import JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
 from django_filters.views import FilterView
-from .filters import AccessionFilter, PreparationFilter
+from .filters import AccessionFilter, PreparationFilter, ReferenceFilter
 
 from django.views.generic import DetailView
 from django.core.paginator import Paginator
@@ -325,18 +325,21 @@ class ReferenceDetailView(DetailView):
     template_name = 'cms/reference_detail.html'
     context_object_name = 'reference'
 
-class ReferenceListView(ListView):
+class ReferenceListView(FilterView):
     model = Reference
     template_name = 'cms/reference_list.html'
     context_object_name = 'references'
     paginate_by = 10
+    filterset_class = ReferenceFilter
 
 
 class LocalityListView(ListView):
     model = Locality
     template_name = 'cms/locality_list.html'
-    context_object_name = 'localitys'
-    paginate_by = 1
+
+    context_object_name = 'localities'
+    paginate_by = 10
+
 
 class LocalityDetailView(DetailView):
     model = Locality
@@ -686,21 +689,3 @@ class PreparationMediaUploadView(View):
             "preparation": preparation,
         })
     
-    class PreparationListView(LoginRequiredMixin, FilterView):
-        model = Preparation
-        template_name = "cms/preparation_list.html"
-        context_object_name = "preparations"
-        paginate_by = 20
-        filterset_class = PreparationFilter
-
-        def get_queryset(self):
-            qs = super().get_queryset()
-            return qs.annotate(
-                accession_label=Concat(
-                    'accession_row__accession__specimen_prefix__abbreviation',
-                    Value(' '),
-                    'accession_row__accession__specimen_no',
-                    'accession_row__specimen_suffix',
-                    output_field=CharField()
-                )
-            )

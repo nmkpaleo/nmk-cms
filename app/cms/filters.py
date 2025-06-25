@@ -1,6 +1,6 @@
 import django_filters
 from django import forms
-from .models import Accession, Locality, Preparation
+from .models import Accession, Locality, Preparation, Reference
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -76,3 +76,25 @@ class PreparationFilter(django_filters.FilterSet):
     class Meta:
         model = Preparation
         fields = ['accession_label', 'status', 'approval_status', 'preparator', 'started_on', 'completed_on']
+
+
+class ReferenceFilter(django_filters.FilterSet):
+    first_author = django_filters.CharFilter(
+        lookup_expr='icontains',
+        label='First Author',
+        widget=forms.TextInput(attrs={'class': 'w3-input'})
+    )
+    year = django_filters.CharFilter(
+        lookup_expr='icontains',
+        label='Year',
+        widget=forms.TextInput(attrs={'class': 'w3-input'})
+    )
+    title = django_filters.CharFilter(
+        lookup_expr='icontains',
+        label='Title',
+        widget=forms.TextInput(attrs={'class': 'w3-input'})
+    )
+
+    class Meta:
+        model = Reference
+        fields = ['first_author', 'year', 'title']
