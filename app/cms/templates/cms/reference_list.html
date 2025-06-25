@@ -1,84 +1,89 @@
 {% extends "base_generic.html" %}
+{% load user_tags %}
 
 {% block title %}
-      <title>reference-list</title>
+  <title>reference-list</title>
 {% endblock %}
 
 {% block content %}
 
-<div class="template_list_body">
-    <div class="container"></div>
-    
-    
+  <div class="w3-container w3-margin-top">
+    <h2>References</h2>
 
-        <div class="template_buttons">           
-            <div class="search-bar">
-              <input type="text" id="searchInput" placeholder="Search " >
-    
-              <select id="colors" name="dropdown-list" class="dropdown-list-select">
-              <option value="Field Number" >Reference</option>
-              <option value="Collector" >Collector</option>
-              <option value="Collection Date" >Collection Date</option>
-              <option value="Discoverer" >Discoverer</option>
-              </select>
-             </div>
-          
-    
-       <!--   <div class="actions">
-              <button><a href="{% url 'reference-create' %}">
-                  <div class="icon-text">
-                  <i class="bi bi-plus-square"></i>
-                  <span >New Slip</span>
-                  </div></a>
-              </button>
-    
-              <button><a href="{% url 'fieldslip-import' %}">
-                  <div class="icon-text">
-                      <i class="bi bi-download"></i>
-                      <span>Import</span>
-                  </div></a>
-              </button>
-    
-              <button><a href="{% url 'fieldslip-export' %}"> 
-                  <div class="icon-text">
-                      <i class="bi bi-upload"></i>
-                      <span> Export</span>
-                  </div></a>
-              </button>
-          </div>-->
-      </div>  
+    <button onclick="toggleAccordion('referenceFilterPanel')" class="w3-button w3-block w3-light-grey w3-left-align">
+      🔍 Show/Hide Filters
+    </button>
 
-
-
-            <table class="lists_table">
- 
-                <th>First Author</th>
-                <th>Year</th>
-                <th>Title</th>
-                <th>Edit Reference</th>
-
-                    {% for reference in references %}
-                    <tr >
-                        <td>
-                            
-                            <a href="{% url 'reference-detail' reference.pk %}">{{ reference.first_author }}</a>
-                        </td> 
-                        <td>{{ reference.year}}</td>
-                        <td>{{ reference.title}}</td>
-                        <td>
-                            &emsp;<a href="{% url 'reference-edit' reference.pk %}" class="edit-icon">✏️</a>
-                        </td>
-
-              </tr>
-                                        
-                    {% endfor %}
-                </tbody>
-            </table>
+    <div id="referenceFilterPanel" class="w3-hide w3-animate-opacity w3-padding w3-light-grey w3-round-large w3-margin-top">
+      <form method="get">
+        <div class="w3-row-padding">
+          <div class="w3-third">
+            <label>First Author</label>
+            {{ filter.form.first_author }}
+          </div>
+          <div class="w3-third">
+            <label>Year</label>
+            {{ filter.form.year }}
+          </div>
+          <div class="w3-third">
+            <label>Title</label>
+            {{ filter.form.title }}
+          </div>
         </div>
-    
-        <script src="script.js"></script>
+
+        <div class="w3-container w3-padding-16">
+          <button type="submit" class="w3-button w3-blue w3-margin-right">Apply Filters</button>
+          <a href="{% url 'reference-list' %}" class="w3-button w3-gray">Clear</a>
+        </div>
+      </form>
     </div>
+  </div>
 
+  <div class="template_list_body">
+    <div class="container"></div>
 
+    <table class="lists_table">
+      <thead>
+        <th>First Author</th>
+        <th>Year</th>
+        <th>Title</th>
+        {% if user.is_superuser or user|has_group:"Collection Managers" %}
+        <th>Edit Reference</th>
+        {% endif %}
+      </thead>
+      <tbody>
+        {% for reference in references %}
+        <tr>
+          <td>
+            <a href="{% url 'reference-detail' reference.pk %}">{{ reference.first_author }}</a>
+          </td>
+          <td>{{ reference.year }}</td>
+          <td>{{ reference.title }}</td>
+          {% if user.is_superuser or user|has_group:"Collection Managers" %}
+          <td>
+            <a href="{% url 'reference-edit' reference.pk %}" class="edit-icon">✏️</a>
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+{% endblock %}
+
+{% block script %}
+<script>
+  function toggleAccordion(id) {
+    var panel = document.getElementById(id);
+    if (panel.classList.contains('w3-show')) {
+      panel.classList.remove('w3-show');
+      panel.classList.add('w3-hide');
+    } else {
+      panel.classList.remove('w3-hide');
+      panel.classList.add('w3-show');
+    }
+  }
+</script>
 {% endblock %}
 
