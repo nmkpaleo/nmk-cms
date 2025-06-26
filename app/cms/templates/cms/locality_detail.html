@@ -6,7 +6,7 @@
 
         <div class="template-detail-container">
             <div class="template-detail-header">
-                <h2 class="template-detail-h2">Locality Detail {{ locality.accession_set.count }} </h2>
+                <h2 class="template-detail-h2">Locality Detail</h2>
                 {% if user.is_superuser or user|has_group:"Collection Managers" %}
                 <a href="{% url 'locality_edit' locality.pk %}" class="edit-icon">
                     Edit Form ✏️
