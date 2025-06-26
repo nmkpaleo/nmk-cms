@@ -30,10 +30,12 @@
                             <th>Type specimen:</th>
                             <td>{{ accession.type_status }}</td>
                         </tr>
+                        {% if user.is_superuser or user|has_group:"Collection Managers" %}
                         <tr>
                             <th>Accessioned by:</th>
                             <td>{{ accession.accessioned_by }}</td>
                         </tr>
+                        {% endif %}
                         <tr>
                             <th>General comment:</th>
                             <td>{{ accession.comment }}</td>
@@ -224,8 +226,9 @@
                     <p>No Comments found for this accession.</p>
                 {% endif %}            
             </div>
+            {% if user.is_superuser or user|has_group:"Collection Managers" %}
             <div class="cards">
-                
+
                 <table class="table">
                     <caption><b><u>Related FieldSlips</u></b></caption>
                     <thead>
@@ -280,8 +283,9 @@
                             <button onclick="closeFieldSlipModal()" class="w3-button w3-red">Cancel</button>
                         </footer>
                     </div>
-                </div>           
+                </div>
             </div>
+            {% endif %}
         </div>
     </div>
 {% endblock %}
