@@ -15,8 +15,7 @@
     {% if form.instance.pk %}Edit {{ title }}{% else %}New {{ title }}{% endif %}
   </h1>
 {% endif %}
-<h3>Form Debug:</h3>
-<pre>{{ form }}</pre>
+
 
 <form method="{{ method|default:'post' }}" action="{{ action|default:'' }}" class="form-container"
       enctype="{{ enctype|default:'application/x-www-form-urlencoded' }}">
