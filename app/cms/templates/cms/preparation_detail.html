@@ -7,7 +7,7 @@
     <div class="template-detail-header">
         <h2>Preparation Details</h2>
         {% if user.is_superuser or user.groups.first.name == "Collection Managers" %}
-        <a href="{% url 'preparation-edit' preparation.pk %}" class="edit-icon">
+        <a href="{% url 'preparation_edit' preparation.pk %}" class="edit-icon">
             Edit Preparation ✏️
         </a>
         {% endif %}
@@ -40,11 +40,11 @@
       <div class="card">
         {% if request.user.is_superuser %}
           <!-- Admin can always curate, even if they are the preparator -->
-          <a href="{% url 'preparation-approve' preparation.id %}" class="btn btn-success">Curate</a>
+          <a href="{% url 'preparation_approve' preparation.id %}" class="btn btn-success">Curate</a>
     
         {% elif request.user.groups.all.0.name == "Curators" and request.user != preparation.preparator %}
           <!-- Curators can curate if they're not the preparator -->
-          <a href="{% url 'preparation-approve' preparation.id %}" class="btn btn-success">Curate</a>
+          <a href="{% url 'preparation_approve' preparation.id %}" class="btn btn-success">Curate</a>
         {% endif %}
 
         <p><strong>Curator:</strong> {{ preparation.curator|default:"Not assigned" }}</p>
@@ -81,7 +81,7 @@
 
     {% if user.is_authenticated %}
         {% if user|has_group:"Collection Managers" or user.is_superuser %}
-        <a href="{% url 'preparation-upload-media-form' preparation.id %}">➕ Upload Media</a>
+        <a href="{% url 'preparation_upload_media_form' preparation.id %}">➕ Upload Media</a>
         {% endif %}
     {% endif %}
 

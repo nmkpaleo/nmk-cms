@@ -22,7 +22,7 @@
         </tbody>
       </table>
 
-      <a href="{% url 'add-specimen' accessionrow.id %}">Add Elemet to Specimen</a>
+      <a href="{% url 'accessionrow_add_specimen' accessionrow.id %}">Add Elemet to Specimen</a>
             
       <h2>Elements</h2>
       <table>
@@ -46,7 +46,7 @@
         {% endfor %}
       </table>
 
-      <a href="{% url 'add-identification' accessionrow.id %}">Add New Identification</a>
+      <a href="{% url 'accessionrow_add_identification' accessionrow.id %}">Add New Identification</a>
       <h2>Identification</h2>
       <table>
         {% for identification in identifications %}
@@ -70,7 +70,7 @@
         </tr>
         {% endfor %}
       </table>
-      <a href="{% url 'accession-detail' accessionrow.accession.id %}">Back to Accession</a>
+      <a href="{% url 'accession_detail' accessionrow.accession.id %}">Back to Accession</a>
     </div>  
   </div>
 </div>

@@ -1,7 +1,7 @@
 {% extends "base_generic.html" %}
 
 {% block title %}
-      <title>fieldslip-list</title>
+      <title>fieldslip_list</title>
 {% endblock %}
 
 {% block content %}
@@ -47,7 +47,7 @@
 
             <div class="w3-container w3-padding-16">
                 <button type="submit" class="w3-button w3-blue w3-margin-right">Apply Filters</button>
-                <a href="{% url 'fieldslip-list' %}" class="w3-button w3-gray">Clear</a>
+                <a href="{% url 'fieldslip_list' %}" class="w3-button w3-gray">Clear</a>
             </div>
         </form>
     </div>
@@ -82,7 +82,7 @@
  
                         <td>
                             
-                            <a href="{% url 'fieldslip-detail' fieldslip.pk %}">{{ fieldslip.field_number }}</a></td> 
+                            <a href="{% url 'fieldslip_detail' fieldslip.pk %}">{{ fieldslip.field_number }}</a></td>
                         <td>{{ fieldslip.collector }}</td>
                         
                         <td>{{ fieldslip.collection_date }}</td>
@@ -98,7 +98,7 @@
                             {% endif %}
                         </td>
                         <td>
-                            &emsp;<a href="{% url 'fieldslip-edit' fieldslip.pk %}" class="edit-icon">✏️</a>
+                            &emsp;<a href="{% url 'fieldslip_edit' fieldslip.pk %}" class="edit-icon">✏️</a>
                         </td>
                     </tr>
                 <!--</div>--> 

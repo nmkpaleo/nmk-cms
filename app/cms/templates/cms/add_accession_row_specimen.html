@@ -3,5 +3,5 @@
 {% block content %}
     {% include "includes/base_form.html" with form=form submit_label="Save" method="post" action=request.path title="Taxon to Specimen: " access=accession_row %}
     
-    <a href="{% url 'accessionrow-detail' accession_row.id %}">Back to Specimen</a>
+    <a href="{% url 'accessionrow_detail' accession_row.id %}">Back to Specimen</a>
 {% endblock %}

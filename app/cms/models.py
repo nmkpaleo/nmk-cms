@@ -71,7 +71,7 @@ class Locality(BaseModel):
         ordering = ["name"]
 
     def get_absolute_url(self):
-        return reverse("locality-detail", args=[str(self.id)])
+        return reverse("locality_detail", args=[str(self.id)])
 
     def __str__(self):
         return self.name
@@ -162,7 +162,7 @@ class Accession(BaseModel):
         super().save(*args, **kwargs)
 
     def get_absolute_url(self):
-        return reverse('accession-detail', args=[str(self.id)])
+        return reverse('accession_detail', args=[str(self.id)])
 
     def __str__(self):
         collection_abbr = self.collection.abbreviation if self.collection else "N/A"
@@ -305,7 +305,7 @@ class FieldSlip(BaseModel):
     verbatim_elevation = models.CharField(max_length=255, null=True, blank=True, help_text="Elevation as recorded.")
 
     def get_absolute_url(self):
-        return reverse('fieldslip-detail', args=[str(self.id)])
+        return reverse('fieldslip_detail', args=[str(self.id)])
 
     def __str__(self):
         return self.field_number if self.field_number else "Unnamed Field Slip"
@@ -344,7 +344,7 @@ class Reference(BaseModel):
     citation = models.TextField(blank=False, null=False)
 
     def get_absolute_url(self):
-        return reverse('reference-detail', args=[str(self.id)])
+        return reverse('reference_detail', args=[str(self.id)])
 
     class Meta:
         verbose_name = "Reference"
@@ -418,7 +418,7 @@ class AccessionRow(BaseModel):
     specimen_suffix = models.CharField(max_length=25, blank=True, null=True, default='-')
 
     def get_absolute_url(self):
-        return reverse('accessionrow-detail', args=[str(self.id)])
+        return reverse('accessionrow_detail', args=[str(self.id)])
 
     def __str__(self):
         return f"{self.accession}: {self.specimen_suffix}" if self.specimen_suffix else str(self.accession)
@@ -988,7 +988,7 @@ class Preparation(BaseModel):
         super().save(*args, **kwargs)
 
     def get_absolute_url(self):
-        return reverse('preparation-detail', args=[str(self.id)])
+        return reverse('preparation_detail', args=[str(self.id)])
 
     class Meta:
         verbose_name = "Preparation"

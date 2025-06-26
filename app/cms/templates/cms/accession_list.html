@@ -56,12 +56,12 @@
                 {% for accession in accessions %}
                     <tr >
                         
-                        <td> <a href="{% url 'accession-detail' accession.pk %}"> {{ accession.collection.abbreviation }}</a></td>
+                        <td> <a href="{% url 'accession_detail' accession.pk %}"> {{ accession.collection.abbreviation }}</a></td>
                         <td>&nbsp;{{ accession.specimen_prefix.abbreviation }}</td>
                         <td>{{ accession.specimen_no }}</td>
                         <td>&nbsp;{{ accession.accessioned_by }}</td>
                         {% if user.is_superuser or user|has_group:"Collection Managers" %}
-                        <td><a href="{% url 'accession-edit' accession.pk %}" class="edit-icon">✏️</a></td>
+                        <td><a href="{% url 'accession_edit' accession.pk %}" class="edit-icon">✏️</a></td>
                         {% endif %}
                     </tr>
                  {% endfor %}

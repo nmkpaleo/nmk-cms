@@ -8,7 +8,7 @@
             <div class="template-detail-header">
                 <h2 class="template-detail-h2">Locality Detail {{ locality.accession_set.count }} </h2>
                 {% if user.is_superuser or user|has_group:"Collection Managers" %}
-                <a href="{% url 'locality-edit' locality.pk %}" class="edit-icon">
+                <a href="{% url 'locality_edit' locality.pk %}" class="edit-icon">
                     Edit Form ✏️
                 </a>
                 {% endif %}
@@ -42,7 +42,7 @@
                                         <tr >
                                             <td>{{ accession.collection.abbreviation }}</td>
                                             
-                                            <td><a href="{% url 'accession-detail' accession.pk %}">{{ accession.specimen_no }}</a></td>
+          <td><a href="{% url 'accession_detail' accession.pk %}">{{ accession.specimen_no }}</a></td>
                                             <td>&nbsp;{{ accession.accessioned_by }}</td>
                                         </tr>
                                     {% endfor %}

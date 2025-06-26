@@ -44,7 +44,7 @@
 </div>
       <div class="w3-container w3-padding-16">
         <button type="submit" class="w3-button w3-blue w3-margin-right">Apply Filters</button>
-        <a href="{% url 'preparation-list' %}" class="w3-button w3-gray">Clear</a>
+        <a href="{% url 'preparation_list' %}" class="w3-button w3-gray">Clear</a>
       </div>
     </form>
   </div>
@@ -71,13 +71,13 @@
             <td>{{ preparation.curator|default:"N/A" }}</td>
             <td>{{ preparation.approval_status }}</td>
             <td>
-                <a href="{% url 'preparation-detail' preparation.id %}" class="btn btn-sm btn-info">View</a>
+                <a href="{% url 'preparation_detail' preparation.id %}" class="btn btn-sm btn-info">View</a>
                 {% if request.user == preparation.preparator %}
-                <a href="{% url 'preparation-edit' preparation.id %}" class="btn btn-sm btn-warning">Edit</a>
-                <a href="{% url 'preparation-delete' preparation.id %}" class="btn btn-sm btn-danger">Delete</a>
+                <a href="{% url 'preparation_edit' preparation.id %}" class="btn btn-sm btn-warning">Edit</a>
+                <a href="{% url 'preparation_delete' preparation.id %}" class="btn btn-sm btn-danger">Delete</a>
                 {% endif %}
                 {% if request.user != preparation.preparator and request.user.groups.all.0.name == "Curators" %}
-                <a href="{% url 'preparation-approve' preparation.id %}" class="btn btn-sm btn-success">Curate</a>
+                <a href="{% url 'preparation_approve' preparation.id %}" class="btn btn-sm btn-success">Curate</a>
                 {% endif %}
             </td>
         </tr>
