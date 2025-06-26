@@ -22,6 +22,13 @@ from cms.views import (
 )
 from .views import PreparationMediaUploadView
 
+from cms.forms import (AccessionForm,
+                       AccessionNumberSelectForm,
+                       SpecimenCompositeForm)
+from cms.views import AccessionWizard
+
+from django_select2.views import AutoResponseView
+
 urlpatterns = [
     
     path('fieldslips/new/', fieldslip_create, name='fieldslip_create'),
@@ -46,7 +53,8 @@ urlpatterns = [
     path('accessionrows/<int:accession_row_id>/add-specimen/', add_specimen_to_accession_row, name='accessionrow_add_specimen'),
     path('accessionrows/<int:accession_row_id>/add-identification/', add_identification_to_accession_row, name='accessionrow_add_identification'),
     path("accessions/generate-batch/", generate_accession_batch, name="accession_generate_batch"),
-
+    path('accession-wizard/', AccessionWizard.as_view([AccessionNumberSelectForm, AccessionForm,
+                                                       SpecimenCompositeForm]), name='accession-wizard'),
     path('references/', ReferenceListView.as_view(), name='reference_list'),
     path('references/<int:pk>/', ReferenceDetailView.as_view(), name='reference_detail'),
     path('references/<int:pk>/edit/', reference_edit, name='reference_edit'),
@@ -73,4 +81,8 @@ urlpatterns += [
 
 urlpatterns += [
     path("preparations/<int:pk>/upload-media-form/", PreparationMediaUploadView.as_view(), name="preparation_upload_media_form"),
+]
+
+urlpatterns += [
+    path("autocomplete/fieldslip/", FieldSlipAutocomplete.as_view(), name="fieldslip-autocomplete"),
 ]

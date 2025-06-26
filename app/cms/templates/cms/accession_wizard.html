@@ -1,0 +1,73 @@
+{% extends "base_generic.html" %}
+{% block head %}
+  {{ wizard.form.media.css }}
+{% endblock %}
+{% block content %}
+  {% if wizard.steps.current == '0' %}
+    <div class="w3-container w3-card w3-white w3-round-large w3-padding-large">
+      <h2>Select Accession Number</h2>
+      <form action="" method="post">{% csrf_token %}
+        {{ wizard.management_form }}
+        <ul>
+          {% for val, label in wizard.form.fields.accession_number.choices %}
+            <li>
+              <a href="#" onclick="event.preventDefault(); document.getElementById('id_0-accession_number').value='{{ val }}'; this.closest('form').submit();">
+                {{ label }}
+              </a>
+            </li>
+          {% endfor %}
+        </ul>
+        <input type="hidden" name="0-accession_number" id="id_0-accession_number" value="">
+      </form>
+    </div>
+  {% else %}
+    <div class="w3-container w3-card w3-white w3-round-large w3-padding-large">
+        <h2>Step {{ wizard.steps.step1 }} of {{ wizard.steps.count }}</h2>
+        <form action="" method="post" enctype="multipart/form-data">{% csrf_token %}
+          {{ wizard.management_form }}
+          {% for field in wizard.form %}
+            {% if field.is_hidden %}
+              {{ field }}
+            {% else %}
+              <div class="w3-margin-bottom">
+                <label class="w3-text-blue"><b>{{ field.label }}</b></label>
+                {{ field }}
+                {% if field.errors %}
+                  <div class="w3-text-red">{{ field.errors }}</div>
+                {% endif %}
+              </div>
+            {% endif %}
+          {% endfor %}
+
+          <div class="w3-margin-top">
+            {% if wizard.steps.prev %}
+                <button type="submit" class="w3-button w3-gray"
+                        name="wizard_goto_step" value="{{ wizard.steps.prev }}">
+                Previous
+                </button>
+            {% endif %}
+            <button type="submit" class="w3-button w3-green">Next</button>
+          </div>
+        </form>
+      </div>
+  {% endif %}
+
+{% endblock %}
+{% block extra_scripts %}
+  {{ wizard.form.media.js }}
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      // Wait until the full page including DAL JS has loaded
+      setTimeout(function () {
+        console.log("🚧 Found widgets:", document.querySelectorAll(".django-autocomplete-light"));
+        if (window.dal && typeof window.dal.initialize === "function") {
+          console.log("✅ Initializing DAL manually on wizard step.");
+          window.dal.initialize(document.body);
+        } else {
+          console.warn("⚠️ DAL not available.");
+        }
+      }, 100); // small delay to ensure everything is ready
+    });
+  </script>
+{% endblock %}
