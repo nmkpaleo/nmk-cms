@@ -1,10 +1,16 @@
-{% extends "base_generic.html" %}   
+{% extends "base_generic.html" %}
 {% load custom_filters %}
+{% load user_tags %}
 
 {% block content %}
     <div class="template-detail-container">
         <div class="template-detail-header">
             <h2 class="accession-detail-h2">Accession Detail</h2>
+            {% if user.is_superuser or user|has_group:"Collection Managers" %}
+            <a href="{% url 'accession-edit' accession.pk %}" class="edit-icon">
+                Edit Form ✏️
+            </a>
+            {% endif %}
         </div>
         <div class="grid-containerr">            
             <!-- Accession Card -->            

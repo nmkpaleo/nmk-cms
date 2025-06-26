@@ -4,7 +4,7 @@ from django.conf import settings
 from django_filters.views import FilterView
 from cms.models import Accession
 from cms.views import (
-    accession_create, add_accession_row, AccessionRowDetailView,
+    accession_create, accession_edit, add_accession_row, AccessionRowDetailView,
     add_fieldslip_to_accession,
     AddCommentToAccessionView,
     AddGeologyToAccessionView,
@@ -34,6 +34,7 @@ urlpatterns = [
     path('accessions/', AccessionListView.as_view(), name='accession-list'),
     path('accessions/new/', accession_create, name='accession-create'),
     path('accession/<int:pk>/', AccessionDetailView.as_view(), name='accession-detail'),
+    path('accession/<int:pk>/edit/', accession_edit, name='accession-edit'),
     path('accession/<int:pk>/add-fieldslip/', add_fieldslip_to_accession, name='add-fieldslip-to-accession'),
     path('accession/<int:pk>/create-fieldslip/', create_fieldslip_for_accession, name='create-fieldslip-for-accession'),
     path('accession/<int:accession_id>/add_accession_row/', add_accession_row, name='add_accession_row'),

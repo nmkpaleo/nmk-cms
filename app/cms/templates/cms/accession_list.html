@@ -1,4 +1,5 @@
 {% extends "base_generic.html" %}
+{% load user_tags %}
 
 {% block title %}
       <title>Accession list</title>
@@ -45,8 +46,11 @@
             <thead>
                 <th>Collection</th>
                 <th>Specimen Prefix</th>
-                <th>Specimen Number</th>    
+                <th>Specimen Number</th>
                 <th>accessioned By</th>
+                {% if user.is_superuser or user|has_group:"Collection Managers" %}
+                <th>Edit Accession</th>
+                {% endif %}
             </thead>
             <tbody>
                 {% for accession in accessions %}
@@ -56,6 +60,9 @@
                         <td>&nbsp;{{ accession.specimen_prefix.abbreviation }}</td>
                         <td>{{ accession.specimen_no }}</td>
                         <td>&nbsp;{{ accession.accessioned_by }}</td>
+                        {% if user.is_superuser or user|has_group:"Collection Managers" %}
+                        <td><a href="{% url 'accession-edit' accession.pk %}" class="edit-icon">✏️</a></td>
+                        {% endif %}
                     </tr>
                  {% endfor %}
             </tbody>
