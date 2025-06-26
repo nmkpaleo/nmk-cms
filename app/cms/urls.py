@@ -21,6 +21,7 @@ from cms.views import (
     PreparationApproveView
 )
 from .views import PreparationMediaUploadView
+from .views import FieldSlipAutocomplete
 
 from cms.forms import (AccessionForm,
                        AccessionNumberSelectForm,
