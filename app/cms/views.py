@@ -9,8 +9,7 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from django_filters.views import FilterView
-
-from .filters import AccessionFilter, PreparationFilter
+from .filters import AccessionFilter, PreparationFilter, ReferenceFilter, FieldSlipFilter, LocalityFilter
 
 from django.views.generic import DetailView
 from django.core.files.storage import FileSystemStorage
@@ -85,10 +84,10 @@ def add_fieldslip_to_accession(request, pk):
             relation.accession = accession
             relation.save()
             messages.success(request, "FieldSlip added successfully!")
-            return redirect("accession-detail", pk=accession.pk)
+            return redirect("accession_detail", pk=accession.pk)
 
     messages.error(request, "Error adding FieldSlip.")
-    return redirect("accession-detail", pk=accession.pk)
+    return redirect("accession_detail", pk=accession.pk)
 
 def create_fieldslip_for_accession(request, pk):
     """ Opens a modal for FieldSlip creation and links it to an Accession """
@@ -142,7 +141,7 @@ def fieldslip_import(request):
 
         if not result.has_errors():
             resource.import_data(dataset, dry_run=False)  #  import now
-            return redirect('fieldslip-list')  # Redirect after successful import
+            return redirect('fieldslip_list')  # Redirect after successful import
 
     return render(request, 'cms/fieldslip_import.html')  # Render the import form
 
@@ -158,7 +157,7 @@ def fieldslip_create(request):
         form = FieldSlipForm(request.POST, request.FILES)
         if form.is_valid():
             form.save()
-            return redirect('fieldslip-list')  #  to redirect to the list view
+            return redirect('fieldslip_list')  #  to redirect to the list view
     else:
         form = FieldSlipForm()
     return render(request, 'cms/fieldslip_form.html', {'form': form})
@@ -169,13 +168,13 @@ def fieldslip_edit(request, pk):
         form = FieldSlipForm(request.POST, request.FILES, instance=fieldslip)
         if form.is_valid():
             form.save()
-            return redirect('fieldslip-detail', pk=fieldslip.pk)  # Redirect to the detail view
+            return redirect('fieldslip_detail', pk=fieldslip.pk)  # Redirect to the detail view
     else:
         form = FieldSlipForm(instance=fieldslip)
     return render(request, 'cms/fieldslip_form.html', {'form': form})
 
 @staff_member_required
-def generate_accession_batch_view(request):
+def generate_accession_batch(request):
     form = AccessionBatchForm(request.POST or None)
     series_remaining = None
     series_range = None
@@ -201,7 +200,7 @@ def generate_accession_batch_view(request):
                     request,
                     f"Successfully created {len(accessions)} accessions for {user}."
                 )
-                return redirect("accession-list")
+                return redirect("accession_list")
 
             except ValueError as ve:
                 form.add_error('count', f"{ve} (Available range: {series_range})")
@@ -223,7 +222,7 @@ def reference_create(request):
         form = ReferenceForm(request.POST, request.FILES)
         if form.is_valid():
             form.save()
-            return redirect('reference-list')  #  to redirect to the list view
+            return redirect('reference_list')  #  to redirect to the list view
     else:
         form = ReferenceForm()
     return render(request, 'cms/reference_form.html', {'form': form})
@@ -235,7 +234,7 @@ def reference_edit(request, pk):
         form = ReferenceForm(request.POST, request.FILES, instance=reference)
         if form.is_valid():
             form.save()
-            return redirect('reference-detail', pk=reference.pk)  # Redirect to the detail view
+            return redirect('reference_detail', pk=reference.pk)  # Redirect to the detail view
     else:
         form = ReferenceForm(instance=reference)
     return render(request, 'cms/reference_form.html', {'form': form})
@@ -248,7 +247,7 @@ def locality_edit(request, pk):
         form = LocalityForm(request.POST, request.FILES, instance=locality)
         if form.is_valid():
             form.save()
-            return redirect('locality-detail', pk=locality.pk)  # Redirect to the detail view
+            return redirect('locality_detail', pk=locality.pk)  # Redirect to the detail view
     else:
         form = LocalityForm(instance=locality)
     return render(request, 'cms/locality_form.html', {'form': form})
@@ -259,11 +258,15 @@ class FieldSlipDetailView(DetailView):
     template_name = 'cms/fieldslip_detail.html'
     context_object_name = 'fieldslip'
 
-class FieldSlipListView(ListView):
+class FieldSlipListView(LoginRequiredMixin, UserPassesTestMixin, FilterView):
     model = FieldSlip
     template_name = 'cms/fieldslip_list.html'
     context_object_name = 'fieldslips'
     paginate_by = 10
+
+    def test_func(self):
+        user = self.request.user
+        return user.is_superuser or user.groups.filter(name="Collection Managers").exists()
 
 class AccessionDetailView(DetailView):
     model = Accession
@@ -465,18 +468,21 @@ class ReferenceDetailView(DetailView):
     template_name = 'cms/reference_detail.html'
     context_object_name = 'reference'
 
-class ReferenceListView(ListView):
+class ReferenceListView(FilterView):
     model = Reference
     template_name = 'cms/reference_list.html'
     context_object_name = 'references'
     paginate_by = 10
+    filterset_class = ReferenceFilter
 
 
-class LocalityListView(ListView):
+class LocalityListView(FilterView):
     model = Locality
     template_name = 'cms/locality_list.html'
-    context_object_name = 'localitys'
+    context_object_name = 'localities'
     paginate_by = 10
+    filterset_class = LocalityFilter
+
 
 class LocalityDetailView(DetailView):
     model = Locality
@@ -511,7 +517,7 @@ def upload_media(request, accession_id):
             media = form.save(commit=False)
             media.accession = accession  # Link media to the correct accession
             media.save()
-            return redirect('accession-detail', pk=accession_id)  # Redirect to accession detail page
+            return redirect('accession_detail', pk=accession_id)  # Redirect to accession detail page
 
     else:
         form = MediaUploadForm()
@@ -532,9 +538,24 @@ def accession_create(request):
             accession.save()  # Now the PK is assigned
             form.save_m2m()   # In case future fields need this
 
-            return redirect('accession-list')
+            return redirect('accession_list')
     else:
         form = AccessionForm()
+
+    return render(request, 'cms/accession_form.html', {'form': form})
+
+@login_required
+@user_passes_test(is_collection_manager)
+def accession_edit(request, pk):
+    accession = get_object_or_404(Accession, pk=pk)
+
+    if request.method == 'POST':
+        form = AccessionForm(request.POST, request.FILES, instance=accession)
+        if form.is_valid():
+            form.save()
+            return redirect('accession_detail', pk=accession.pk)
+    else:
+        form = AccessionForm(instance=accession)
 
     return render(request, 'cms/accession_form.html', {'form': form})
 
@@ -549,14 +570,14 @@ def add_accession_row(request, accession_id):
             accession_row = form.save(commit=False)
             accession_row.accession = accession  # Link accession_row to the correct accession
             accession_row.save()
-            return redirect('accession-detail', pk=accession_id)  # Redirect to accession detail page
+            return redirect('accession_detail', pk=accession_id)  # Redirect to accession detail page
     else:
         form = AddAccessionRowForm(accession=accession)
     return render(request, 'cms/add_accession_row.html', {'form': form, 'accession': accession})
 
 @login_required
 @user_passes_test(is_collection_manager)
-def AddCommentToAccessionView(request, accession_id):
+def add_comment_to_accession(request, accession_id):
     accession = get_object_or_404(Accession, id=accession_id)
 
     if request.method == 'POST':
@@ -566,7 +587,7 @@ def AddCommentToAccessionView(request, accession_id):
             accession_comment.specimen_no = accession  # Link comment to the correct accession (specimen no)
             accession_comment.status = 'N'
             accession_comment.save()
-            return redirect('accession-detail', pk=accession_id)  # Redirect to accession detail page
+            return redirect('accession_detail', pk=accession_id)  # Redirect to accession detail page
 
     else:
         form = AccessionCommentForm()
@@ -575,7 +596,7 @@ def AddCommentToAccessionView(request, accession_id):
 
 @login_required
 @user_passes_test(is_collection_manager)
-def AddReferenceToAccessionView(request, accession_id):
+def add_reference_to_accession(request, accession_id):
     accession = get_object_or_404(Accession, id=accession_id)
 
     if request.method == 'POST':
@@ -584,7 +605,7 @@ def AddReferenceToAccessionView(request, accession_id):
             accession_reference = form.save(commit=False)
             accession_reference.accession = accession  # Link reference to the correct accession
             accession_reference.save()
-            return redirect('accession-detail', pk=accession_id)  # Redirect to accession detail page
+            return redirect('accession_detail', pk=accession_id)  # Redirect to accession detail page
 
     else:
         form = AccessionReferenceForm()
@@ -593,7 +614,7 @@ def AddReferenceToAccessionView(request, accession_id):
 
 @login_required
 @user_passes_test(is_collection_manager)
-def AddIdentificationToAccessionRowView(request, accession_row_id):
+def add_identification_to_accession_row(request, accession_row_id):
     accession_row = get_object_or_404(AccessionRow, id=accession_row_id)
     taxonomy = []
 
@@ -603,7 +624,7 @@ def AddIdentificationToAccessionRowView(request, accession_row_id):
             accession_row_identification = form.save(commit=False)
             accession_row_identification.accession_row = accession_row  # Link specimen to the correct accession_row
             accession_row_identification.save()
-            return redirect('accessionrow-detail', pk=accession_row_id)  # Redirect to accession row detail page
+            return redirect('accessionrow_detail', pk=accession_row_id)  # Redirect to accession row detail page
         else:
             print("Form errors:", form.errors)  # Debugging output
     else:
@@ -620,7 +641,7 @@ def AddIdentificationToAccessionRowView(request, accession_row_id):
 
 @login_required
 @user_passes_test(is_collection_manager)
-def AddSpecimenToAccessionRowView(request, accession_row_id):
+def add_specimen_to_accession_row(request, accession_row_id):
     accession_row = get_object_or_404(AccessionRow, id=accession_row_id)
 
     if request.method == 'POST':
@@ -629,7 +650,7 @@ def AddSpecimenToAccessionRowView(request, accession_row_id):
             accession_row_specimen = form.save(commit=False)
             accession_row_specimen.accession_row = accession_row  # Link specimen to the correct accession_row
             accession_row_specimen.save()
-            return redirect('accessionrow-detail', pk=accession_row_id)  # Redirect to accession row detail page
+            return redirect('accessionrow_detail', pk=accession_row_id)  # Redirect to accession row detail page
         else:
             print("Form errors:", form.errors)  # Debugging output
     else:
@@ -639,7 +660,7 @@ def AddSpecimenToAccessionRowView(request, accession_row_id):
 
 @login_required
 @user_passes_test(is_collection_manager)
-def AddGeologyToAccessionView(request, accession_id):
+def add_geology_to_accession(request, accession_id):
     accession = get_object_or_404(Accession, id=accession_id)
 
     if request.method == 'POST':
@@ -648,7 +669,7 @@ def AddGeologyToAccessionView(request, accession_id):
             accession_geology = form.save(commit=False)
             accession_geology.accession = accession
             accession_geology.save()
-            return redirect('accession-detail', pk=accession_id)
+            return redirect('accession_detail', pk=accession_id)
         else:
             print("Form errors:", form.errors)  # Debugging output
     else:
@@ -661,7 +682,7 @@ class PreparationListView(LoginRequiredMixin, PreparationAccessMixin, FilterView
     model = Preparation
     template_name = "cms/preparation_list.html"
     context_object_name = "preparations"
-    paginate_by = 20
+    paginate_by = 2
     ordering = ["-created_on"]
     filterset_class = PreparationFilter
 
@@ -736,7 +757,7 @@ class PreparationUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView)
 class PreparationDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
     """ Delete a preparation record. """
     model = Preparation
-    success_url = reverse_lazy("preparation-list")
+    success_url = reverse_lazy("preparation_list")
     template_name = "cms/preparation_confirm_delete.html"
 
     def test_func(self):
@@ -774,7 +795,7 @@ class PreparationApproveView(LoginRequiredMixin, UserPassesTestMixin, UpdateView
         preparation.curator = self.request.user
         preparation.approval_date = now()
         preparation.save()
-        return redirect("preparation-detail", pk=preparation.pk)
+        return redirect("preparation_detail", pk=preparation.pk)
 
 class PreparationMediaUploadView(View):
     def get(self, request, pk):
@@ -785,7 +806,7 @@ class PreparationMediaUploadView(View):
             not request.user.is_superuser and
             not request.user.groups.filter(name__in=["Curators", "Collection Managers"]).exists()
         ):
-            return redirect("preparation-detail", pk=pk)
+            return redirect("preparation_detail", pk=pk)
 
         form = PreparationMediaUploadForm()
         return render(request, "cms/preparation_media_upload.html", {
@@ -800,7 +821,7 @@ class PreparationMediaUploadView(View):
             not request.user.is_superuser and
             not request.user.groups.filter(name__in=["Curators", "Collection Managers"]).exists()
         ):
-            return redirect("preparation-detail", pk=pk)
+            return redirect("preparation_detail", pk=pk)
 
         form = PreparationMediaUploadForm(request.POST, request.FILES)
         if form.is_valid():
@@ -819,28 +840,10 @@ class PreparationMediaUploadView(View):
                     context=context,
                     notes=notes
                 )
-            return redirect("preparation-detail", pk=pk)
+            return redirect("preparation_detail", pk=pk)
 
         return render(request, "cms/preparation_media_upload.html", {
             "form": form,
             "preparation": preparation,
         })
     
-    class PreparationListView(LoginRequiredMixin, FilterView):
-        model = Preparation
-        template_name = "cms/preparation_list.html"
-        context_object_name = "preparations"
-        paginate_by = 20
-        filterset_class = PreparationFilter
-
-        def get_queryset(self):
-            qs = super().get_queryset()
-            return qs.annotate(
-                accession_label=Concat(
-                    'accession_row__accession__specimen_prefix__abbreviation',
-                    Value(' '),
-                    'accession_row__accession__specimen_no',
-                    'accession_row__specimen_suffix',
-                    output_field=CharField()
-                )
-            )

@@ -1,10 +1,16 @@
-{% extends "base_generic.html" %}   
+{% extends "base_generic.html" %}
 {% load custom_filters %}
+{% load user_tags %}
 
 {% block content %}
     <div class="template-detail-container">
         <div class="template-detail-header">
             <h2 class="accession-detail-h2">Accession Detail</h2>
+            {% if user.is_superuser or user|has_group:"Collection Managers" %}
+            <a href="{% url 'accession_edit' accession.pk %}" class="edit-icon">
+                Edit Form ✏️
+            </a>
+            {% endif %}
         </div>
         <div class="grid-containerr">            
             <!-- Accession Card -->            
@@ -38,7 +44,7 @@
             <div class="cards">
 
                 {% if user.is_authenticated and user.groups.all.0.name == "Collection Managers" %}
-                    <a href="{% url 'add-geology' accession.id %}">➕ Add Horizon</a>
+                    <a href="{% url 'accession_add_geology' accession.id %}">➕ Add Horizon</a>
                 {% endif %}
 
                 <table>
@@ -61,7 +67,7 @@
                 
                 <hr class="accession_hr">
                 {% if user.is_authenticated and user.groups.all.0.name == "Collection Managers" %}
-                    <a href="{% url 'add_accession_row' accession.id %}">➕ Add Specimen</a>
+                    <a href="{% url 'accession_add_row' accession.id %}">➕ Add Specimen</a>
                 {% endif %}
                 <table>
                     <caption><em>Specimen details</em></caption>
@@ -80,7 +86,7 @@
                     <tbody>
                         {% for accessionrow in accession.accessionrow_set.all %}                   
                             <tr>
-                                <td><a href="{% url 'accessionrow-detail' accessionrow.pk %}">{{ accessionrow.specimen_suffix }}</a></td>
+                                <td><a href="{% url 'accessionrow_detail' accessionrow.pk %}">{{ accessionrow.specimen_suffix }}</a></td>
                                 <td>{{ accessionrow.storage }}</td>
                         
                                 {% with first_identifications|get_item:accessionrow.id as first_identification %}
@@ -113,7 +119,7 @@
                 </table>                
                 <hr class="accession_hr">
                 {% if user.is_authenticated and user.groups.all.0.name == "Collection Managers" %}
-                  <a href="{% url 'add-reference' accession.id %}">➕ Add Reference</a>
+                  <a href="{% url 'accession_add_reference' accession.id %}">➕ Add Reference</a>
                 {% endif %}
                 {% if references %}
                 <table>
@@ -148,7 +154,7 @@
                 <hr class="accession_hr">                
 
                 {% if user.is_authenticated and user.groups.all.0.name == "Collection Managers" %}
-                    <a href="{% url 'upload-media' accession.id %}">➕ Upload Media</a>
+                    <a href="{% url 'accession_upload_media' accession.id %}">➕ Upload Media</a>
                 {% endif %}
                 <table>
                     <caption><em>Media</em></caption>
@@ -190,7 +196,7 @@
                 <hr class="accession_hr">
 
                 {% if user.is_authenticated and user.groups.all.0.name == "Collection Managers" %}
-                  <a href="{% url 'add-comment' accession.id %}">➕ Add Comment</a>
+                  <a href="{% url 'accession_add_comment' accession.id %}">➕ Add Comment</a>
                 {% endif %}
                 {% if comments %}
                     <table>
@@ -234,7 +240,7 @@
                         {% for relation in related_fieldslips %}
                         <tr>
                             <td>
-                                <a href="{% url 'fieldslip-detail' relation.fieldslip.pk %}">{{ relation.fieldslip.field_number }}</a>
+                                <a href="{% url 'fieldslip_detail' relation.fieldslip.pk %}">{{ relation.fieldslip.field_number }}</a>
                             </td>
                             <td>{{ relation.fieldslip.verbatim_taxon }}</td>
                             <td>{{ relation.fieldslip.verbatim_element }}</td>
@@ -250,7 +256,7 @@
             
                 <h5><strong><u>Add Existing FieldSlip</u></strong></h5>
                 {{ add_fieldslip_form.media }}
-                <form method="POST" action="{% url 'add-fieldslip-to-accession' accession.pk %}">
+                <form method="POST" action="{% url 'accession_add_fieldslip' accession.pk %}">
                     {% csrf_token %}
                     {{ add_fieldslip_form }}
                     <button type="submit" class="btn btn-primary">Add FieldSlip</button>
@@ -283,7 +289,7 @@
 {% block extra_scripts %}
 <script>
     function openFieldSlipModal() {
-        var url = "{% url 'create-fieldslip-for-accession' accession.pk %}";
+        var url = "{% url 'accession_create_fieldslip' accession.pk %}";
         document.getElementById("fieldSlipFrame").src = url;
         document.getElementById("fieldSlipModal").style.display = "block";
     }

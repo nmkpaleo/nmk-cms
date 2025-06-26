@@ -3,5 +3,5 @@
 {% block content %}
     {% include "includes/base_form.html" with form=form submit_label="Save" method="post" action=request.path title="Locality" %}
     
-    <a href="{% url 'locality-list' %}">Back to Locality list</a>
+    <a href="{% url 'locality_list' %}">Back to Locality list</a>
 {% endblock %}

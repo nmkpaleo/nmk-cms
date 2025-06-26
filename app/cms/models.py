@@ -71,7 +71,7 @@ class Locality(BaseModel):
         ordering = ["name"]
 
     def get_absolute_url(self):
-        return reverse("locality-detail", args=[str(self.id)])
+        return reverse("locality_detail", args=[str(self.id)])
 
     def __str__(self):
         return self.name
@@ -162,7 +162,7 @@ class Accession(BaseModel):
         super().save(*args, **kwargs)
 
     def get_absolute_url(self):
-        return reverse('accession-detail', args=[str(self.id)])
+        return reverse('accession_detail', args=[str(self.id)])
 
     def __str__(self):
         collection_abbr = self.collection.abbreviation if self.collection else "N/A"
@@ -305,7 +305,7 @@ class FieldSlip(BaseModel):
     verbatim_elevation = models.CharField(max_length=255, null=True, blank=True, help_text="Elevation as recorded.")
 
     def get_absolute_url(self):
-        return reverse('fieldslip-detail', args=[str(self.id)])
+        return reverse('fieldslip_detail', args=[str(self.id)])
 
     def __str__(self):
         return self.field_number if self.field_number else "Unnamed Field Slip"
@@ -344,7 +344,7 @@ class Reference(BaseModel):
     citation = models.TextField(blank=False, null=False)
 
     def get_absolute_url(self):
-        return reverse('reference-detail', args=[str(self.id)])
+        return reverse('reference_detail', args=[str(self.id)])
 
     class Meta:
         verbose_name = "Reference"
@@ -418,7 +418,7 @@ class AccessionRow(BaseModel):
     specimen_suffix = models.CharField(max_length=25, blank=True, null=True, default='-')
 
     def get_absolute_url(self):
-        return reverse('accessionrow-detail', args=[str(self.id)])
+        return reverse('accessionrow_detail', args=[str(self.id)])
 
     def __str__(self):
         return f"{self.accession}: {self.specimen_suffix}" if self.specimen_suffix else str(self.accession)
@@ -661,7 +661,13 @@ class Media(BaseModel):
     accession_row = models.ForeignKey('AccessionRow', null=True, blank=True, on_delete=models.CASCADE, related_name='media', help_text="Accession row this media belongs to")    
     file_name = models.CharField(max_length=255, null=True, blank=True, help_text="The name of the media file")
     type = models.CharField(max_length=50, null=True, blank=True, choices=MEDIA_TYPE_CHOICES, help_text="Type of the media (e.g., photo, video, etc.)")
-    format = models.CharField(max_length=50, null=True, blank=True, choices=MEDIA_FORMAT_CHOICES, help_text="File format of the media (valid_formats are 'jpg', 'jpeg', 'png', 'gif', 'tiff' and 'bmp'")
+    format = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        choices=MEDIA_FORMAT_CHOICES,
+        help_text="File format of the media (supported formats: 'jpg', 'jpeg', 'png', 'gif', 'bmp')"
+    )
     media_location = models.ImageField(upload_to='media/')
     license = models.CharField(max_length=30, choices=LICENSE_CHOICES
                                ,default='CC0'  # Default to public domain
@@ -982,7 +988,7 @@ class Preparation(BaseModel):
         super().save(*args, **kwargs)
 
     def get_absolute_url(self):
-        return reverse('preparation-detail', args=[str(self.id)])
+        return reverse('preparation_detail', args=[str(self.id)])
 
     class Meta:
         verbose_name = "Preparation"
