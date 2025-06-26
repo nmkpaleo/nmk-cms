@@ -407,6 +407,21 @@ def accession_create(request):
 
 @login_required
 @user_passes_test(is_collection_manager)
+def accession_edit(request, pk):
+    accession = get_object_or_404(Accession, pk=pk)
+
+    if request.method == 'POST':
+        form = AccessionForm(request.POST, request.FILES, instance=accession)
+        if form.is_valid():
+            form.save()
+            return redirect('accession-detail', pk=accession.pk)
+    else:
+        form = AccessionForm(instance=accession)
+
+    return render(request, 'cms/accession_form.html', {'form': form})
+
+@login_required
+@user_passes_test(is_collection_manager)
 def add_accession_row(request, accession_id):
     accession = get_object_or_404(Accession, id=accession_id)
     
