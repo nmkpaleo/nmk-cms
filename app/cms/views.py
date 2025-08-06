@@ -11,6 +11,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django_filters.views import FilterView
 from .filters import AccessionFilter, PreparationFilter, ReferenceFilter, FieldSlipFilter, LocalityFilter
 
+
 from django.views.generic import DetailView
 from django.core.files.storage import FileSystemStorage
 from django.core.paginator import Paginator
@@ -473,7 +474,7 @@ class ReferenceListView(FilterView):
     template_name = 'cms/reference_list.html'
     context_object_name = 'references'
     paginate_by = 10
-    filterset_class = ReferenceFilter
+
 
 
 class LocalityListView(FilterView):
@@ -482,6 +483,7 @@ class LocalityListView(FilterView):
     context_object_name = 'localities'
     paginate_by = 10
     filterset_class = LocalityFilter
+
 
 
 class LocalityDetailView(DetailView):

@@ -78,6 +78,28 @@ class PreparationFilter(django_filters.FilterSet):
         fields = ['accession_label', 'status', 'approval_status', 'preparator', 'started_on', 'completed_on']
 
 
+
+class LocalityFilter(django_filters.FilterSet):
+
+    abbreviation = django_filters.CharFilter(
+        lookup_expr='exact',
+        label="Abbreviation",
+        widget=forms.TextInput(attrs={'class': 'w3-input'})
+    )
+    name = django_filters.ModelChoiceFilter(
+        queryset=Locality.objects.all(),
+        label="Name",
+        widget=forms.Select(attrs={'class': 'w3-select'})
+    )
+ 
+ 
+
+    class Meta:
+        model = Locality
+        fields = ['abbreviation', 'name']
+
+
+
 class ReferenceFilter(django_filters.FilterSet):
     first_author = django_filters.CharFilter(
         lookup_expr='icontains',
@@ -150,13 +172,4 @@ class FieldSlipFilter(django_filters.FilterSet):
         ]
 
 
-class LocalityFilter(django_filters.FilterSet):
-    name = django_filters.CharFilter(
-        lookup_expr="icontains",
-        label="Name",
-        widget=forms.TextInput(attrs={"class": "w3-input"})
-    )
 
-    class Meta:
-        model = Locality
-        fields = ["name"]
