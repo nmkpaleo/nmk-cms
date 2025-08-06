@@ -67,12 +67,15 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "django_filters",
     'django_userforeignkey',
+    'formtools',
     'import_export' ,
     'allauth',
     'allauth.account',
     'allauth.socialaccount',
     'allauth.socialaccount.providers.orcid',
     'django_select2',
+    'dal',
+    'dal_select2',
 ]
 
 SITE_ID = 1

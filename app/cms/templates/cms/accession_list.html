@@ -1,4 +1,5 @@
 {% extends "base_generic.html" %}
+{% load user_tags %}
 
 {% block title %}
       <title>Accession list</title>
@@ -32,7 +33,7 @@
   
         <div class="w3-container w3-padding-16">
           <button type="submit" class="w3-button w3-blue w3-margin-right">Apply Filters</button>
-          <a href="{% url 'accession-list' %}" class="w3-button w3-gray">Clear</a>
+          <a href="{% url 'accession_list' %}" class="w3-button w3-gray">Clear</a>
         </div>
       </form>
     </div>
@@ -45,17 +46,23 @@
             <thead>
                 <th>Collection</th>
                 <th>Specimen Prefix</th>
-                <th>Specimen Number</th>    
+                <th>Specimen Number</th>
+                {% if user.is_superuser or user|has_group:"Collection Managers" %}
                 <th>accessioned By</th>
+                <th>Edit Accession</th>
+                {% endif %}
             </thead>
             <tbody>
                 {% for accession in accessions %}
                     <tr >
                         
-                        <td> <a href="{% url 'accession-detail' accession.pk %}"> {{ accession.collection.abbreviation }}</a></td>
+                        <td> <a href="{% url 'accession_detail' accession.pk %}"> {{ accession.collection.abbreviation }}</a></td>
                         <td>&nbsp;{{ accession.specimen_prefix.abbreviation }}</td>
                         <td>{{ accession.specimen_no }}</td>
+                        {% if user.is_superuser or user|has_group:"Collection Managers" %}
                         <td>&nbsp;{{ accession.accessioned_by }}</td>
+                        <td><a href="{% url 'accession_edit' accession.pk %}" class="edit-icon">✏️</a></td>
+                        {% endif %}
                     </tr>
                  {% endfor %}
             </tbody>

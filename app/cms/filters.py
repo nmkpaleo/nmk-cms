@@ -1,6 +1,6 @@
 import django_filters
 from django import forms
-from .models import Accession, Locality, Preparation, FieldSlip, Reference
+from .models import Accession, Locality, Preparation, Reference, FieldSlip
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -78,6 +78,7 @@ class PreparationFilter(django_filters.FilterSet):
         fields = ['accession_label', 'status', 'approval_status', 'preparator', 'started_on', 'completed_on']
 
 
+
 class LocalityFilter(django_filters.FilterSet):
 
     abbreviation = django_filters.CharFilter(
@@ -96,5 +97,79 @@ class LocalityFilter(django_filters.FilterSet):
     class Meta:
         model = Locality
         fields = ['abbreviation', 'name']
+
+
+
+class ReferenceFilter(django_filters.FilterSet):
+    first_author = django_filters.CharFilter(
+        lookup_expr='icontains',
+        label='First Author',
+        widget=forms.TextInput(attrs={'class': 'w3-input'})
+    )
+    year = django_filters.CharFilter(
+        lookup_expr='icontains',
+        label='Year',
+        widget=forms.TextInput(attrs={'class': 'w3-input'})
+    )
+    title = django_filters.CharFilter(
+        lookup_expr='icontains',
+        label='Title',
+        widget=forms.TextInput(attrs={'class': 'w3-input'})
+    )
+
+    class Meta:
+        model = Reference
+        fields = ['first_author', 'year', 'title']
+
+
+class FieldSlipFilter(django_filters.FilterSet):
+    collector = django_filters.CharFilter(
+        lookup_expr='icontains',
+        label='Collector',
+        widget=forms.TextInput(attrs={'class': 'w3-input'})
+    )
+
+    collection_date = django_filters.DateFromToRangeFilter(
+        label='Collection Date',
+        widget=django_filters.widgets.RangeWidget(
+            attrs={'type': 'date', 'class': 'w3-input'}
+        )
+    )
+
+    verbatim_locality = django_filters.CharFilter(
+        lookup_expr='icontains',
+        label='Verbatim Locality',
+        widget=forms.TextInput(attrs={'class': 'w3-input'})
+    )
+
+    verbatim_taxon = django_filters.CharFilter(
+        lookup_expr='icontains',
+        label='Verbatim Taxon',
+        widget=forms.TextInput(attrs={'class': 'w3-input'})
+    )
+
+    verbatim_element = django_filters.CharFilter(
+        lookup_expr='icontains',
+        label='Verbatim Element',
+        widget=forms.TextInput(attrs={'class': 'w3-input'})
+    )
+
+    verbatim_horizon = django_filters.CharFilter(
+        lookup_expr='icontains',
+        label='Verbatim Horizon',
+        widget=forms.TextInput(attrs={'class': 'w3-input'})
+    )
+
+    class Meta:
+        model = FieldSlip
+        fields = [
+            'collector',
+            'collection_date',
+            'verbatim_locality',
+            'verbatim_taxon',
+            'verbatim_element',
+            'verbatim_horizon',
+        ]
+
 
 

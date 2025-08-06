@@ -1,14 +1,17 @@
 {% extends "base_generic.html" %}
+{% load user_tags %}
 
 {% block content %}
     
 
         <div class="template-detail-container">
             <div class="template-detail-header">
-                <h2 class="template-detail-h2">Locality Detail {{ locality.accession_set.count }} </h2>
-                <a href="{% url 'locality-edit' locality.pk %}" class="edit-icon">
+                <h2 class="template-detail-h2">Locality Detail</h2>
+                {% if user.is_superuser or user|has_group:"Collection Managers" %}
+                <a href="{% url 'locality_edit' locality.pk %}" class="edit-icon">
                     Edit Form ✏️
                 </a>
+                {% endif %}
             </div>
             <div class="grid-container">
                 <!-- Field Number Card -->
@@ -29,33 +32,23 @@
                             <tr>
                                 <th><u>Collection</u></th>
                                 <th><u>Specimen  Number</u></th>
+                                {% if user.is_superuser or user|has_group:"Collection Managers" %}
                                 <th><u>Accesioned by</u></th>
-                                
+                                {% endif %}
                             </tr>
-                                      
-                                <tr>
-                                    
-                                    {% for accession in accessions %}
-                                        <tr >
-                                            <td>{{ accession.collection.abbreviation }}</td>
-                                            
-                                            <td><a href="{% url 'accession-detail' accession.pk %}">{{ accession.specimen_no }}</a></td>
-                                            <td>&nbsp;{{ accession.accessioned_by }}</td>
-                                        </tr>
-                                    {% endfor %}
-                                       
-
-
-
-
-                        </tbody>
-
-
                         </thead>
                         <tbody>
-                            
-                            <tr><th></th></tr>
-                    </table>                
+                            {% for accession in accessions %}
+                            <tr>
+                                <td>{{ accession.collection.abbreviation }}</td>
+                                <td><a href="{% url 'accession_detail' accession.pk %}">{{ accession.specimen_no }}</a></td>
+                                {% if user.is_superuser or user|has_group:"Collection Managers" %}
+                                <td>&nbsp;{{ accession.accessioned_by }}</td>
+                                {% endif %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                     <hr class="accession_hr">
                     <div class="pagination">
 

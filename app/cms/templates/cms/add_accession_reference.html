@@ -3,5 +3,5 @@
 {% block content %}
     {% include "includes/base_form.html" with form=form submit_label="Save" method="post" action=request.path title="Reference to Accession: " access=accession_row %}
     
-    <a href="{% url 'accession-detail' accession.id %}">Back to Accession</a>
+    <a href="{% url 'accession_detail' accession.id %}">Back to Accession</a>
 {% endblock %}

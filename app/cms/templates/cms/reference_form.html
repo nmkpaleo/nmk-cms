@@ -3,5 +3,5 @@
 {% block content %}
     {% include "includes/base_form.html" with form=form submit_label="Save" method="post" action=request.path title="Reference" %}
     
-    <a href="{% url 'reference-list' %}">Back to References list</a>
+    <a href="{% url 'reference_list' %}">Back to References list</a>
 {% endblock %}

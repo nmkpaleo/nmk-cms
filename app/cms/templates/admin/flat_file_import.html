@@ -1,0 +1,10 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<h1>Flat File Import</h1>
+<form method="post" enctype="multipart/form-data" class="flat-import-form">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <input type="submit" value="Import" class="default">
+</form>
+{% endblock %}

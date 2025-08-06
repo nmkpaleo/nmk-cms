@@ -1,17 +1,36 @@
 {% extends "base_generic.html" %}
+{% load user_tags %}
 
 {% block title %}
-      <title>locality-list</title>
+      <title>locality_list</title>
 {% endblock %}
 
 {% block content %}
 
-    <div class="template_list_body">
-        <div class="container"></div>
-        
-      
-        
+    <div class="w3-container w3-margin-top">
+        <h2>Localities</h2>
+
+        <button onclick="toggleAccordion('localityFilterPanel')" class="w3-button w3-block w3-light-grey w3-left-align">
+          🔍 Show/Hide Filters
+        </button>
+
+        <div id="localityFilterPanel" class="w3-hide w3-animate-opacity w3-padding w3-light-grey w3-round-large w3-margin-top">
+          <form method="get">
+            <div class="w3-row-padding">
+              <div class="w3-third">
+                <label>Name</label>
+                {{ filter.form.name }}
+              </div>
+            </div>
+
+            <div class="w3-container w3-padding-16">
+              <button type="submit" class="w3-button w3-blue w3-margin-right">Apply Filters</button>
+              <a href="{% url 'locality_list' %}" class="w3-button w3-gray">Clear</a>
+            </div>
+          </form>
         </div>
+    </div>
+
 
 <div class="w3-container w3-margin-top">
     <h2>Locality</h2>
@@ -52,23 +71,29 @@
             <table class="lists_table">
 
 
-                  <th>Abbreviation</th>
-                  <th>Name</b>
+
+                    <th>Abbreviation</th>
+                    <th>Name</b>
+                    {% if user.is_superuser or user|has_group:"Collection Managers" %}
+                    <th>Edit Locality</th>
+                    {% endif %}
                     
 
      
-                {% for locality in localitys %}
+                 {% for locality in localities %}
 
                    <tr class="template_data">
 
                         
-                        <td><a href="{% url 'locality-detail' locality.pk %}">{{ locality.abbreviation }}</a></td>
+                        <td><a href="{% url 'locality_detail' locality.pk %}">{{ locality.abbreviation }}</a></td>
                         
                         <td>{{ locality.name }}</td>
 
+                        {% if user.is_superuser or user|has_group:"Collection Managers" %}
                         <td>
-                            <a href="{% url 'locality-edit' locality.pk %}" class="edit-icon">✏️</a>
+                            <a href="{% url 'locality_edit' locality.pk %}" class="edit-icon">✏️</a>
                         </td>
+                        {% endif %}
 
                     </tr>
   
@@ -83,6 +108,7 @@
 {% endblock %}
 
 {% block script %}
+
     <script>
     function toggleAccordion(id) {
     var panel = document.getElementById(id);
@@ -96,3 +122,4 @@
     }
     </script>
 {% endblock %}
+

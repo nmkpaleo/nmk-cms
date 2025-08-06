@@ -445,3 +445,54 @@ if admin.site.is_registered(User):
 admin.site.register(Media, MediaAdmin)
 admin.site.register(SpecimenGeology, SpecimenGeologyAdmin)
 admin.site.register(GeologicalContext, GeologicalContextAdmin)
+
+# ----------------------------------------------------------------------
+# Flat file import integration
+# ----------------------------------------------------------------------
+from django.urls import path
+from django.contrib import messages
+from django.shortcuts import render, redirect
+from django import forms
+from .importer import import_flat_file
+
+
+class FlatImportForm(forms.Form):
+    """Simple form for uploading a combined import file."""
+
+    import_file = forms.FileField(label="Import CSV")
+
+
+def flat_file_import_view(request):
+    """Handle the flat file import process."""
+    if request.method == "POST":
+        form = FlatImportForm(request.POST, request.FILES)
+        if form.is_valid():
+            try:
+                count = import_flat_file(form.cleaned_data["import_file"])
+                messages.success(request, f"Imported {count} rows successfully.")
+                return redirect("admin:index")
+            except Exception as exc:  # pragma: no cover - best effort
+                messages.error(request, f"Import failed: {exc}")
+    else:
+        form = FlatImportForm()
+
+    context = {"form": form, "title": "Flat File Import"}
+    return render(request, "admin/flat_file_import.html", context)
+
+
+original_get_urls = admin.site.get_urls
+
+
+def get_urls():
+    urls = original_get_urls()
+    custom_urls = [
+        path(
+            "flat-file-import/",
+            admin.site.admin_view(flat_file_import_view),
+            name="flat-file-import",
+        ),
+    ]
+    return custom_urls + urls
+
+
+admin.site.get_urls = get_urls
