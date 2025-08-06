@@ -571,21 +571,19 @@ class PreparationResource(resources.ModelResource):
 
     collection = fields.Field(
         column_name="collection",
-        attribute="accession_row__accession__collection",
-        widget=ForeignKeyWidget(Collection, "abbreviation"),
+        readonly=True,
     )
     specimen_prefix = fields.Field(
         column_name="specimen_prefix",
-        attribute="accession_row__accession__specimen_prefix",
-        widget=ForeignKeyWidget(Locality, "abbreviation"),
+        readonly=True,
     )
     specimen_no = fields.Field(
         column_name="specimen_no",
-        attribute="accession_row__accession__specimen_no",
+        readonly=True,
     )
     specimen_suffix = fields.Field(
         column_name="specimen_suffix",
-        attribute="accession_row__specimen_suffix",
+        readonly=True,
     )
 
     preparator = fields.Field(
@@ -666,6 +664,26 @@ class PreparationResource(resources.ModelResource):
             )
 
         row["accession_row"] = str(accession_row.id)
+
+    def _get_accession(self, obj):
+        return getattr(obj.accession_row, "accession", None) if obj.accession_row else None
+
+    def dehydrate_collection(self, obj):
+        accession = self._get_accession(obj)
+        collection = getattr(accession, "collection", None)
+        return getattr(collection, "abbreviation", None)
+
+    def dehydrate_specimen_prefix(self, obj):
+        accession = self._get_accession(obj)
+        prefix = getattr(accession, "specimen_prefix", None)
+        return getattr(prefix, "abbreviation", None)
+
+    def dehydrate_specimen_no(self, obj):
+        accession = self._get_accession(obj)
+        return getattr(accession, "specimen_no", None)
+
+    def dehydrate_specimen_suffix(self, obj):
+        return getattr(obj.accession_row, "specimen_suffix", None)
 
     class Meta:
         model = Preparation
