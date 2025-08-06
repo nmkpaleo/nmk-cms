@@ -1,5 +1,5 @@
 from venv import logger
-from .models import Accession, AccessionReference, AccessionRow, Collection, Element, FieldSlip, GeologicalContext, Identification, Locality, Media, NatureOfSpecimen, Person, Reference, SpecimenGeology, Storage, Taxon, User
+from .models import Accession, AccessionReference, AccessionRow, Collection, Element, FieldSlip, GeologicalContext, Identification, Locality, Media, NatureOfSpecimen, Person, PreparationMaterial, Reference, SpecimenGeology, Storage, Taxon, User
 from import_export import resources, fields
 #from import_export.fields import Field
 from import_export.widgets import BooleanWidget, ForeignKeyWidget, DateWidget
@@ -526,6 +526,15 @@ class PersonResource(resources.ModelResource):
         import_id_fields = ('first_name', 'last_name',)
         fields = ('first_name', 'last_name', 'orcid')
         export_order = ('first_name', 'last_name', 'orcid')
+
+class PreparationMaterialResource(resources.ModelResource):
+    class Meta:
+        model = PreparationMaterial
+        skip_unchanged = True
+        report_skipped = False
+        import_id_fields = ('name',)
+        fields = ('name', 'description')
+        export_order = ('name', 'description')
 
 class ReferenceResource(resources.ModelResource):
     class Meta:
