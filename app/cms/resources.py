@@ -1,8 +1,33 @@
 from venv import logger
-from .models import Accession, AccessionReference, AccessionRow, Collection, Element, FieldSlip, GeologicalContext, Identification, Locality, Media, NatureOfSpecimen, Person, PreparationMaterial, Reference, SpecimenGeology, Storage, Taxon, User
+from .models import (
+    Accession,
+    AccessionReference,
+    AccessionRow,
+    Collection,
+    Element,
+    FieldSlip,
+    GeologicalContext,
+    Identification,
+    Locality,
+    Media,
+    NatureOfSpecimen,
+    Person,
+    Preparation,
+    PreparationMaterial,
+    Reference,
+    SpecimenGeology,
+    Storage,
+    Taxon,
+    User,
+)
 from import_export import resources, fields
 #from import_export.fields import Field
-from import_export.widgets import BooleanWidget, ForeignKeyWidget, DateWidget
+from import_export.widgets import (
+    BooleanWidget,
+    DateWidget,
+    ForeignKeyWidget,
+    ManyToManyWidget,
+)
 
 class AccessionResource(resources.ModelResource):
     accession = fields.Field()
@@ -535,6 +560,170 @@ class PreparationMaterialResource(resources.ModelResource):
         import_id_fields = ('name',)
         fields = ('name', 'description')
         export_order = ('name', 'description')
+
+
+class PreparationResource(resources.ModelResource):
+    accession_row = fields.Field(
+        column_name="accession_row",
+        attribute="accession_row",
+        widget=ForeignKeyWidget(AccessionRow, "id"),
+    )
+
+    collection = fields.Field(
+        column_name="collection",
+        attribute="accession_row__accession__collection",
+        widget=ForeignKeyWidget(Collection, "abbreviation"),
+    )
+    specimen_prefix = fields.Field(
+        column_name="specimen_prefix",
+        attribute="accession_row__accession__specimen_prefix",
+        widget=ForeignKeyWidget(Locality, "abbreviation"),
+    )
+    specimen_no = fields.Field(
+        column_name="specimen_no",
+        attribute="accession_row__accession__specimen_no",
+    )
+    specimen_suffix = fields.Field(
+        column_name="specimen_suffix",
+        attribute="accession_row__specimen_suffix",
+    )
+
+    preparator = fields.Field(
+        column_name="preparator",
+        attribute="preparator",
+        widget=ForeignKeyWidget(User, "username"),
+    )
+    curator = fields.Field(
+        column_name="curator",
+        attribute="curator",
+        widget=ForeignKeyWidget(User, "username"),
+    )
+    original_storage = fields.Field(
+        column_name="original_storage",
+        attribute="original_storage",
+        widget=ForeignKeyWidget(Storage, "area"),
+    )
+    temporary_storage = fields.Field(
+        column_name="temporary_storage",
+        attribute="temporary_storage",
+        widget=ForeignKeyWidget(Storage, "area"),
+    )
+    materials_used = fields.Field(
+        column_name="materials_used",
+        attribute="materials_used",
+        widget=ManyToManyWidget(PreparationMaterial, field="name", separator=";"),
+    )
+    started_on = fields.Field(
+        column_name="started_on",
+        attribute="started_on",
+        widget=DateWidget(format="%Y-%m-%d"),
+    )
+    completed_on = fields.Field(
+        column_name="completed_on",
+        attribute="completed_on",
+        widget=DateWidget(format="%Y-%m-%d"),
+    )
+
+    def before_import(self, dataset, **kwargs):
+        dataset.headers.append("accession_row")
+        super().before_import(dataset, **kwargs)
+
+    def before_import_row(self, row, **kwargs):
+        collection = row.get("collection")
+        specimen_prefix = row.get("specimen_prefix")
+        specimen_no = row.get("specimen_no")
+        specimen_suffix = row.get("specimen_suffix")
+
+        if not all([collection, specimen_prefix, specimen_no, specimen_suffix]):
+            raise ValueError(
+                "Missing required fields for AccessionRow lookup: "
+                f"collection='{collection}', specimen_prefix='{specimen_prefix}', "
+                f"specimen_no='{specimen_no}', specimen_suffix='{specimen_suffix}'."
+            )
+
+        accession = Accession.objects.filter(
+            collection__abbreviation=collection,
+            specimen_prefix__abbreviation=specimen_prefix,
+            specimen_no=specimen_no,
+        ).first()
+
+        if not accession:
+            raise ValueError(
+                f"No Accession found for collection='{collection}', "
+                f"specimen_prefix='{specimen_prefix}', specimen_no='{specimen_no}'."
+            )
+
+        accession_row = AccessionRow.objects.filter(
+            accession=accession,
+            specimen_suffix=specimen_suffix,
+        ).first()
+
+        if not accession_row:
+            raise ValueError(
+                f"No AccessionRow found for collection='{collection}', "
+                f"specimen_prefix='{specimen_prefix}', specimen_no='{specimen_no}', "
+                f"specimen_suffix='{specimen_suffix}'."
+            )
+
+        row["accession_row"] = str(accession_row.id)
+
+    class Meta:
+        model = Preparation
+        skip_unchanged = True
+        report_skipped = False
+        import_id_fields = ("id",)
+        fields = (
+            "id",
+            "collection",
+            "specimen_prefix",
+            "specimen_no",
+            "specimen_suffix",
+            "accession_row",
+            "preparator",
+            "preparation_type",
+            "reason",
+            "started_on",
+            "completed_on",
+            "status",
+            "original_storage",
+            "temporary_storage",
+            "condition_before",
+            "condition_after",
+            "preparation_method",
+            "chemicals_used",
+            "materials_used",
+            "curator",
+            "approval_status",
+            "approval_date",
+            "curator_comments",
+            "report_link",
+            "notes",
+        )
+        export_order = (
+            "collection",
+            "specimen_prefix",
+            "specimen_no",
+            "specimen_suffix",
+            "preparator",
+            "preparation_type",
+            "reason",
+            "started_on",
+            "completed_on",
+            "status",
+            "original_storage",
+            "temporary_storage",
+            "condition_before",
+            "condition_after",
+            "preparation_method",
+            "chemicals_used",
+            "materials_used",
+            "curator",
+            "approval_status",
+            "approval_date",
+            "curator_comments",
+            "report_link",
+            "notes",
+        )
 
 class ReferenceResource(resources.ModelResource):
     class Meta:

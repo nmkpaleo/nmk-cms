@@ -355,9 +355,10 @@ class PreparationMediaInline(admin.TabularInline):
 
 
 @admin.register(Preparation)
-class PreparationAdmin(admin.ModelAdmin):
+class PreparationAdmin(ImportExportModelAdmin):
     """ Custom admin panel for Preparation model. """
-    
+
+    resource_class = PreparationResource
     form = PreparationAdminForm
     list_display = ("accession_row", "preparator", "status", "curator", "approval_status", "approval_date", "admin_colored_status")
     list_filter = ("status", "approval_status", "preparator", "curator")
