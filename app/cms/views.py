@@ -235,12 +235,12 @@ class FieldSlipDetailView(DetailView):
     template_name = 'cms/fieldslip_detail.html'
     context_object_name = 'fieldslip'
 
-class FieldSlipListView(FilterView, ListView):
+class FieldSlipListView(ListView):
     model = FieldSlip
     template_name = 'cms/fieldslip_list.html'
     context_object_name = 'fieldslips'
     paginate_by = 4
-    filterset_class =FieldSlipFilter
+    
 
 class AccessionDetailView(DetailView):
     model = Accession
@@ -326,12 +326,12 @@ class ReferenceDetailView(DetailView):
     template_name = 'cms/reference_detail.html'
     context_object_name = 'reference'
 
-class ReferenceListView(FilterView,ListView):
+class ReferenceListView(ListView):
     model = Reference
     template_name = 'cms/reference_list.html'
     context_object_name = 'references'
     paginate_by = 10
-    filterset_class= ReferenceFilter
+    
 
 
 class LocalityListView(FilterView, ListView):
