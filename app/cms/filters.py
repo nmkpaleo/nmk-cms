@@ -1,6 +1,6 @@
 import django_filters
 from django import forms
-from .models import Accession, Locality, Preparation
+from .models import Accession, Locality, Preparation, FieldSlip, Reference
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -76,3 +76,25 @@ class PreparationFilter(django_filters.FilterSet):
     class Meta:
         model = Preparation
         fields = ['accession_label', 'status', 'approval_status', 'preparator', 'started_on', 'completed_on']
+
+
+class LocalityFilter(django_filters.FilterSet):
+
+    abbreviation = django_filters.CharFilter(
+        lookup_expr='exact',
+        label="Abbreviation",
+        widget=forms.TextInput(attrs={'class': 'w3-input'})
+    )
+    name = django_filters.ModelChoiceFilter(
+        queryset=Locality.objects.all(),
+        label="Name",
+        widget=forms.Select(attrs={'class': 'w3-select'})
+    )
+ 
+ 
+
+    class Meta:
+        model = Locality
+        fields = ['abbreviation', 'name']
+
+

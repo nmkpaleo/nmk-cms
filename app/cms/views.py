@@ -6,7 +6,7 @@ from django.http import JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
 from django_filters.views import FilterView
-from .filters import AccessionFilter, PreparationFilter
+from .filters import AccessionFilter, PreparationFilter, LocalityFilter, FieldSlipFilter, ReferenceFilter
 
 from django.views.generic import DetailView
 from django.core.paginator import Paginator
@@ -235,11 +235,12 @@ class FieldSlipDetailView(DetailView):
     template_name = 'cms/fieldslip_detail.html'
     context_object_name = 'fieldslip'
 
-class FieldSlipListView(ListView):
+class FieldSlipListView(FilterView, ListView):
     model = FieldSlip
     template_name = 'cms/fieldslip_list.html'
     context_object_name = 'fieldslips'
     paginate_by = 4
+    filterset_class =FieldSlipFilter
 
 class AccessionDetailView(DetailView):
     model = Accession
@@ -325,18 +326,20 @@ class ReferenceDetailView(DetailView):
     template_name = 'cms/reference_detail.html'
     context_object_name = 'reference'
 
-class ReferenceListView(ListView):
+class ReferenceListView(FilterView,ListView):
     model = Reference
     template_name = 'cms/reference_list.html'
     context_object_name = 'references'
     paginate_by = 10
+    filterset_class= ReferenceFilter
 
 
-class LocalityListView(ListView):
+class LocalityListView(FilterView, ListView):
     model = Locality
     template_name = 'cms/locality_list.html'
     context_object_name = 'localitys'
     paginate_by = 1
+    filterset_class = LocalityFilter
 
 class LocalityDetailView(DetailView):
     model = Locality
