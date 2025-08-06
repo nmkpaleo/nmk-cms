@@ -417,7 +417,8 @@ class PreparationAdmin(admin.ModelAdmin):
     admin_status_info.short_description = "Status Overview"
 
 @admin.register(PreparationMaterial)
-class PreparationMaterialAdmin(admin.ModelAdmin):
+class PreparationMaterialAdmin(ImportExportModelAdmin):
+    resource_class = PreparationMaterialResource
     list_display = ("name", "description")
     search_fields = ("name",)
 
