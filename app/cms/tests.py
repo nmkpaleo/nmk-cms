@@ -1,13 +1,18 @@
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.test import TestCase
+from django.urls import reverse
 
 from cms.models import (
     Accession,
     AccessionNumberSeries,
+    AccessionRow,
     Collection,
     Locality,
+    Preparation,
+    PreparationStatus,
 )
 from cms.utils import generate_accessions_from_series
 
@@ -75,4 +80,84 @@ class GenerateAccessionsFromSeriesTests(TestCase):
                 specimen_prefix=self.locality,
                 creator_user=self.creator,
             )
+
+
+class PreparationUpdateViewTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+
+        self.preparator = User.objects.create_user(
+            username="prep", password="pass"
+        )
+        self.curator = User.objects.create_user(
+            username="cur", password="pass"
+        )
+        self.other_curator = User.objects.create_user(
+            username="cur2", password="pass"
+        )
+
+        self.curators_group = Group.objects.create(name="Curators")
+        self.preparators_group = Group.objects.create(name="Preparators")
+        self.curators_group.user_set.add(self.curator, self.other_curator)
+        self.preparators_group.user_set.add(self.preparator)
+
+        self.patcher = patch("cms.models.get_current_user", return_value=self.curator)
+        self.patcher.start()
+        self.addCleanup(self.patcher.stop)
+
+        self.collection = Collection.objects.create(
+            abbreviation="COL", description="Test Collection"
+        )
+        self.locality = Locality.objects.create(abbreviation="LC", name="Locality")
+        self.accession = Accession.objects.create(
+            collection=self.collection,
+            specimen_prefix=self.locality,
+            specimen_no=1,
+            accessioned_by=self.preparator,
+        )
+        self.accession_row = AccessionRow.objects.create(accession=self.accession)
+        self.preparation = Preparation.objects.create(
+            accession_row=self.accession_row,
+            preparator=self.preparator,
+            curator=self.curator,
+            preparation_type="cleaning",
+            started_on="2023-01-01",
+            status=PreparationStatus.COMPLETED,
+        )
+
+    def test_curator_must_match_to_edit(self):
+        self.client.login(username="cur2", password="pass")
+        url = reverse("preparation_edit", args=[self.preparation.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 403)
+
+    def test_curator_sees_only_approved_declined_choices(self):
+        self.client.login(username="cur", password="pass")
+        url = reverse("preparation_edit", args=[self.preparation.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        choices = [c[0] for c in response.context["form"].fields["status"].choices]
+        self.assertEqual(
+            choices,
+            [PreparationStatus.APPROVED, PreparationStatus.DECLINED],
+        )
+
+    def test_curator_cannot_set_invalid_status(self):
+        self.client.login(username="cur", password="pass")
+        url = reverse("preparation_edit", args=[self.preparation.pk])
+        data = {
+            "accession_row": self.accession_row.pk,
+            "preparation_type": "cleaning",
+            "preparator": self.preparator.pk,
+            "started_on": "2023-01-01",
+            "status": PreparationStatus.IN_PROGRESS,
+        }
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, 200)
+        self.assertFormError(
+            response,
+            "form",
+            "status",
+            "You can only set status to Approved or Declined.",
+        )
 

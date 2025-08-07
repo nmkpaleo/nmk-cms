@@ -805,8 +805,8 @@ class PreparationUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView)
         if user.is_superuser:
             return True
 
-        # Curators can edit if they are not the preparator
-        if user.groups.filter(name="Curators").exists() and user != preparation.preparator:
+        # Curators can edit only if they are assigned as the curator
+        if user.groups.filter(name="Curators").exists() and user == preparation.curator:
             return True
 
         # Preparators can edit their own preparations
@@ -828,14 +828,36 @@ class PreparationUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView)
                     if choice[0] not in [PreparationStatus.APPROVED, PreparationStatus.DECLINED]
                 ]
 
+        # Restrict status choices for curators
+        if user.groups.filter(name="Curators").exists() and user == self.get_object().curator:
+            status_field = form.fields.get("status")
+            if status_field:
+                status_field.choices = [
+                    (PreparationStatus.APPROVED, PreparationStatus.APPROVED.label),
+                    (PreparationStatus.DECLINED, PreparationStatus.DECLINED.label),
+                ]
+            curator_field = form.fields.get("curator")
+            if curator_field:
+                curator_field.initial = user
+                curator_field.disabled = True
+
         return form
 
     def form_valid(self, form):
         user = self.request.user
+
         if user.groups.filter(name="Preparators").exists() and user == self.get_object().preparator:
             if form.cleaned_data.get("status") in [PreparationStatus.APPROVED, PreparationStatus.DECLINED]:
                 form.add_error("status", "You cannot set status to Approved or Declined.")
                 return self.form_invalid(form)
+
+        if user.groups.filter(name="Curators").exists() and user == self.get_object().curator:
+            status = form.cleaned_data.get("status")
+            if status not in [PreparationStatus.APPROVED, PreparationStatus.DECLINED]:
+                form.add_error("status", "You can only set status to Approved or Declined.")
+                return self.form_invalid(form)
+            form.instance.curator = user
+            form.instance.approval_status = status.lower()
 
         return super().form_valid(form)
 
