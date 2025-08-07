@@ -184,7 +184,8 @@ def dashboard(request):
 
     if user.groups.filter(name="Curators").exists():
         completed_preparations = Preparation.objects.filter(
-            status=PreparationStatus.COMPLETED
+            status=PreparationStatus.COMPLETED,
+            curator=user,
         )
 
         context = {

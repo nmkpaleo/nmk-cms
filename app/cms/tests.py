@@ -161,3 +161,66 @@ class PreparationUpdateViewTests(TestCase):
             "You can only set status to Approved or Declined.",
         )
 
+
+class DashboardViewCuratorTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+
+        self.preparator = User.objects.create_user(
+            username="prep", password="pass"
+        )
+        self.curator = User.objects.create_user(
+            username="cur", password="pass"
+        )
+        self.other_curator = User.objects.create_user(
+            username="cur2", password="pass"
+        )
+
+        self.curators_group = Group.objects.create(name="Curators")
+        self.preparators_group = Group.objects.create(name="Preparators")
+        self.curators_group.user_set.add(self.curator, self.other_curator)
+        self.preparators_group.user_set.add(self.preparator)
+
+        self.patcher = patch("cms.models.get_current_user", return_value=self.curator)
+        self.patcher.start()
+        self.addCleanup(self.patcher.stop)
+
+        self.collection = Collection.objects.create(
+            abbreviation="COL", description="Test Collection"
+        )
+        self.locality = Locality.objects.create(abbreviation="LC", name="Locality")
+        self.accession = Accession.objects.create(
+            collection=self.collection,
+            specimen_prefix=self.locality,
+            specimen_no=1,
+            accessioned_by=self.preparator,
+        )
+        self.accession_row1 = AccessionRow.objects.create(accession=self.accession)
+        self.accession_row2 = AccessionRow.objects.create(accession=self.accession)
+
+        self.curator_prep = Preparation.objects.create(
+            accession_row=self.accession_row1,
+            preparator=self.preparator,
+            curator=self.curator,
+            preparation_type="cleaning",
+            started_on="2023-01-01",
+            status=PreparationStatus.COMPLETED,
+        )
+        self.other_curator_prep = Preparation.objects.create(
+            accession_row=self.accession_row2,
+            preparator=self.preparator,
+            curator=self.other_curator,
+            preparation_type="cleaning",
+            started_on="2023-01-01",
+            status=PreparationStatus.COMPLETED,
+        )
+
+    def test_curator_sees_only_their_completed_preparations(self):
+        self.client.login(username="cur", password="pass")
+        response = self.client.get(reverse("dashboard"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            list(response.context["completed_preparations"]),
+            [self.curator_prep],
+        )
+
