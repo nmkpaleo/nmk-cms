@@ -164,12 +164,9 @@ def fieldslip_import(request):
 
 @login_required
 def dashboard(request):
-    """Landing page that adapts content based on user roles.
-
-    Currently supports the Preparator role by showing relevant preparation
-    records and quick actions.
-    """
+    """Landing page that adapts content based on user roles."""
     user = request.user
+
     if user.groups.filter(name="Preparators").exists():
         my_preparations = Preparation.objects.filter(
             preparator=user
@@ -182,6 +179,17 @@ def dashboard(request):
             "role": "Preparator",
             "my_preparations": my_preparations,
             "priority_tasks": priority_tasks,
+        }
+        return render(request, "cms/dashboard.html", context)
+
+    if user.groups.filter(name="Curators").exists():
+        completed_preparations = Preparation.objects.filter(
+            status=PreparationStatus.COMPLETED
+        )
+
+        context = {
+            "role": "Curator",
+            "completed_preparations": completed_preparations,
         }
         return render(request, "cms/dashboard.html", context)
 

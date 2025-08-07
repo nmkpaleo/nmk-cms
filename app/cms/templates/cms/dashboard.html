@@ -4,7 +4,7 @@
   {% if role == "Preparator" %}
     <h2>My Preparations</h2>
     {% if my_preparations %}
-      <table class="table">
+      <table class="w3-table w3-striped">
         <thead>
           <tr>
             <th>Specimen</th>
@@ -20,7 +20,7 @@
               <td>{{ prep.status }}</td>
               <td>{{ prep.started_on }}</td>
               <td>
-                <a href="{% url 'preparation_detail' prep.id %}" class="btn btn-sm btn-info">View</a>
+                <a href="{% url 'preparation_detail' prep.id %}" class="w3-button w3-small w3-blue">View</a>
               </td>
             </tr>
           {% endfor %}
@@ -44,7 +44,35 @@
       <p>No priority tasks.</p>
     {% endif %}
 
-    <a href="{% url 'preparation_create' %}" class="btn btn-primary">Create Preparation Record</a>
+    <a href="{% url 'preparation_create' %}" class="w3-button w3-green">Create Preparation Record</a>
+  {% elif role == "Curator" %}
+    <h2>Completed Preparations</h2>
+    {% if completed_preparations %}
+      <table class="w3-table w3-striped">
+        <thead>
+          <tr>
+            <th>Specimen</th>
+            <th>Completed On</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for prep in completed_preparations %}
+            <tr>
+              <td>{{ prep.accession_row }}</td>
+              <td>{{ prep.completed_on }}</td>
+              <td>
+                <a href="{% url 'preparation_detail' prep.id %}" class="w3-button w3-small w3-blue">View</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No completed preparations awaiting review.</p>
+    {% endif %}
+
+    <a href="{% url 'preparation_create' %}" class="w3-button w3-green">Create Preparation Record</a>
   {% else %}
     <p>Dashboard content for your role is not available yet.</p>
   {% endif %}
