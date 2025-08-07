@@ -793,12 +793,43 @@ class PreparationUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView)
         preparation = self.get_object()
         user = self.request.user
 
-        # Allow admins always
+        # Admins can always edit
         if user.is_superuser:
             return True
 
-        # Allow curators if they are not the preparator
-        return user != preparation.preparator and user.groups.filter(name="Curators").exists()
+        # Curators can edit if they are not the preparator
+        if user.groups.filter(name="Curators").exists() and user != preparation.preparator:
+            return True
+
+        # Preparators can edit their own preparations
+        if user.groups.filter(name="Preparators").exists() and user == preparation.preparator:
+            return True
+
+        return False
+
+    def get_form(self, *args, **kwargs):
+        form = super().get_form(*args, **kwargs)
+        user = self.request.user
+
+        # Restrict status choices for preparators
+        if user.groups.filter(name="Preparators").exists() and user == self.get_object().preparator:
+            status_field = form.fields.get("status")
+            if status_field:
+                status_field.choices = [
+                    choice for choice in status_field.choices
+                    if choice[0] not in [PreparationStatus.APPROVED, PreparationStatus.DECLINED]
+                ]
+
+        return form
+
+    def form_valid(self, form):
+        user = self.request.user
+        if user.groups.filter(name="Preparators").exists() and user == self.get_object().preparator:
+            if form.cleaned_data.get("status") in [PreparationStatus.APPROVED, PreparationStatus.DECLINED]:
+                form.add_error("status", "You cannot set status to Approved or Declined.")
+                return self.form_invalid(form)
+
+        return super().form_valid(form)
 
 class PreparationDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
     """ Delete a preparation record. """
