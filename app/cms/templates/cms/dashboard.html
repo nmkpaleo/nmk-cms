@@ -73,6 +73,62 @@
     {% endif %}
 
     <a href="{% url 'preparation_create' %}" class="w3-button w3-green">Create Preparation Record</a>
+  {% elif role == "Collection Manager" %}
+    {% if has_active_series %}
+      <h2>Generate Accession Numbers</h2>
+      <a href="{% url 'accession_create' %}" class="w3-button w3-green">Create Single Accession</a>
+      <a href="{% url 'accession_generate_batch' %}" class="w3-button w3-green">Generate Batch</a>
+    {% endif %}
+
+    <h2>Unassigned Accessions</h2>
+    {% if unassigned_accessions %}
+      <table class="w3-table w3-striped">
+        <thead>
+          <tr>
+            <th>Accession</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for acc in unassigned_accessions %}
+            <tr>
+              <td>{{ acc }}</td>
+              <td>
+                <a href="{% url 'accession_detail' acc.id %}" class="w3-button w3-small w3-blue">View</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No unassigned accessions.</p>
+    {% endif %}
+
+    <h2>My Latest Accessions</h2>
+    {% if latest_accessions %}
+      <table class="w3-table w3-striped">
+        <thead>
+          <tr>
+            <th>Accession</th>
+            <th>Modified On</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for acc in latest_accessions %}
+            <tr>
+              <td>{{ acc }}</td>
+              <td>{{ acc.modified_on }}</td>
+              <td>
+                <a href="{% url 'accession_detail' acc.id %}" class="w3-button w3-small w3-blue">View</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No recent accessions.</p>
+    {% endif %}
   {% else %}
     <p>Dashboard content for your role is not available yet.</p>
   {% endif %}

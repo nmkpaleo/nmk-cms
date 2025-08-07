@@ -3,7 +3,7 @@ from datetime import timedelta
 from dal import autocomplete
 from django import forms
 from django.db import transaction
-from django.db.models import Value, CharField
+from django.db.models import Value, CharField, Count, Q
 from django.db.models.functions import Concat
 from django.http import JsonResponse
 from django.utils.decorators import method_decorator
@@ -194,6 +194,27 @@ def dashboard(request):
         }
         return render(request, "cms/dashboard.html", context)
 
+    if user.groups.filter(name="Collection Managers").exists():
+        has_active_series = AccessionNumberSeries.objects.filter(
+            user=user, is_active=True
+        ).exists()
+        unassigned_accessions = (
+            Accession.objects.filter(accessioned_by=user)
+            .annotate(row_count=Count("accessionrow"))
+            .filter(row_count=0)
+        )
+        latest_accessions = (
+            Accession.objects.filter(Q(created_by=user) | Q(modified_by=user))
+            .order_by("-modified_on")[:10]
+        )
+        context = {
+            "role": "Collection Manager",
+            "has_active_series": has_active_series,
+            "unassigned_accessions": unassigned_accessions,
+            "latest_accessions": latest_accessions,
+        }
+        return render(request, "cms/dashboard.html", context)
+
     # Placeholder for other roles
     return render(request, "cms/dashboard.html", {"role": "Unknown"})
 
@@ -366,7 +387,6 @@ class AccessionDetailView(DetailView):
         return context
 
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import Q
 
 from django.views.generic import ListView
 from django_filters.views import FilterView

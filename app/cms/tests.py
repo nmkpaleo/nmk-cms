@@ -286,3 +286,73 @@ class DashboardViewCuratorTests(TestCase):
             [self.curator_prep],
         )
 
+
+class DashboardViewCollectionManagerTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+
+        self.manager = User.objects.create_user(
+            username="cm", password="pass"
+        )
+        self.other_manager = User.objects.create_user(
+            username="cm2", password="pass"
+        )
+
+        self.group = Group.objects.create(name="Collection Managers")
+        self.group.user_set.add(self.manager, self.other_manager)
+
+        self.patcher = patch("cms.models.get_current_user", return_value=self.manager)
+        self.patcher.start()
+        self.addCleanup(self.patcher.stop)
+
+        self.collection = Collection.objects.create(
+            abbreviation="COL", description="Test Collection"
+        )
+        self.locality = Locality.objects.create(abbreviation="LC", name="Locality")
+
+        AccessionNumberSeries.objects.create(
+            user=self.manager,
+            start_from=1,
+            end_at=100,
+            current_number=1,
+            is_active=True,
+        )
+
+        self.unassigned = Accession.objects.create(
+            collection=self.collection,
+            specimen_prefix=self.locality,
+            specimen_no=1,
+            accessioned_by=self.manager,
+        )
+        self.assigned = Accession.objects.create(
+            collection=self.collection,
+            specimen_prefix=self.locality,
+            specimen_no=2,
+            accessioned_by=self.manager,
+        )
+        AccessionRow.objects.create(accession=self.assigned)
+
+        for i in range(3, 14):
+            Accession.objects.create(
+                collection=self.collection,
+                specimen_prefix=self.locality,
+                specimen_no=i,
+                accessioned_by=self.manager,
+            )
+
+        self.client.login(username="cm", password="pass")
+
+    def test_collection_manager_dashboard_lists(self):
+        response = self.client.get(reverse("dashboard"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["role"], "Collection Manager")
+        self.assertTrue(response.context["has_active_series"])
+        self.assertIn(self.unassigned, response.context["unassigned_accessions"])
+        self.assertNotIn(self.assigned, response.context["unassigned_accessions"])
+        self.assertEqual(len(response.context["latest_accessions"]), 10)
+
+    def test_collection_manager_without_active_series(self):
+        AccessionNumberSeries.objects.filter(user=self.manager).update(is_active=False)
+        response = self.client.get(reverse("dashboard"))
+        self.assertFalse(response.context["has_active_series"])
+
