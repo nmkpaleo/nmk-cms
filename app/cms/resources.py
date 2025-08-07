@@ -25,9 +25,37 @@ from import_export import resources, fields
 from import_export.widgets import (
     BooleanWidget,
     DateWidget,
+    DateTimeWidget,
     ForeignKeyWidget,
     ManyToManyWidget,
 )
+from datetime import datetime
+from django.utils import timezone
+
+
+class DayFirstDateTimeWidget(DateTimeWidget):
+    """Widget that parses dates in dd/MM/yyyy format, with optional seconds."""
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("format", "%d/%m/%Y %H:%M:%S")
+        super().__init__(*args, **kwargs)
+
+    def clean(self, value, row=None, *args, **kwargs):
+        if not value:
+            return None
+        for fmt in ("%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M"):
+            try:
+                dt = datetime.strptime(value, fmt)
+                break
+            except ValueError:
+                continue
+        else:
+            raise ValueError(
+                f"Incorrect datetime format: {value}. Expected dd/MM/yyyy HH:mm[:ss]"
+            )
+        if timezone.is_naive(dt):
+            return timezone.make_aware(dt)
+        return dt
 
 class AccessionResource(resources.ModelResource):
     accession = fields.Field()
@@ -621,6 +649,11 @@ class PreparationResource(resources.ModelResource):
         attribute="completed_on",
         widget=DateWidget(format="%Y-%m-%d"),
     )
+    approval_date = fields.Field(
+        column_name="approval_date",
+        attribute="approval_date",
+        widget=DayFirstDateTimeWidget(),
+    )
 
     def before_import(self, dataset, **kwargs):
         dataset.headers.append("accession_row")
@@ -684,6 +717,11 @@ class PreparationResource(resources.ModelResource):
 
     def dehydrate_specimen_suffix(self, obj):
         return getattr(obj.accession_row, "specimen_suffix", None)
+
+    def dehydrate_approval_date(self, obj):
+        if obj.approval_date:
+            return timezone.localtime(obj.approval_date).strftime("%d/%m/%Y %H:%M:%S")
+        return None
 
     class Meta:
         model = Preparation
