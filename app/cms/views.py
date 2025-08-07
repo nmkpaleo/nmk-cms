@@ -766,12 +766,22 @@ class PreparationDetailView(LoginRequiredMixin, DetailView):
     template_name = "cms/preparation_detail.html"
     context_object_name = "preparation"
 
-    def test_func(self):
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
         user = self.request.user
-        return (
-            user.is_superuser or 
-            user.groups.filter(name__in=["Curators", "Collection Managers"]).exists()
+        preparation = self.object
+        context["can_edit"] = (
+            user.is_superuser
+            or (
+                user.groups.filter(name="Curators").exists()
+                and user == preparation.curator
+            )
+            or (
+                user.groups.filter(name="Preparators").exists()
+                and user == preparation.preparator
+            )
         )
+        return context
 
 class PreparationCreateView(LoginRequiredMixin, CreateView):
     """ Create a new preparation record. """
