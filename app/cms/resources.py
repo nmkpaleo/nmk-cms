@@ -1,8 +1,61 @@
 from venv import logger
-from .models import Accession, AccessionReference, AccessionRow, Collection, Element, FieldSlip, GeologicalContext, Identification, Locality, Media, NatureOfSpecimen, Person, PreparationMaterial, Reference, SpecimenGeology, Storage, Taxon, User
+from .models import (
+    Accession,
+    AccessionReference,
+    AccessionRow,
+    Collection,
+    Element,
+    FieldSlip,
+    GeologicalContext,
+    Identification,
+    Locality,
+    Media,
+    NatureOfSpecimen,
+    Person,
+    Preparation,
+    PreparationMaterial,
+    Reference,
+    SpecimenGeology,
+    Storage,
+    Taxon,
+    User,
+)
 from import_export import resources, fields
 #from import_export.fields import Field
-from import_export.widgets import BooleanWidget, ForeignKeyWidget, DateWidget
+from import_export.widgets import (
+    BooleanWidget,
+    DateWidget,
+    DateTimeWidget,
+    ForeignKeyWidget,
+    ManyToManyWidget,
+)
+from datetime import datetime
+from django.utils import timezone
+
+
+class DayFirstDateTimeWidget(DateTimeWidget):
+    """Widget that parses dates in dd/MM/yyyy format, with optional seconds."""
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("format", "%d/%m/%Y %H:%M:%S")
+        super().__init__(*args, **kwargs)
+
+    def clean(self, value, row=None, *args, **kwargs):
+        if not value:
+            return None
+        for fmt in ("%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M"):
+            try:
+                dt = datetime.strptime(value, fmt)
+                break
+            except ValueError:
+                continue
+        else:
+            raise ValueError(
+                f"Incorrect datetime format: {value}. Expected dd/MM/yyyy HH:mm[:ss]"
+            )
+        if timezone.is_naive(dt):
+            return timezone.make_aware(dt)
+        return dt
 
 class AccessionResource(resources.ModelResource):
     accession = fields.Field()
@@ -535,6 +588,198 @@ class PreparationMaterialResource(resources.ModelResource):
         import_id_fields = ('name',)
         fields = ('name', 'description')
         export_order = ('name', 'description')
+
+
+class PreparationResource(resources.ModelResource):
+    accession_row = fields.Field(
+        column_name="accession_row",
+        attribute="accession_row",
+        widget=ForeignKeyWidget(AccessionRow, "id"),
+    )
+
+    collection = fields.Field(
+        column_name="collection",
+        readonly=True,
+    )
+    specimen_prefix = fields.Field(
+        column_name="specimen_prefix",
+        readonly=True,
+    )
+    specimen_no = fields.Field(
+        column_name="specimen_no",
+        readonly=True,
+    )
+    specimen_suffix = fields.Field(
+        column_name="specimen_suffix",
+        readonly=True,
+    )
+
+    preparator = fields.Field(
+        column_name="preparator",
+        attribute="preparator",
+        widget=ForeignKeyWidget(User, "username"),
+    )
+    curator = fields.Field(
+        column_name="curator",
+        attribute="curator",
+        widget=ForeignKeyWidget(User, "username"),
+    )
+    original_storage = fields.Field(
+        column_name="original_storage",
+        attribute="original_storage",
+        widget=ForeignKeyWidget(Storage, "area"),
+    )
+    temporary_storage = fields.Field(
+        column_name="temporary_storage",
+        attribute="temporary_storage",
+        widget=ForeignKeyWidget(Storage, "area"),
+    )
+    materials_used = fields.Field(
+        column_name="materials_used",
+        attribute="materials_used",
+        widget=ManyToManyWidget(PreparationMaterial, field="name", separator=";"),
+    )
+    started_on = fields.Field(
+        column_name="started_on",
+        attribute="started_on",
+        widget=DateWidget(format="%Y-%m-%d"),
+    )
+    completed_on = fields.Field(
+        column_name="completed_on",
+        attribute="completed_on",
+        widget=DateWidget(format="%Y-%m-%d"),
+    )
+    approval_date = fields.Field(
+        column_name="approval_date",
+        attribute="approval_date",
+        widget=DayFirstDateTimeWidget(),
+    )
+
+    def before_import(self, dataset, **kwargs):
+        dataset.headers.append("accession_row")
+        super().before_import(dataset, **kwargs)
+
+    def before_import_row(self, row, **kwargs):
+        collection = row.get("collection")
+        specimen_prefix = row.get("specimen_prefix")
+        specimen_no = row.get("specimen_no")
+        specimen_suffix = row.get("specimen_suffix")
+
+        if not all([collection, specimen_prefix, specimen_no, specimen_suffix]):
+            raise ValueError(
+                "Missing required fields for AccessionRow lookup: "
+                f"collection='{collection}', specimen_prefix='{specimen_prefix}', "
+                f"specimen_no='{specimen_no}', specimen_suffix='{specimen_suffix}'."
+            )
+
+        accession = Accession.objects.filter(
+            collection__abbreviation=collection,
+            specimen_prefix__abbreviation=specimen_prefix,
+            specimen_no=specimen_no,
+        ).first()
+
+        if not accession:
+            raise ValueError(
+                f"No Accession found for collection='{collection}', "
+                f"specimen_prefix='{specimen_prefix}', specimen_no='{specimen_no}'."
+            )
+
+        accession_row = AccessionRow.objects.filter(
+            accession=accession,
+            specimen_suffix=specimen_suffix,
+        ).first()
+
+        if not accession_row:
+            raise ValueError(
+                f"No AccessionRow found for collection='{collection}', "
+                f"specimen_prefix='{specimen_prefix}', specimen_no='{specimen_no}', "
+                f"specimen_suffix='{specimen_suffix}'."
+            )
+
+        row["accession_row"] = str(accession_row.id)
+
+    def _get_accession(self, obj):
+        return getattr(obj.accession_row, "accession", None) if obj.accession_row else None
+
+    def dehydrate_collection(self, obj):
+        accession = self._get_accession(obj)
+        collection = getattr(accession, "collection", None)
+        return getattr(collection, "abbreviation", None)
+
+    def dehydrate_specimen_prefix(self, obj):
+        accession = self._get_accession(obj)
+        prefix = getattr(accession, "specimen_prefix", None)
+        return getattr(prefix, "abbreviation", None)
+
+    def dehydrate_specimen_no(self, obj):
+        accession = self._get_accession(obj)
+        return getattr(accession, "specimen_no", None)
+
+    def dehydrate_specimen_suffix(self, obj):
+        return getattr(obj.accession_row, "specimen_suffix", None)
+
+    def dehydrate_approval_date(self, obj):
+        if obj.approval_date:
+            return timezone.localtime(obj.approval_date).strftime("%d/%m/%Y %H:%M:%S")
+        return None
+
+    class Meta:
+        model = Preparation
+        skip_unchanged = True
+        report_skipped = False
+        import_id_fields = ("id",)
+        fields = (
+            "id",
+            "collection",
+            "specimen_prefix",
+            "specimen_no",
+            "specimen_suffix",
+            "accession_row",
+            "preparator",
+            "preparation_type",
+            "reason",
+            "started_on",
+            "completed_on",
+            "status",
+            "original_storage",
+            "temporary_storage",
+            "condition_before",
+            "condition_after",
+            "preparation_method",
+            "chemicals_used",
+            "materials_used",
+            "curator",
+            "approval_status",
+            "approval_date",
+            "curator_comments",
+            "report_link",
+            "notes",
+        )
+        export_order = (
+            "collection",
+            "specimen_prefix",
+            "specimen_no",
+            "specimen_suffix",
+            "preparator",
+            "preparation_type",
+            "reason",
+            "started_on",
+            "completed_on",
+            "status",
+            "original_storage",
+            "temporary_storage",
+            "condition_before",
+            "condition_after",
+            "preparation_method",
+            "chemicals_used",
+            "materials_used",
+            "curator",
+            "approval_status",
+            "approval_date",
+            "curator_comments",
+            "report_link",
+            "notes",
+        )
 
 class ReferenceResource(resources.ModelResource):
     class Meta:
