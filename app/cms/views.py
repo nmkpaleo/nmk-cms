@@ -166,6 +166,7 @@ def fieldslip_import(request):
 def dashboard(request):
     """Landing page that adapts content based on user roles."""
     user = request.user
+    context = {}
 
     if user.groups.filter(name="Preparators").exists():
         my_preparations = Preparation.objects.filter(
@@ -175,12 +176,13 @@ def dashboard(request):
         priority_threshold = now().date() - timedelta(days=7)
         priority_tasks = my_preparations.filter(started_on__lte=priority_threshold)
 
-        context = {
-            "role": "Preparator",
-            "my_preparations": my_preparations,
-            "priority_tasks": priority_tasks,
-        }
-        return render(request, "cms/dashboard.html", context)
+        context.update(
+            {
+                "is_preparator": True,
+                "my_preparations": my_preparations,
+                "priority_tasks": priority_tasks,
+            }
+        )
 
     if user.groups.filter(name="Curators").exists():
         completed_preparations = Preparation.objects.filter(
@@ -188,11 +190,12 @@ def dashboard(request):
             curator=user,
         )
 
-        context = {
-            "role": "Curator",
-            "completed_preparations": completed_preparations,
-        }
-        return render(request, "cms/dashboard.html", context)
+        context.update(
+            {
+                "is_curator": True,
+                "completed_preparations": completed_preparations,
+            }
+        )
 
     if user.groups.filter(name="Collection Managers").exists():
         has_active_series = AccessionNumberSeries.objects.filter(
@@ -207,16 +210,20 @@ def dashboard(request):
             Accession.objects.filter(Q(created_by=user) | Q(modified_by=user))
             .order_by("-modified_on")[:10]
         )
-        context = {
-            "role": "Collection Manager",
-            "has_active_series": has_active_series,
-            "unassigned_accessions": unassigned_accessions,
-            "latest_accessions": latest_accessions,
-        }
-        return render(request, "cms/dashboard.html", context)
 
-    # Placeholder for other roles
-    return render(request, "cms/dashboard.html", {"role": "Unknown"})
+        context.update(
+            {
+                "is_collection_manager": True,
+                "has_active_series": has_active_series,
+                "unassigned_accessions": unassigned_accessions,
+                "latest_accessions": latest_accessions,
+            }
+        )
+
+    if not context:
+        context["no_role"] = True
+
+    return render(request, "cms/dashboard.html", context)
 
 def index(request):
     """View function for home page of site."""

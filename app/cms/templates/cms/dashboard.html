@@ -1,7 +1,7 @@
 {% extends "base_generic.html" %}
 
 {% block content %}
-  {% if role == "Preparator" %}
+  {% if is_preparator %}
     <h2>My Preparations</h2>
     {% if my_preparations %}
       <table class="w3-table w3-striped">
@@ -45,7 +45,9 @@
     {% endif %}
 
     <a href="{% url 'preparation_create' %}" class="w3-button w3-green">Create Preparation Record</a>
-  {% elif role == "Curator" %}
+  {% endif %}
+
+  {% if is_curator %}
     <h2>Completed Preparations</h2>
     {% if completed_preparations %}
       <table class="w3-table w3-striped">
@@ -73,7 +75,9 @@
     {% endif %}
 
     <a href="{% url 'preparation_create' %}" class="w3-button w3-green">Create Preparation Record</a>
-  {% elif role == "Collection Manager" %}
+  {% endif %}
+
+  {% if is_collection_manager %}
     {% if has_active_series %}
       <h2>Generate Accession Numbers</h2>
       <a href="{% url 'accession_create' %}" class="w3-button w3-green">Create Single Accession</a>
@@ -129,7 +133,9 @@
     {% else %}
       <p>No recent accessions.</p>
     {% endif %}
-  {% else %}
+  {% endif %}
+
+  {% if no_role %}
     <p>Dashboard content for your role is not available yet.</p>
   {% endif %}
 {% endblock %}
