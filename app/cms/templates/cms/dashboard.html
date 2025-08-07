@@ -1,0 +1,51 @@
+{% extends "base_generic.html" %}
+
+{% block content %}
+  {% if role == "Preparator" %}
+    <h2>My Preparations</h2>
+    {% if my_preparations %}
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Specimen</th>
+            <th>Status</th>
+            <th>Started On</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for prep in my_preparations %}
+            <tr>
+              <td>{{ prep.accession_row }}</td>
+              <td>{{ prep.status }}</td>
+              <td>{{ prep.started_on }}</td>
+              <td>
+                <a href="{% url 'preparation_detail' prep.id %}" class="btn btn-sm btn-info">View</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No active preparations assigned.</p>
+    {% endif %}
+
+    <h2>Priority Tasks</h2>
+    {% if priority_tasks %}
+      <ul>
+        {% for task in priority_tasks %}
+          <li>
+            <a href="{% url 'preparation_detail' task.id %}">{{ task.accession_row }}</a>
+            - started on {{ task.started_on }}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>No priority tasks.</p>
+    {% endif %}
+
+    <a href="{% url 'preparation_create' %}" class="btn btn-primary">Create Preparation Record</a>
+  {% else %}
+    <p>Dashboard content for your role is not available yet.</p>
+  {% endif %}
+{% endblock %}

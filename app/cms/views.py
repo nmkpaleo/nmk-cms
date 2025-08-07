@@ -1,4 +1,5 @@
 import csv
+from datetime import timedelta
 from dal import autocomplete
 from django import forms
 from django.db import transaction
@@ -39,11 +40,26 @@ from cms.forms import (AccessionBatchForm, AccessionCommentForm,
                     PreparationApprovalForm, PreparationMediaUploadForm,
                     SpecimenCompositeForm, ReferenceForm, LocalityForm)
 
-from cms.models import (Accession, AccessionNumberSeries,
-                     AccessionFieldSlip, AccessionReference, AccessionRow,
-                     Comment, FieldSlip, Media, NatureOfSpecimen, Identification,
-                     Preparation, PreparationMedia, Reference, SpecimenGeology, Storage,
-                     Taxon , Locality)
+from cms.models import (
+    Accession,
+    AccessionNumberSeries,
+    AccessionFieldSlip,
+    AccessionReference,
+    AccessionRow,
+    Comment,
+    FieldSlip,
+    Media,
+    NatureOfSpecimen,
+    Identification,
+    Preparation,
+    PreparationMedia,
+    Reference,
+    SpecimenGeology,
+    Storage,
+    Taxon,
+    Locality,
+    PreparationStatus,
+)
 
 from cms.resources import FieldSlipResource
 from cms.utils import generate_accessions_from_series
@@ -146,8 +162,36 @@ def fieldslip_import(request):
 
     return render(request, 'cms/fieldslip_import.html')  # Render the import form
 
+@login_required
+def dashboard(request):
+    """Landing page that adapts content based on user roles.
+
+    Currently supports the Preparator role by showing relevant preparation
+    records and quick actions.
+    """
+    user = request.user
+    if user.groups.filter(name="Preparators").exists():
+        my_preparations = Preparation.objects.filter(
+            preparator=user
+        ).exclude(status=PreparationStatus.COMPLETED)
+
+        priority_threshold = now().date() - timedelta(days=7)
+        priority_tasks = my_preparations.filter(started_on__lte=priority_threshold)
+
+        context = {
+            "role": "Preparator",
+            "my_preparations": my_preparations,
+            "priority_tasks": priority_tasks,
+        }
+        return render(request, "cms/dashboard.html", context)
+
+    # Placeholder for other roles
+    return render(request, "cms/dashboard.html", {"role": "Unknown"})
+
 def index(request):
     """View function for home page of site."""
+    if request.user.is_authenticated:
+        return dashboard(request)
     return render(request, 'index.html')
 
 def base_generic(request):
