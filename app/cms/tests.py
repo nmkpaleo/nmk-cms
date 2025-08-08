@@ -340,6 +340,16 @@ class DashboardViewCollectionManagerTests(TestCase):
                 accessioned_by=self.manager,
             )
 
+        with patch("cms.models.get_current_user", return_value=self.other_manager):
+            self.row_accession = Accession.objects.create(
+                collection=self.collection,
+                specimen_prefix=self.locality,
+                specimen_no=99,
+                accessioned_by=self.other_manager,
+            )
+
+        AccessionRow.objects.create(accession=self.row_accession)
+
         self.client.login(username="cm", password="pass")
 
     def test_collection_manager_dashboard_lists(self):
@@ -350,6 +360,7 @@ class DashboardViewCollectionManagerTests(TestCase):
         self.assertIn(self.unassigned, response.context["unassigned_accessions"])
         self.assertNotIn(self.assigned, response.context["unassigned_accessions"])
         self.assertEqual(len(response.context["latest_accessions"]), 10)
+        self.assertIn(self.row_accession, response.context["latest_accessions"])
 
     def test_collection_manager_without_active_series(self):
         AccessionNumberSeries.objects.filter(user=self.manager).update(is_active=False)

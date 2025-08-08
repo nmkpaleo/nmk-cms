@@ -3,8 +3,8 @@ from datetime import timedelta
 from dal import autocomplete
 from django import forms
 from django.db import transaction
-from django.db.models import Value, CharField, Count, Q
-from django.db.models.functions import Concat
+from django.db.models import Value, CharField, Count, Q, Max
+from django.db.models.functions import Concat, Greatest
 from django.http import JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -207,8 +207,19 @@ def dashboard(request):
             .filter(row_count=0)
         )
         latest_accessions = (
-            Accession.objects.filter(Q(created_by=user) | Q(modified_by=user))
-            .order_by("-modified_on")[:10]
+            Accession.objects.filter(
+                Q(created_by=user)
+                | Q(modified_by=user)
+                | Q(accessionrow__created_by=user)
+                | Q(accessionrow__modified_by=user)
+            )
+            .annotate(
+                last_activity=Greatest(
+                    "modified_on", Max("accessionrow__modified_on")
+                )
+            )
+            .order_by("-last_activity")
+            .distinct()[:10]
         )
 
         context.update(

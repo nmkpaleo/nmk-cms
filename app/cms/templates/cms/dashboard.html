@@ -114,7 +114,7 @@
         <thead>
           <tr>
             <th>Accession</th>
-            <th>Modified On</th>
+            <th>Last Activity</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -122,7 +122,7 @@
           {% for acc in latest_accessions %}
             <tr>
               <td>{{ acc }}</td>
-              <td>{{ acc.modified_on }}</td>
+              <td>{{ acc.last_activity }}</td>
               <td>
                 <a href="{% url 'accession_detail' acc.id %}" class="w3-button w3-small w3-blue">View</a>
               </td>
