@@ -13,6 +13,9 @@
       {% endfor %}
     </select>
     <button type="submit" class="w3-button w3-blue w3-margin-top">Update Selection</button>
+    {% if selected_shelf_ids %}
+    <button type="button" id="start-inventory-btn" class="w3-button w3-red w3-margin-top">Start Inventory</button>
+    {% endif %}
   </form>
 
   <table class="w3-table-all w3-margin-top">
@@ -73,5 +76,37 @@ document.querySelectorAll('.status-select').forEach(function(select){
     });
   });
 });
+
+const startBtn = document.getElementById('start-inventory-btn');
+const shelfSelect = document.getElementById('shelf_ids');
+if(startBtn){
+  startBtn.addEventListener('click', function(e){
+    e.preventDefault();
+    if(confirm('All statuses will be emptied for the selected rows.')){
+      const params = new URLSearchParams();
+      Array.from(shelfSelect.selectedOptions).forEach(opt => params.append('shelf_ids', opt.value));
+      fetch('{% url "inventory_reset" %}', {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': csrftoken,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: params
+      }).then(function(){
+        location.reload();
+      });
+    } else {
+      fetch('{% url "inventory_clear" %}', {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': csrftoken,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      }).then(function(){
+        window.location.href = '{% url "inventory_start" %}';
+      });
+    }
+  });
+}
 </script>
 {% endblock %}

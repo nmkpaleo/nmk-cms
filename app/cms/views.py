@@ -1065,4 +1065,21 @@ def inventory_update(request):
         specimen.status = None
     specimen.save(update_fields=["status"])
     return JsonResponse({"success": True})
+
+
+@require_POST
+@login_required
+def inventory_reset(request):
+    shelf_ids = request.POST.getlist("shelf_ids")
+    if not shelf_ids:
+        return JsonResponse({"success": False}, status=400)
+    AccessionRow.objects.filter(storage_id__in=shelf_ids).update(status=None)
+    return JsonResponse({"success": True})
+
+
+@require_POST
+@login_required
+def inventory_clear(request):
+    request.session.pop("inventory_shelf_ids", None)
+    return JsonResponse({"success": True})
     
