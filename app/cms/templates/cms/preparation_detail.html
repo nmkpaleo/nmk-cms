@@ -6,7 +6,7 @@
 <div class="template-detail-container">
     <div class="template-detail-header">
         <h2>Preparation Details</h2>
-        {% if user.is_superuser or user.groups.first.name == "Collection Managers" %}
+        {% if can_edit %}
         <a href="{% url 'preparation_edit' preparation.pk %}" class="edit-icon">
             Edit Preparation ✏️
         </a>

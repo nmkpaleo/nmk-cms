@@ -18,7 +18,8 @@ from cms.views import (
     upload_media,
     PreparationListView, PreparationDetailView,
     PreparationCreateView, PreparationUpdateView, PreparationDeleteView,
-    PreparationApproveView
+    PreparationApproveView,
+    dashboard,
 )
 from .views import PreparationMediaUploadView
 from .views import FieldSlipAutocomplete
@@ -86,4 +87,8 @@ urlpatterns += [
 
 urlpatterns += [
     path("autocomplete/fieldslip/", FieldSlipAutocomplete.as_view(), name="fieldslip-autocomplete"),
+]
+
+urlpatterns += [
+    path("dashboard/", dashboard, name="dashboard"),
 ]

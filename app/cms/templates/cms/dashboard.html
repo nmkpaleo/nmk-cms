@@ -1,0 +1,141 @@
+{% extends "base_generic.html" %}
+
+{% block content %}
+  {% if is_preparator %}
+    <h2>My Preparations</h2>
+    {% if my_preparations %}
+      <table class="w3-table w3-striped">
+        <thead>
+          <tr>
+            <th>Specimen</th>
+            <th>Status</th>
+            <th>Started On</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for prep in my_preparations %}
+            <tr>
+              <td>{{ prep.accession_row }}</td>
+              <td>{{ prep.status }}</td>
+              <td>{{ prep.started_on }}</td>
+              <td>
+                <a href="{% url 'preparation_detail' prep.id %}" class="w3-button w3-small w3-blue">View</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No active preparations assigned.</p>
+    {% endif %}
+
+    <h2>Priority Tasks</h2>
+    {% if priority_tasks %}
+      <ul>
+        {% for task in priority_tasks %}
+          <li>
+            <a href="{% url 'preparation_detail' task.id %}">{{ task.accession_row }}</a>
+            - started on {{ task.started_on }}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>No priority tasks.</p>
+    {% endif %}
+
+    <a href="{% url 'preparation_create' %}" class="w3-button w3-green">Create Preparation Record</a>
+  {% endif %}
+
+  {% if is_curator %}
+    <h2>Completed Preparations</h2>
+    {% if completed_preparations %}
+      <table class="w3-table w3-striped">
+        <thead>
+          <tr>
+            <th>Specimen</th>
+            <th>Completed On</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for prep in completed_preparations %}
+            <tr>
+              <td>{{ prep.accession_row }}</td>
+              <td>{{ prep.completed_on }}</td>
+              <td>
+                <a href="{% url 'preparation_detail' prep.id %}" class="w3-button w3-small w3-blue">View</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No completed preparations awaiting review.</p>
+    {% endif %}
+
+    <a href="{% url 'preparation_create' %}" class="w3-button w3-green">Create Preparation Record</a>
+  {% endif %}
+
+  {% if is_collection_manager %}
+    {% if has_active_series %}
+      <h2>Generate Accession Numbers</h2>
+      <a href="{% url 'accession_create' %}" class="w3-button w3-green">Create Single Accession</a>
+      <a href="{% url 'accession_generate_batch' %}" class="w3-button w3-green">Generate Batch</a>
+    {% endif %}
+
+    <h2>Unassigned Accessions</h2>
+    {% if unassigned_accessions %}
+      <table class="w3-table w3-striped">
+        <thead>
+          <tr>
+            <th>Accession</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for acc in unassigned_accessions %}
+            <tr>
+              <td>{{ acc }}</td>
+              <td>
+                <a href="{% url 'accession_detail' acc.id %}" class="w3-button w3-small w3-blue">View</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No unassigned accessions.</p>
+    {% endif %}
+
+    <h2>My Latest Accessions</h2>
+    {% if latest_accessions %}
+      <table class="w3-table w3-striped">
+        <thead>
+          <tr>
+            <th>Accession</th>
+            <th>Last Activity</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for acc in latest_accessions %}
+            <tr>
+              <td>{{ acc }}</td>
+              <td>{{ acc.last_activity }}</td>
+              <td>
+                <a href="{% url 'accession_detail' acc.id %}" class="w3-button w3-small w3-blue">View</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No recent accessions.</p>
+    {% endif %}
+  {% endif %}
+
+  {% if no_role %}
+    <p>Dashboard content for your role is not available yet.</p>
+  {% endif %}
+{% endblock %}

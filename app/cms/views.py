@@ -1,9 +1,10 @@
 import csv
+from datetime import timedelta
 from dal import autocomplete
 from django import forms
 from django.db import transaction
-from django.db.models import Value, CharField
-from django.db.models.functions import Concat
+from django.db.models import Value, CharField, Count, Q, Max
+from django.db.models.functions import Concat, Greatest
 from django.http import JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -39,11 +40,26 @@ from cms.forms import (AccessionBatchForm, AccessionCommentForm,
                     PreparationApprovalForm, PreparationMediaUploadForm,
                     SpecimenCompositeForm, ReferenceForm, LocalityForm)
 
-from cms.models import (Accession, AccessionNumberSeries,
-                     AccessionFieldSlip, AccessionReference, AccessionRow,
-                     Comment, FieldSlip, Media, NatureOfSpecimen, Identification,
-                     Preparation, PreparationMedia, Reference, SpecimenGeology, Storage,
-                     Taxon , Locality)
+from cms.models import (
+    Accession,
+    AccessionNumberSeries,
+    AccessionFieldSlip,
+    AccessionReference,
+    AccessionRow,
+    Comment,
+    FieldSlip,
+    Media,
+    NatureOfSpecimen,
+    Identification,
+    Preparation,
+    PreparationMedia,
+    Reference,
+    SpecimenGeology,
+    Storage,
+    Taxon,
+    Locality,
+    PreparationStatus,
+)
 
 from cms.resources import FieldSlipResource
 from cms.utils import generate_accessions_from_series
@@ -146,8 +162,84 @@ def fieldslip_import(request):
 
     return render(request, 'cms/fieldslip_import.html')  # Render the import form
 
+@login_required
+def dashboard(request):
+    """Landing page that adapts content based on user roles."""
+    user = request.user
+    context = {}
+
+    if user.groups.filter(name="Preparators").exists():
+        my_preparations = Preparation.objects.filter(
+            preparator=user
+        ).exclude(status=PreparationStatus.COMPLETED)
+
+        priority_threshold = now().date() - timedelta(days=7)
+        priority_tasks = my_preparations.filter(started_on__lte=priority_threshold)
+
+        context.update(
+            {
+                "is_preparator": True,
+                "my_preparations": my_preparations,
+                "priority_tasks": priority_tasks,
+            }
+        )
+
+    if user.groups.filter(name="Curators").exists():
+        completed_preparations = Preparation.objects.filter(
+            status=PreparationStatus.COMPLETED,
+            curator=user,
+        )
+
+        context.update(
+            {
+                "is_curator": True,
+                "completed_preparations": completed_preparations,
+            }
+        )
+
+    if user.groups.filter(name="Collection Managers").exists():
+        has_active_series = AccessionNumberSeries.objects.filter(
+            user=user, is_active=True
+        ).exists()
+        unassigned_accessions = (
+            Accession.objects.filter(accessioned_by=user)
+            .annotate(row_count=Count("accessionrow"))
+            .filter(row_count=0)
+        )
+        latest_accessions = (
+            Accession.objects.filter(
+                Q(created_by=user)
+                | Q(modified_by=user)
+                | Q(accessionrow__created_by=user)
+                | Q(accessionrow__modified_by=user)
+            )
+            .annotate(
+                last_activity=Greatest(
+                    "modified_on", Max("accessionrow__modified_on")
+                )
+            )
+            .order_by("-last_activity")
+            .distinct()[:10]
+        )
+
+        context.update(
+            {
+                "is_collection_manager": True,
+                "has_active_series": has_active_series,
+                "unassigned_accessions": unassigned_accessions,
+                "latest_accessions": latest_accessions,
+            }
+        )
+
+    if not context:
+        context["no_role"] = True
+
+    return render(request, "cms/dashboard.html", context)
+
 def index(request):
     """View function for home page of site."""
+    if request.user.is_authenticated:
+        return dashboard(request)
     return render(request, 'index.html')
 
 def base_generic(request):
@@ -313,7 +405,6 @@ class AccessionDetailView(DetailView):
         return context
 
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import Q
 
 from django.views.generic import ListView
 from django_filters.views import FilterView
@@ -713,12 +804,22 @@ class PreparationDetailView(LoginRequiredMixin, DetailView):
     template_name = "cms/preparation_detail.html"
     context_object_name = "preparation"
 
-    def test_func(self):
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
         user = self.request.user
-        return (
-            user.is_superuser or 
-            user.groups.filter(name__in=["Curators", "Collection Managers"]).exists()
+        preparation = self.object
+        context["can_edit"] = (
+            user.is_superuser
+            or (
+                user.groups.filter(name="Curators").exists()
+                and user == preparation.curator
+            )
+            or (
+                user.groups.filter(name="Preparators").exists()
+                and user == preparation.preparator
+            )
         )
+        return context
 
 class PreparationCreateView(LoginRequiredMixin, CreateView):
     """ Create a new preparation record. """
@@ -749,12 +850,71 @@ class PreparationUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView)
         preparation = self.get_object()
         user = self.request.user
 
-        # Allow admins always
+        # Admins can always edit
         if user.is_superuser:
             return True
 
-        # Allow curators if they are not the preparator
-        return user != preparation.preparator and user.groups.filter(name="Curators").exists()
+        # Curators can edit only if they are assigned as the curator
+        if user.groups.filter(name="Curators").exists() and user == preparation.curator:
+            return True
+
+        # Preparators can edit their own preparations
+        if user.groups.filter(name="Preparators").exists() and user == preparation.preparator:
+            return True
+
+        return False
+
+    def get_form(self, *args, **kwargs):
+        form = super().get_form(*args, **kwargs)
+        user = self.request.user
+
+        # Restrict status choices for preparators
+        if user.groups.filter(name="Preparators").exists() and user == self.get_object().preparator:
+            status_field = form.fields.get("status")
+            if status_field:
+                status_field.choices = [
+                    choice for choice in status_field.choices
+                    if choice[0] not in [PreparationStatus.APPROVED, PreparationStatus.DECLINED]
+                ]
+                status_field.error_messages[
+                    "invalid_choice"
+                ] = "You cannot set status to Approved or Declined."
+
+        # Restrict status choices for curators
+        if user.groups.filter(name="Curators").exists() and user == self.get_object().curator:
+            status_field = form.fields.get("status")
+            if status_field:
+                status_field.choices = [
+                    (PreparationStatus.APPROVED, PreparationStatus.APPROVED.label),
+                    (PreparationStatus.DECLINED, PreparationStatus.DECLINED.label),
+                ]
+                status_field.error_messages[
+                    "invalid_choice"
+                ] = "You can only set status to Approved or Declined."
+            curator_field = form.fields.get("curator")
+            if curator_field:
+                curator_field.initial = user
+                curator_field.disabled = True
+
+        return form
+
+    def form_valid(self, form):
+        user = self.request.user
+
+        if user.groups.filter(name="Preparators").exists() and user == self.get_object().preparator:
+            if form.cleaned_data.get("status") in [PreparationStatus.APPROVED, PreparationStatus.DECLINED]:
+                form.add_error("status", "You cannot set status to Approved or Declined.")
+                return self.form_invalid(form)
+
+        if user.groups.filter(name="Curators").exists() and user == self.get_object().curator:
+            status = form.cleaned_data.get("status")
+            if status not in [PreparationStatus.APPROVED, PreparationStatus.DECLINED]:
+                form.add_error("status", "You can only set status to Approved or Declined.")
+                return self.form_invalid(form)
+            form.instance.curator = user
+            form.instance.approval_status = status.lower()
+
+        return super().form_valid(form)
 
 class PreparationDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
     """ Delete a preparation record. """
