@@ -1,0 +1,117 @@
+{% extends "base_generic.html" %}
+{% block title %}<title>Inventory Session</title>{% endblock %}
+
+{% block content %}
+<div class="w3-container w3-margin-top">
+  <h2>Inventory Session</h2>
+  <form method="post" class="w3-margin-top">
+    {% csrf_token %}
+    <label for="shelf_ids">Select Shelves</label>
+    <select name="shelf_ids" id="shelf_ids" class="w3-select" multiple>
+      {% for shelf in shelves %}
+        <option value="{{ shelf.id }}" {% if shelf.id in selected_shelf_ids %}selected{% endif %}>{{ shelf }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="w3-button w3-blue w3-margin-top">Update Selection</button>
+    {% if selected_shelf_ids %}
+    <button type="button" id="start-inventory-btn" class="w3-button w3-red w3-margin-top">Start Inventory</button>
+    {% endif %}
+  </form>
+
+  <table class="w3-table-all w3-margin-top">
+    <thead>
+      <tr>
+        <th>Shelf</th>
+        <th>Current Location</th>
+        <th>Accession</th>
+        <th>Specimen</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for specimen in specimens %}
+      <tr data-id="{{ specimen.id }}">
+        <td>{{ specimen.display_shelf.area }}</td>
+        <td>
+          {{ specimen.current_location.area }}
+          {% if specimen.active_preparations %}(under preparation){% endif %}
+        </td>
+        <td>{{ specimen.accession }}</td>
+        <td>{{ specimen.specimen_suffix }}</td>
+        <td>
+          <select class="status-select" data-original="{{ specimen.status|default:'' }}">
+            <option value="">--Select--</option>
+            {% for key,label in status_choices %}
+            <option value="{{ key }}" {% if specimen.status == key %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          <button type="button" class="w3-button w3-small w3-green save-button" disabled style="display:none;">Save</button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<script>
+const csrftoken = '{{ csrf_token }}';
+document.querySelectorAll('.status-select').forEach(function(select){
+  const button = select.nextElementSibling;
+  function updateButton(){
+    if(select.value === ''){
+      button.style.display = 'none';
+    } else {
+      button.style.display = 'inline-block';
+      button.disabled = (select.value === select.dataset.original);
+    }
+  }
+  updateButton();
+  select.addEventListener('change', updateButton);
+  button.addEventListener('click', function(){
+    const id = select.closest('tr').dataset.id;
+    fetch('{% url "inventory_update" %}', {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrftoken,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: new URLSearchParams({specimen_id: id, status: select.value})
+    }).then(function(){
+      select.dataset.original = select.value;
+      updateButton();
+    });
+  });
+});
+
+const startBtn = document.getElementById('start-inventory-btn');
+const shelfSelect = document.getElementById('shelf_ids');
+if(startBtn){
+  startBtn.addEventListener('click', function(e){
+    e.preventDefault();
+    if(confirm('All statuses will be emptied for the selected rows.')){
+      const params = new URLSearchParams();
+      Array.from(shelfSelect.selectedOptions).forEach(opt => params.append('shelf_ids', opt.value));
+      fetch('{% url "inventory_reset" %}', {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': csrftoken,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: params
+      }).then(function(){
+        location.reload();
+      });
+    } else {
+      fetch('{% url "inventory_clear" %}', {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': csrftoken,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      }).then(function(){
+        window.location.href = '{% url "inventory_start" %}';
+      });
+    }
+  });
+}
+</script>
+{% endblock %}

@@ -3,12 +3,13 @@ from datetime import timedelta
 from dal import autocomplete
 from django import forms
 from django.db import transaction
-from django.db.models import Value, CharField, Count, Q, Max
+from django.db.models import Value, CharField, Count, Q, Max, Prefetch
 from django.db.models.functions import Concat, Greatest
 from django.http import JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
 from django_filters.views import FilterView
 from .filters import AccessionFilter, PreparationFilter, ReferenceFilter, FieldSlipFilter, LocalityFilter
 
@@ -59,6 +60,7 @@ from cms.models import (
     Taxon,
     Locality,
     PreparationStatus,
+    InventoryStatus,
 )
 
 from cms.resources import FieldSlipResource
@@ -1012,7 +1014,7 @@ class PreparationMediaUploadView(View):
 
 @login_required
 def inventory_start(request):
-    """Initialize an inventory session for selected shelves."""
+    """Start an inventory session or display expected specimens."""
     if request.method == "POST":
         shelf_ids = request.POST.getlist("shelf_ids")
         if shelf_ids:
@@ -1020,6 +1022,93 @@ def inventory_start(request):
             messages.success(request, "Inventory session started.")
             return redirect("inventory_start")
 
+    shelf_ids = request.session.get("inventory_shelf_ids")
+    if shelf_ids:
+        selected_shelf_ids = [int(s) for s in shelf_ids]
+        active_prep_qs = Preparation.objects.filter(
+            status__in=[PreparationStatus.PENDING, PreparationStatus.IN_PROGRESS]
+        ).select_related("original_storage", "temporary_storage")
+
+        specimens = (
+            AccessionRow.objects
+            .filter(
+                Q(storage_id__in=selected_shelf_ids) |
+                Q(
+                    preparations__original_storage_id__in=selected_shelf_ids,
+                    preparations__status__in=[PreparationStatus.PENDING, PreparationStatus.IN_PROGRESS],
+                )
+            )
+            .select_related("accession", "storage")
+            .prefetch_related(Prefetch("preparations", queryset=active_prep_qs, to_attr="active_preparations"))
+            .order_by(
+                "storage__area",
+                "accession__collection__abbreviation",
+                "accession__specimen_prefix__abbreviation",
+                "accession__specimen_no",
+                "accession__instance_number",
+                "specimen_suffix",
+            )
+            .distinct()
+        )
+
+        specimens = list(specimens)
+        for spec in specimens:
+            if getattr(spec, "active_preparations", []):
+                prep = spec.active_preparations[0]
+                spec.display_shelf = prep.original_storage or spec.storage
+                spec.current_location = prep.temporary_storage or spec.storage
+            else:
+                spec.display_shelf = spec.storage
+                spec.current_location = spec.storage
+
+        shelves = Storage.objects.all()
+        context = {
+            "specimens": specimens,
+            "status_choices": InventoryStatus.choices,
+            "shelves": shelves,
+            "selected_shelf_ids": selected_shelf_ids,
+        }
+        return render(request, "inventory/session.html", context)
+
     shelves = Storage.objects.all()
     return render(request, "inventory/start.html", {"shelves": shelves})
+
+
+@require_POST
+@login_required
+def inventory_update(request):
+    specimen_id = request.POST.get("specimen_id")
+    status = request.POST.get("status")
+    if not specimen_id:
+        return JsonResponse({"success": False}, status=400)
+    specimen = get_object_or_404(AccessionRow, id=specimen_id)
+    if status in dict(InventoryStatus.choices):
+        specimen.status = status
+    else:
+        specimen.status = None
+    specimen.save(update_fields=["status"])
+    return JsonResponse({"success": True})
+
+
+@require_POST
+@login_required
+def inventory_reset(request):
+    shelf_ids = request.POST.getlist("shelf_ids")
+    if not shelf_ids:
+        return JsonResponse({"success": False}, status=400)
+    AccessionRow.objects.filter(
+        Q(storage_id__in=shelf_ids) |
+        Q(
+            preparations__original_storage_id__in=shelf_ids,
+            preparations__status__in=[PreparationStatus.PENDING, PreparationStatus.IN_PROGRESS],
+        )
+    ).update(status=None)
+    return JsonResponse({"success": True})
+
+
+@require_POST
+@login_required
+def inventory_clear(request):
+    request.session.pop("inventory_shelf_ids", None)
+    return JsonResponse({"success": True})
     
