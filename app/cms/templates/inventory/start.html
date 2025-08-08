@@ -1,0 +1,21 @@
+{% extends "base_generic.html" %}
+
+{% block title %}
+<title>Inventory Session</title>
+{% endblock %}
+
+{% block content %}
+<div class="w3-container w3-margin-top">
+  <h2>Start Inventory Session</h2>
+  <form method="post" class="w3-margin-top">
+    {% csrf_token %}
+    <label for="shelf_ids">Select Shelves</label>
+    <select name="shelf_ids" id="shelf_ids" class="w3-select" multiple>
+      {% for shelf in shelves %}
+        <option value="{{ shelf.id }}">{{ shelf }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="w3-button w3-blue w3-margin-top">Start Session</button>
+  </form>
+</div>
+{% endblock %}

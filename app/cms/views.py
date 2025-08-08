@@ -1008,4 +1008,18 @@ class PreparationMediaUploadView(View):
             "form": form,
             "preparation": preparation,
         })
+
+
+@login_required
+def inventory_start(request):
+    """Initialize an inventory session for selected shelves."""
+    if request.method == "POST":
+        shelf_ids = request.POST.getlist("shelf_ids")
+        if shelf_ids:
+            request.session["inventory_shelf_ids"] = shelf_ids
+            messages.success(request, "Inventory session started.")
+            return redirect("inventory_start")
+
+    shelves = Storage.objects.all()
+    return render(request, "inventory/start.html", {"shelves": shelves})
     
