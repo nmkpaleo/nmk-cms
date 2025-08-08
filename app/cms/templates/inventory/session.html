@@ -22,6 +22,7 @@
     <thead>
       <tr>
         <th>Shelf</th>
+        <th>Current Location</th>
         <th>Accession</th>
         <th>Specimen</th>
         <th>Status</th>
@@ -30,7 +31,11 @@
     <tbody>
       {% for specimen in specimens %}
       <tr data-id="{{ specimen.id }}">
-        <td>{{ specimen.storage.area }}</td>
+        <td>{{ specimen.display_shelf.area }}</td>
+        <td>
+          {{ specimen.current_location.area }}
+          {% if specimen.active_preparations %}(under preparation){% endif %}
+        </td>
         <td>{{ specimen.accession }}</td>
         <td>{{ specimen.specimen_suffix }}</td>
         <td>

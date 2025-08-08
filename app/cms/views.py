@@ -3,7 +3,7 @@ from datetime import timedelta
 from dal import autocomplete
 from django import forms
 from django.db import transaction
-from django.db.models import Value, CharField, Count, Q, Max
+from django.db.models import Value, CharField, Count, Q, Max, Prefetch
 from django.db.models.functions import Concat, Greatest
 from django.http import JsonResponse
 from django.utils.decorators import method_decorator
@@ -1025,10 +1025,21 @@ def inventory_start(request):
     shelf_ids = request.session.get("inventory_shelf_ids")
     if shelf_ids:
         selected_shelf_ids = [int(s) for s in shelf_ids]
+        active_prep_qs = Preparation.objects.filter(
+            status__in=[PreparationStatus.PENDING, PreparationStatus.IN_PROGRESS]
+        ).select_related("original_storage", "temporary_storage")
+
         specimens = (
             AccessionRow.objects
-            .filter(storage_id__in=selected_shelf_ids)
+            .filter(
+                Q(storage_id__in=selected_shelf_ids) |
+                Q(
+                    preparations__original_storage_id__in=selected_shelf_ids,
+                    preparations__status__in=[PreparationStatus.PENDING, PreparationStatus.IN_PROGRESS],
+                )
+            )
             .select_related("accession", "storage")
+            .prefetch_related(Prefetch("preparations", queryset=active_prep_qs, to_attr="active_preparations"))
             .order_by(
                 "storage__area",
                 "accession__collection__abbreviation",
@@ -1037,7 +1048,19 @@ def inventory_start(request):
                 "accession__instance_number",
                 "specimen_suffix",
             )
+            .distinct()
         )
+
+        specimens = list(specimens)
+        for spec in specimens:
+            if getattr(spec, "active_preparations", []):
+                prep = spec.active_preparations[0]
+                spec.display_shelf = prep.original_storage or spec.storage
+                spec.current_location = prep.temporary_storage or spec.storage
+            else:
+                spec.display_shelf = spec.storage
+                spec.current_location = spec.storage
+
         shelves = Storage.objects.all()
         context = {
             "specimens": specimens,
@@ -1073,7 +1096,13 @@ def inventory_reset(request):
     shelf_ids = request.POST.getlist("shelf_ids")
     if not shelf_ids:
         return JsonResponse({"success": False}, status=400)
-    AccessionRow.objects.filter(storage_id__in=shelf_ids).update(status=None)
+    AccessionRow.objects.filter(
+        Q(storage_id__in=shelf_ids) |
+        Q(
+            preparations__original_storage_id__in=shelf_ids,
+            preparations__status__in=[PreparationStatus.PENDING, PreparationStatus.IN_PROGRESS],
+        )
+    ).update(status=None)
     return JsonResponse({"success": True})
 
 
