@@ -876,6 +876,9 @@ class PreparationUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView)
                     choice for choice in status_field.choices
                     if choice[0] not in [PreparationStatus.APPROVED, PreparationStatus.DECLINED]
                 ]
+                status_field.error_messages[
+                    "invalid_choice"
+                ] = "You cannot set status to Approved or Declined."
 
         # Restrict status choices for curators
         if user.groups.filter(name="Curators").exists() and user == self.get_object().curator:
@@ -885,6 +888,9 @@ class PreparationUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView)
                     (PreparationStatus.APPROVED, PreparationStatus.APPROVED.label),
                     (PreparationStatus.DECLINED, PreparationStatus.DECLINED.label),
                 ]
+                status_field.error_messages[
+                    "invalid_choice"
+                ] = "You can only set status to Approved or Declined."
             curator_field = form.fields.get("curator")
             if curator_field:
                 curator_field.initial = user
