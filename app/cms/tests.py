@@ -13,6 +13,7 @@ from cms.models import (
     Locality,
     Preparation,
     PreparationStatus,
+    UnexpectedSpecimen,
 )
 from cms.utils import generate_accessions_from_series
 
@@ -427,4 +428,20 @@ class DashboardViewMultipleRolesTests(TestCase):
         self.assertTrue(response.context["is_collection_manager"])
         self.assertIn(self.preparation, response.context["my_preparations"])
         self.assertIn(self.unassigned, response.context["unassigned_accessions"])
+
+
+class UnexpectedSpecimenLoggingTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username="tester", password="pass")
+
+        self.patcher = patch("cms.models.get_current_user", return_value=self.user)
+        self.patcher.start()
+        self.addCleanup(self.patcher.stop)
+
+    def test_logging_creates_record(self):
+        self.client.login(username="tester", password="pass")
+        response = self.client.post(reverse("inventory_log_unexpected"), {"identifier": "XYZ"})
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(UnexpectedSpecimen.objects.filter(identifier="XYZ").exists())
 

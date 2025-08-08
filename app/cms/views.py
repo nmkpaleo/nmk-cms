@@ -61,6 +61,7 @@ from cms.models import (
     Locality,
     PreparationStatus,
     InventoryStatus,
+    UnexpectedSpecimen,
 )
 
 from cms.resources import FieldSlipResource
@@ -1110,5 +1111,15 @@ def inventory_reset(request):
 @login_required
 def inventory_clear(request):
     request.session.pop("inventory_shelf_ids", None)
+    return JsonResponse({"success": True})
+
+
+@require_POST
+@login_required
+def inventory_log_unexpected(request):
+    identifier = request.POST.get("identifier")
+    if not identifier:
+        return JsonResponse({"success": False}, status=400)
+    UnexpectedSpecimen.objects.create(identifier=identifier)
     return JsonResponse({"success": True})
     
