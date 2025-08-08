@@ -14,6 +14,13 @@ import string # For generating specimen number
 User = get_user_model()
 
 
+class InventoryStatus(models.TextChoices):
+    """Status options for inventory sessions."""
+    PRESENT = "present", "Present"
+    MISSING = "missing", "Missing"
+    UNKNOWN = "unknown", "Unknown"
+
+
 
 class BaseModel(models.Model):
     created_on = models.DateTimeField(auto_now_add=True, verbose_name="Date Created")
@@ -416,6 +423,13 @@ class AccessionRow(BaseModel):
     accession = models.ForeignKey(Accession, on_delete=models.CASCADE)
     storage = models.ForeignKey(Storage, on_delete=models.SET_NULL, blank=True, null=True)
     specimen_suffix = models.CharField(max_length=25, blank=True, null=True, default='-')
+    status = models.CharField(
+        max_length=10,
+        choices=InventoryStatus.choices,
+        blank=True,
+        null=True,
+        help_text="Inventory status of the specimen",
+    )
 
     def get_absolute_url(self):
         return reverse('accessionrow_detail', args=[str(self.id)])

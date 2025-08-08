@@ -60,17 +60,12 @@ from cms.models import (
     Taxon,
     Locality,
     PreparationStatus,
+    InventoryStatus,
 )
 
 from cms.resources import FieldSlipResource
 from cms.utils import generate_accessions_from_series
 from formtools.wizard.views import SessionWizardView
-
-INVENTORY_STATUS_CHOICES = [
-    ("present", "Present"),
-    ("missing", "Missing"),
-    ("unknown", "Unknown"),
-]
 
 class FieldSlipAutocomplete(autocomplete.Select2QuerySetView):
     def get_queryset(self):
@@ -1024,7 +1019,6 @@ def inventory_start(request):
         shelf_ids = request.POST.getlist("shelf_ids")
         if shelf_ids:
             request.session["inventory_shelf_ids"] = shelf_ids
-            request.session["inventory_statuses"] = {}
             messages.success(request, "Inventory session started.")
             return redirect("inventory_start")
 
@@ -1044,12 +1038,10 @@ def inventory_start(request):
                 "specimen_suffix",
             )
         )
-        statuses = {int(k): v for k, v in request.session.get("inventory_statuses", {}).items()}
         shelves = Storage.objects.all()
         context = {
             "specimens": specimens,
-            "status_choices": INVENTORY_STATUS_CHOICES,
-            "statuses": statuses,
+            "status_choices": InventoryStatus.choices,
             "shelves": shelves,
             "selected_shelf_ids": selected_shelf_ids,
         }
@@ -1064,9 +1056,13 @@ def inventory_start(request):
 def inventory_update(request):
     specimen_id = request.POST.get("specimen_id")
     status = request.POST.get("status")
-    statuses = request.session.get("inventory_statuses", {})
-    if specimen_id and status:
-        statuses[str(specimen_id)] = status
-        request.session["inventory_statuses"] = statuses
+    if not specimen_id:
+        return JsonResponse({"success": False}, status=400)
+    specimen = get_object_or_404(AccessionRow, id=specimen_id)
+    if status in dict(InventoryStatus.choices):
+        specimen.status = status
+    else:
+        specimen.status = None
+    specimen.save(update_fields=["status"])
     return JsonResponse({"success": True})
     

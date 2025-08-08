@@ -1,6 +1,4 @@
 {% extends "base_generic.html" %}
-{% load custom_filters %}
-
 {% block title %}<title>Inventory Session</title>{% endblock %}
 
 {% block content %}
@@ -33,11 +31,13 @@
         <td>{{ specimen.accession }}</td>
         <td>{{ specimen.specimen_suffix }}</td>
         <td>
-          <select class="status-select">
+          <select class="status-select" data-original="{{ specimen.status|default:'' }}">
+            <option value="">--Select--</option>
             {% for key,label in status_choices %}
-            <option value="{{ key }}" {% if statuses|get_item:specimen.id == key %}selected{% endif %}>{{ label }}</option>
+            <option value="{{ key }}" {% if specimen.status == key %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
           </select>
+          <button type="button" class="w3-button w3-small w3-green save-button" disabled style="display:none;">Save</button>
         </td>
       </tr>
       {% endfor %}
@@ -47,15 +47,29 @@
 <script>
 const csrftoken = '{{ csrf_token }}';
 document.querySelectorAll('.status-select').forEach(function(select){
-  select.addEventListener('change', function(){
-    const id = this.closest('tr').dataset.id;
+  const button = select.nextElementSibling;
+  function updateButton(){
+    if(select.value === ''){
+      button.style.display = 'none';
+    } else {
+      button.style.display = 'inline-block';
+      button.disabled = (select.value === select.dataset.original);
+    }
+  }
+  updateButton();
+  select.addEventListener('change', updateButton);
+  button.addEventListener('click', function(){
+    const id = select.closest('tr').dataset.id;
     fetch('{% url "inventory_update" %}', {
       method: 'POST',
       headers: {
         'X-CSRFToken': csrftoken,
         'Content-Type': 'application/x-www-form-urlencoded'
       },
-      body: new URLSearchParams({specimen_id: id, status: this.value})
+      body: new URLSearchParams({specimen_id: id, status: select.value})
+    }).then(function(){
+      select.dataset.original = select.value;
+      updateButton();
     });
   });
 });
