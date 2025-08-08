@@ -20,7 +20,7 @@ from cms.views import (
     PreparationCreateView, PreparationUpdateView, PreparationDeleteView,
     PreparationApproveView,
     dashboard,
-    inventory_start,
+    inventory_start, inventory_update,
 )
 from .views import PreparationMediaUploadView
 from .views import FieldSlipAutocomplete
@@ -34,6 +34,7 @@ from django_select2.views import AutoResponseView
 
 urlpatterns = [
     path('inventory/', inventory_start, name='inventory_start'),
+    path('inventory/update/', inventory_update, name='inventory_update'),
     path('fieldslips/new/', fieldslip_create, name='fieldslip_create'),
     path('fieldslips/<int:pk>/', FieldSlipDetailView.as_view(), name='fieldslip_detail'),
     path('fieldslips/<int:pk>/edit/', fieldslip_edit, name='fieldslip_edit'),

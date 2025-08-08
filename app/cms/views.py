@@ -9,6 +9,7 @@ from django.http import JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
 from django_filters.views import FilterView
 from .filters import AccessionFilter, PreparationFilter, ReferenceFilter, FieldSlipFilter, LocalityFilter
 
@@ -64,6 +65,12 @@ from cms.models import (
 from cms.resources import FieldSlipResource
 from cms.utils import generate_accessions_from_series
 from formtools.wizard.views import SessionWizardView
+
+INVENTORY_STATUS_CHOICES = [
+    ("present", "Present"),
+    ("missing", "Missing"),
+    ("unknown", "Unknown"),
+]
 
 class FieldSlipAutocomplete(autocomplete.Select2QuerySetView):
     def get_queryset(self):
@@ -1012,14 +1019,38 @@ class PreparationMediaUploadView(View):
 
 @login_required
 def inventory_start(request):
-    """Initialize an inventory session for selected shelves."""
+    """Start an inventory session or display expected specimens."""
     if request.method == "POST":
         shelf_ids = request.POST.getlist("shelf_ids")
         if shelf_ids:
             request.session["inventory_shelf_ids"] = shelf_ids
+            request.session["inventory_statuses"] = {}
             messages.success(request, "Inventory session started.")
             return redirect("inventory_start")
 
+    shelf_ids = request.session.get("inventory_shelf_ids")
+    if shelf_ids:
+        specimens = AccessionRow.objects.filter(storage_id__in=shelf_ids).select_related("accession")
+        statuses = {int(k): v for k, v in request.session.get("inventory_statuses", {}).items()}
+        context = {
+            "specimens": specimens,
+            "status_choices": INVENTORY_STATUS_CHOICES,
+            "statuses": statuses,
+        }
+        return render(request, "inventory/session.html", context)
+
     shelves = Storage.objects.all()
     return render(request, "inventory/start.html", {"shelves": shelves})
+
+
+@require_POST
+@login_required
+def inventory_update(request):
+    specimen_id = request.POST.get("specimen_id")
+    status = request.POST.get("status")
+    statuses = request.session.get("inventory_statuses", {})
+    if specimen_id and status:
+        statuses[str(specimen_id)] = status
+        request.session["inventory_statuses"] = statuses
+    return JsonResponse({"success": True})
     

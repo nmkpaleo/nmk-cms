@@ -1,0 +1,51 @@
+{% extends "base_generic.html" %}
+{% load custom_filters %}
+
+{% block title %}<title>Inventory Session</title>{% endblock %}
+
+{% block content %}
+<div class="w3-container w3-margin-top">
+  <h2>Inventory Session</h2>
+  {% csrf_token %}
+  <table class="w3-table-all">
+    <thead>
+      <tr>
+        <th>Accession</th>
+        <th>Specimen</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for specimen in specimens %}
+      <tr data-id="{{ specimen.id }}">
+        <td>{{ specimen.accession }}</td>
+        <td>{{ specimen.specimen_suffix }}</td>
+        <td>
+          <select class="status-select">
+            {% for key,label in status_choices %}
+            <option value="{{ key }}" {% if statuses|get_item:specimen.id == key %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<script>
+const csrftoken = '{{ csrf_token }}';
+document.querySelectorAll('.status-select').forEach(function(select){
+  select.addEventListener('change', function(){
+    const id = this.closest('tr').dataset.id;
+    fetch('{% url "inventory_update" %}', {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrftoken,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: new URLSearchParams({specimen_id: id, status: this.value})
+    });
+  });
+});
+</script>
+{% endblock %}
