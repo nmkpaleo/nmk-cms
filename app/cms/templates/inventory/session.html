@@ -18,6 +18,12 @@
     {% endif %}
   </form>
 
+  <div class="w3-margin-top">
+    <label for="scan-input">Scan Specimen ID</label>
+    <input type="text" id="scan-input" class="w3-input w3-border" autofocus>
+  </div>
+  <div id="scan-warning" class="w3-panel w3-pale-red w3-border" style="display:none;"></div>
+
   <table class="w3-table-all w3-margin-top">
     <thead>
       <tr>
@@ -112,6 +118,43 @@ if(startBtn){
       });
     }
   });
+}
+
+const scanInput = document.getElementById('scan-input');
+const warning = document.getElementById('scan-warning');
+if(scanInput){
+  scanInput.addEventListener('keypress', function(e){
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      const value = scanInput.value.trim();
+      scanInput.value = '';
+      const row = document.querySelector('tr[data-id="' + value + '"]');
+      warning.style.display = 'none';
+      warning.textContent = '';
+      if(row){
+        row.classList.add('w3-yellow');
+        row.scrollIntoView({behavior: 'smooth', block: 'center'});
+        setTimeout(function(){ row.classList.remove('w3-yellow'); }, 2000);
+      } else {
+        warning.innerHTML = 'Specimen ' + value + ' not found. <button id="log-unexpected" class="w3-button w3-small w3-orange">Log unexpected specimen</button>';
+        warning.style.display = 'block';
+        const btn = document.getElementById('log-unexpected');
+        btn.addEventListener('click', function(){
+          fetch('{% url "inventory_log_unexpected" %}', {
+            method: 'POST',
+            headers: {
+              'X-CSRFToken': csrftoken,
+              'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: new URLSearchParams({identifier: value})
+          }).then(function(){
+            warning.innerHTML = 'Specimen ' + value + ' logged as unexpected.';
+          });
+        });
+      }
+    }
+  });
+  scanInput.focus();
 }
 </script>
 {% endblock %}

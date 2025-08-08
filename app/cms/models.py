@@ -490,6 +490,17 @@ class AccessionRow(BaseModel):
                 return suffix
         raise ValidationError({'specimen_suffix': "No more available suffixes for this accession."})
 
+
+class UnexpectedSpecimen(BaseModel):
+    identifier = models.CharField(max_length=255)
+
+    class Meta:
+        verbose_name = "Unexpected Specimen"
+        verbose_name_plural = "Unexpected Specimens"
+
+    def __str__(self):
+        return self.identifier
+
 # NatureOfSpecimen Model
 class NatureOfSpecimen(BaseModel):
     accession_row = models.ForeignKey(AccessionRow, on_delete=models.CASCADE)
