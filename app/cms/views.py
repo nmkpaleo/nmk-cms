@@ -1030,12 +1030,28 @@ def inventory_start(request):
 
     shelf_ids = request.session.get("inventory_shelf_ids")
     if shelf_ids:
-        specimens = AccessionRow.objects.filter(storage_id__in=shelf_ids).select_related("accession")
+        selected_shelf_ids = [int(s) for s in shelf_ids]
+        specimens = (
+            AccessionRow.objects
+            .filter(storage_id__in=selected_shelf_ids)
+            .select_related("accession", "storage")
+            .order_by(
+                "storage__area",
+                "accession__collection__abbreviation",
+                "accession__specimen_prefix__abbreviation",
+                "accession__specimen_no",
+                "accession__instance_number",
+                "specimen_suffix",
+            )
+        )
         statuses = {int(k): v for k, v in request.session.get("inventory_statuses", {}).items()}
+        shelves = Storage.objects.all()
         context = {
             "specimens": specimens,
             "status_choices": INVENTORY_STATUS_CHOICES,
             "statuses": statuses,
+            "shelves": shelves,
+            "selected_shelf_ids": selected_shelf_ids,
         }
         return render(request, "inventory/session.html", context)
 

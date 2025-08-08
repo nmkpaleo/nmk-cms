@@ -6,10 +6,21 @@
 {% block content %}
 <div class="w3-container w3-margin-top">
   <h2>Inventory Session</h2>
-  {% csrf_token %}
-  <table class="w3-table-all">
+  <form method="post" class="w3-margin-top">
+    {% csrf_token %}
+    <label for="shelf_ids">Select Shelves</label>
+    <select name="shelf_ids" id="shelf_ids" class="w3-select" multiple>
+      {% for shelf in shelves %}
+        <option value="{{ shelf.id }}" {% if shelf.id in selected_shelf_ids %}selected{% endif %}>{{ shelf }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="w3-button w3-blue w3-margin-top">Update Selection</button>
+  </form>
+
+  <table class="w3-table-all w3-margin-top">
     <thead>
       <tr>
+        <th>Shelf</th>
         <th>Accession</th>
         <th>Specimen</th>
         <th>Status</th>
@@ -18,6 +29,7 @@
     <tbody>
       {% for specimen in specimens %}
       <tr data-id="{{ specimen.id }}">
+        <td>{{ specimen.storage.area }}</td>
         <td>{{ specimen.accession }}</td>
         <td>{{ specimen.specimen_suffix }}</td>
         <td>
