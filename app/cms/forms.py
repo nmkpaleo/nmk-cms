@@ -483,7 +483,10 @@ class DrawerRegisterForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["taxa"].queryset = Taxon.objects.filter(taxon_rank="order")
+        # Allow both "order" and "Order" values in existing data
+        self.fields["taxa"].queryset = Taxon.objects.filter(
+            taxon_rank__iexact="order"
+        )
 
     def clean(self):
         cleaned_data = super().clean()

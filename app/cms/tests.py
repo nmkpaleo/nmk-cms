@@ -498,7 +498,7 @@ class DrawerRegisterTests(TestCase):
 
     def test_taxa_field_limited_to_orders(self):
         order_taxon = Taxon.objects.create(
-            taxon_rank="order",
+            taxon_rank="Order",
             taxon_name="Ordertaxon",
             kingdom="k",
             phylum="p",
@@ -509,7 +509,7 @@ class DrawerRegisterTests(TestCase):
             species="s",
         )
         Taxon.objects.create(
-            taxon_rank="family",
+            taxon_rank="Family",
             taxon_name="Familytaxon",
             kingdom="k",
             phylum="p",
@@ -521,6 +521,32 @@ class DrawerRegisterTests(TestCase):
         )
         form = DrawerRegisterForm()
         self.assertEqual(list(form.fields["taxa"].queryset), [order_taxon])
+
+    def test_filter_taxa_field_limited_to_orders(self):
+        order_taxon = Taxon.objects.create(
+            taxon_rank="Order",
+            taxon_name="Ordertaxon",
+            kingdom="k",
+            phylum="p",
+            class_name="c",
+            order="Ordertaxon",
+            family="f",
+            genus="g",
+            species="s",
+        )
+        Taxon.objects.create(
+            taxon_rank="Family",
+            taxon_name="Familytaxon",
+            kingdom="k",
+            phylum="p",
+            class_name="c",
+            order="o",
+            family="Familytaxon",
+            genus="g",
+            species="s",
+        )
+        f = DrawerRegisterFilter({}, queryset=DrawerRegister.objects.all())
+        self.assertEqual(list(f.form.fields["taxa"].queryset), [order_taxon])
 
     def test_filter_by_code_and_status(self):
         DrawerRegister.objects.create(

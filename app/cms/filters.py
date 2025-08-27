@@ -190,7 +190,7 @@ class DrawerRegisterFilter(django_filters.FilterSet):
         widget=forms.Select(attrs={"class": "w3-select"}),
     )
     taxa = django_filters.ModelChoiceFilter(
-        queryset=Taxon.objects.filter(taxon_rank="order"),
+        queryset=Taxon.objects.filter(taxon_rank__iexact="order"),
         label="Taxon",
         widget=forms.Select(attrs={"class": "w3-select"}),
     )
