@@ -7,33 +7,8 @@
 
 {% block content %}
 
-    <div class="w3-container w3-margin-top">
-        <h2>Localities</h2>
-
-        <button onclick="toggleAccordion('localityFilterPanel')" class="w3-button w3-block w3-light-grey w3-left-align">
-          🔍 Show/Hide Filters
-        </button>
-
-        <div id="localityFilterPanel" class="w3-hide w3-animate-opacity w3-padding w3-light-grey w3-round-large w3-margin-top">
-          <form method="get">
-            <div class="w3-row-padding">
-              <div class="w3-third">
-                <label>Name</label>
-                {{ filter.form.name }}
-              </div>
-            </div>
-
-            <div class="w3-container w3-padding-16">
-              <button type="submit" class="w3-button w3-blue w3-margin-right">Apply Filters</button>
-              <a href="{% url 'locality_list' %}" class="w3-button w3-gray">Clear</a>
-            </div>
-          </form>
-        </div>
-    </div>
-
-
 <div class="w3-container w3-margin-top">
-    <h2>Locality</h2>
+    <h2>Localities</h2>
   
     <button onclick="toggleAccordion('accessionFilterPanel')" class="w3-button w3-block w3-light-grey w3-left-align">
       🔍 Show/Hide Filters
