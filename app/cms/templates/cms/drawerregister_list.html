@@ -4,11 +4,46 @@
 <div class="w3-container w3-margin-top">
   <h2>Drawer Register</h2>
   <a href="{% url 'drawerregister_create' %}" class="w3-button w3-green w3-margin-bottom">New Drawer</a>
+  <button onclick="toggleAccordion('drawerFilterPanel')" class="w3-button w3-block w3-light-grey w3-left-align">
+    🔍 Show/Hide Filters
+  </button>
+
+  <div id="drawerFilterPanel" class="w3-hide w3-animate-opacity w3-padding w3-light-grey w3-round-large w3-margin-top">
+    <form method="get">
+      <div class="w3-row-padding">
+        <div class="w3-third">
+          <label>Code</label>
+          {{ filter.form.code }}
+        </div>
+        <div class="w3-third">
+          <label>Status</label>
+          {{ filter.form.scanning_status }}
+        </div>
+        <div class="w3-third">
+          <label>Locality</label>
+          {{ filter.form.localities }}
+        </div>
+      </div>
+      <div class="w3-row-padding">
+        <div class="w3-third">
+          <label>Taxon</label>
+          {{ filter.form.taxa }}
+        </div>
+      </div>
+      <div class="w3-container w3-padding-16">
+        <button type="submit" class="w3-button w3-blue w3-margin-right">Apply Filters</button>
+        <a href="{% url 'drawerregister_list' %}" class="w3-button w3-gray">Clear</a>
+      </div>
+    </form>
+  </div>
+
   <div class="table-container">
     <table class="lists_table">
       <tr>
         <th>Code</th>
         <th>Description</th>
+        <th>Taxa</th>
+        <th>Localities</th>
         <th>Estimated Documents</th>
         <th>Status</th>
         <th>Scanning Users</th>
@@ -18,6 +53,8 @@
       <tr class="template_data">
         <td><a href="{% url 'drawerregister_detail' drawer.pk %}">{{ drawer.code }}</a></td>
         <td>{{ drawer.description }}</td>
+        <td>{{ drawer.taxa.all|join:", " }}</td>
+        <td>{{ drawer.localities.all|join:", " }}</td>
         <td>{{ drawer.estimated_documents }}</td>
         <td>{{ drawer.get_scanning_status_display }}</td>
         <td>{{ drawer.scanning_users.all|join:", " }}</td>
@@ -27,4 +64,19 @@
     </table>
   </div>
 </div>
+{% endblock %}
+
+{% block script %}
+<script>
+function toggleAccordion(id) {
+    var panel = document.getElementById(id);
+    if (panel.classList.contains("w3-show")) {
+        panel.classList.remove("w3-show");
+        panel.classList.add("w3-hide");
+    } else {
+        panel.classList.remove("w3-hide");
+        panel.classList.add("w3-show");
+    }
+}
+</script>
 {% endblock %}

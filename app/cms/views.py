@@ -11,7 +11,14 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django_filters.views import FilterView
-from .filters import AccessionFilter, PreparationFilter, ReferenceFilter, FieldSlipFilter, LocalityFilter
+from .filters import (
+    AccessionFilter,
+    PreparationFilter,
+    ReferenceFilter,
+    FieldSlipFilter,
+    LocalityFilter,
+    DrawerRegisterFilter,
+)
 
 
 from django.views.generic import DetailView
@@ -1132,10 +1139,12 @@ class DrawerRegisterAccessMixin(UserPassesTestMixin):
         return is_collection_manager(self.request.user) or self.request.user.is_superuser
 
 
-class DrawerRegisterListView(LoginRequiredMixin, DrawerRegisterAccessMixin, ListView):
+class DrawerRegisterListView(LoginRequiredMixin, DrawerRegisterAccessMixin, FilterView):
     model = DrawerRegister
     template_name = "cms/drawerregister_list.html"
     context_object_name = "drawers"
+    paginate_by = 10
+    filterset_class = DrawerRegisterFilter
 
 
 class DrawerRegisterDetailView(LoginRequiredMixin, DrawerRegisterAccessMixin, DetailView):

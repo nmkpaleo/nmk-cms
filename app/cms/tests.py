@@ -16,9 +16,11 @@ from cms.models import (
     UnexpectedSpecimen,
     DrawerRegister,
     DrawerRegisterLog,
+    Taxon,
 )
 from cms.utils import generate_accessions_from_series
 from cms.forms import DrawerRegisterForm
+from cms.filters import DrawerRegisterFilter
 
 
 class GenerateAccessionsFromSeriesTests(TestCase):
@@ -493,4 +495,46 @@ class DrawerRegisterTests(TestCase):
         self.assertEqual(logs.count(), 2)
         self.assertTrue(logs.filter(change_type=DrawerRegisterLog.ChangeType.STATUS).exists())
         self.assertTrue(logs.filter(change_type=DrawerRegisterLog.ChangeType.USER).exists())
+
+    def test_taxa_field_limited_to_orders(self):
+        order_taxon = Taxon.objects.create(
+            taxon_rank="order",
+            taxon_name="Ordertaxon",
+            kingdom="k",
+            phylum="p",
+            class_name="c",
+            order="Ordertaxon",
+            family="f",
+            genus="g",
+            species="s",
+        )
+        Taxon.objects.create(
+            taxon_rank="family",
+            taxon_name="Familytaxon",
+            kingdom="k",
+            phylum="p",
+            class_name="c",
+            order="o",
+            family="Familytaxon",
+            genus="g",
+            species="s",
+        )
+        form = DrawerRegisterForm()
+        self.assertEqual(list(form.fields["taxa"].queryset), [order_taxon])
+
+    def test_filter_by_code_and_status(self):
+        DrawerRegister.objects.create(
+            code="ABC", description="Drawer A", estimated_documents=1
+        )
+        DrawerRegister.objects.create(
+            code="XYZ",
+            description="Drawer B",
+            estimated_documents=2,
+            scanning_status=DrawerRegister.ScanningStatus.SCANNED,
+        )
+
+        f = DrawerRegisterFilter({"code": "ABC"}, queryset=DrawerRegister.objects.all())
+        self.assertEqual(list(f.qs.values_list("code", flat=True)), ["ABC"])
+        f = DrawerRegisterFilter({"scanning_status": DrawerRegister.ScanningStatus.SCANNED}, queryset=DrawerRegister.objects.all())
+        self.assertEqual(list(f.qs.values_list("code", flat=True)), ["XYZ"])
 

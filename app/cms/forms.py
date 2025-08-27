@@ -10,7 +10,7 @@ from .models import (Accession, AccessionFieldSlip, AccessionNumberSeries, Acces
                      AccessionRow, Collection, Comment, Element, FieldSlip, Identification,
                      Locality, Media,
                      NatureOfSpecimen, Person, Preparation, Reference, SpecimenGeology,
-                     DrawerRegister)
+                     DrawerRegister, Taxon)
 
 import json
 
@@ -480,6 +480,10 @@ class DrawerRegisterForm(forms.ModelForm):
             "scanning_status",
             "scanning_users",
         ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["taxa"].queryset = Taxon.objects.filter(taxon_rank="order")
 
     def clean(self):
         cleaned_data = super().clean()
