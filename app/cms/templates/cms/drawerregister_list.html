@@ -1,0 +1,30 @@
+{% extends "base_generic.html" %}
+
+{% block content %}
+<div class="w3-container w3-margin-top">
+  <h2>Drawer Register</h2>
+  <a href="{% url 'drawerregister_create' %}" class="w3-button w3-green w3-margin-bottom">New Drawer</a>
+  <div class="table-container">
+    <table class="lists_table">
+      <tr>
+        <th>Code</th>
+        <th>Description</th>
+        <th>Estimated Documents</th>
+        <th>Status</th>
+        <th>Scanning Users</th>
+        <th>Edit</th>
+      </tr>
+      {% for drawer in drawers %}
+      <tr class="template_data">
+        <td><a href="{% url 'drawerregister_detail' drawer.pk %}">{{ drawer.code }}</a></td>
+        <td>{{ drawer.description }}</td>
+        <td>{{ drawer.estimated_documents }}</td>
+        <td>{{ drawer.get_scanning_status_display }}</td>
+        <td>{{ drawer.scanning_users.all|join:", " }}</td>
+        <td><a href="{% url 'drawerregister_edit' drawer.pk %}" class="edit-icon">✏️</a></td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+{% endblock %}

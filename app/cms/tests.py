@@ -14,8 +14,11 @@ from cms.models import (
     Preparation,
     PreparationStatus,
     UnexpectedSpecimen,
+    DrawerRegister,
+    DrawerRegisterLog,
 )
 from cms.utils import generate_accessions_from_series
+from cms.forms import DrawerRegisterForm
 
 
 class GenerateAccessionsFromSeriesTests(TestCase):
@@ -444,4 +447,50 @@ class UnexpectedSpecimenLoggingTests(TestCase):
         response = self.client.post(reverse("inventory_log_unexpected"), {"identifier": "XYZ"})
         self.assertEqual(response.status_code, 200)
         self.assertTrue(UnexpectedSpecimen.objects.filter(identifier="XYZ").exists())
+
+
+class DrawerRegisterTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username="cm", password="pass")
+
+        self.patcher = patch("cms.models.get_current_user", return_value=self.user)
+        self.patcher.start()
+        self.addCleanup(self.patcher.stop)
+
+    def test_requires_user_when_in_progress(self):
+        form = DrawerRegisterForm(
+            data={
+                "code": "ABC",
+                "description": "Test",
+                "estimated_documents": 5,
+                "scanning_status": DrawerRegister.ScanningStatus.IN_PROGRESS,
+            }
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn("Scanning user is required", form.non_field_errors()[0])
+
+    def test_logging_on_status_and_user_change(self):
+        drawer = DrawerRegister.objects.create(
+            code="DEF", description="Drawer", estimated_documents=10
+        )
+        other = get_user_model().objects.create_user("other", password="pass")
+        form = DrawerRegisterForm(
+            data={
+                "code": "DEF",
+                "description": "Drawer",
+                "estimated_documents": 10,
+                "scanning_status": DrawerRegister.ScanningStatus.IN_PROGRESS,
+                "scanning_users": [other.pk],
+                "localities": [],
+                "taxa": [],
+            },
+            instance=drawer,
+        )
+        self.assertTrue(form.is_valid())
+        form.save()
+        logs = DrawerRegisterLog.objects.filter(drawer=drawer)
+        self.assertEqual(logs.count(), 2)
+        self.assertTrue(logs.filter(change_type=DrawerRegisterLog.ChangeType.STATUS).exists())
+        self.assertTrue(logs.filter(change_type=DrawerRegisterLog.ChangeType.USER).exists())
 

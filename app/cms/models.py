@@ -1080,3 +1080,77 @@ class PreparationMedia(BaseModel):
 
     def __str__(self):
         return f"{self.preparation} - {self.get_context_display()}"
+
+
+class DrawerRegister(BaseModel):
+    code = models.CharField(max_length=3, unique=True, help_text="Three letter unique code")
+    description = models.TextField(help_text="Description of the drawer or folder")
+    localities = models.ManyToManyField(
+        "Locality", blank=True, help_text="Related localities"
+    )
+    taxa = models.ManyToManyField(
+        "Taxon", blank=True, help_text="Related taxa"
+    )
+    estimated_documents = models.PositiveIntegerField(
+        help_text="Estimated number of documents or cards"
+    )
+
+    class ScanningStatus(models.TextChoices):
+        WAITING = "waiting", "Waiting"
+        IN_PROGRESS = "in_progress", "In progress"
+        SCANNED = "scanned", "Scanned"
+
+    scanning_status = models.CharField(
+        max_length=20,
+        choices=ScanningStatus.choices,
+        default=ScanningStatus.WAITING,
+    )
+    scanning_users = models.ManyToManyField(
+        User,
+        blank=True,
+        related_name="drawerregisters",
+        help_text="Users assigned to scanning",
+    )
+
+    class Meta:
+        verbose_name = "Drawer Register"
+        verbose_name_plural = "Drawer Register"
+        ordering = ["code"]
+
+    def clean(self):
+        super().clean()
+
+    def __str__(self):
+        return f"{self.code}"
+
+
+class DrawerRegisterLog(BaseModel):
+    class ChangeType(models.TextChoices):
+        STATUS = "status", "Status"
+        USER = "user", "User"
+
+    drawer = models.ForeignKey(
+        DrawerRegister, on_delete=models.CASCADE, related_name="logs"
+    )
+    change_type = models.CharField(max_length=20, choices=ChangeType.choices)
+    previous_status = models.CharField(
+        max_length=20,
+        choices=DrawerRegister.ScanningStatus.choices,
+        null=True,
+        blank=True,
+    )
+    new_status = models.CharField(
+        max_length=20,
+        choices=DrawerRegister.ScanningStatus.choices,
+        null=True,
+        blank=True,
+    )
+    description = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-created_on"]
+        verbose_name = "Drawer Register Log"
+        verbose_name_plural = "Drawer Register Logs"
+
+    def __str__(self):
+        return f"{self.drawer.code} - {self.change_type}"

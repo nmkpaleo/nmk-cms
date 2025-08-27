@@ -21,6 +21,7 @@ from cms.views import (
     PreparationApproveView,
     dashboard,
     inventory_start, inventory_update, inventory_reset, inventory_clear, inventory_log_unexpected,
+    DrawerRegisterListView, DrawerRegisterDetailView, DrawerRegisterCreateView, DrawerRegisterUpdateView,
 )
 from .views import PreparationMediaUploadView
 from .views import FieldSlipAutocomplete
@@ -73,6 +74,11 @@ urlpatterns = [
     path('localities/', LocalityListView.as_view(), name='locality_list'),
     path('localities/<int:pk>/', LocalityDetailView.as_view(), name='locality_detail'),
     path('localities/<int:pk>/edit/', locality_edit, name='locality_edit'),
+
+    path('drawers/', DrawerRegisterListView.as_view(), name='drawerregister_list'),
+    path('drawers/new/', DrawerRegisterCreateView.as_view(), name='drawerregister_create'),
+    path('drawers/<int:pk>/', DrawerRegisterDetailView.as_view(), name='drawerregister_detail'),
+    path('drawers/<int:pk>/edit/', DrawerRegisterUpdateView.as_view(), name='drawerregister_edit'),
 
 
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
