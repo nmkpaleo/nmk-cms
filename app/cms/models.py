@@ -637,9 +637,11 @@ class Taxon(BaseModel):
         return reverse('taxon-detail', args=[str(self.id)])
 
     def __str__(self):
-        if self.infraspecific_epithet:
-            return f"{self.genus} {self.species} {self.infraspecific_epithet}"
-        return f"{self.genus} {self.species}"
+        if self.genus and self.species:
+            if self.infraspecific_epithet:
+                return f"{self.genus} {self.species} {self.infraspecific_epithet}"
+            return f"{self.genus} {self.species}"
+        return self.taxon_name
 
 
 class Media(BaseModel):

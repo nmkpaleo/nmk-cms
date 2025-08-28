@@ -504,9 +504,9 @@ class DrawerRegisterTests(TestCase):
             phylum="p",
             class_name="c",
             order="Ordertaxon",
-            family="f",
-            genus="g",
-            species="s",
+            family="",
+            genus="",
+            species="",
         )
         Taxon.objects.create(
             taxon_rank="Family",
@@ -530,9 +530,9 @@ class DrawerRegisterTests(TestCase):
             phylum="p",
             class_name="c",
             order="Ordertaxon",
-            family="f",
-            genus="g",
-            species="s",
+            family="",
+            genus="",
+            species="",
         )
         family_taxon = Taxon.objects.create(
             taxon_rank="Family",
@@ -562,9 +562,9 @@ class DrawerRegisterTests(TestCase):
             phylum="p",
             class_name="c",
             order="Ordertaxon",
-            family="f",
-            genus="g",
-            species="s",
+            family="",
+            genus="",
+            species="",
         )
         Taxon.objects.create(
             taxon_rank="Family",
@@ -595,4 +595,18 @@ class DrawerRegisterTests(TestCase):
         self.assertEqual(list(f.qs.values_list("code", flat=True)), ["ABC"])
         f = DrawerRegisterFilter({"scanning_status": DrawerRegister.ScanningStatus.SCANNED}, queryset=DrawerRegister.objects.all())
         self.assertEqual(list(f.qs.values_list("code", flat=True)), ["XYZ"])
+
+    def test_order_taxon_str_falls_back_to_name(self):
+        taxon = Taxon.objects.create(
+            taxon_rank="Order",
+            taxon_name="Coleoptera",
+            kingdom="k",
+            phylum="p",
+            class_name="c",
+            order="Coleoptera",
+            family="",
+            genus="",
+            species="",
+        )
+        self.assertEqual(str(taxon), "Coleoptera")
 
