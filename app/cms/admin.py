@@ -450,7 +450,8 @@ admin.site.register(GeologicalContext, GeologicalContextAdmin)
 
 
 @admin.register(DrawerRegister)
-class DrawerRegisterAdmin(admin.ModelAdmin):
+class DrawerRegisterAdmin(ImportExportModelAdmin):
+    resource_class = DrawerRegisterResource
     form = DrawerRegisterForm
     list_display = ("code", "description", "estimated_documents", "scanning_status")
     list_filter = ("scanning_status",)

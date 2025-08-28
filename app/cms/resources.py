@@ -14,6 +14,7 @@ from .models import (
     Person,
     Preparation,
     PreparationMaterial,
+    DrawerRegister,
     Reference,
     SpecimenGeology,
     Storage,
@@ -886,3 +887,35 @@ class GeologicalContextResource(resources.ModelResource):
         model = GeologicalContext
         fields = ('id', 'geological_context_type', 'unit_name', 'name', 'parent_geological_context')
         export_order = ('id', 'geological_context_type', 'unit_name', 'name', 'parent_geological_context')
+
+
+class DrawerRegisterResource(resources.ModelResource):
+    localities = fields.Field(
+        column_name="localities",
+        attribute="localities",
+        widget=ManyToManyWidget(Locality, field="name", separator=";"),
+    )
+    taxa = fields.Field(
+        column_name="taxa",
+        attribute="taxa",
+        widget=ManyToManyWidget(Taxon, field="taxon_name", separator=";"),
+    )
+    scanning_users = fields.Field(
+        column_name="scanning_users",
+        attribute="scanning_users",
+        widget=ManyToManyWidget(User, field="username", separator=";"),
+    )
+
+    class Meta:
+        model = DrawerRegister
+        import_id_fields = ("code",)
+        fields = (
+            "code",
+            "description",
+            "localities",
+            "taxa",
+            "estimated_documents",
+            "scanning_status",
+            "scanning_users",
+        )
+        export_order = fields

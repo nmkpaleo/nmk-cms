@@ -10,6 +10,11 @@ Administrators can manage drawers and their scanning status through the Django a
 5. When the scanning status is set to *In progress*, at least one scanning user must be selected.
 6. Save the entry. Status and user changes are recorded in the log automatically.
 
+## Importing and Exporting
+1. From the **Drawer Registers** changelist, use the **Import** and **Export** buttons to bulk load or download entries.
+2. CSV files use a semicolon (`;`) to separate multiple localities, taxa, or scanning users.
+3. After uploading an import file, review the preview and confirm to apply the changes.
+
 ## Viewing Change Logs
 1. In the admin list, select a drawer register.
 2. Scroll to the **Drawer Register Logs** section to see a history of status and user changes.

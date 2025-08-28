@@ -21,6 +21,7 @@ from cms.models import (
 from cms.utils import generate_accessions_from_series
 from cms.forms import DrawerRegisterForm
 from cms.filters import DrawerRegisterFilter
+from cms.resources import DrawerRegisterResource
 
 
 class GenerateAccessionsFromSeriesTests(TestCase):
@@ -609,4 +610,57 @@ class DrawerRegisterTests(TestCase):
             species="",
         )
         self.assertEqual(str(taxon), "Coleoptera")
+
+    def test_drawer_register_resource_roundtrip(self):
+        loc1 = Locality.objects.create(abbreviation="L1", name="Loc1")
+        loc2 = Locality.objects.create(abbreviation="L2", name="Loc2")
+        taxon1 = Taxon.objects.create(
+            taxon_rank="Order",
+            taxon_name="Order1",
+            kingdom="k",
+            phylum="p",
+            class_name="c",
+            order="Order1",
+            family="",
+            genus="",
+            species="",
+        )
+        taxon2 = Taxon.objects.create(
+            taxon_rank="Order",
+            taxon_name="Order2",
+            kingdom="k",
+            phylum="p",
+            class_name="c",
+            order="Order2",
+            family="",
+            genus="",
+            species="",
+        )
+        user1 = get_user_model().objects.create_user(username="u1")
+        user2 = get_user_model().objects.create_user(username="u2")
+        drawer = DrawerRegister.objects.create(
+            code="ABC",
+            description="Desc",
+            estimated_documents=5,
+            scanning_status=DrawerRegister.ScanningStatus.IN_PROGRESS,
+        )
+        drawer.localities.set([loc1, loc2])
+        drawer.taxa.set([taxon1, taxon2])
+        drawer.scanning_users.set([user1, user2])
+
+        resource = DrawerRegisterResource()
+        dataset = resource.export()
+        DrawerRegister.objects.all().delete()
+        result = resource.import_data(dataset, dry_run=False)
+        self.assertFalse(result.has_errors())
+        imported = DrawerRegister.objects.get(code="ABC")
+        self.assertQuerysetEqual(
+            imported.localities.order_by("id"), [loc1, loc2], transform=lambda x: x
+        )
+        self.assertQuerysetEqual(
+            imported.taxa.order_by("id"), [taxon1, taxon2], transform=lambda x: x
+        )
+        self.assertQuerysetEqual(
+            imported.scanning_users.order_by("id"), [user1, user2], transform=lambda x: x
+        )
 
