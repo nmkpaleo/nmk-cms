@@ -889,21 +889,36 @@ class GeologicalContextResource(resources.ModelResource):
         export_order = ('id', 'geological_context_type', 'unit_name', 'name', 'parent_geological_context')
 
 
+class SemicolonManyToManyWidget(ManyToManyWidget):
+    """Widget that splits semicolon separated values into model instances."""
+
+    def clean(self, value, row=None, **kwargs):
+        if not value:
+            return []
+        items = [v.strip() for v in str(value).split(self.separator) if v.strip()]
+        objects = []
+        for item in items:
+            obj = self.model.objects.filter(**{self.field: item}).first()
+            if obj:
+                objects.append(obj)
+        return objects
+
+
 class DrawerRegisterResource(resources.ModelResource):
     localities = fields.Field(
         column_name="localities",
         attribute="localities",
-        widget=ManyToManyWidget(Locality, field="name", separator=";"),
+        widget=SemicolonManyToManyWidget(Locality, field="name", separator=";"),
     )
     taxa = fields.Field(
         column_name="taxa",
         attribute="taxa",
-        widget=ManyToManyWidget(Taxon, field="taxon_name", separator=";"),
+        widget=SemicolonManyToManyWidget(Taxon, field="taxon_name", separator=";"),
     )
     scanning_users = fields.Field(
         column_name="scanning_users",
         attribute="scanning_users",
-        widget=ManyToManyWidget(User, field="username", separator=";"),
+        widget=SemicolonManyToManyWidget(User, field="username", separator=";"),
     )
 
     class Meta:

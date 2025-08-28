@@ -22,6 +22,7 @@ from cms.utils import generate_accessions_from_series
 from cms.forms import DrawerRegisterForm
 from cms.filters import DrawerRegisterFilter
 from cms.resources import DrawerRegisterResource
+from tablib import Dataset
 
 
 class GenerateAccessionsFromSeriesTests(TestCase):
@@ -662,5 +663,70 @@ class DrawerRegisterTests(TestCase):
         )
         self.assertQuerysetEqual(
             imported.scanning_users.order_by("id"), [user1, user2], transform=lambda x: x
+        )
+
+    def test_resource_imports_semicolon_values_with_spaces(self):
+        loc1 = Locality.objects.create(abbreviation="L1", name="Loc1")
+        loc2 = Locality.objects.create(abbreviation="L2", name="Loc2")
+        taxon1 = Taxon.objects.create(
+            taxon_rank="Order",
+            taxon_name="Order1",
+            kingdom="k",
+            phylum="p",
+            class_name="c",
+            order="Order1",
+            family="",
+            genus="",
+            species="",
+        )
+        taxon2 = Taxon.objects.create(
+            taxon_rank="Order",
+            taxon_name="Order2",
+            kingdom="k",
+            phylum="p",
+            class_name="c",
+            order="Order2",
+            family="",
+            genus="",
+            species="",
+        )
+        user1 = get_user_model().objects.create_user(username="u1")
+        user2 = get_user_model().objects.create_user(username="u2")
+
+        dataset = Dataset(
+            headers=[
+                "code",
+                "description",
+                "localities",
+                "taxa",
+                "estimated_documents",
+                "scanning_status",
+                "scanning_users",
+            ]
+        )
+        dataset.append(
+            [
+                "XYZ",
+                "Desc",
+                f"{loc1.name}; {loc2.name}",
+                f"{taxon1.taxon_name}; {taxon2.taxon_name}",
+                5,
+                DrawerRegister.ScanningStatus.IN_PROGRESS,
+                f"{user1.username}; {user2.username}",
+            ]
+        )
+
+        resource = DrawerRegisterResource()
+        result = resource.import_data(dataset, dry_run=False)
+        self.assertFalse(result.has_errors())
+        drawer = DrawerRegister.objects.get(code="XYZ")
+        self.assertQuerysetEqual(
+            drawer.localities.order_by("id"), [loc1, loc2], transform=lambda x: x
+        )
+        self.assertQuerysetEqual(
+            drawer.taxa.order_by("id"), [taxon1, taxon2], transform=lambda x: x
+        )
+        self.assertQuerysetEqual(
+            drawer.scanning_users.order_by("id"), [user1, user2], transform=lambda x: x
         )
 
