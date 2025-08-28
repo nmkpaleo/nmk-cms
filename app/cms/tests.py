@@ -522,6 +522,38 @@ class DrawerRegisterTests(TestCase):
         form = DrawerRegisterForm()
         self.assertEqual(list(form.fields["taxa"].queryset), [order_taxon])
 
+    def test_edit_form_includes_existing_taxa(self):
+        order_taxon = Taxon.objects.create(
+            taxon_rank="Order",
+            taxon_name="Ordertaxon",
+            kingdom="k",
+            phylum="p",
+            class_name="c",
+            order="Ordertaxon",
+            family="f",
+            genus="g",
+            species="s",
+        )
+        family_taxon = Taxon.objects.create(
+            taxon_rank="Family",
+            taxon_name="Familytaxon",
+            kingdom="k",
+            phylum="p",
+            class_name="c",
+            order="o",
+            family="Familytaxon",
+            genus="g",
+            species="s",
+        )
+        drawer = DrawerRegister.objects.create(
+            code="ABC",
+            description="Drawer",
+            estimated_documents=1,
+        )
+        drawer.taxa.add(family_taxon)
+        form = DrawerRegisterForm(instance=drawer)
+        self.assertEqual(set(form.fields["taxa"].queryset), {order_taxon, family_taxon})
+
     def test_filter_taxa_field_limited_to_orders(self):
         order_taxon = Taxon.objects.create(
             taxon_rank="Order",

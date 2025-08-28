@@ -6,7 +6,7 @@ from import_export import resources, fields
 from import_export.fields import Field
 from import_export.widgets import ForeignKeyWidget, DateWidget
 
-from .forms import AccessionNumberSeriesAdminForm
+from .forms import AccessionNumberSeriesAdminForm, DrawerRegisterForm
 
 from .models import (
     AccessionNumberSeries, NatureOfSpecimen, Element, Person, Identification, Taxon,Media, SpecimenGeology, GeologicalContext,
@@ -451,6 +451,7 @@ admin.site.register(GeologicalContext, GeologicalContextAdmin)
 
 @admin.register(DrawerRegister)
 class DrawerRegisterAdmin(admin.ModelAdmin):
+    form = DrawerRegisterForm
     list_display = ("code", "description", "estimated_documents", "scanning_status")
     list_filter = ("scanning_status",)
     search_fields = ("code", "description")
