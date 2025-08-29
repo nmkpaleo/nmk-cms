@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
+from django.utils.timezone import now
 
 from cms.models import (
     Accession,
@@ -16,6 +17,7 @@ from cms.models import (
     UnexpectedSpecimen,
     DrawerRegister,
     DrawerRegisterLog,
+    Scanning,
     Taxon,
 )
 from cms.utils import generate_accessions_from_series
@@ -729,4 +731,47 @@ class DrawerRegisterTests(TestCase):
         self.assertQuerysetEqual(
             drawer.scanning_users.order_by("id"), [user1, user2], transform=lambda x: x
         )
+
+
+class ScanningTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username="intern", password="pass")
+        group = Group.objects.create(name="Intern")
+        self.user.groups.add(group)
+        self.patcher = patch("cms.models.get_current_user", return_value=self.user)
+        self.patcher.start()
+        self.addCleanup(self.patcher.stop)
+        self.drawer = DrawerRegister.objects.create(
+            code="ABC", description="Drawer", estimated_documents=1,
+            scanning_status=DrawerRegister.ScanningStatus.IN_PROGRESS,
+        )
+        self.drawer.scanning_users.add(self.user)
+
+    def test_dashboard_lists_drawers_for_intern(self):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("dashboard"))
+        self.assertContains(response, "ABC")
+
+    def test_start_and_stop_scan(self):
+        self.client.force_login(self.user)
+        self.client.post(reverse("drawer_start_scan", args=[self.drawer.id]))
+        scan = Scanning.objects.get()
+        self.assertIsNotNone(scan.start_time)
+        self.assertIsNone(scan.end_time)
+        self.client.post(reverse("drawer_stop_scan", args=[self.drawer.id]))
+        scan.refresh_from_db()
+        self.assertIsNotNone(scan.end_time)
+
+    def test_drawer_detail_shows_scans(self):
+        Scanning.objects.create(
+            drawer=self.drawer,
+            user=self.user,
+            start_time=now(),
+            end_time=now(),
+        )
+        admin = get_user_model().objects.create_superuser("admin", "admin@example.com", "pass")
+        self.client.force_login(admin)
+        response = self.client.get(reverse("drawerregister_detail", args=[self.drawer.id]))
+        self.assertContains(response, self.user.username)
 

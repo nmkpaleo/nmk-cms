@@ -135,6 +135,39 @@
     {% endif %}
   {% endif %}
 
+  {% if is_intern %}
+    <h2>My Drawer Registers</h2>
+    {% if my_drawers %}
+      <table class="w3-table w3-striped">
+        <thead>
+          <tr>
+            <th>Drawer</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for drawer in my_drawers %}
+            <tr>
+              <td><a href="{% url 'drawerregister_detail' drawer.id %}">{{ drawer.code }}</a></td>
+              <td>
+                <form method="post" action="{% url 'drawer_start_scan' drawer.id %}" style="display:inline;">
+                  {% csrf_token %}
+                  <button type="submit" class="w3-button w3-small w3-green" {% if drawer.active_scan_id %}disabled{% endif %}>Start</button>
+                </form>
+                <form method="post" action="{% url 'drawer_stop_scan' drawer.id %}" style="display:inline;">
+                  {% csrf_token %}
+                  <button type="submit" class="w3-button w3-small w3-red" {% if not drawer.active_scan_id %}disabled{% endif %}>Stop</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No assigned drawer registers.</p>
+    {% endif %}
+  {% endif %}
+
   {% if no_role %}
     <p>Dashboard content for your role is not available yet.</p>
   {% endif %}

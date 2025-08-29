@@ -9,9 +9,9 @@ from import_export.widgets import ForeignKeyWidget, DateWidget
 from .forms import AccessionNumberSeriesAdminForm, DrawerRegisterForm
 
 from .models import (
-    AccessionNumberSeries, NatureOfSpecimen, Element, Person, Identification, Taxon,Media, SpecimenGeology, GeologicalContext,
+    AccessionNumberSeries, NatureOfSpecimen, Element, Person, Identification, Taxon, Media, SpecimenGeology, GeologicalContext,
     AccessionReference, Locality, Collection, Accession, AccessionRow, Subject, Comment, FieldSlip, Reference, Storage, User,
-    Preparation, PreparationLog, PreparationMaterial, PreparationMedia, DrawerRegister, DrawerRegisterLog
+    Preparation, PreparationLog, PreparationMaterial, PreparationMedia, DrawerRegister, DrawerRegisterLog, Scanning
 )
 from .resources import *
 
@@ -463,6 +463,12 @@ class DrawerRegisterAdmin(ImportExportModelAdmin):
 class DrawerRegisterLogAdmin(admin.ModelAdmin):
     list_display = ("drawer", "change_type", "previous_status", "new_status", "created_on", "created_by")
     list_filter = ("change_type", "new_status")
+
+
+@admin.register(Scanning)
+class ScanningAdmin(admin.ModelAdmin):
+    list_display = ("drawer", "user", "start_time", "end_time")
+    list_filter = ("user", "drawer")
 
 # ----------------------------------------------------------------------
 # Flat file import integration
