@@ -14,8 +14,15 @@ from cms.models import (
     Preparation,
     PreparationStatus,
     UnexpectedSpecimen,
+    DrawerRegister,
+    DrawerRegisterLog,
+    Taxon,
 )
 from cms.utils import generate_accessions_from_series
+from cms.forms import DrawerRegisterForm
+from cms.filters import DrawerRegisterFilter
+from cms.resources import DrawerRegisterResource
+from tablib import Dataset
 
 
 class GenerateAccessionsFromSeriesTests(TestCase):
@@ -444,4 +451,282 @@ class UnexpectedSpecimenLoggingTests(TestCase):
         response = self.client.post(reverse("inventory_log_unexpected"), {"identifier": "XYZ"})
         self.assertEqual(response.status_code, 200)
         self.assertTrue(UnexpectedSpecimen.objects.filter(identifier="XYZ").exists())
+
+
+class DrawerRegisterTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username="cm", password="pass")
+
+        self.patcher = patch("cms.models.get_current_user", return_value=self.user)
+        self.patcher.start()
+        self.addCleanup(self.patcher.stop)
+
+    def test_requires_user_when_in_progress(self):
+        form = DrawerRegisterForm(
+            data={
+                "code": "ABC",
+                "description": "Test",
+                "estimated_documents": 5,
+                "scanning_status": DrawerRegister.ScanningStatus.IN_PROGRESS,
+            }
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn("Scanning user is required", form.non_field_errors()[0])
+
+    def test_logging_on_status_and_user_change(self):
+        drawer = DrawerRegister.objects.create(
+            code="DEF", description="Drawer", estimated_documents=10
+        )
+        other = get_user_model().objects.create_user("other", password="pass")
+        form = DrawerRegisterForm(
+            data={
+                "code": "DEF",
+                "description": "Drawer",
+                "estimated_documents": 10,
+                "scanning_status": DrawerRegister.ScanningStatus.IN_PROGRESS,
+                "scanning_users": [other.pk],
+                "localities": [],
+                "taxa": [],
+            },
+            instance=drawer,
+        )
+        self.assertTrue(form.is_valid())
+        form.save()
+        logs = DrawerRegisterLog.objects.filter(drawer=drawer)
+        self.assertEqual(logs.count(), 2)
+        self.assertTrue(logs.filter(change_type=DrawerRegisterLog.ChangeType.STATUS).exists())
+        self.assertTrue(logs.filter(change_type=DrawerRegisterLog.ChangeType.USER).exists())
+
+    def test_taxa_field_limited_to_orders(self):
+        order_taxon = Taxon.objects.create(
+            taxon_rank="Order",
+            taxon_name="Ordertaxon",
+            kingdom="k",
+            phylum="p",
+            class_name="c",
+            order="Ordertaxon",
+            family="",
+            genus="",
+            species="",
+        )
+        Taxon.objects.create(
+            taxon_rank="Family",
+            taxon_name="Familytaxon",
+            kingdom="k",
+            phylum="p",
+            class_name="c",
+            order="o",
+            family="Familytaxon",
+            genus="g",
+            species="s",
+        )
+        form = DrawerRegisterForm()
+        self.assertEqual(list(form.fields["taxa"].queryset), [order_taxon])
+
+    def test_edit_form_includes_existing_taxa(self):
+        order_taxon = Taxon.objects.create(
+            taxon_rank="Order",
+            taxon_name="Ordertaxon",
+            kingdom="k",
+            phylum="p",
+            class_name="c",
+            order="Ordertaxon",
+            family="",
+            genus="",
+            species="",
+        )
+        family_taxon = Taxon.objects.create(
+            taxon_rank="Family",
+            taxon_name="Familytaxon",
+            kingdom="k",
+            phylum="p",
+            class_name="c",
+            order="o",
+            family="Familytaxon",
+            genus="g",
+            species="s",
+        )
+        drawer = DrawerRegister.objects.create(
+            code="ABC",
+            description="Drawer",
+            estimated_documents=1,
+        )
+        drawer.taxa.add(family_taxon)
+        form = DrawerRegisterForm(instance=drawer)
+        self.assertEqual(set(form.fields["taxa"].queryset), {order_taxon, family_taxon})
+
+    def test_filter_taxa_field_limited_to_orders(self):
+        order_taxon = Taxon.objects.create(
+            taxon_rank="Order",
+            taxon_name="Ordertaxon",
+            kingdom="k",
+            phylum="p",
+            class_name="c",
+            order="Ordertaxon",
+            family="",
+            genus="",
+            species="",
+        )
+        Taxon.objects.create(
+            taxon_rank="Family",
+            taxon_name="Familytaxon",
+            kingdom="k",
+            phylum="p",
+            class_name="c",
+            order="o",
+            family="Familytaxon",
+            genus="g",
+            species="s",
+        )
+        f = DrawerRegisterFilter({}, queryset=DrawerRegister.objects.all())
+        self.assertEqual(list(f.form.fields["taxa"].queryset), [order_taxon])
+
+    def test_filter_by_code_and_status(self):
+        DrawerRegister.objects.create(
+            code="ABC", description="Drawer A", estimated_documents=1
+        )
+        DrawerRegister.objects.create(
+            code="XYZ",
+            description="Drawer B",
+            estimated_documents=2,
+            scanning_status=DrawerRegister.ScanningStatus.SCANNED,
+        )
+
+        f = DrawerRegisterFilter({"code": "ABC"}, queryset=DrawerRegister.objects.all())
+        self.assertEqual(list(f.qs.values_list("code", flat=True)), ["ABC"])
+        f = DrawerRegisterFilter({"scanning_status": DrawerRegister.ScanningStatus.SCANNED}, queryset=DrawerRegister.objects.all())
+        self.assertEqual(list(f.qs.values_list("code", flat=True)), ["XYZ"])
+
+    def test_order_taxon_str_falls_back_to_name(self):
+        taxon = Taxon.objects.create(
+            taxon_rank="Order",
+            taxon_name="Coleoptera",
+            kingdom="k",
+            phylum="p",
+            class_name="c",
+            order="Coleoptera",
+            family="",
+            genus="",
+            species="",
+        )
+        self.assertEqual(str(taxon), "Coleoptera")
+
+    def test_drawer_register_resource_roundtrip(self):
+        loc1 = Locality.objects.create(abbreviation="L1", name="Loc1")
+        loc2 = Locality.objects.create(abbreviation="L2", name="Loc2")
+        taxon1 = Taxon.objects.create(
+            taxon_rank="Order",
+            taxon_name="Order1",
+            kingdom="k",
+            phylum="p",
+            class_name="c",
+            order="Order1",
+            family="",
+            genus="",
+            species="",
+        )
+        taxon2 = Taxon.objects.create(
+            taxon_rank="Order",
+            taxon_name="Order2",
+            kingdom="k",
+            phylum="p",
+            class_name="c",
+            order="Order2",
+            family="",
+            genus="",
+            species="",
+        )
+        user1 = get_user_model().objects.create_user(username="u1")
+        user2 = get_user_model().objects.create_user(username="u2")
+        drawer = DrawerRegister.objects.create(
+            code="ABC",
+            description="Desc",
+            estimated_documents=5,
+            scanning_status=DrawerRegister.ScanningStatus.IN_PROGRESS,
+        )
+        drawer.localities.set([loc1, loc2])
+        drawer.taxa.set([taxon1, taxon2])
+        drawer.scanning_users.set([user1, user2])
+
+        resource = DrawerRegisterResource()
+        dataset = resource.export()
+        DrawerRegister.objects.all().delete()
+        result = resource.import_data(dataset, dry_run=False)
+        self.assertFalse(result.has_errors())
+        imported = DrawerRegister.objects.get(code="ABC")
+        self.assertQuerysetEqual(
+            imported.localities.order_by("id"), [loc1, loc2], transform=lambda x: x
+        )
+        self.assertQuerysetEqual(
+            imported.taxa.order_by("id"), [taxon1, taxon2], transform=lambda x: x
+        )
+        self.assertQuerysetEqual(
+            imported.scanning_users.order_by("id"), [user1, user2], transform=lambda x: x
+        )
+
+    def test_resource_imports_semicolon_values_with_spaces(self):
+        loc1 = Locality.objects.create(abbreviation="L1", name="Loc1")
+        loc2 = Locality.objects.create(abbreviation="L2", name="Loc2")
+        taxon1 = Taxon.objects.create(
+            taxon_rank="Order",
+            taxon_name="Order1",
+            kingdom="k",
+            phylum="p",
+            class_name="c",
+            order="Order1",
+            family="",
+            genus="",
+            species="",
+        )
+        taxon2 = Taxon.objects.create(
+            taxon_rank="Order",
+            taxon_name="Order2",
+            kingdom="k",
+            phylum="p",
+            class_name="c",
+            order="Order2",
+            family="",
+            genus="",
+            species="",
+        )
+        user1 = get_user_model().objects.create_user(username="u1")
+        user2 = get_user_model().objects.create_user(username="u2")
+
+        dataset = Dataset(
+            headers=[
+                "code",
+                "description",
+                "localities",
+                "taxa",
+                "estimated_documents",
+                "scanning_status",
+                "scanning_users",
+            ]
+        )
+        dataset.append(
+            [
+                "XYZ",
+                "Desc",
+                f"{loc1.name}; {loc2.name}",
+                f"{taxon1.taxon_name}; {taxon2.taxon_name}",
+                5,
+                DrawerRegister.ScanningStatus.IN_PROGRESS,
+                f"{user1.username}; {user2.username}",
+            ]
+        )
+
+        resource = DrawerRegisterResource()
+        result = resource.import_data(dataset, dry_run=False)
+        self.assertFalse(result.has_errors())
+        drawer = DrawerRegister.objects.get(code="XYZ")
+        self.assertQuerysetEqual(
+            drawer.localities.order_by("id"), [loc1, loc2], transform=lambda x: x
+        )
+        self.assertQuerysetEqual(
+            drawer.taxa.order_by("id"), [taxon1, taxon2], transform=lambda x: x
+        )
+        self.assertQuerysetEqual(
+            drawer.scanning_users.order_by("id"), [user1, user2], transform=lambda x: x
+        )
 

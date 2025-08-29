@@ -142,17 +142,20 @@ WSGI_APPLICATION = "config.wsgi.application"
 
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.mysql",
-        "HOST": get_var("DB_HOST"),
-        "NAME": get_var("DB_NAME"),
-        "USER": get_var("DB_USER"),
-        "PASSWORD": get_var("DB_PASS"),
+        "ENGINE": get_var("DB_ENGINE", "django.db.backends.mysql"),
+        "HOST": get_var("DB_HOST", ""),
+        "NAME": get_var("DB_NAME", BASE_DIR / "db.sqlite3"),
+        "USER": get_var("DB_USER", ""),
+        "PASSWORD": get_var("DB_PASS", ""),
         "OPTIONS": {
             "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
             "charset": "utf8mb4",
         },
     }
 }
+
+if DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":
+    DATABASES["default"].pop("OPTIONS", None)
 
 # Password validation
 # https://docs.djangoproject.com/en/4.0/ref/settings/#auth-password-validators

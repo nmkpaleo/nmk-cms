@@ -11,7 +11,14 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django_filters.views import FilterView
-from .filters import AccessionFilter, PreparationFilter, ReferenceFilter, FieldSlipFilter, LocalityFilter
+from .filters import (
+    AccessionFilter,
+    PreparationFilter,
+    ReferenceFilter,
+    FieldSlipFilter,
+    LocalityFilter,
+    DrawerRegisterFilter,
+)
 
 
 from django.views.generic import DetailView
@@ -39,7 +46,8 @@ from cms.forms import (AccessionBatchForm, AccessionCommentForm,
                     AccessionReferenceForm, AddAccessionRowForm, FieldSlipForm,
                     MediaUploadForm, NatureOfSpecimenForm, PreparationForm,
                     PreparationApprovalForm, PreparationMediaUploadForm,
-                    SpecimenCompositeForm, ReferenceForm, LocalityForm)
+                    SpecimenCompositeForm, ReferenceForm, LocalityForm,
+                    DrawerRegisterForm)
 
 from cms.models import (
     Accession,
@@ -62,6 +70,8 @@ from cms.models import (
     PreparationStatus,
     InventoryStatus,
     UnexpectedSpecimen,
+    DrawerRegister,
+    DrawerRegisterLog,
 )
 
 from cms.resources import FieldSlipResource
@@ -1122,4 +1132,36 @@ def inventory_log_unexpected(request):
         return JsonResponse({"success": False}, status=400)
     UnexpectedSpecimen.objects.create(identifier=identifier)
     return JsonResponse({"success": True})
+
+
+class DrawerRegisterAccessMixin(UserPassesTestMixin):
+    def test_func(self):
+        return is_collection_manager(self.request.user) or self.request.user.is_superuser
+
+
+class DrawerRegisterListView(LoginRequiredMixin, DrawerRegisterAccessMixin, FilterView):
+    model = DrawerRegister
+    template_name = "cms/drawerregister_list.html"
+    context_object_name = "drawers"
+    paginate_by = 10
+    filterset_class = DrawerRegisterFilter
+
+
+class DrawerRegisterDetailView(LoginRequiredMixin, DrawerRegisterAccessMixin, DetailView):
+    model = DrawerRegister
+    template_name = "cms/drawerregister_detail.html"
+
+
+class DrawerRegisterCreateView(LoginRequiredMixin, DrawerRegisterAccessMixin, CreateView):
+    model = DrawerRegister
+    form_class = DrawerRegisterForm
+    template_name = "cms/drawerregister_form.html"
+    success_url = reverse_lazy("drawerregister_list")
+
+
+class DrawerRegisterUpdateView(LoginRequiredMixin, DrawerRegisterAccessMixin, UpdateView):
+    model = DrawerRegister
+    form_class = DrawerRegisterForm
+    template_name = "cms/drawerregister_form.html"
+    success_url = reverse_lazy("drawerregister_list")
     

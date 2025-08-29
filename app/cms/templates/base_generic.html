@@ -56,6 +56,10 @@
                 <li><a href="{% url 'preparation_list' %}">Preparations</a></li>
               {% endif %}
 
+              {% if user.is_superuser or user.groups.first.name in "Collection Managers" %}
+                <li><a href="{% url 'drawerregister_list' %}">Drawer Register</a></li>
+              {% endif %}
+
               {% if user.is_authenticated %}
                 <li>User: {{ user.get_username }}</li>
                 <li>

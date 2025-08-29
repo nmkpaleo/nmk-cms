@@ -14,6 +14,7 @@ from .models import (
     Person,
     Preparation,
     PreparationMaterial,
+    DrawerRegister,
     Reference,
     SpecimenGeology,
     Storage,
@@ -886,3 +887,50 @@ class GeologicalContextResource(resources.ModelResource):
         model = GeologicalContext
         fields = ('id', 'geological_context_type', 'unit_name', 'name', 'parent_geological_context')
         export_order = ('id', 'geological_context_type', 'unit_name', 'name', 'parent_geological_context')
+
+
+class SemicolonManyToManyWidget(ManyToManyWidget):
+    """Widget that splits semicolon separated values into model instances."""
+
+    def clean(self, value, row=None, **kwargs):
+        if not value:
+            return []
+        items = [v.strip() for v in str(value).split(self.separator) if v.strip()]
+        objects = []
+        for item in items:
+            obj = self.model.objects.filter(**{self.field: item}).first()
+            if obj:
+                objects.append(obj)
+        return objects
+
+
+class DrawerRegisterResource(resources.ModelResource):
+    localities = fields.Field(
+        column_name="localities",
+        attribute="localities",
+        widget=SemicolonManyToManyWidget(Locality, field="name", separator=";"),
+    )
+    taxa = fields.Field(
+        column_name="taxa",
+        attribute="taxa",
+        widget=SemicolonManyToManyWidget(Taxon, field="taxon_name", separator=";"),
+    )
+    scanning_users = fields.Field(
+        column_name="scanning_users",
+        attribute="scanning_users",
+        widget=SemicolonManyToManyWidget(User, field="username", separator=";"),
+    )
+
+    class Meta:
+        model = DrawerRegister
+        import_id_fields = ("code",)
+        fields = (
+            "code",
+            "description",
+            "localities",
+            "taxa",
+            "estimated_documents",
+            "scanning_status",
+            "scanning_users",
+        )
+        export_order = fields

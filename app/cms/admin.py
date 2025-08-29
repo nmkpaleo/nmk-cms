@@ -6,12 +6,12 @@ from import_export import resources, fields
 from import_export.fields import Field
 from import_export.widgets import ForeignKeyWidget, DateWidget
 
-from .forms import AccessionNumberSeriesAdminForm
+from .forms import AccessionNumberSeriesAdminForm, DrawerRegisterForm
 
 from .models import (
     AccessionNumberSeries, NatureOfSpecimen, Element, Person, Identification, Taxon,Media, SpecimenGeology, GeologicalContext,
     AccessionReference, Locality, Collection, Accession, AccessionRow, Subject, Comment, FieldSlip, Reference, Storage, User,
-    Preparation, PreparationLog, PreparationMaterial, PreparationMedia
+    Preparation, PreparationLog, PreparationMaterial, PreparationMedia, DrawerRegister, DrawerRegisterLog
 )
 from .resources import *
 
@@ -447,6 +447,22 @@ if admin.site.is_registered(User):
 admin.site.register(Media, MediaAdmin)
 admin.site.register(SpecimenGeology, SpecimenGeologyAdmin)
 admin.site.register(GeologicalContext, GeologicalContextAdmin)
+
+
+@admin.register(DrawerRegister)
+class DrawerRegisterAdmin(ImportExportModelAdmin):
+    resource_class = DrawerRegisterResource
+    form = DrawerRegisterForm
+    list_display = ("code", "description", "estimated_documents", "scanning_status")
+    list_filter = ("scanning_status",)
+    search_fields = ("code", "description")
+    filter_horizontal = ("localities", "taxa", "scanning_users")
+
+
+@admin.register(DrawerRegisterLog)
+class DrawerRegisterLogAdmin(admin.ModelAdmin):
+    list_display = ("drawer", "change_type", "previous_status", "new_status", "created_on", "created_by")
+    list_filter = ("change_type", "new_status")
 
 # ----------------------------------------------------------------------
 # Flat file import integration

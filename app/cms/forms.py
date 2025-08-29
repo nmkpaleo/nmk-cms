@@ -9,7 +9,8 @@ from django.urls import reverse_lazy
 from .models import (Accession, AccessionFieldSlip, AccessionNumberSeries, AccessionReference,
                      AccessionRow, Collection, Comment, Element, FieldSlip, Identification,
                      Locality, Media,
-                     NatureOfSpecimen, Person, Preparation, Reference, SpecimenGeology)
+                     NatureOfSpecimen, Person, Preparation, Reference, SpecimenGeology,
+                     DrawerRegister, Taxon)
 
 import json
 
@@ -465,3 +466,35 @@ class SpecimenCompositeForm(forms.Form):
     fragments = forms.IntegerField(min_value=0, required=False)
     taxon = forms.CharField(max_length=255, required=False)
     identified_by = forms.ModelChoiceField(queryset=Person.objects.all(), required=False)
+
+
+class DrawerRegisterForm(forms.ModelForm):
+    class Meta:
+        model = DrawerRegister
+        fields = [
+            "code",
+            "description",
+            "localities",
+            "taxa",
+            "estimated_documents",
+            "scanning_status",
+            "scanning_users",
+        ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Allow both "order" and "Order" values in existing data
+        qs = Taxon.objects.filter(taxon_rank__iexact="order")
+        if self.instance.pk:
+            qs = qs | self.instance.taxa.all()
+        self.fields["taxa"].queryset = qs.distinct()
+
+    def clean(self):
+        cleaned_data = super().clean()
+        status = cleaned_data.get("scanning_status")
+        users = cleaned_data.get("scanning_users")
+        if status == DrawerRegister.ScanningStatus.IN_PROGRESS and not users:
+            raise forms.ValidationError(
+                "Scanning user is required when status is In progress."
+            )
+        return cleaned_data

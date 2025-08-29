@@ -1,6 +1,6 @@
 import django_filters
 from django import forms
-from .models import Accession, Locality, Preparation, Reference, FieldSlip
+from .models import Accession, Locality, Preparation, Reference, FieldSlip, DrawerRegister, Taxon
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -172,4 +172,30 @@ class FieldSlipFilter(django_filters.FilterSet):
         ]
 
 
+
+
+class DrawerRegisterFilter(django_filters.FilterSet):
+    code = django_filters.CharFilter(
+        lookup_expr="icontains",
+        label="Code",
+        widget=forms.TextInput(attrs={"class": "w3-input"}),
+    )
+    scanning_status = django_filters.ChoiceFilter(
+        choices=DrawerRegister.ScanningStatus.choices,
+        widget=forms.Select(attrs={"class": "w3-select"}),
+    )
+    localities = django_filters.ModelChoiceFilter(
+        queryset=Locality.objects.all(),
+        label="Locality",
+        widget=forms.Select(attrs={"class": "w3-select"}),
+    )
+    taxa = django_filters.ModelChoiceFilter(
+        queryset=Taxon.objects.filter(taxon_rank__iexact="order"),
+        label="Taxon",
+        widget=forms.Select(attrs={"class": "w3-select"}),
+    )
+
+    class Meta:
+        model = DrawerRegister
+        fields = ["code", "scanning_status", "localities", "taxa"]
 

@@ -1,0 +1,20 @@
+{% extends "base_generic.html" %}
+
+{% block content %}
+<div class="w3-container w3-margin-top">
+  <h2>Drawer {{ object.code }}</h2>
+  <p>{{ object.description }}</p>
+  <p><strong>Estimated documents:</strong> {{ object.estimated_documents }}</p>
+  <p><strong>Status:</strong> {{ object.get_scanning_status_display }}</p>
+  <p><strong>Scanning users:</strong> {{ object.scanning_users.all|join:", " }}</p>
+  <h3>Change Log</h3>
+  <ul>
+    {% for log in object.logs.all %}
+      <li>{{ log.created_on|date:"Y-m-d H:i" }} - {{ log.get_change_type_display }}{% if log.previous_status or log.new_status %}: {{ log.previous_status }} → {{ log.new_status }}{% endif %}{% if log.description %} ({{ log.description }}){% endif %} by {{ log.created_by }}</li>
+    {% empty %}
+      <li>No changes logged.</li>
+    {% endfor %}
+  </ul>
+  <a href="{% url 'drawerregister_edit' object.pk %}" class="w3-button w3-blue">Edit</a>
+</div>
+{% endblock %}
