@@ -752,6 +752,9 @@ class ScanningTests(TestCase):
         self.client.force_login(self.user)
         response = self.client.get(reverse("dashboard"))
         self.assertContains(response, "ABC")
+        self.assertContains(response, "Drawer")
+        self.assertContains(response, "Start scanning task")
+        self.assertContains(response, "Stop scanning task")
 
     def test_start_and_stop_scan(self):
         self.client.force_login(self.user)
@@ -759,6 +762,9 @@ class ScanningTests(TestCase):
         scan = Scanning.objects.get()
         self.assertIsNotNone(scan.start_time)
         self.assertIsNone(scan.end_time)
+        response = self.client.get(reverse("dashboard"))
+        self.assertContains(response, scan.start_time.strftime("%Y-%m-%d"))
+        self.assertContains(response, "scan-timer")
         self.client.post(reverse("drawer_stop_scan", args=[self.drawer.id]))
         scan.refresh_from_db()
         self.assertIsNotNone(scan.end_time)

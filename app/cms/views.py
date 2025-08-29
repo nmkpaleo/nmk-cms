@@ -246,14 +246,19 @@ def dashboard(request):
         )
 
     if user.groups.filter(name="Intern").exists():
-        active_scan_subquery = Scanning.objects.filter(
+        active_scan_id_subquery = Scanning.objects.filter(
             drawer=OuterRef("pk"), user=user, end_time__isnull=True
         ).values("id")[:1]
+        active_scan_start_subquery = Scanning.objects.filter(
+            drawer=OuterRef("pk"), user=user, end_time__isnull=True
+        ).values("start_time")[:1]
         my_drawers = (
             DrawerRegister.objects.filter(
                 scanning_status=DrawerRegister.ScanningStatus.IN_PROGRESS,
                 scanning_users=user,
-            ).annotate(active_scan_id=Subquery(active_scan_subquery))
+            )
+            .annotate(active_scan_id=Subquery(active_scan_id_subquery))
+            .annotate(active_scan_start=Subquery(active_scan_start_subquery))
         )
 
         context.update({"is_intern": True, "my_drawers": my_drawers})
