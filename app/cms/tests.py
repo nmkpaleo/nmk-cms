@@ -365,7 +365,7 @@ class DashboardViewCollectionManagerTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.context["is_collection_manager"])
         self.assertTrue(response.context["has_active_series"])
-        self.assertIn(self.unassigned, response.context["unassigned_accessions"])
+        self.assertEqual(len(response.context["unassigned_accessions"]), 10)
         self.assertNotIn(self.assigned, response.context["unassigned_accessions"])
         self.assertEqual(len(response.context["latest_accessions"]), 10)
         self.assertIn(self.row_accession, response.context["latest_accessions"])
@@ -374,6 +374,49 @@ class DashboardViewCollectionManagerTests(TestCase):
         AccessionNumberSeries.objects.filter(user=self.manager).update(is_active=False)
         response = self.client.get(reverse("dashboard"))
         self.assertFalse(response.context["has_active_series"])
+
+
+class DashboardViewPreparatorTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+
+        self.user = User.objects.create_user(username="prep", password="pass")
+
+        self.group = Group.objects.create(name="Preparators")
+        self.group.user_set.add(self.user)
+
+        self.patcher = patch("cms.models.get_current_user", return_value=self.user)
+        self.patcher.start()
+        self.addCleanup(self.patcher.stop)
+
+        self.collection = Collection.objects.create(
+            abbreviation="COL", description="Test Collection"
+        )
+        self.locality = Locality.objects.create(abbreviation="LC", name="Locality")
+
+        for i in range(15):
+            accession = Accession.objects.create(
+                collection=self.collection,
+                specimen_prefix=self.locality,
+                specimen_no=i,
+                accessioned_by=self.user,
+            )
+            row = AccessionRow.objects.create(accession=accession)
+            Preparation.objects.create(
+                accession_row=row,
+                preparator=self.user,
+                preparation_type="cleaning",
+                started_on="2023-01-01",
+                status=PreparationStatus.IN_PROGRESS,
+            )
+
+        self.client.login(username="prep", password="pass")
+
+    def test_preparator_dashboard_lists_limited(self):
+        response = self.client.get(reverse("dashboard"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context["my_preparations"]), 10)
+        self.assertEqual(len(response.context["priority_tasks"]), 10)
 
 
 class DashboardViewMultipleRolesTests(TestCase):

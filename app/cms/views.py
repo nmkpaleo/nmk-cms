@@ -182,12 +182,16 @@ def dashboard(request):
     context = {}
 
     if user.groups.filter(name="Preparators").exists():
-        my_preparations = Preparation.objects.filter(
+        my_preparations_qs = Preparation.objects.filter(
             preparator=user
         ).exclude(status=PreparationStatus.COMPLETED)
+        my_preparations = my_preparations_qs.order_by("-started_on")[:10]
 
         priority_threshold = now().date() - timedelta(days=7)
-        priority_tasks = my_preparations.filter(started_on__lte=priority_threshold)
+        priority_tasks = (
+            my_preparations_qs.filter(started_on__lte=priority_threshold)
+            .order_by("-started_on")[:10]
+        )
 
         context.update(
             {
@@ -198,9 +202,12 @@ def dashboard(request):
         )
 
     if user.groups.filter(name="Curators").exists():
-        completed_preparations = Preparation.objects.filter(
-            status=PreparationStatus.COMPLETED,
-            curator=user,
+        completed_preparations = (
+            Preparation.objects.filter(
+                status=PreparationStatus.COMPLETED,
+                curator=user,
+            )
+            .order_by("-completed_on")[:10]
         )
 
         context.update(
@@ -218,6 +225,7 @@ def dashboard(request):
             Accession.objects.filter(accessioned_by=user)
             .annotate(row_count=Count("accessionrow"))
             .filter(row_count=0)
+            .order_by("-created_on")[:10]
         )
         latest_accessions = (
             Accession.objects.filter(
