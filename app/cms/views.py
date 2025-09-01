@@ -387,6 +387,16 @@ class AccessionDetailView(DetailView):
     template_name = 'cms/accession_detail.html'
     context_object_name = 'accession'
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        user = self.request.user
+        if user.is_authenticated and (
+            user.is_superuser or
+            user.groups.filter(name__in=["Collection Managers", "Curators"]).exists()
+        ):
+            return qs
+        return qs.filter(is_published=True)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["related_fieldslips"] = self.object.fieldslip_links.all()
@@ -605,15 +615,22 @@ class LocalityDetailView(DetailView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-
+        user = self.request.user
         accessions = self.object.accession_set.all()
-        paginator = Paginator(accessions, 5)  
+        if not (
+            user.is_authenticated and (
+                user.is_superuser or
+                user.groups.filter(name__in=["Collection Managers", "Curators"]).exists()
+            )
+        ):
+            accessions = accessions.filter(is_published=True)
+
+        paginator = Paginator(accessions, 5)
         page_number = self.request.GET.get('page')
         accessions = paginator.get_page(page_number)
 
+        context['accessions'] = accessions
 
-        context['accessions'] = accessions     # so your base template's pagination still works
-       
         return context
 
     
