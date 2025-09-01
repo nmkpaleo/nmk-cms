@@ -737,7 +737,7 @@ class ScanningTests(TestCase):
     def setUp(self):
         User = get_user_model()
         self.user = User.objects.create_user(username="intern", password="pass")
-        group = Group.objects.create(name="Intern")
+        group = Group.objects.create(name="Interns")
         self.user.groups.add(group)
         self.patcher = patch("cms.models.get_current_user", return_value=self.user)
         self.patcher.start()

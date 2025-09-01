@@ -245,7 +245,7 @@ def dashboard(request):
             }
         )
 
-    if user.groups.filter(name="Intern").exists():
+    if user.groups.filter(name="Interns").exists():
         active_scan_id_subquery = Scanning.objects.filter(
             drawer=OuterRef("pk"), user=user, end_time__isnull=True
         ).values("id")[:1]
