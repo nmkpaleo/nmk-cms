@@ -773,3 +773,60 @@ class DrawerRegisterTests(TestCase):
             drawer.scanning_users.order_by("id"), [user1, user2], transform=lambda x: x
         )
 
+
+class AccessionVisibilityTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.creator = User.objects.create_user(username="creator", password="pass")
+        self.cm_user = User.objects.create_user(username="cm", password="pass")
+        self.cm_group = Group.objects.create(name="Collection Managers")
+        self.cm_group.user_set.add(self.cm_user)
+
+        self.patcher = patch("cms.models.get_current_user", return_value=self.creator)
+        self.patcher.start()
+        self.addCleanup(self.patcher.stop)
+
+        self.collection = Collection.objects.create(abbreviation="COL", description="Test")
+        self.locality = Locality.objects.create(abbreviation="LC", name="Loc")
+
+        self.published_accession = Accession.objects.create(
+            collection=self.collection,
+            specimen_prefix=self.locality,
+            specimen_no=1,
+        )
+        self.unpublished_accession = Accession.objects.create(
+            collection=self.collection,
+            specimen_prefix=self.locality,
+            specimen_no=2,
+        )
+        Accession.objects.filter(pk=self.published_accession.pk).update(is_published=True)
+        Accession.objects.filter(pk=self.unpublished_accession.pk).update(is_published=False)
+        self.published_accession.refresh_from_db()
+        self.unpublished_accession.refresh_from_db()
+
+    def test_locality_detail_hides_unpublished_for_public(self):
+        url = reverse("locality_detail", args=[self.locality.pk])
+        response = self.client.get(url)
+        self.assertContains(response, str(self.published_accession.specimen_no))
+        self.assertNotIn(
+            f"/accessions/{self.unpublished_accession.pk}/",
+            response.content.decode(),
+        )
+
+    def test_locality_detail_shows_unpublished_for_collection_manager(self):
+        self.client.login(username="cm", password="pass")
+        url = reverse("locality_detail", args=[self.locality.pk])
+        response = self.client.get(url)
+        self.assertContains(response, str(self.unpublished_accession.specimen_no))
+
+    def test_accession_detail_unpublished_returns_404_for_public(self):
+        url = reverse("accession_detail", args=[self.unpublished_accession.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 404)
+
+    def test_accession_detail_unpublished_allowed_for_collection_manager(self):
+        self.client.login(username="cm", password="pass")
+        url = reverse("accession_detail", args=[self.unpublished_accession.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+

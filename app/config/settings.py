@@ -144,7 +144,7 @@ DATABASES = {
     "default": {
         "ENGINE": get_var("DB_ENGINE", "django.db.backends.mysql"),
         "HOST": get_var("DB_HOST", ""),
-        "NAME": get_var("DB_NAME", BASE_DIR / "db.sqlite3"),
+        "NAME": get_var("DB_NAME", str(BASE_DIR / "db.sqlite3")),
         "USER": get_var("DB_USER", ""),
         "PASSWORD": get_var("DB_PASS", ""),
         "OPTIONS": {
