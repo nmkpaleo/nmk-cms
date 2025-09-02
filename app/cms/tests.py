@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
+from django.core.exceptions import ValidationError
 
 from cms.models import (
     Accession,
@@ -24,7 +25,7 @@ from cms.models import (
 from cms.utils import generate_accessions_from_series
 from cms.forms import DrawerRegisterForm
 from cms.filters import DrawerRegisterFilter
-from cms.resources import DrawerRegisterResource
+from cms.resources import DrawerRegisterResource, PlaceResource
 from tablib import Dataset
 
 
@@ -878,6 +879,41 @@ class PlaceModelTests(TestCase):
         with self.assertRaises(ValidationError):
             invalid.full_clean()
 
+    def test_related_place_must_share_locality(self):
+        other_locality = Locality.objects.create(abbreviation="OT", name="Other")
+        region = Place.objects.create(
+            locality=other_locality,
+            name="OtherRegion",
+            place_type=PlaceType.REGION,
+        )
+        invalid = Place(
+            locality=self.locality,
+            name="Site",
+            place_type=PlaceType.SITE,
+            related_place=region,
+            relation_type=PlaceRelation.PART_OF,
+        )
+        with self.assertRaisesMessage(ValidationError, "Related place must belong to the same locality."):
+            invalid.full_clean()
+
+    def test_prevent_circular_part_of(self):
+        parent = Place.objects.create(
+            locality=self.locality,
+            name="Region",
+            place_type=PlaceType.REGION,
+        )
+        child = Place.objects.create(
+            locality=self.locality,
+            name="Site",
+            place_type=PlaceType.SITE,
+            related_place=parent,
+            relation_type=PlaceRelation.PART_OF,
+        )
+        parent.related_place = child
+        parent.relation_type = PlaceRelation.PART_OF
+        with self.assertRaisesMessage(ValidationError, "Cannot set a higher-level place as part of its descendant."):
+            parent.full_clean()
+
 
 class PlaceViewTests(TestCase):
     def setUp(self):
@@ -896,11 +932,93 @@ class PlaceViewTests(TestCase):
     def test_place_detail_view(self):
         response = self.client.get(reverse('place_detail', args=[self.place.pk]))
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Higher Geography")
         self.assertContains(response, self.place.part_of_hierarchy)
+
+    def test_place_detail_view_lists_lower_geography(self):
+        child = Place.objects.create(
+            locality=self.locality,
+            name="Site",
+            place_type=PlaceType.SITE,
+            related_place=self.place,
+            relation_type=PlaceRelation.PART_OF,
+        )
+        response = self.client.get(reverse('place_detail', args=[self.place.pk]))
+        self.assertContains(response, "Lower Geography")
+        self.assertContains(response, child.name)
 
     def test_place_filter_by_name(self):
         Place.objects.create(locality=self.locality, name="Other", place_type=PlaceType.REGION)
         response = self.client.get(reverse('place_list'), {'name': 'Region'})
         self.assertContains(response, "Region")
         self.assertNotContains(response, "Other")
+
+
+class PlaceImportTests(TestCase):
+    def setUp(self):
+        self.locality = Locality.objects.create(abbreviation="LC", name="Locality")
+        self.resource = PlaceResource()
+
+    def test_invalid_relation_type(self):
+        row = {
+            'name': 'Test',
+            'place_type': PlaceType.REGION,
+            'locality': self.locality.abbreviation,
+            'relation_type': 'invalid',
+        }
+        with self.assertRaises(ValueError) as cm:
+            self.resource.before_import_row(row, row_number=1)
+        self.assertIn('Invalid relation_type', str(cm.exception))
+
+    def test_invalid_place_type(self):
+        row = {
+            'name': 'Test',
+            'place_type': 'InvalidType',
+            'locality': self.locality.abbreviation,
+        }
+        with self.assertRaises(ValueError) as cm:
+            self.resource.before_import_row(row, row_number=1)
+        self.assertIn('Invalid place_type', str(cm.exception))
+
+    def test_related_place_must_share_locality(self):
+        other_locality = Locality.objects.create(abbreviation="OT", name="Other")
+        related = Place.objects.create(
+            locality=other_locality,
+            name="OtherRegion",
+            place_type=PlaceType.REGION,
+        )
+        row = {
+            'name': 'Test',
+            'place_type': PlaceType.SITE,
+            'locality': self.locality.abbreviation,
+            'related_place': related.name,
+            'relation_type': PlaceRelation.PART_OF,
+        }
+        with self.assertRaises(ValueError) as cm:
+            self.resource.before_import_row(row, row_number=1)
+        self.assertIn('must belong to locality', str(cm.exception))
+
+    def test_prevent_circular_part_of(self):
+        parent = Place.objects.create(
+            locality=self.locality,
+            name="Region",
+            place_type=PlaceType.REGION,
+        )
+        child = Place.objects.create(
+            locality=self.locality,
+            name="Site",
+            place_type=PlaceType.SITE,
+            related_place=parent,
+            relation_type=PlaceRelation.PART_OF,
+        )
+        row = {
+            'name': parent.name,
+            'place_type': parent.place_type,
+            'locality': self.locality.abbreviation,
+            'related_place': child.name,
+            'relation_type': PlaceRelation.PART_OF,
+        }
+        with self.assertRaises(ValueError) as cm:
+            self.resource.before_import_row(row, row_number=1)
+        self.assertIn('higher-level place cannot be part of its descendant', str(cm.exception))
 

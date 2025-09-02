@@ -69,6 +69,7 @@ from cms.models import (
     Taxon,
     Locality,
     Place,
+    PlaceRelation,
     PreparationStatus,
     InventoryStatus,
     UnexpectedSpecimen,
@@ -683,6 +684,13 @@ class PlaceDetailView(DetailView):
     model = Place
     template_name = 'cms/place_detail.html'
     context_object_name = 'place'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['children'] = Place.objects.filter(
+            related_place=self.object, relation_type=PlaceRelation.PART_OF
+        )
+        return context
 
 
 @login_required
