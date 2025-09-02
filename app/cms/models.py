@@ -133,6 +133,18 @@ class Place(BaseModel):
             raise ValidationError({"relation_type": "Relation type is required when related place is set."})
         if not self.related_place and self.relation_type:
             raise ValidationError({"related_place": "Related place is required when relation type is set."})
+        if self.related_place:
+            if self.locality_id != self.related_place.locality_id:
+                raise ValidationError({"related_place": "Related place must belong to the same locality."})
+            if self.relation_type == PlaceRelation.PART_OF:
+                ancestor = self.related_place
+                while ancestor:
+                    if ancestor.pk == self.pk:
+                        raise ValidationError({"related_place": "Cannot set a higher-level place as part of its descendant."})
+                    if ancestor.relation_type == PlaceRelation.PART_OF:
+                        ancestor = ancestor.related_place
+                    else:
+                        break
 
     def save(self, *args, **kwargs):
         if self.related_place:

@@ -20,8 +20,17 @@
             <p><strong>Locality:</strong> <br> {{ place.locality.abbreviation }}</p>
         </div>
         <div class="card">
-            <p><strong>Hierarchy:</strong> <br> {{ place.part_of_hierarchy }}</p>
+            <p><strong>Higher Geography:</strong> <br> {{ place.part_of_hierarchy }}</p>
         </div>
+        {% if children %}
+        <div class="card">
+            <p><strong>Lower Geography:</strong> <br>
+            {% for child in children %}
+                <a href="{% url 'place_detail' child.pk %}">{{ child.name }}</a>{% if not forloop.last %}, {% endif %}
+            {% endfor %}
+            </p>
+        </div>
+        {% endif %}
         {% if place.related_place %}
         <div class="card">
             <p><strong>Relation:</strong> <br> {{ place.get_relation_type_display }} → {{ place.related_place.name }}</p>
