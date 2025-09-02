@@ -1,0 +1,42 @@
+{% extends "base_generic.html" %}
+{% load user_tags %}
+
+{% block content %}
+<div class="template-detail-container">
+    <div class="template-detail-header">
+        <h2 class="template-detail-h2">Place Detail</h2>
+        {% if user.is_superuser or user|has_group:"Collection Managers" %}
+        <a href="{% url 'place_edit' place.pk %}" class="edit-icon">Edit Form ✏️</a>
+        {% endif %}
+    </div>
+    <div class="grid-container">
+        <div class="card">
+            <p><strong>Name:</strong> <br> {{ place.name }}</p>
+        </div>
+        <div class="card">
+            <p><strong>Type:</strong> <br> {{ place.get_place_type_display }}</p>
+        </div>
+        <div class="card">
+            <p><strong>Locality:</strong> <br> {{ place.locality.abbreviation }}</p>
+        </div>
+        <div class="card">
+            <p><strong>Hierarchy:</strong> <br> {{ place.part_of_hierarchy }}</p>
+        </div>
+        {% if place.related_place %}
+        <div class="card">
+            <p><strong>Relation:</strong> <br> {{ place.get_relation_type_display }} → {{ place.related_place.name }}</p>
+        </div>
+        {% endif %}
+        {% if place.description %}
+        <div class="card">
+            <p><strong>Description:</strong> <br> {{ place.description }}</p>
+        </div>
+        {% endif %}
+        {% if place.comment %}
+        <div class="card">
+            <p><strong>Comment:</strong> <br> {{ place.comment }}</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

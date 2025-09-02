@@ -878,3 +878,29 @@ class PlaceModelTests(TestCase):
         with self.assertRaises(ValidationError):
             invalid.full_clean()
 
+
+class PlaceViewTests(TestCase):
+    def setUp(self):
+        self.locality = Locality.objects.create(abbreviation="LC", name="Locality")
+        self.place = Place.objects.create(
+            locality=self.locality,
+            name="Region",
+            place_type=PlaceType.REGION,
+        )
+
+    def test_place_list_view(self):
+        response = self.client.get(reverse('place_list'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Region")
+
+    def test_place_detail_view(self):
+        response = self.client.get(reverse('place_detail', args=[self.place.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.place.part_of_hierarchy)
+
+    def test_place_filter_by_name(self):
+        Place.objects.create(locality=self.locality, name="Other", place_type=PlaceType.REGION)
+        response = self.client.get(reverse('place_list'), {'name': 'Region'})
+        self.assertContains(response, "Region")
+        self.assertNotContains(response, "Other")
+

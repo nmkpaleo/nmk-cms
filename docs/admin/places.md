@@ -2,6 +2,10 @@
 
 Administrators can manage places that describe regions, sites, collecting areas or squares. Places are linked to a locality and may reference another place as a part of, synonym or abbreviation.
 
+Collection managers can add and edit places and manage their relationships, but only superusers may delete them.
+
+The CMS interface also provides a **Places** section in the navigation menu where entries can be filtered by name, type or locality before viewing or editing details.
+
 ## Adding or Editing a Place
 1. Log in to the admin site.
 2. Select **Places** from the sidebar.
