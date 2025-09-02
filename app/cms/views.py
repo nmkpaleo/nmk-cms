@@ -17,6 +17,7 @@ from .filters import (
     ReferenceFilter,
     FieldSlipFilter,
     LocalityFilter,
+    PlaceFilter,
     DrawerRegisterFilter,
 )
 
@@ -47,7 +48,7 @@ from cms.forms import (AccessionBatchForm, AccessionCommentForm,
                     MediaUploadForm, NatureOfSpecimenForm, PreparationForm,
                     PreparationApprovalForm, PreparationMediaUploadForm,
                     SpecimenCompositeForm, ReferenceForm, LocalityForm,
-                    DrawerRegisterForm)
+                    PlaceForm, DrawerRegisterForm)
 
 from cms.models import (
     Accession,
@@ -67,6 +68,7 @@ from cms.models import (
     Storage,
     Taxon,
     Locality,
+    Place,
     PreparationStatus,
     InventoryStatus,
     UnexpectedSpecimen,
@@ -100,6 +102,10 @@ class PreparationAccessMixin(UserPassesTestMixin):
 # Helper function to check if user is in the "Collection Managers" group
 def is_collection_manager(user):
     return user.groups.filter(name="Collection Managers").exists()
+
+
+def can_manage_places(user):
+    return user.is_superuser or user.groups.filter(name="Collection Managers").exists()
 
 def add_fieldslip_to_accession(request, pk):
     """
@@ -365,6 +371,33 @@ def locality_edit(request, pk):
     else:
         form = LocalityForm(instance=locality)
     return render(request, 'cms/locality_form.html', {'form': form})
+
+
+@login_required
+@user_passes_test(can_manage_places)
+def place_create(request):
+    if request.method == 'POST':
+        form = PlaceForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect('place_list')
+    else:
+        form = PlaceForm()
+    return render(request, 'cms/place_form.html', {'form': form})
+
+
+@login_required
+@user_passes_test(can_manage_places)
+def place_edit(request, pk):
+    place = get_object_or_404(Place, pk=pk)
+    if request.method == 'POST':
+        form = PlaceForm(request.POST, instance=place)
+        if form.is_valid():
+            form.save()
+            return redirect('place_detail', pk=place.pk)
+    else:
+        form = PlaceForm(instance=place)
+    return render(request, 'cms/place_form.html', {'form': form})
 
 
 class FieldSlipDetailView(DetailView):
@@ -635,6 +668,21 @@ class LocalityDetailView(DetailView):
 
     
     
+
+
+
+class PlaceListView(FilterView):
+    model = Place
+    template_name = 'cms/place_list.html'
+    context_object_name = 'places'
+    paginate_by = 10
+    filterset_class = PlaceFilter
+
+
+class PlaceDetailView(DetailView):
+    model = Place
+    template_name = 'cms/place_detail.html'
+    context_object_name = 'place'
 
 
 @login_required

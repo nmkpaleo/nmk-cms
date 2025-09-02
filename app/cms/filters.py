@@ -1,6 +1,16 @@
 import django_filters
 from django import forms
-from .models import Accession, Locality, Preparation, Reference, FieldSlip, DrawerRegister, Taxon
+from .models import (
+    Accession,
+    Locality,
+    Place,
+    PlaceType,
+    Preparation,
+    Reference,
+    FieldSlip,
+    DrawerRegister,
+    Taxon,
+)
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -98,6 +108,27 @@ class LocalityFilter(django_filters.FilterSet):
         model = Locality
         fields = ['abbreviation', 'name']
 
+
+class PlaceFilter(django_filters.FilterSet):
+    name = django_filters.CharFilter(
+        lookup_expr='icontains',
+        label='Name',
+        widget=forms.TextInput(attrs={'class': 'w3-input'})
+    )
+    place_type = django_filters.ChoiceFilter(
+        choices=PlaceType.choices,
+        label='Type',
+        widget=forms.Select(attrs={'class': 'w3-select'})
+    )
+    locality = django_filters.ModelChoiceFilter(
+        queryset=Locality.objects.all(),
+        label='Locality',
+        widget=forms.Select(attrs={'class': 'w3-select'})
+    )
+
+    class Meta:
+        model = Place
+        fields = ['name', 'place_type', 'locality']
 
 
 class ReferenceFilter(django_filters.FilterSet):

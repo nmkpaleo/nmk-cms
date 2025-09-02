@@ -46,6 +46,7 @@
 
               <li><a href="{% url 'accession_list' %}">Accessions</a></li>
               <li><a href="{% url 'locality_list' %}">Localities</a></li>
+              <li><a href="{% url 'place_list' %}">Places</a></li>
               <li><a href="{% url 'reference_list' %}">References</a></li>
               
               {% if user.is_superuser or user.groups.first.name in "Curators Collection Managers" %}

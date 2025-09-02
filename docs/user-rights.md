@@ -21,5 +21,6 @@ This guide outlines visibility and operations available to different user roles.
 ## Place
 - **Public User**: can view place pages.
 - **Curator**: can view all places and their hierarchies.
-- **Collection Manager / Superuser**: can add, edit or delete places and manage their relationships.
+- **Collection Manager**: can add and edit places and manage their relationships, but cannot delete them.
+- **Superuser**: can add, edit or delete places and manage their relationships.
 
