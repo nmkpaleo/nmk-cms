@@ -21,6 +21,19 @@ class InventoryStatus(models.TextChoices):
     UNKNOWN = "unknown", "Unknown"
 
 
+class PlaceRelation(models.TextChoices):
+    PART_OF = "partOf", "Part Of"
+    SYNONYM = "synonym", "Synonym"
+    ABBREVIATION = "abbreviation", "Abbreviation"
+
+
+class PlaceType(models.TextChoices):
+    REGION = "Region", "Region"
+    SITE = "Site", "Site"
+    COLLECTING_AREA = "CollectingArea", "Collecting Area"
+    SQUARE = "square", "Square"
+
+
 
 class BaseModel(models.Model):
     created_on = models.DateTimeField(auto_now_add=True, verbose_name="Date Created")
@@ -86,6 +99,50 @@ class Locality(BaseModel):
     class Meta:
         verbose_name = "Locality"
         verbose_name_plural = "Localities"
+
+
+class Place(BaseModel):
+    locality = models.ForeignKey(
+        "Locality", on_delete=models.CASCADE, related_name="places"
+    )
+    related_place = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="related_places",
+    )
+    relation_type = models.CharField(
+        max_length=20, choices=PlaceRelation.choices, null=True, blank=True
+    )
+    name = models.CharField(max_length=100)
+    place_type = models.CharField(max_length=20, choices=PlaceType.choices)
+    description = models.TextField(null=True, blank=True)
+    comment = models.TextField(null=True, blank=True)
+    part_of_hierarchy = models.CharField(max_length=255, editable=False)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+    def clean(self):
+        super().clean()
+        if self.related_place and not self.relation_type:
+            raise ValidationError({"relation_type": "Relation type is required when related place is set."})
+        if not self.related_place and self.relation_type:
+            raise ValidationError({"related_place": "Related place is required when relation type is set."})
+
+    def save(self, *args, **kwargs):
+        if self.related_place:
+            if self.relation_type == PlaceRelation.PART_OF:
+                self.part_of_hierarchy = f"{self.related_place.part_of_hierarchy} | {self.name}"
+            else:
+                self.part_of_hierarchy = self.related_place.part_of_hierarchy
+        else:
+            self.part_of_hierarchy = self.name
+        super().save(*args, **kwargs)
 
 # Collection Model
 class Collection(BaseModel):

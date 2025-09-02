@@ -11,6 +11,9 @@ from cms.models import (
     AccessionRow,
     Collection,
     Locality,
+    Place,
+    PlaceType,
+    PlaceRelation,
     Preparation,
     PreparationStatus,
     UnexpectedSpecimen,
@@ -829,4 +832,49 @@ class AccessionVisibilityTests(TestCase):
         url = reverse("accession_detail", args=[self.unpublished_accession.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
+
+
+class PlaceModelTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username="user", password="pass")
+        self.patcher = patch("cms.models.get_current_user", return_value=self.user)
+        self.patcher.start()
+        self.addCleanup(self.patcher.stop)
+        self.locality = Locality.objects.create(abbreviation="LC", name="Locality")
+
+    def test_hierarchy_and_validation(self):
+        region = Place.objects.create(
+            locality=self.locality,
+            name="Region",
+            place_type=PlaceType.REGION,
+        )
+        self.assertEqual(region.part_of_hierarchy, "Region")
+
+        site = Place.objects.create(
+            locality=self.locality,
+            name="Site",
+            place_type=PlaceType.SITE,
+            related_place=region,
+            relation_type=PlaceRelation.PART_OF,
+        )
+        self.assertEqual(site.part_of_hierarchy, "Region | Site")
+
+        synonym = Place.objects.create(
+            locality=self.locality,
+            name="R",
+            place_type=PlaceType.REGION,
+            related_place=region,
+            relation_type=PlaceRelation.SYNONYM,
+        )
+        self.assertEqual(synonym.part_of_hierarchy, region.part_of_hierarchy)
+
+        invalid = Place(
+            locality=self.locality,
+            name="Invalid",
+            place_type=PlaceType.SITE,
+            related_place=region,
+        )
+        with self.assertRaises(ValidationError):
+            invalid.full_clean()
 

@@ -9,6 +9,7 @@ from .models import (
     GeologicalContext,
     Identification,
     Locality,
+    Place,
     Media,
     NatureOfSpecimen,
     Person,
@@ -463,6 +464,46 @@ class LocalityResource(resources.ModelResource):
         import_id_fields = ('abbreviation',)
         fields = ('name', 'abbreviation')
         export_order = ('abbreviation', 'name')
+
+
+class PlaceResource(resources.ModelResource):
+    locality = fields.Field(
+        column_name='locality',
+        attribute='locality',
+        widget=ForeignKeyWidget(Locality, 'abbreviation')
+    )
+    related_place = fields.Field(
+        column_name='related_place',
+        attribute='related_place',
+        widget=ForeignKeyWidget(Place, 'name')
+    )
+
+    class Meta:
+        model = Place
+        skip_unchanged = True
+        report_skipped = False
+        import_id_fields = ('name', 'locality')
+        fields = (
+            'name',
+            'place_type',
+            'locality',
+            'related_place',
+            'relation_type',
+            'description',
+            'comment',
+            'part_of_hierarchy',
+        )
+        export_order = (
+            'name',
+            'place_type',
+            'locality',
+            'related_place',
+            'relation_type',
+            'description',
+            'comment',
+            'part_of_hierarchy',
+        )
+        readonly_fields = ('part_of_hierarchy',)
 
 class NatureOfSpecimenResource(resources.ModelResource):
     accession_row_id= fields.Field(

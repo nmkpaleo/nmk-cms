@@ -18,3 +18,8 @@ This guide outlines visibility and operations available to different user roles.
 - **Curator**: can view all accessions associated with a locality, regardless of publication state.
 - **Collection Manager / Superuser**: can edit localities and see all associated accessions, including who accessioned them.
 
+## Place
+- **Public User**: can view place pages.
+- **Curator**: can view all places and their hierarchies.
+- **Collection Manager / Superuser**: can add, edit or delete places and manage their relationships.
+

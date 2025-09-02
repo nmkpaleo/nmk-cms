@@ -10,7 +10,7 @@ from .forms import AccessionNumberSeriesAdminForm, DrawerRegisterForm
 
 from .models import (
     AccessionNumberSeries, NatureOfSpecimen, Element, Person, Identification, Taxon,Media, SpecimenGeology, GeologicalContext,
-    AccessionReference, Locality, Collection, Accession, AccessionRow, Subject, Comment, FieldSlip, Reference, Storage, User,
+    AccessionReference, Locality, Place, Collection, Accession, AccessionRow, Subject, Comment, FieldSlip, Reference, Storage, User,
     Preparation, PreparationLog, PreparationMaterial, PreparationMedia, DrawerRegister, DrawerRegisterLog
 )
 from .resources import *
@@ -242,6 +242,13 @@ class LocalityAdmin(ImportExportModelAdmin):
     search_fields = ('abbreviation', 'name')
     ordering = ('abbreviation', 'name')
 
+
+class PlaceAdmin(ImportExportModelAdmin):
+    resource_class = PlaceResource
+    list_display = ('name', 'place_type', 'locality', 'relation_type', 'related_place')
+    list_filter = ('place_type', 'relation_type', 'locality')
+    search_fields = ('name', 'locality__name')
+
 # Media
 class MediaAdmin(ImportExportModelAdmin):
     list_display = ('file_name', 'type', 'format', 'media_location', 'license', 'rights_holder', "created_by", "created_on")
@@ -433,6 +440,7 @@ admin.site.register(Element, ElementAdmin)
 admin.site.register(FieldSlip, FieldSlipAdmin)
 admin.site.register(Identification, IdentificationAdmin)
 admin.site.register(Locality, LocalityAdmin)
+admin.site.register(Place, PlaceAdmin)
 admin.site.register(NatureOfSpecimen, NatureOfSpecimenAdmin)
 admin.site.register(Person, PersonAdmin)
 admin.site.register(Reference, ReferenceAdmin)
