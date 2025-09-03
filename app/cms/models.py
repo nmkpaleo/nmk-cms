@@ -8,6 +8,7 @@ from django.utils import timezone
 from django_userforeignkey.models.fields import UserForeignKey
 from django.db.models import UniqueConstraint
 from django.contrib.auth.models import User
+from simple_history.models import HistoricalRecords
 import os # For file handling in media class
 from django.core.exceptions import ValidationError
 import string # For generating specimen number
@@ -55,6 +56,7 @@ class BaseModel(models.Model):
         related_name="%(app_label)s_%(class)s_modified",
         verbose_name="Modified by"
     )
+    history = HistoricalRecords(inherit=True)
 
     class Meta:
         abstract = True

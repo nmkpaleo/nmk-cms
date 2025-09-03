@@ -76,6 +76,7 @@ INSTALLED_APPS = [
     'django_select2',
     'dal',
     'dal_select2',
+    'simple_history',
 ]
 
 SITE_ID = 1
@@ -90,6 +91,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
     "crum.CurrentRequestUserMiddleware",
+    "simple_history.middleware.HistoryRequestMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
