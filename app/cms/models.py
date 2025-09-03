@@ -1184,7 +1184,6 @@ class DrawerRegister(BaseModel):
         related_name="drawerregisters",
         help_text="Users assigned to scanning",
     )
-    history = HistoricalRecords()
 
     class Meta:
         verbose_name = "Drawer Register"
