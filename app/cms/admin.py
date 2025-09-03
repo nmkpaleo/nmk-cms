@@ -5,6 +5,7 @@ from import_export.admin import ImportExportModelAdmin
 from import_export import resources, fields
 from import_export.fields import Field
 from import_export.widgets import ForeignKeyWidget, DateWidget
+from simple_history.admin import SimpleHistoryAdmin
 
 from .forms import AccessionNumberSeriesAdminForm, DrawerRegisterForm
 
@@ -33,6 +34,16 @@ from django.db.models import Count, OuterRef, Exists
 from cms.models import Accession
 
 User = get_user_model()
+
+
+class HistoricalImportExportAdmin(SimpleHistoryAdmin, ImportExportModelAdmin):
+    """Base admin class combining simple history and import-export."""
+    pass
+
+
+class HistoricalAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
+    """Base admin class for models using simple history."""
+    pass
 
 class DuplicateFilter(admin.SimpleListFilter):
     title = 'By Duplicate specimen_no + prefix'
@@ -69,7 +80,7 @@ class DuplicateFilter(admin.SimpleListFilter):
             return annotated  # ✅ return the annotated base queryset
 
 # Accession Model
-class AccessionAdmin(ImportExportModelAdmin):
+class AccessionAdmin(HistoricalImportExportAdmin):
     resource_class = AccessionResource
     list_display = ('collection_abbreviation', 'specimen_prefix_abbreviation',
                     'specimen_no', 'instance_number','accessioned_by',
@@ -98,7 +109,7 @@ class AccessionAdmin(ImportExportModelAdmin):
 
 
 @admin.register(AccessionNumberSeries)
-class AccessionNumberSeriesAdmin(admin.ModelAdmin):
+class AccessionNumberSeriesAdmin(HistoricalAdmin):
     form = AccessionNumberSeriesAdminForm
     change_form_template = "admin/cms/accessionnumberseries/change_form.html"
     list_display = ('user', 'start_from', 'end_at', 'current_number', 'is_active')
@@ -156,7 +167,7 @@ class AccessionNumberSeriesAdmin(admin.ModelAdmin):
 
         return formfield
 
-class AccessionReferenceAdmin(ImportExportModelAdmin):
+class AccessionReferenceAdmin(HistoricalImportExportAdmin):
     resource_class = AccessionReferenceResource
     list_display = ('collection_abbreviation', 'specimen_prefix_abbreviation', 'specimen_number', 'page', 'reference')
     search_fields = ('accession__specimen_no', 'specimen_suffix', 'reference',)
@@ -174,7 +185,7 @@ class AccessionReferenceAdmin(ImportExportModelAdmin):
         return obj.accession.specimen_no if obj.accession.specimen_no else None
     specimen_number.short_description = 'Specimen Number'
 
-class AccessionRowAdmin(ImportExportModelAdmin):
+class AccessionRowAdmin(HistoricalImportExportAdmin):
     resource_class = AccessionRowResource
     list_display = ('collection_abbreviation', 'specimen_prefix_abbreviation', 'specimen_number', 'specimen_suffix', 'storage')
     search_fields = ('accession__specimen_no', 'specimen_suffix', 'storage__area',)
@@ -193,19 +204,19 @@ class AccessionRowAdmin(ImportExportModelAdmin):
     specimen_number.short_description = 'Specimen Number'
 
 # Comment Model
-class CommentAdmin(admin.ModelAdmin):
+class CommentAdmin(HistoricalAdmin):
     list_display = ('specimen_no', 'comment', 'status', 'subject', 'comment_by')
     search_fields = ('comment', 'comment_by')
     list_filter = ('status', 'subject', 'comment_by')
 
 # Collection Model
-class CollectionAdmin(ImportExportModelAdmin):
+class CollectionAdmin(HistoricalImportExportAdmin):
     resource_class = CollectionResource
     list_display = ('abbreviation', 'description')
     search_fields = ('abbreviation', 'description')
 
 # Element Model
-class ElementAdmin(ImportExportModelAdmin):
+class ElementAdmin(HistoricalImportExportAdmin):
     resource_class = ElementResource
     list_display = ('parent_element', 'name')
     list_filter = ('parent_element__name',)
@@ -213,7 +224,7 @@ class ElementAdmin(ImportExportModelAdmin):
     ordering = ('name',)
 
 # FieldSlip Model
-class FieldSlipAdmin(ImportExportModelAdmin):
+class FieldSlipAdmin(HistoricalImportExportAdmin):
     resource_class = FieldSlipResource
     list_display = ('field_number', 'discoverer', 'collector', 'collection_date', 'verbatim_locality', 'verbatim_taxon', 'verbatim_element')
     search_fields = ('field_number', 'discoverer', 'collector', 'verbatim_locality')
@@ -221,14 +232,14 @@ class FieldSlipAdmin(ImportExportModelAdmin):
     ordering = ('verbatim_locality', 'field_number')
 
 #  GeologicalContext
-class GeologicalContextAdmin(ImportExportModelAdmin):
+class GeologicalContextAdmin(HistoricalImportExportAdmin):
     list_display = ('geological_context_type', 'unit_name', 'name', 'parent_geological_context')
     search_fields = ('geological_context_type', 'unit_name', 'name')
     list_filter = ('geological_context_type',)
     ordering = ('name',)
 
 # Identification Model
-class IdentificationAdmin(ImportExportModelAdmin):
+class IdentificationAdmin(HistoricalImportExportAdmin):
     resource_class = IdentificationResource
     list_display = ('accession_row', 'identification_qualifier', 'verbatim_identification', 'taxon', 'identified_by', 'date_identified', )
     search_fields = ('accession_row__accession__specimen_no', 'verbatim_identification', 'taxon__taxon_name', 'identified_by__last_name')
@@ -236,21 +247,21 @@ class IdentificationAdmin(ImportExportModelAdmin):
     ordering = ('accession_row', 'date_identified')
 
 # Locality Model
-class LocalityAdmin(ImportExportModelAdmin):
+class LocalityAdmin(HistoricalImportExportAdmin):
     resource_class = LocalityResource
     list_display = ('abbreviation', 'name')
     search_fields = ('abbreviation', 'name')
     ordering = ('abbreviation', 'name')
 
 
-class PlaceAdmin(ImportExportModelAdmin):
+class PlaceAdmin(HistoricalImportExportAdmin):
     resource_class = PlaceResource
     list_display = ('name', 'place_type', 'locality', 'relation_type', 'related_place')
     list_filter = ('place_type', 'relation_type', 'locality')
     search_fields = ('name', 'locality__name')
 
 # Media
-class MediaAdmin(ImportExportModelAdmin):
+class MediaAdmin(HistoricalImportExportAdmin):
     list_display = ('file_name', 'type', 'format', 'media_location', 'license', 'rights_holder', "created_by", "created_on")
     readonly_fields = ("created_by", "modified_by", "created_on", "modified_on")
     search_fields = ('file_name', 'type', 'format', 'media_location', 'license', 'rights_holder')
@@ -258,44 +269,44 @@ class MediaAdmin(ImportExportModelAdmin):
     ordering = ('file_name',)
 
 # NatureOfSpecimen Model
-class NatureOfSpecimenAdmin(ImportExportModelAdmin):
+class NatureOfSpecimenAdmin(HistoricalImportExportAdmin):
     resource_class = NatureOfSpecimenResource
     list_display = ('accession_row', 'element', 'side', 'condition', 'fragments')
     search_fields = ('accession_row__id', 'element__name', 'side', 'condition')
     ordering = ('accession_row', 'element')
 
 # Person Model
-class PersonAdmin(ImportExportModelAdmin):
+class PersonAdmin(HistoricalImportExportAdmin):
     resource_class = PersonResource
     list_display = ('first_name', 'last_name', 'orcid')
     search_fields = ('first_name', 'last_name', 'orcid')
 
 # Reference Model
-class ReferenceAdmin(ImportExportModelAdmin):
+class ReferenceAdmin(HistoricalImportExportAdmin):
     resource_class = ReferenceResource
     list_display = ('citation', 'doi')
     search_fields = ('citation', 'doi')
 
 # SpecimenGeology
-class SpecimenGeologyAdmin(ImportExportModelAdmin):
+class SpecimenGeologyAdmin(HistoricalImportExportAdmin):
     list_display = ('accession', 'earliest_geological_context', 'latest_geological_context')
     search_fields = ('accession__specimen_prefix',)
     ordering = ('accession',)
 
 # Storage Model
-class StorageAdmin(ImportExportModelAdmin):
+class StorageAdmin(HistoricalImportExportAdmin):
     resource_class = StorageResource
     list_display = ('area', 'parent_area')
     search_fields = ('area', 'parent_area__area')
 
 # Subject Model
-class SubjectAdmin(admin.ModelAdmin):
+class SubjectAdmin(HistoricalAdmin):
     list_display = ('subject_name',)
     search_fields = ('subject_name',)
     list_filter = ('subject_name',)
 
 # TaxonAdmin: Customizes the admin interface for the Taxon model
-class TaxonAdmin(ImportExportModelAdmin):
+class TaxonAdmin(HistoricalImportExportAdmin):
     resource_class = TaxonResource
 
     # Columns to display in the admin list view
@@ -315,7 +326,7 @@ class TaxonAdmin(ImportExportModelAdmin):
     formatted_subspecies.short_description = 'Subspecies'
 
 # User Model
-class UserAdmin(ImportExportModelAdmin):
+class UserAdmin(HistoricalImportExportAdmin):
     resource_class = UserResource
     list_display = ('username', 'first_name', 'last_name', 'email')
     search_fields = ('username', 'first_name', 'last_name', 'email')
@@ -362,7 +373,7 @@ class PreparationMediaInline(admin.TabularInline):
 
 
 @admin.register(Preparation)
-class PreparationAdmin(ImportExportModelAdmin):
+class PreparationAdmin(HistoricalImportExportAdmin):
     """ Custom admin panel for Preparation model. """
 
     resource_class = PreparationResource
@@ -425,7 +436,7 @@ class PreparationAdmin(ImportExportModelAdmin):
     admin_status_info.short_description = "Status Overview"
 
 @admin.register(PreparationMaterial)
-class PreparationMaterialAdmin(ImportExportModelAdmin):
+class PreparationMaterialAdmin(HistoricalImportExportAdmin):
     resource_class = PreparationMaterialResource
     list_display = ("name", "description")
     search_fields = ("name",)
@@ -458,7 +469,7 @@ admin.site.register(GeologicalContext, GeologicalContextAdmin)
 
 
 @admin.register(DrawerRegister)
-class DrawerRegisterAdmin(ImportExportModelAdmin):
+class DrawerRegisterAdmin(HistoricalImportExportAdmin):
     resource_class = DrawerRegisterResource
     form = DrawerRegisterForm
     list_display = ("code", "description", "estimated_documents", "scanning_status")
@@ -468,7 +479,7 @@ class DrawerRegisterAdmin(ImportExportModelAdmin):
 
 
 @admin.register(DrawerRegisterLog)
-class DrawerRegisterLogAdmin(admin.ModelAdmin):
+class DrawerRegisterLogAdmin(HistoricalAdmin):
     list_display = ("drawer", "change_type", "previous_status", "new_status", "created_on", "created_by")
     list_filter = ("change_type", "new_status")
 
