@@ -753,6 +753,25 @@ class DrawerRegisterTests(TestCase):
         )
 
 
+    def test_change_log_uses_history(self):
+        drawer = DrawerRegister(
+            code="ABC", description="Desc", estimated_documents=1
+        )
+        drawer.history_user = self.user
+        drawer.save()
+
+        drawer.description = "Updated"
+        drawer.history_user = self.user
+        drawer.save()
+
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse("drawerregister_detail", args=[drawer.pk])
+        )
+        self.assertContains(response, "Change Log")
+        self.assertContains(response, "Changed")
+        self.assertContains(response, self.user.username)
+
 class AccessionVisibilityTests(TestCase):
     def setUp(self):
         User = get_user_model()
