@@ -74,7 +74,6 @@ from cms.models import (
     InventoryStatus,
     UnexpectedSpecimen,
     DrawerRegister,
-    DrawerRegisterLog,
 )
 
 from cms.resources import FieldSlipResource

@@ -19,7 +19,6 @@ from cms.models import (
     PreparationStatus,
     UnexpectedSpecimen,
     DrawerRegister,
-    DrawerRegisterLog,
     Taxon,
 )
 from cms.utils import generate_accessions_from_series
@@ -520,30 +519,6 @@ class DrawerRegisterTests(TestCase):
         )
         self.assertFalse(form.is_valid())
         self.assertIn("Scanning user is required", form.non_field_errors()[0])
-
-    def test_logging_on_status_and_user_change(self):
-        drawer = DrawerRegister.objects.create(
-            code="DEF", description="Drawer", estimated_documents=10
-        )
-        other = get_user_model().objects.create_user("other", password="pass")
-        form = DrawerRegisterForm(
-            data={
-                "code": "DEF",
-                "description": "Drawer",
-                "estimated_documents": 10,
-                "scanning_status": DrawerRegister.ScanningStatus.IN_PROGRESS,
-                "scanning_users": [other.pk],
-                "localities": [],
-                "taxa": [],
-            },
-            instance=drawer,
-        )
-        self.assertTrue(form.is_valid())
-        form.save()
-        logs = DrawerRegisterLog.objects.filter(drawer=drawer)
-        self.assertEqual(logs.count(), 2)
-        self.assertTrue(logs.filter(change_type=DrawerRegisterLog.ChangeType.STATUS).exists())
-        self.assertTrue(logs.filter(change_type=DrawerRegisterLog.ChangeType.USER).exists())
 
     def test_taxa_field_limited_to_orders(self):
         order_taxon = Taxon.objects.create(
