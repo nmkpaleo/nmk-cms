@@ -38,6 +38,7 @@ from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse_lazy, reverse
 from django.utils.timezone import now
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, FormView
+from django.contrib.auth import get_user_model
 
 from cms.forms import (AccessionBatchForm, AccessionCommentForm,
                     AccessionForm, AccessionFieldSlipForm, AccessionGeologyForm,
@@ -1230,6 +1231,34 @@ class DrawerRegisterListView(LoginRequiredMixin, DrawerRegisterAccessMixin, Filt
 class DrawerRegisterDetailView(LoginRequiredMixin, DrawerRegisterAccessMixin, DetailView):
     model = DrawerRegister
     template_name = "cms/drawerregister_detail.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        history_entries = []
+        for log in self.object.history.all():
+            prev = log.prev_record
+            changes = []
+            if prev:
+                delta = log.diff_against(prev)
+                for change in delta.changes:
+                    if change.field == "scanning_users":
+                        User = get_user_model()
+                        old_ids = set(change.old or [])
+                        new_ids = set(change.new or [])
+                        added_ids = new_ids - old_ids
+                        removed_ids = old_ids - new_ids
+                        if added_ids:
+                            added_names = User.objects.filter(pk__in=added_ids).values_list("username", flat=True)
+                            changes.append("Added users: " + ", ".join(added_names))
+                        if removed_ids:
+                            removed_names = User.objects.filter(pk__in=removed_ids).values_list("username", flat=True)
+                            changes.append("Removed users: " + ", ".join(removed_names))
+                    else:
+                        field_name = change.field.replace("_", " ").capitalize()
+                        changes.append(f"{field_name}: {change.old} → {change.new}")
+            history_entries.append({"log": log, "changes": changes})
+        context["history_entries"] = history_entries
+        return context
 
 
 class DrawerRegisterCreateView(LoginRequiredMixin, DrawerRegisterAccessMixin, CreateView):

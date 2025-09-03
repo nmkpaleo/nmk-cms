@@ -770,6 +770,7 @@ class DrawerRegisterTests(TestCase):
         )
         self.assertContains(response, "Change Log")
         self.assertContains(response, "Changed")
+        self.assertContains(response, "Description: Desc → Updated")
         self.assertContains(response, self.user.username)
 
 class AccessionVisibilityTests(TestCase):
