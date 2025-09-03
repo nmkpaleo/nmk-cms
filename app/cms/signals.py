@@ -9,6 +9,8 @@ from cms.models import (
     AccessionReference,
     DrawerRegister,
     DrawerRegisterLog,
+    Locality,
+    Taxon,
 )
 
 User = get_user_model()
@@ -82,6 +84,50 @@ def log_user_change(sender, instance, action, pk_set, **kwargs):
             description = f"Added users: {', '.join(usernames)}"
         else:
             description = f"Removed users: {', '.join(usernames)}"
+    DrawerRegisterLog.objects.create(
+        drawer=instance,
+        change_type=DrawerRegisterLog.ChangeType.USER,
+        new_status=instance.scanning_status,
+        description=description,
+    )
+
+
+@receiver(m2m_changed, sender=DrawerRegister.localities.through)
+def log_locality_change(sender, instance, action, pk_set, **kwargs):
+    if action not in {"post_add", "post_remove", "post_clear"}:
+        return
+    if action == "post_clear":
+        description = "Cleared localities"
+    else:
+        names = list(
+            Locality.objects.filter(pk__in=pk_set).values_list("name", flat=True)
+        )
+        if action == "post_add":
+            description = f"Added localities: {', '.join(names)}"
+        else:
+            description = f"Removed localities: {', '.join(names)}"
+    DrawerRegisterLog.objects.create(
+        drawer=instance,
+        change_type=DrawerRegisterLog.ChangeType.USER,
+        new_status=instance.scanning_status,
+        description=description,
+    )
+
+
+@receiver(m2m_changed, sender=DrawerRegister.taxa.through)
+def log_taxon_change(sender, instance, action, pk_set, **kwargs):
+    if action not in {"post_add", "post_remove", "post_clear"}:
+        return
+    if action == "post_clear":
+        description = "Cleared taxa"
+    else:
+        names = list(
+            Taxon.objects.filter(pk__in=pk_set).values_list("taxon_name", flat=True)
+        )
+        if action == "post_add":
+            description = f"Added taxa: {', '.join(names)}"
+        else:
+            description = f"Removed taxa: {', '.join(names)}"
     DrawerRegisterLog.objects.create(
         drawer=instance,
         change_type=DrawerRegisterLog.ChangeType.USER,

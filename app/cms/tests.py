@@ -545,6 +545,56 @@ class DrawerRegisterTests(TestCase):
         self.assertTrue(logs.filter(change_type=DrawerRegisterLog.ChangeType.STATUS).exists())
         self.assertTrue(logs.filter(change_type=DrawerRegisterLog.ChangeType.USER).exists())
 
+    def test_change_log_lists_locality_and_taxon_updates(self):
+        cm_group = Group.objects.create(name="Collection Managers")
+        self.user.groups.add(cm_group)
+        self.client.force_login(self.user)
+
+        loc1 = Locality.objects.create(abbreviation="L1", name="Loc1")
+        loc2 = Locality.objects.create(abbreviation="L2", name="Loc2")
+        tax1 = Taxon.objects.create(
+            taxon_rank="Order",
+            taxon_name="Tax1",
+            kingdom="k",
+            phylum="p",
+            class_name="c",
+            order="Tax1",
+            family="",
+            genus="",
+            species="",
+        )
+        tax2 = Taxon.objects.create(
+            taxon_rank="Order",
+            taxon_name="Tax2",
+            kingdom="k",
+            phylum="p",
+            class_name="c",
+            order="Tax2",
+            family="",
+            genus="",
+            species="",
+        )
+
+        drawer = DrawerRegister.objects.create(
+            code="XYZ",
+            description="Drawer",
+            estimated_documents=1,
+        )
+        drawer.localities.set([loc1])
+        drawer.taxa.set([tax1])
+        drawer.save()
+
+        drawer.localities.set([loc2])
+        drawer.taxa.set([tax2])
+        drawer.save()
+
+        response = self.client.get(reverse("drawerregister_detail", args=[drawer.pk]))
+        content = response.content.decode()
+        self.assertIn("Added localities: Loc2", content)
+        self.assertIn("Removed localities: Loc1", content)
+        self.assertIn("Added taxa: Tax2", content)
+        self.assertIn("Removed taxa: Tax1", content)
+
     def test_taxa_field_limited_to_orders(self):
         order_taxon = Taxon.objects.create(
             taxon_rank="Order",

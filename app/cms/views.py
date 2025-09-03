@@ -29,6 +29,7 @@ from django.conf import settings
 
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.core.exceptions import ValidationError
@@ -1231,6 +1232,24 @@ class DrawerRegisterListView(LoginRequiredMixin, DrawerRegisterAccessMixin, Filt
 class DrawerRegisterDetailView(LoginRequiredMixin, DrawerRegisterAccessMixin, DetailView):
     model = DrawerRegister
     template_name = "cms/drawerregister_detail.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        drawer = self.object
+
+        log_strings = []
+        for log in drawer.logs.all():
+            entry = f"{log.created_on:%Y-%m-%d %H:%M} - {log.get_change_type_display()}"
+            if log.previous_status or log.new_status:
+                entry += f": {log.previous_status} → {log.new_status}"
+            if log.description:
+                entry += f" ({log.description})"
+            if log.created_by:
+                entry += f" by {log.created_by}"
+            log_strings.append(entry)
+
+        context["change_log"] = log_strings
+        return context
 
 
 class DrawerRegisterCreateView(LoginRequiredMixin, DrawerRegisterAccessMixin, CreateView):
