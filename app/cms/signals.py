@@ -1,4 +1,4 @@
-from django.db.models.signals import post_save, post_delete, pre_save, m2m_changed
+from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 
 from django.contrib.auth import get_user_model
@@ -8,7 +8,6 @@ from cms.models import (
     AccessionNumberSeries,
     AccessionReference,
     DrawerRegister,
-    DrawerRegisterLog,
 )
 
 User = get_user_model()
@@ -49,42 +48,3 @@ def check_series_completion(sender, instance, **kwargs):
     if used_count >= total_slots:
         active_series.is_active = False
         active_series.save()
-
-
-@receiver(pre_save, sender=DrawerRegister)
-def log_status_change(sender, instance, **kwargs):
-    if not instance.pk:
-        return
-    try:
-        old = DrawerRegister.objects.get(pk=instance.pk)
-    except DrawerRegister.DoesNotExist:
-        return
-    if old.scanning_status != instance.scanning_status:
-        DrawerRegisterLog.objects.create(
-            drawer=instance,
-            change_type=DrawerRegisterLog.ChangeType.STATUS,
-            previous_status=old.scanning_status,
-            new_status=instance.scanning_status,
-        )
-
-
-@receiver(m2m_changed, sender=DrawerRegister.scanning_users.through)
-def log_user_change(sender, instance, action, pk_set, **kwargs):
-    if action not in {"post_add", "post_remove", "post_clear"}:
-        return
-    if action == "post_clear":
-        description = "Cleared users"
-    else:
-        usernames = list(
-            User.objects.filter(pk__in=pk_set).values_list("username", flat=True)
-        )
-        if action == "post_add":
-            description = f"Added users: {', '.join(usernames)}"
-        else:
-            description = f"Removed users: {', '.join(usernames)}"
-    DrawerRegisterLog.objects.create(
-        drawer=instance,
-        change_type=DrawerRegisterLog.ChangeType.USER,
-        new_status=instance.scanning_status,
-        description=description,
-    )

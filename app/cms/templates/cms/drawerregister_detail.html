@@ -9,8 +9,12 @@
   <p><strong>Scanning users:</strong> {{ object.scanning_users.all|join:", " }}</p>
   <h3>Change Log</h3>
   <ul>
-    {% for log in object.logs.all %}
-      <li>{{ log.created_on|date:"Y-m-d H:i" }} - {{ log.get_change_type_display }}{% if log.previous_status or log.new_status %}: {{ log.previous_status }} → {{ log.new_status }}{% endif %}{% if log.description %} ({{ log.description }}){% endif %} by {{ log.created_by }}</li>
+    {% for entry in history_entries %}
+      <li>
+        {{ entry.log.history_date|date:"Y-m-d H:i" }} - {{ entry.log.get_history_type_display }}
+        {% if entry.changes %} ({{ entry.changes|join:"; " }}){% endif %}
+        {% if entry.log.history_user %} by {{ entry.log.history_user }}{% endif %}
+      </li>
     {% empty %}
       <li>No changes logged.</li>
     {% endfor %}

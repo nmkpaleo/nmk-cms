@@ -12,7 +12,7 @@ from .forms import AccessionNumberSeriesAdminForm, DrawerRegisterForm
 from .models import (
     AccessionNumberSeries, NatureOfSpecimen, Element, Person, Identification, Taxon,Media, SpecimenGeology, GeologicalContext,
     AccessionReference, Locality, Place, Collection, Accession, AccessionRow, Subject, Comment, FieldSlip, Reference, Storage, User,
-    Preparation, PreparationLog, PreparationMaterial, PreparationMedia, DrawerRegister, DrawerRegisterLog
+    Preparation, PreparationLog, PreparationMaterial, PreparationMedia, DrawerRegister
 )
 from .resources import *
 
@@ -477,11 +477,6 @@ class DrawerRegisterAdmin(HistoricalImportExportAdmin):
     search_fields = ("code", "description")
     filter_horizontal = ("localities", "taxa", "scanning_users")
 
-
-@admin.register(DrawerRegisterLog)
-class DrawerRegisterLogAdmin(HistoricalAdmin):
-    list_display = ("drawer", "change_type", "previous_status", "new_status", "created_on", "created_by")
-    list_filter = ("change_type", "new_status")
 
 # ----------------------------------------------------------------------
 # Flat file import integration

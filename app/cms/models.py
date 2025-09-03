@@ -1195,35 +1195,3 @@ class DrawerRegister(BaseModel):
 
     def __str__(self):
         return f"{self.code}"
-
-
-class DrawerRegisterLog(BaseModel):
-    class ChangeType(models.TextChoices):
-        STATUS = "status", "Status"
-        USER = "user", "User"
-
-    drawer = models.ForeignKey(
-        DrawerRegister, on_delete=models.CASCADE, related_name="logs"
-    )
-    change_type = models.CharField(max_length=20, choices=ChangeType.choices)
-    previous_status = models.CharField(
-        max_length=20,
-        choices=DrawerRegister.ScanningStatus.choices,
-        null=True,
-        blank=True,
-    )
-    new_status = models.CharField(
-        max_length=20,
-        choices=DrawerRegister.ScanningStatus.choices,
-        null=True,
-        blank=True,
-    )
-    description = models.TextField(blank=True)
-
-    class Meta:
-        ordering = ["-created_on"]
-        verbose_name = "Drawer Register Log"
-        verbose_name_plural = "Drawer Register Logs"
-
-    def __str__(self):
-        return f"{self.drawer.code} - {self.change_type}"
