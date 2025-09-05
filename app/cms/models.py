@@ -1062,23 +1062,6 @@ class Preparation(BaseModel):
         """
         self.clean()  # Ensure validations are checked
 
-        # Log status changes in PreparationLog
-        if self.pk:
-            old_instance = Preparation.objects.get(pk=self.pk)
-            changes = []
-            for field in ["status", "approval_status", "completed_on", "approval_date"]:
-                old_value = getattr(old_instance, field)
-                new_value = getattr(self, field)
-                if old_value != new_value:
-                    changes.append(f"{field} changed from '{old_value}' to '{new_value}'")
-
-            if changes:
-                PreparationLog.objects.create(
-                    preparation=self,
-                    changed_by=self.modified_by,
-                    changes=", ".join(changes)
-                )
-
         # Automatically set approval date if a curator approves or declines
         if self.approval_status in ["approved", "declined"] and not self.approval_date:
             self.approval_date = timezone.now()
@@ -1096,37 +1079,6 @@ class Preparation(BaseModel):
         return f"{self.accession_row} - {self.preparation_type} by {self.preparator}"
 
 
-class PreparationLog(BaseModel):
-    """ Tracks changes to preparation records, including curation decisions. """
-    preparation = models.ForeignKey(
-        Preparation, 
-        on_delete=models.CASCADE, 
-        related_name="logs",
-        help_text="The preparation record that was modified."
-    )
-    changed_by = models.ForeignKey(
-        User, 
-        on_delete=models.SET_NULL, 
-        null=True, 
-        blank=True, 
-        help_text="User who made the change."
-    )
-    changes = models.TextField(
-        help_text="Description of changes made."
-    )
-    changed_on = models.DateTimeField(
-        auto_now_add=True, 
-        help_text="Timestamp of the change."
-    )
-
-    class Meta:
-        verbose_name = "Preparation Log"
-        verbose_name_plural = "Preparation Logs"
-        ordering = ["-changed_on"]
-
-    def __str__(self):
-        return f"Change in {self.preparation} on {self.changed_on}"
-    
 class PreparationMedia(BaseModel):
     preparation = models.ForeignKey("Preparation", on_delete=models.CASCADE)
     media = models.ForeignKey("Media", on_delete=models.CASCADE)

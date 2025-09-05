@@ -12,7 +12,7 @@ from .forms import AccessionNumberSeriesAdminForm, DrawerRegisterForm
 from .models import (
     AccessionNumberSeries, NatureOfSpecimen, Element, Person, Identification, Taxon,Media, SpecimenGeology, GeologicalContext,
     AccessionReference, Locality, Place, Collection, Accession, AccessionRow, Subject, Comment, FieldSlip, Reference, Storage, User,
-    Preparation, PreparationLog, PreparationMaterial, PreparationMedia, DrawerRegister
+    Preparation, PreparationMaterial, PreparationMedia, DrawerRegister
 )
 from .resources import *
 
@@ -331,16 +331,6 @@ class UserAdmin(HistoricalImportExportAdmin):
     list_display = ('username', 'first_name', 'last_name', 'email')
     search_fields = ('username', 'first_name', 'last_name', 'email')
 
-class PreparationLogInline(admin.TabularInline):
-    """ Inline display of PreparationLog entries within Preparation admin. """
-    model = PreparationLog
-    extra = 0
-    readonly_fields = ("changed_on", "changed_by", "changes")
-    can_delete = False
-
-    def has_add_permission(self, request, obj=None):
-        return False  # Prevents adding new log entries manually
-
 class PreparationAdminForm(forms.ModelForm):
     """ Custom form for validation and dynamic field handling in admin. """
     
@@ -382,7 +372,7 @@ class PreparationAdmin(HistoricalImportExportAdmin):
     list_filter = ("status", "approval_status", "preparator", "curator")
     search_fields = ("accession_row__accession__specimen_no", "preparator__username", "curator__username")
     readonly_fields = ("approval_date", "created_on", "modified_on", "admin_status_info")
-    inlines = [PreparationMediaInline, PreparationLogInline]
+    inlines = [PreparationMediaInline]
     
     fieldsets = (
         ("Preparation Details", {
