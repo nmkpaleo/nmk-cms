@@ -2,7 +2,7 @@ import csv
 from datetime import timedelta
 from dal import autocomplete
 from django import forms
-from django.db import transaction, models
+from django.db import transaction
 from django.db.models import Value, CharField, Count, Q, Max, Prefetch
 from django.db.models.functions import Concat, Greatest
 from django.http import JsonResponse
@@ -38,7 +38,6 @@ from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse_lazy, reverse
 from django.utils.timezone import now
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, FormView
-from django.contrib.auth import get_user_model
 
 from cms.forms import (AccessionBatchForm, AccessionCommentForm,
                     AccessionForm, AccessionFieldSlipForm, AccessionGeologyForm,
@@ -78,6 +77,7 @@ from cms.models import (
 )
 
 from cms.resources import FieldSlipResource
+from .utils import build_history_entries
 from cms.utils import generate_accessions_from_series
 from formtools.wizard.views import SessionWizardView
 
@@ -913,26 +913,7 @@ class PreparationDetailView(LoginRequiredMixin, DetailView):
                 and user == preparation.preparator
             )
         )
-        history_entries = []
-        for log in preparation.history.all().order_by("-history_date", "-history_id"):
-            prev = log.prev_record
-            changes = []
-            if prev:
-                delta = log.diff_against(prev)
-                for change in delta.changes:
-                    field = Preparation._meta.get_field(change.field)
-                    field_name = field.verbose_name.capitalize()
-                    old = change.old
-                    new = change.new
-                    if isinstance(field, models.ForeignKey):
-                        related_model = field.remote_field.model
-                        old_obj = related_model.objects.filter(pk=old).first()
-                        new_obj = related_model.objects.filter(pk=new).first()
-                        old = str(old_obj) if old_obj else old
-                        new = str(new_obj) if new_obj else new
-                    changes.append({"field": field_name, "old": old, "new": new})
-            history_entries.append({"log": log, "changes": changes})
-        context["history_entries"] = history_entries
+        context["history_entries"] = build_history_entries(preparation)
         return context
 
 class PreparationCreateView(LoginRequiredMixin, CreateView):
@@ -1254,30 +1235,7 @@ class DrawerRegisterDetailView(LoginRequiredMixin, DrawerRegisterAccessMixin, De
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        history_entries = []
-        for log in self.object.history.all():
-            prev = log.prev_record
-            changes = []
-            if prev:
-                delta = log.diff_against(prev)
-                for change in delta.changes:
-                    if change.field == "scanning_users":
-                        User = get_user_model()
-                        old_ids = set(change.old or [])
-                        new_ids = set(change.new or [])
-                        added_ids = new_ids - old_ids
-                        removed_ids = old_ids - new_ids
-                        if added_ids:
-                            added_names = User.objects.filter(pk__in=added_ids).values_list("username", flat=True)
-                            changes.append("Added users: " + ", ".join(added_names))
-                        if removed_ids:
-                            removed_names = User.objects.filter(pk__in=removed_ids).values_list("username", flat=True)
-                            changes.append("Removed users: " + ", ".join(removed_names))
-                    else:
-                        field_name = change.field.replace("_", " ").capitalize()
-                        changes.append(f"{field_name}: {change.old} → {change.new}")
-            history_entries.append({"log": log, "changes": changes})
-        context["history_entries"] = history_entries
+        context["history_entries"] = build_history_entries(self.object)
         return context
 
 
