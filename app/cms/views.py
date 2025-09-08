@@ -1,4 +1,5 @@
 import csv
+import json
 from datetime import timedelta
 from dal import autocomplete
 from django import forms
@@ -1227,6 +1228,22 @@ class DrawerRegisterListView(LoginRequiredMixin, DrawerRegisterAccessMixin, Filt
     context_object_name = "drawers"
     paginate_by = 10
     filterset_class = DrawerRegisterFilter
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["can_edit"] = (
+            is_collection_manager(self.request.user) or self.request.user.is_superuser
+        )
+        return context
+
+
+class DrawerRegisterReorderView(LoginRequiredMixin, DrawerRegisterAccessMixin, View):
+    def post(self, request, *args, **kwargs):
+        data = json.loads(request.body)
+        order = data.get("order", [])
+        for priority, pk in enumerate(order, start=1):
+            DrawerRegister.objects.filter(pk=pk).update(priority=priority)
+        return JsonResponse({"status": "ok"})
 
 
 class DrawerRegisterDetailView(LoginRequiredMixin, DrawerRegisterAccessMixin, DetailView):

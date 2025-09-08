@@ -1023,6 +1023,7 @@ class DrawerRegisterResource(resources.ModelResource):
             "localities",
             "taxa",
             "estimated_documents",
+            "priority",
             "scanning_status",
             "scanning_users",
         )
