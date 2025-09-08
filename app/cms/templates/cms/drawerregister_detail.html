@@ -8,17 +8,42 @@
   <p><strong>Status:</strong> {{ object.get_scanning_status_display }}</p>
   <p><strong>Scanning users:</strong> {{ object.scanning_users.all|join:", " }}</p>
   <h3>Change Log</h3>
-  <ul>
-    {% for entry in history_entries %}
-      <li>
-        {{ entry.log.history_date|date:"Y-m-d H:i" }} - {{ entry.log.get_history_type_display }}
-        {% if entry.changes %} ({{ entry.changes|join:"; " }}){% endif %}
-        {% if entry.log.history_user %} by {{ entry.log.history_user }}{% endif %}
-      </li>
-    {% empty %}
-      <li>No changes logged.</li>
-    {% endfor %}
-  </ul>
+  {% if history_entries %}
+    <table class="table table-striped">
+      <thead>
+        <tr>
+          <th>Date/time</th>
+          <th></th>
+          <th>Comment</th>
+          <th>Changed by</th>
+          <th>Changes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in history_entries %}
+          <tr>
+            <td>{{ entry.log.history_date|date:"Y-m-d H:i" }}</td>
+            <td>{{ entry.log.history_type }}</td>
+            <td>{{ entry.log.history_change_reason|default:"" }}</td>
+            <td>{{ entry.log.history_user|default:"System or Unknown" }}</td>
+            <td>
+              {% if entry.changes %}
+                <ul>
+                  {% for change in entry.changes %}
+                    <li><strong>{{ change.field }}:</strong> {{ change.old }} → {{ change.new }}</li>
+                  {% endfor %}
+                </ul>
+              {% else %}
+                Initial version
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>No changes logged.</p>
+  {% endif %}
   <a href="{% url 'drawerregister_edit' object.pk %}" class="w3-button w3-blue">Edit</a>
 </div>
 {% endblock %}
