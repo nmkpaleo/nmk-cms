@@ -4,7 +4,7 @@ from datetime import timedelta
 from dal import autocomplete
 from django import forms
 from django.db import transaction
-from django.db.models import Value, CharField, Count, Q, Max, Prefetch
+from django.db.models import Value, CharField, Count, Q, Max, Prefetch, OuterRef, Subquery
 from django.db.models.functions import Concat, Greatest
 from django.http import JsonResponse
 from django.utils.decorators import method_decorator
@@ -75,6 +75,7 @@ from cms.models import (
     InventoryStatus,
     UnexpectedSpecimen,
     DrawerRegister,
+    Scanning,
 )
 
 from cms.resources import FieldSlipResource
@@ -259,6 +260,24 @@ def dashboard(request):
                 "latest_accessions": latest_accessions,
             }
         )
+
+    if user.groups.filter(name="Interns").exists():
+        active_scan_id_subquery = Scanning.objects.filter(
+            drawer=OuterRef("pk"), user=user, end_time__isnull=True
+        ).values("id")[:1]
+        active_scan_start_subquery = Scanning.objects.filter(
+            drawer=OuterRef("pk"), user=user, end_time__isnull=True
+        ).values("start_time")[:1]
+        my_drawers = (
+            DrawerRegister.objects.filter(
+                scanning_status=DrawerRegister.ScanningStatus.IN_PROGRESS,
+                scanning_users=user,
+            )
+            .annotate(active_scan_id=Subquery(active_scan_id_subquery))
+            .annotate(active_scan_start=Subquery(active_scan_start_subquery))
+        )
+
+        context.update({"is_intern": True, "my_drawers": my_drawers})
 
     if not context:
         context["no_role"] = True
@@ -1268,4 +1287,27 @@ class DrawerRegisterUpdateView(LoginRequiredMixin, DrawerRegisterAccessMixin, Up
     form_class = DrawerRegisterForm
     template_name = "cms/drawerregister_form.html"
     success_url = reverse_lazy("drawerregister_list")
+
+
+@login_required
+def start_scan(request, pk):
+    drawer = get_object_or_404(DrawerRegister, pk=pk)
+    Scanning.objects.create(
+        drawer=drawer, user=request.user, start_time=now()
+    )
+    return redirect("dashboard")
+
+
+@login_required
+def stop_scan(request, pk):
+    drawer = get_object_or_404(DrawerRegister, pk=pk)
+    scan = (
+        Scanning.objects.filter(drawer=drawer, user=request.user, end_time__isnull=True)
+        .order_by("-start_time")
+        .first()
+    )
+    if scan:
+        scan.end_time = now()
+        scan.save()
+    return redirect("dashboard")
     

@@ -10,9 +10,9 @@ from simple_history.admin import SimpleHistoryAdmin
 from .forms import AccessionNumberSeriesAdminForm, DrawerRegisterForm
 
 from .models import (
-    AccessionNumberSeries, NatureOfSpecimen, Element, Person, Identification, Taxon,Media, SpecimenGeology, GeologicalContext,
+    AccessionNumberSeries, NatureOfSpecimen, Element, Person, Identification, Taxon, Media, SpecimenGeology, GeologicalContext,
     AccessionReference, Locality, Place, Collection, Accession, AccessionRow, Subject, Comment, FieldSlip, Reference, Storage, User,
-    Preparation, PreparationMaterial, PreparationMedia, DrawerRegister
+    Preparation, PreparationMaterial, PreparationMedia, DrawerRegister, Scanning
 )
 from .resources import *
 
@@ -467,6 +467,11 @@ class DrawerRegisterAdmin(HistoricalImportExportAdmin):
     search_fields = ("code", "description")
     filter_horizontal = ("localities", "taxa", "scanning_users")
 
+
+@admin.register(Scanning)
+class ScanningAdmin(admin.ModelAdmin):
+    list_display = ("drawer", "user", "start_time", "end_time")
+    list_filter = ("user", "drawer")
 
 # ----------------------------------------------------------------------
 # Flat file import integration

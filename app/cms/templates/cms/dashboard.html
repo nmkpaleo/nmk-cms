@@ -135,6 +135,71 @@
     {% endif %}
   {% endif %}
 
+  {% if is_intern %}
+    <h2>My Drawer Registers</h2>
+    {% if my_drawers %}
+      <table class="w3-table w3-striped">
+        <thead>
+          <tr>
+            <th>Drawer</th>
+            <th>Description</th>
+            <th>Start time</th>
+            <th>Elapsed</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for drawer in my_drawers %}
+            <tr>
+              <td><a href="{% url 'drawerregister_detail' drawer.id %}">{{ drawer.code }}</a></td>
+              <td>{{ drawer.description }}</td>
+              <td>
+                {% if drawer.active_scan_start %}
+                  {{ drawer.active_scan_start|date:"Y-m-d H:i:s" }}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td>
+                {% if drawer.active_scan_start %}
+                  <span class="scan-timer" data-start="{{ drawer.active_scan_start|date:'c' }}">00:00:00</span>
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td>
+                <form method="post" action="{% url 'drawer_start_scan' drawer.id %}" style="display:inline;">
+                  {% csrf_token %}
+                  <button type="submit" class="w3-button w3-small w3-green" {% if drawer.active_scan_id %}disabled{% endif %}>Start scanning task</button>
+                </form>
+                <form method="post" action="{% url 'drawer_stop_scan' drawer.id %}" style="display:inline;">
+                  {% csrf_token %}
+                  <button type="submit" class="w3-button w3-small w3-red" {% if not drawer.active_scan_id %}disabled{% endif %}>Stop scanning task</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <script>
+        function updateTimers() {
+          document.querySelectorAll('.scan-timer').forEach(function(timer) {
+            var start = new Date(timer.dataset.start);
+            var diff = Math.floor((Date.now() - start.getTime()) / 1000);
+            var h = String(Math.floor(diff / 3600)).padStart(2, '0');
+            var m = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
+            var s = String(diff % 60).padStart(2, '0');
+            timer.textContent = h + ':' + m + ':' + s;
+          });
+        }
+        updateTimers();
+        setInterval(updateTimers, 1000);
+      </script>
+    {% else %}
+      <p>No assigned drawer registers.</p>
+    {% endif %}
+  {% endif %}
+
   {% if no_role %}
     <p>Dashboard content for your role is not available yet.</p>
   {% endif %}

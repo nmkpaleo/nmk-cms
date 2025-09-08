@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
+from django.utils.timezone import now
 from django.core.exceptions import ValidationError
 
 from cms.models import (
@@ -19,6 +20,7 @@ from cms.models import (
     PreparationStatus,
     UnexpectedSpecimen,
     DrawerRegister,
+    Scanning,
     Taxon,
 )
 from cms.utils import generate_accessions_from_series
@@ -753,25 +755,54 @@ class DrawerRegisterTests(TestCase):
         )
 
 
-    def test_change_log_uses_history(self):
-        drawer = DrawerRegister(
-            code="ABC", description="Desc", estimated_documents=1
+class ScanningTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username="intern", password="pass")
+        group = Group.objects.create(name="Interns")
+        self.user.groups.add(group)
+        self.patcher = patch("cms.models.get_current_user", return_value=self.user)
+        self.patcher.start()
+        self.addCleanup(self.patcher.stop)
+        self.drawer = DrawerRegister.objects.create(
+            code="ABC", description="Drawer", estimated_documents=1,
+            scanning_status=DrawerRegister.ScanningStatus.IN_PROGRESS,
         )
-        drawer.history_user = self.user
-        drawer.save()
+        self.drawer.scanning_users.add(self.user)
 
-        drawer.description = "Updated"
-        drawer.history_user = self.user
-        drawer.save()
-
+    def test_dashboard_lists_drawers_for_intern(self):
         self.client.force_login(self.user)
-        response = self.client.get(
-            reverse("drawerregister_detail", args=[drawer.pk])
+        response = self.client.get(reverse("dashboard"))
+        self.assertContains(response, "ABC")
+        self.assertContains(response, "Drawer")
+        self.assertContains(response, "Start scanning task")
+        self.assertContains(response, "Stop scanning task")
+
+    def test_start_and_stop_scan(self):
+        self.client.force_login(self.user)
+        self.client.post(reverse("drawer_start_scan", args=[self.drawer.id]))
+        scan = Scanning.objects.get()
+        self.assertIsNotNone(scan.start_time)
+        self.assertIsNone(scan.end_time)
+        response = self.client.get(reverse("dashboard"))
+        self.assertContains(response, scan.start_time.strftime("%Y-%m-%d"))
+        self.assertContains(response, "scan-timer")
+        self.client.post(reverse("drawer_stop_scan", args=[self.drawer.id]))
+        scan.refresh_from_db()
+        self.assertIsNotNone(scan.end_time)
+
+    def test_drawer_detail_shows_scans(self):
+        Scanning.objects.create(
+            drawer=self.drawer,
+            user=self.user,
+            start_time=now(),
+            end_time=now(),
         )
-        self.assertContains(response, "Change Log")
-        self.assertContains(response, "Changed")
-        self.assertContains(response, "Description: Desc → Updated")
+        admin = get_user_model().objects.create_superuser("admin", "admin@example.com", "pass")
+        self.client.force_login(admin)
+        response = self.client.get(reverse("drawerregister_detail", args=[self.drawer.id]))
         self.assertContains(response, self.user.username)
+
 
 class AccessionVisibilityTests(TestCase):
     def setUp(self):

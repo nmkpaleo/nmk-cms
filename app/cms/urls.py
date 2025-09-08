@@ -43,6 +43,8 @@ from cms.views import (
     PreparationDeleteView,
     PreparationApproveView,
     dashboard,
+    inventory_start, inventory_update, inventory_reset, inventory_clear, inventory_log_unexpected,
+    DrawerRegisterListView, DrawerRegisterDetailView, DrawerRegisterCreateView, DrawerRegisterUpdateView, start_scan, stop_scan,
     inventory_start,
     inventory_update,
     inventory_reset,
@@ -115,6 +117,8 @@ urlpatterns = [
     path('drawers/new/', DrawerRegisterCreateView.as_view(), name='drawerregister_create'),
     path('drawers/<int:pk>/', DrawerRegisterDetailView.as_view(), name='drawerregister_detail'),
     path('drawers/<int:pk>/edit/', DrawerRegisterUpdateView.as_view(), name='drawerregister_edit'),
+    path('drawers/<int:pk>/start/', start_scan, name='drawer_start_scan'),
+    path('drawers/<int:pk>/stop/', stop_scan, name='drawer_stop_scan'),
     path('drawers/reorder/', DrawerRegisterReorderView.as_view(), name='drawerregister_reorder'),
 
 

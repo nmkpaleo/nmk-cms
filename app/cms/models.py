@@ -1151,3 +1151,17 @@ class DrawerRegister(BaseModel):
 
     def __str__(self):
         return f"{self.code}"
+
+class Scanning(BaseModel):
+    drawer = models.ForeignKey(
+        DrawerRegister, on_delete=models.CASCADE, related_name="scans"
+    )
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="scans")
+    start_time = models.DateTimeField()
+    end_time = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-start_time"]
+
+    def __str__(self):
+        return f"{self.drawer.code} - {self.user} ({self.start_time})"
