@@ -913,6 +913,18 @@ class PreparationDetailView(LoginRequiredMixin, DetailView):
                 and user == preparation.preparator
             )
         )
+        history = preparation.history.all().order_by("-history_date", "-history_id")
+        for item in history:
+            prev = item.prev_record
+            if prev:
+                delta = item.diff_against(prev)
+                item.changes = ", ".join(
+                    f"{change.field} from '{change.old}' to '{change.new}'"
+                    for change in delta.changes
+                )
+            else:
+                item.changes = "Initial version"
+        context["history"] = history
         return context
 
 class PreparationCreateView(LoginRequiredMixin, CreateView):
