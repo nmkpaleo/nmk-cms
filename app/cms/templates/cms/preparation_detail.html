@@ -56,7 +56,7 @@
   
     <h3>Change History</h3>
 
-    {% if history %}
+    {% if history_entries %}
       <table class="table table-striped">
         <thead>
           <tr>
@@ -68,13 +68,23 @@
           </tr>
         </thead>
         <tbody>
-          {% for item in history %}
+          {% for entry in history_entries %}
             <tr>
-              <td>{{ item.history_date|date:"Y-m-d H:i" }}</td>
-              <td>{{ item.history_type }}</td>
-              <td>{{ item.history_change_reason|default:"" }}</td>
-              <td>{{ item.history_user|default:"System or Unknown" }}</td>
-              <td>{{ item.changes }}</td>
+              <td>{{ entry.log.history_date|date:"Y-m-d H:i" }}</td>
+              <td>{{ entry.log.history_type }}</td>
+              <td>{{ entry.log.history_change_reason|default:"" }}</td>
+              <td>{{ entry.log.history_user|default:"System or Unknown" }}</td>
+              <td>
+                {% if entry.changes %}
+                  <ul>
+                    {% for change in entry.changes %}
+                      <li><strong>{{ change.field }}:</strong> {{ change.old }} → {{ change.new }}</li>
+                    {% endfor %}
+                  </ul>
+                {% else %}
+                  Initial version
+                {% endif %}
+              </td>
             </tr>
           {% endfor %}
         </tbody>
