@@ -8,6 +8,7 @@ from django.utils import timezone
 from django_userforeignkey.models.fields import UserForeignKey
 from django.db.models import UniqueConstraint
 from django.contrib.auth.models import User
+from simple_history.models import HistoricalRecords
 import os # For file handling in media class
 from django.core.exceptions import ValidationError
 import string # For generating specimen number
@@ -19,6 +20,19 @@ class InventoryStatus(models.TextChoices):
     PRESENT = "present", "Present"
     MISSING = "missing", "Missing"
     UNKNOWN = "unknown", "Unknown"
+
+
+class PlaceRelation(models.TextChoices):
+    PART_OF = "partOf", "Part Of"
+    SYNONYM = "synonym", "Synonym"
+    ABBREVIATION = "abbreviation", "Abbreviation"
+
+
+class PlaceType(models.TextChoices):
+    REGION = "Region", "Region"
+    SITE = "Site", "Site"
+    COLLECTING_AREA = "CollectingArea", "Collecting Area"
+    SQUARE = "square", "Square"
 
 
 
@@ -42,6 +56,7 @@ class BaseModel(models.Model):
         related_name="%(app_label)s_%(class)s_modified",
         verbose_name="Modified by"
     )
+    history = HistoricalRecords(inherit=True)
 
     class Meta:
         abstract = True
@@ -86,6 +101,62 @@ class Locality(BaseModel):
     class Meta:
         verbose_name = "Locality"
         verbose_name_plural = "Localities"
+
+
+class Place(BaseModel):
+    locality = models.ForeignKey(
+        "Locality", on_delete=models.CASCADE, related_name="places"
+    )
+    related_place = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="related_places",
+    )
+    relation_type = models.CharField(
+        max_length=20, choices=PlaceRelation.choices, null=True, blank=True
+    )
+    name = models.CharField(max_length=100)
+    place_type = models.CharField(max_length=20, choices=PlaceType.choices)
+    description = models.TextField(null=True, blank=True)
+    comment = models.TextField(null=True, blank=True)
+    part_of_hierarchy = models.CharField(max_length=255, editable=False)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+    def clean(self):
+        super().clean()
+        if self.related_place and not self.relation_type:
+            raise ValidationError({"relation_type": "Relation type is required when related place is set."})
+        if not self.related_place and self.relation_type:
+            raise ValidationError({"related_place": "Related place is required when relation type is set."})
+        if self.related_place:
+            if self.locality_id != self.related_place.locality_id:
+                raise ValidationError({"related_place": "Related place must belong to the same locality."})
+            if self.relation_type == PlaceRelation.PART_OF:
+                ancestor = self.related_place
+                while ancestor:
+                    if ancestor.pk == self.pk:
+                        raise ValidationError({"related_place": "Cannot set a higher-level place as part of its descendant."})
+                    if ancestor.relation_type == PlaceRelation.PART_OF:
+                        ancestor = ancestor.related_place
+                    else:
+                        break
+
+    def save(self, *args, **kwargs):
+        if self.related_place:
+            if self.relation_type == PlaceRelation.PART_OF:
+                self.part_of_hierarchy = f"{self.related_place.part_of_hierarchy} | {self.name}"
+            else:
+                self.part_of_hierarchy = self.related_place.part_of_hierarchy
+        else:
+            self.part_of_hierarchy = self.name
+        super().save(*args, **kwargs)
 
 # Collection Model
 class Collection(BaseModel):
@@ -991,23 +1062,6 @@ class Preparation(BaseModel):
         """
         self.clean()  # Ensure validations are checked
 
-        # Log status changes in PreparationLog
-        if self.pk:
-            old_instance = Preparation.objects.get(pk=self.pk)
-            changes = []
-            for field in ["status", "approval_status", "completed_on", "approval_date"]:
-                old_value = getattr(old_instance, field)
-                new_value = getattr(self, field)
-                if old_value != new_value:
-                    changes.append(f"{field} changed from '{old_value}' to '{new_value}'")
-
-            if changes:
-                PreparationLog.objects.create(
-                    preparation=self,
-                    changed_by=self.modified_by,
-                    changes=", ".join(changes)
-                )
-
         # Automatically set approval date if a curator approves or declines
         if self.approval_status in ["approved", "declined"] and not self.approval_date:
             self.approval_date = timezone.now()
@@ -1025,37 +1079,6 @@ class Preparation(BaseModel):
         return f"{self.accession_row} - {self.preparation_type} by {self.preparator}"
 
 
-class PreparationLog(BaseModel):
-    """ Tracks changes to preparation records, including curation decisions. """
-    preparation = models.ForeignKey(
-        Preparation, 
-        on_delete=models.CASCADE, 
-        related_name="logs",
-        help_text="The preparation record that was modified."
-    )
-    changed_by = models.ForeignKey(
-        User, 
-        on_delete=models.SET_NULL, 
-        null=True, 
-        blank=True, 
-        help_text="User who made the change."
-    )
-    changes = models.TextField(
-        help_text="Description of changes made."
-    )
-    changed_on = models.DateTimeField(
-        auto_now_add=True, 
-        help_text="Timestamp of the change."
-    )
-
-    class Meta:
-        verbose_name = "Preparation Log"
-        verbose_name_plural = "Preparation Logs"
-        ordering = ["-changed_on"]
-
-    def __str__(self):
-        return f"Change in {self.preparation} on {self.changed_on}"
-    
 class PreparationMedia(BaseModel):
     preparation = models.ForeignKey("Preparation", on_delete=models.CASCADE)
     media = models.ForeignKey("Media", on_delete=models.CASCADE)
@@ -1096,6 +1119,10 @@ class DrawerRegister(BaseModel):
     estimated_documents = models.PositiveIntegerField(
         help_text="Estimated number of documents or cards"
     )
+    priority = models.PositiveIntegerField(
+        default=0,
+        help_text="Display order priority",
+    )
 
     class ScanningStatus(models.TextChoices):
         WAITING = "waiting", "Waiting"
@@ -1117,46 +1144,13 @@ class DrawerRegister(BaseModel):
     class Meta:
         verbose_name = "Drawer Register"
         verbose_name_plural = "Drawer Register"
-        ordering = ["code"]
+        ordering = ["priority", "code"]
 
     def clean(self):
         super().clean()
 
     def __str__(self):
         return f"{self.code}"
-
-
-class DrawerRegisterLog(BaseModel):
-    class ChangeType(models.TextChoices):
-        STATUS = "status", "Status"
-        USER = "user", "User"
-
-    drawer = models.ForeignKey(
-        DrawerRegister, on_delete=models.CASCADE, related_name="logs"
-    )
-    change_type = models.CharField(max_length=20, choices=ChangeType.choices)
-    previous_status = models.CharField(
-        max_length=20,
-        choices=DrawerRegister.ScanningStatus.choices,
-        null=True,
-        blank=True,
-    )
-    new_status = models.CharField(
-        max_length=20,
-        choices=DrawerRegister.ScanningStatus.choices,
-        null=True,
-        blank=True,
-    )
-    description = models.TextField(blank=True)
-
-    class Meta:
-        ordering = ["-created_on"]
-        verbose_name = "Drawer Register Log"
-        verbose_name_plural = "Drawer Register Logs"
-
-    def __str__(self):
-        return f"{self.drawer.code} - {self.change_type}"
-
 
 class Scanning(BaseModel):
     drawer = models.ForeignKey(

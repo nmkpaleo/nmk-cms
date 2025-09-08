@@ -1,4 +1,5 @@
 import csv
+import json
 from datetime import timedelta
 from dal import autocomplete
 from django import forms
@@ -17,6 +18,7 @@ from .filters import (
     ReferenceFilter,
     FieldSlipFilter,
     LocalityFilter,
+    PlaceFilter,
     DrawerRegisterFilter,
 )
 
@@ -47,7 +49,7 @@ from cms.forms import (AccessionBatchForm, AccessionCommentForm,
                     MediaUploadForm, NatureOfSpecimenForm, PreparationForm,
                     PreparationApprovalForm, PreparationMediaUploadForm,
                     SpecimenCompositeForm, ReferenceForm, LocalityForm,
-                    DrawerRegisterForm)
+                    PlaceForm, DrawerRegisterForm)
 
 from cms.models import (
     Accession,
@@ -67,15 +69,17 @@ from cms.models import (
     Storage,
     Taxon,
     Locality,
+    Place,
+    PlaceRelation,
     PreparationStatus,
     InventoryStatus,
     UnexpectedSpecimen,
     DrawerRegister,
-    DrawerRegisterLog,
     Scanning,
 )
 
 from cms.resources import FieldSlipResource
+from .utils import build_history_entries
 from cms.utils import generate_accessions_from_series
 from formtools.wizard.views import SessionWizardView
 
@@ -101,6 +105,10 @@ class PreparationAccessMixin(UserPassesTestMixin):
 # Helper function to check if user is in the "Collection Managers" group
 def is_collection_manager(user):
     return user.groups.filter(name="Collection Managers").exists()
+
+
+def can_manage_places(user):
+    return user.is_superuser or user.groups.filter(name="Collection Managers").exists()
 
 def add_fieldslip_to_accession(request, pk):
     """
@@ -183,12 +191,16 @@ def dashboard(request):
     context = {}
 
     if user.groups.filter(name="Preparators").exists():
-        my_preparations = Preparation.objects.filter(
+        my_preparations_qs = Preparation.objects.filter(
             preparator=user
         ).exclude(status=PreparationStatus.COMPLETED)
+        my_preparations = my_preparations_qs.order_by("-started_on")[:10]
 
         priority_threshold = now().date() - timedelta(days=7)
-        priority_tasks = my_preparations.filter(started_on__lte=priority_threshold)
+        priority_tasks = (
+            my_preparations_qs.filter(started_on__lte=priority_threshold)
+            .order_by("-started_on")[:10]
+        )
 
         context.update(
             {
@@ -199,9 +211,12 @@ def dashboard(request):
         )
 
     if user.groups.filter(name="Curators").exists():
-        completed_preparations = Preparation.objects.filter(
-            status=PreparationStatus.COMPLETED,
-            curator=user,
+        completed_preparations = (
+            Preparation.objects.filter(
+                status=PreparationStatus.COMPLETED,
+                curator=user,
+            )
+            .order_by("-completed_on")[:10]
         )
 
         context.update(
@@ -219,6 +234,7 @@ def dashboard(request):
             Accession.objects.filter(accessioned_by=user)
             .annotate(row_count=Count("accessionrow"))
             .filter(row_count=0)
+            .order_by("-created_on")[:10]
         )
         latest_accessions = (
             Accession.objects.filter(
@@ -378,6 +394,33 @@ def locality_edit(request, pk):
     return render(request, 'cms/locality_form.html', {'form': form})
 
 
+@login_required
+@user_passes_test(can_manage_places)
+def place_create(request):
+    if request.method == 'POST':
+        form = PlaceForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect('place_list')
+    else:
+        form = PlaceForm()
+    return render(request, 'cms/place_form.html', {'form': form})
+
+
+@login_required
+@user_passes_test(can_manage_places)
+def place_edit(request, pk):
+    place = get_object_or_404(Place, pk=pk)
+    if request.method == 'POST':
+        form = PlaceForm(request.POST, instance=place)
+        if form.is_valid():
+            form.save()
+            return redirect('place_detail', pk=place.pk)
+    else:
+        form = PlaceForm(instance=place)
+    return render(request, 'cms/place_form.html', {'form': form})
+
+
 class FieldSlipDetailView(DetailView):
     model = FieldSlip
     template_name = 'cms/fieldslip_detail.html'
@@ -397,6 +440,16 @@ class AccessionDetailView(DetailView):
     model = Accession
     template_name = 'cms/accession_detail.html'
     context_object_name = 'accession'
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        user = self.request.user
+        if user.is_authenticated and (
+            user.is_superuser or
+            user.groups.filter(name__in=["Collection Managers", "Curators"]).exists()
+        ):
+            return qs
+        return qs.filter(is_published=True)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -616,19 +669,48 @@ class LocalityDetailView(DetailView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-
+        user = self.request.user
         accessions = self.object.accession_set.all()
-        paginator = Paginator(accessions, 5)  
+        if not (
+            user.is_authenticated and (
+                user.is_superuser or
+                user.groups.filter(name__in=["Collection Managers", "Curators"]).exists()
+            )
+        ):
+            accessions = accessions.filter(is_published=True)
+
+        paginator = Paginator(accessions, 5)
         page_number = self.request.GET.get('page')
         accessions = paginator.get_page(page_number)
 
+        context['accessions'] = accessions
 
-        context['accessions'] = accessions     # so your base template's pagination still works
-       
         return context
 
     
     
+
+
+
+class PlaceListView(FilterView):
+    model = Place
+    template_name = 'cms/place_list.html'
+    context_object_name = 'places'
+    paginate_by = 10
+    filterset_class = PlaceFilter
+
+
+class PlaceDetailView(DetailView):
+    model = Place
+    template_name = 'cms/place_detail.html'
+    context_object_name = 'place'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['children'] = Place.objects.filter(
+            related_place=self.object, relation_type=PlaceRelation.PART_OF
+        )
+        return context
 
 
 @login_required
@@ -851,6 +933,7 @@ class PreparationDetailView(LoginRequiredMixin, DetailView):
                 and user == preparation.preparator
             )
         )
+        context["history_entries"] = build_history_entries(preparation)
         return context
 
 class PreparationCreateView(LoginRequiredMixin, CreateView):
@@ -1165,10 +1248,31 @@ class DrawerRegisterListView(LoginRequiredMixin, DrawerRegisterAccessMixin, Filt
     paginate_by = 10
     filterset_class = DrawerRegisterFilter
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["can_edit"] = (
+            is_collection_manager(self.request.user) or self.request.user.is_superuser
+        )
+        return context
+
+
+class DrawerRegisterReorderView(LoginRequiredMixin, DrawerRegisterAccessMixin, View):
+    def post(self, request, *args, **kwargs):
+        data = json.loads(request.body)
+        order = data.get("order", [])
+        for priority, pk in enumerate(order, start=1):
+            DrawerRegister.objects.filter(pk=pk).update(priority=priority)
+        return JsonResponse({"status": "ok"})
+
 
 class DrawerRegisterDetailView(LoginRequiredMixin, DrawerRegisterAccessMixin, DetailView):
     model = DrawerRegister
     template_name = "cms/drawerregister_detail.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["history_entries"] = build_history_entries(self.object)
+        return context
 
 
 class DrawerRegisterCreateView(LoginRequiredMixin, DrawerRegisterAccessMixin, CreateView):

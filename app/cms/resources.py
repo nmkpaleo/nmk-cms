@@ -9,6 +9,9 @@ from .models import (
     GeologicalContext,
     Identification,
     Locality,
+    Place,
+    PlaceRelation,
+    PlaceType,
     Media,
     NatureOfSpecimen,
     Person,
@@ -463,6 +466,96 @@ class LocalityResource(resources.ModelResource):
         import_id_fields = ('abbreviation',)
         fields = ('name', 'abbreviation')
         export_order = ('abbreviation', 'name')
+
+
+class PlaceResource(resources.ModelResource):
+    locality = fields.Field(
+        column_name='locality',
+        attribute='locality',
+        widget=ForeignKeyWidget(Locality, 'abbreviation')
+    )
+    related_place = fields.Field(
+        column_name='related_place',
+        attribute='related_place',
+        widget=ForeignKeyWidget(Place, 'name')
+    )
+
+    class Meta:
+        model = Place
+        skip_unchanged = True
+        report_skipped = False
+        import_id_fields = ('name', 'locality')
+        fields = (
+            'name',
+            'place_type',
+            'locality',
+            'related_place',
+            'relation_type',
+            'description',
+            'comment',
+            'part_of_hierarchy',
+        )
+        export_order = (
+            'name',
+            'place_type',
+            'locality',
+            'related_place',
+            'relation_type',
+            'description',
+            'comment',
+            'part_of_hierarchy',
+        )
+        readonly_fields = ('part_of_hierarchy',)
+
+    def before_import_row(self, row, row_number=None, **kwargs):
+        relation_type = row.get('relation_type')
+        if relation_type and relation_type not in PlaceRelation.values:
+            allowed = ', '.join(PlaceRelation.values)
+            raise ValueError(
+                f"Invalid relation_type '{relation_type}' in row {row_number}. "
+                f"Expected one of: {allowed}."
+            )
+        place_type = row.get('place_type')
+        if place_type and place_type not in PlaceType.values:
+            allowed = ', '.join(PlaceType.values)
+            raise ValueError(
+                f"Invalid place_type '{place_type}' in row {row_number}. "
+                f"Expected one of: {allowed}."
+            )
+        related_name = row.get('related_place')
+        locality_abbr = row.get('locality')
+        if related_name:
+            try:
+                related_obj = Place.objects.get(name=related_name)
+            except Place.DoesNotExist:
+                related_obj = None
+            if related_obj and locality_abbr:
+                try:
+                    loc = Locality.objects.get(abbreviation=locality_abbr)
+                except Locality.DoesNotExist:
+                    loc = None
+                if loc and related_obj.locality_id != loc.id:
+                    raise ValueError(
+                        f"related_place '{related_name}' in row {row_number} must belong to locality '{locality_abbr}'."
+                    )
+            if related_obj and relation_type == PlaceRelation.PART_OF:
+                place_obj = None
+                if locality_abbr:
+                    place_obj = Place.objects.filter(
+                        name=row.get('name'), locality__abbreviation=locality_abbr
+                    ).first()
+                if place_obj:
+                    ancestor = related_obj
+                    while ancestor:
+                        if ancestor.pk == place_obj.pk:
+                            raise ValueError(
+                                f"Invalid partOf relation in row {row_number}: higher-level place cannot be part of its descendant."
+                            )
+                        if ancestor.relation_type == PlaceRelation.PART_OF:
+                            ancestor = ancestor.related_place
+                        else:
+                            break
+        return super().before_import_row(row, row_number=row_number, **kwargs)
 
 class NatureOfSpecimenResource(resources.ModelResource):
     accession_row_id= fields.Field(
@@ -930,6 +1023,7 @@ class DrawerRegisterResource(resources.ModelResource):
             "localities",
             "taxa",
             "estimated_documents",
+            "priority",
             "scanning_status",
             "scanning_users",
         )

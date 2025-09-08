@@ -29,13 +29,42 @@
     </tbody>
   </table>
   <h3>Change Log</h3>
-  <ul>
-    {% for log in object.logs.all %}
-      <li>{{ log.created_on|date:"Y-m-d H:i" }} - {{ log.get_change_type_display }}{% if log.previous_status or log.new_status %}: {{ log.previous_status }} → {{ log.new_status }}{% endif %}{% if log.description %} ({{ log.description }}){% endif %} by {{ log.created_by }}</li>
-    {% empty %}
-      <li>No changes logged.</li>
-    {% endfor %}
-  </ul>
+  {% if history_entries %}
+    <table class="table table-striped">
+      <thead>
+        <tr>
+          <th>Date/time</th>
+          <th></th>
+          <th>Comment</th>
+          <th>Changed by</th>
+          <th>Changes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in history_entries %}
+          <tr>
+            <td>{{ entry.log.history_date|date:"Y-m-d H:i" }}</td>
+            <td>{{ entry.log.history_type }}</td>
+            <td>{{ entry.log.history_change_reason|default:"" }}</td>
+            <td>{{ entry.log.history_user|default:"System or Unknown" }}</td>
+            <td>
+              {% if entry.changes %}
+                <ul>
+                  {% for change in entry.changes %}
+                    <li><strong>{{ change.field }}:</strong> {{ change.old }} → {{ change.new }}</li>
+                  {% endfor %}
+                </ul>
+              {% else %}
+                Initial version
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>No changes logged.</p>
+  {% endif %}
   <a href="{% url 'drawerregister_edit' object.pk %}" class="w3-button w3-blue">Edit</a>
 </div>
 {% endblock %}

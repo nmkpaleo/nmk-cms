@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
 
     <!-- Add jQuery (Required for Select2) -->
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-H+K7U5CnXl1h5ywQSwEarFoF8WfsJdq9dvTqeZ3SZOI=" crossorigin="anonymous"></script>
 
     {{ form.media.css }}
     {% block script %}{% endblock %}
@@ -46,6 +46,7 @@
 
               <li><a href="{% url 'accession_list' %}">Accessions</a></li>
               <li><a href="{% url 'locality_list' %}">Localities</a></li>
+              <li><a href="{% url 'place_list' %}">Places</a></li>
               <li><a href="{% url 'reference_list' %}">References</a></li>
               
               {% if user.is_superuser or user.groups.first.name in "Curators Collection Managers" %}
@@ -63,9 +64,9 @@
               {% if user.is_authenticated %}
                 <li>User: {{ user.get_username }}</li>
                 <li>
-                  <form id="logout-form" method="post" action="{% url 'account_logout' %}">
+                  <form id="logout-form" class="logout-form" method="post" action="{% url 'account_logout' %}">
                     {% csrf_token %}
-                    <button type="submit" class="btn btn-link">Logout</button>
+                    <button type="submit" class="logout-button">Logout</button>
                   </form>
                 </li>
               {% else %}

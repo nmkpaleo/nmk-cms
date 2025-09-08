@@ -29,8 +29,8 @@
 
 .sidebar-nav{
     display: flex;
-    gap: 60px;
-    
+    gap: 30px;
+    flex-wrap: wrap;
     margin-top: 20px;
     padding-bottom: 15px;
     font-size: 20px;
@@ -43,10 +43,28 @@
 .sidebar-nav li a{
     text-decoration: none;
     color: #232323;
-    font-family: 'Inter', sans-serif
+    font-family: 'Inter', sans-serif;
 }
 
 .sidebar-nav li a:hover{
+    color: #C46132;
+    text-decoration: underline;
+}
+
+.logout-form {
+    display: inline;
+}
+
+.logout-form .logout-button {
+    background: none;
+    border: none;
+    padding: 0;
+    color: #232323;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+}
+
+.logout-form .logout-button:hover {
     color: #C46132;
     text-decoration: underline;
 }

@@ -6,11 +6,28 @@ from django_select2.forms import ModelSelect2Widget, Select2Widget
 from django.contrib.auth.models import User
 from django.urls import reverse_lazy
 
-from .models import (Accession, AccessionFieldSlip, AccessionNumberSeries, AccessionReference,
-                     AccessionRow, Collection, Comment, Element, FieldSlip, Identification,
-                     Locality, Media,
-                     NatureOfSpecimen, Person, Preparation, Reference, SpecimenGeology,
-                     DrawerRegister, Taxon)
+from .models import (
+    Accession,
+    AccessionFieldSlip,
+    AccessionNumberSeries,
+    AccessionReference,
+    AccessionRow,
+    Collection,
+    Comment,
+    Element,
+    FieldSlip,
+    Identification,
+    Locality,
+    Place,
+    Media,
+    NatureOfSpecimen,
+    Person,
+    Preparation,
+    Reference,
+    SpecimenGeology,
+    DrawerRegister,
+    Taxon,
+)
 
 import json
 
@@ -327,6 +344,29 @@ class LocalityForm(forms.ModelForm):
 
             'name': forms.TextInput(attrs={'class': 'template_form_input'})
 
+        }
+
+
+class PlaceForm(forms.ModelForm):
+    class Meta:
+        model = Place
+        fields = [
+            'locality',
+            'name',
+            'place_type',
+            'related_place',
+            'relation_type',
+            'description',
+            'comment',
+        ]
+        widgets = {
+            'locality': forms.Select(attrs={'class': 'template_form_select'}),
+            'name': forms.TextInput(attrs={'class': 'template_form_input'}),
+            'place_type': forms.Select(attrs={'class': 'template_form_select'}),
+            'related_place': forms.Select(attrs={'class': 'template_form_select'}),
+            'relation_type': forms.Select(attrs={'class': 'template_form_select'}),
+            'description': forms.Textarea(attrs={'class': 'template_form_textarea'}),
+            'comment': forms.Textarea(attrs={'class': 'template_form_textarea'}),
         }
 
 

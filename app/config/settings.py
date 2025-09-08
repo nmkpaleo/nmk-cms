@@ -76,6 +76,7 @@ INSTALLED_APPS = [
     'django_select2',
     'dal',
     'dal_select2',
+    'simple_history',
 ]
 
 SITE_ID = 1
@@ -90,6 +91,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
     "crum.CurrentRequestUserMiddleware",
+    "simple_history.middleware.HistoryRequestMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -144,7 +146,7 @@ DATABASES = {
     "default": {
         "ENGINE": get_var("DB_ENGINE", "django.db.backends.mysql"),
         "HOST": get_var("DB_HOST", ""),
-        "NAME": get_var("DB_NAME", BASE_DIR / "db.sqlite3"),
+        "NAME": get_var("DB_NAME", str(BASE_DIR / "db.sqlite3")),
         "USER": get_var("DB_USER", ""),
         "PASSWORD": get_var("DB_PASS", ""),
         "OPTIONS": {
