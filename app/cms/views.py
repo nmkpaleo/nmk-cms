@@ -2,7 +2,7 @@ import csv
 from datetime import timedelta
 from dal import autocomplete
 from django import forms
-from django.db import transaction
+from django.db import transaction, models
 from django.db.models import Value, CharField, Count, Q, Max, Prefetch
 from django.db.models.functions import Concat, Greatest
 from django.http import JsonResponse
@@ -913,6 +913,26 @@ class PreparationDetailView(LoginRequiredMixin, DetailView):
                 and user == preparation.preparator
             )
         )
+        history_entries = []
+        for log in preparation.history.all().order_by("-history_date", "-history_id"):
+            prev = log.prev_record
+            changes = []
+            if prev:
+                delta = log.diff_against(prev)
+                for change in delta.changes:
+                    field = Preparation._meta.get_field(change.field)
+                    field_name = field.verbose_name.capitalize()
+                    old = change.old
+                    new = change.new
+                    if isinstance(field, models.ForeignKey):
+                        related_model = field.remote_field.model
+                        old_obj = related_model.objects.filter(pk=old).first()
+                        new_obj = related_model.objects.filter(pk=new).first()
+                        old = str(old_obj) if old_obj else old
+                        new = str(new_obj) if new_obj else new
+                    changes.append({"field": field_name, "old": old, "new": new})
+            history_entries.append({"log": log, "changes": changes})
+        context["history_entries"] = history_entries
         return context
 
 class PreparationCreateView(LoginRequiredMixin, CreateView):

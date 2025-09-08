@@ -54,23 +54,37 @@
       </div>
     </div>
   
-    <h3>Preparation Log</h3>
+    <h3>Change History</h3>
 
-    {% if preparation.logs.all %}
+    {% if history_entries %}
       <table class="table table-striped">
         <thead>
           <tr>
-            <th>Date</th>
-            <th>User</th>
+            <th>Date/time</th>
+            <th></th>
+            <th>Comment</th>
+            <th>Changed by</th>
             <th>Changes</th>
           </tr>
         </thead>
         <tbody>
-          {% for log in preparation.logs.all %}
+          {% for entry in history_entries %}
             <tr>
-              <td>{{ log.changed_on|date:"Y-m-d H:i" }}</td>
-              <td>{{ log.changed_by|default:"System or Unknown" }}</td>
-              <td>{{ log.changes }}</td>
+              <td>{{ entry.log.history_date|date:"Y-m-d H:i" }}</td>
+              <td>{{ entry.log.history_type }}</td>
+              <td>{{ entry.log.history_change_reason|default:"" }}</td>
+              <td>{{ entry.log.history_user|default:"System or Unknown" }}</td>
+              <td>
+                {% if entry.changes %}
+                  <ul>
+                    {% for change in entry.changes %}
+                      <li><strong>{{ change.field }}:</strong> {{ change.old }} → {{ change.new }}</li>
+                    {% endfor %}
+                  </ul>
+                {% else %}
+                  Initial version
+                {% endif %}
+              </td>
             </tr>
           {% endfor %}
         </tbody>
