@@ -1119,6 +1119,10 @@ class DrawerRegister(BaseModel):
     estimated_documents = models.PositiveIntegerField(
         help_text="Estimated number of documents or cards"
     )
+    priority = models.PositiveIntegerField(
+        default=0,
+        help_text="Display order priority",
+    )
 
     class ScanningStatus(models.TextChoices):
         WAITING = "waiting", "Waiting"
@@ -1140,7 +1144,7 @@ class DrawerRegister(BaseModel):
     class Meta:
         verbose_name = "Drawer Register"
         verbose_name_plural = "Drawer Register"
-        ordering = ["code"]
+        ordering = ["priority", "code"]
 
     def clean(self):
         super().clean()

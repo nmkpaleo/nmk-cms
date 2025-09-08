@@ -52,6 +52,7 @@ from cms.views import (
     DrawerRegisterDetailView,
     DrawerRegisterCreateView,
     DrawerRegisterUpdateView,
+    DrawerRegisterReorderView,
 )
 from .views import PreparationMediaUploadView
 from .views import FieldSlipAutocomplete
@@ -114,6 +115,7 @@ urlpatterns = [
     path('drawers/new/', DrawerRegisterCreateView.as_view(), name='drawerregister_create'),
     path('drawers/<int:pk>/', DrawerRegisterDetailView.as_view(), name='drawerregister_detail'),
     path('drawers/<int:pk>/edit/', DrawerRegisterUpdateView.as_view(), name='drawerregister_edit'),
+    path('drawers/reorder/', DrawerRegisterReorderView.as_view(), name='drawerregister_reorder'),
 
 
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
