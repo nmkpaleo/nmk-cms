@@ -943,6 +943,13 @@ class PlaceModelTests(TestCase):
 
 class PlaceViewTests(TestCase):
     def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username="viewer", password="pass")
+
+        self.patcher = patch("cms.models.get_current_user", return_value=self.user)
+        self.patcher.start()
+        self.addCleanup(self.patcher.stop)
+
         self.locality = Locality.objects.create(abbreviation="LC", name="Locality")
         self.place = Place.objects.create(
             locality=self.locality,
@@ -982,6 +989,13 @@ class PlaceViewTests(TestCase):
 
 class PlaceImportTests(TestCase):
     def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username="importer", password="pass")
+
+        self.patcher = patch("cms.models.get_current_user", return_value=self.user)
+        self.patcher.start()
+        self.addCleanup(self.patcher.stop)
+
         self.locality = Locality.objects.create(abbreviation="LC", name="Locality")
         self.resource = PlaceResource()
 

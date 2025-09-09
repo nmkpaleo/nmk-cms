@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/4.0/ref/settings/
 """
 
 import os
+import sys
 import json
 
 from pathlib import Path
@@ -155,6 +156,19 @@ DATABASES = {
         },
     }
 }
+
+from django.db.utils import OperationalError, ConnectionHandler
+
+if "test" in sys.argv:
+    connections = ConnectionHandler(DATABASES)
+    try:
+        connections["default"].ensure_connection()
+    except OperationalError:
+        DATABASES["default"] = {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+        connections = ConnectionHandler(DATABASES)
 
 if DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":
     DATABASES["default"].pop("OPTIONS", None)
