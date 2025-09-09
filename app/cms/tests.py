@@ -498,7 +498,9 @@ class UnexpectedSpecimenLoggingTests(TestCase):
         self.client.login(username="tester", password="pass")
         response = self.client.post(reverse("inventory_log_unexpected"), {"identifier": "XYZ"})
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(UnexpectedSpecimen.objects.filter(identifier="XYZ").exists())
+        self.assertTrue(
+            UnexpectedSpecimen.history.filter(identifier="XYZ").exists()
+        )
 
 
 class DrawerRegisterTests(TestCase):

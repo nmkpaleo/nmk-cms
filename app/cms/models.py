@@ -56,7 +56,6 @@ class BaseModel(models.Model):
         related_name="%(app_label)s_%(class)s_modified",
         verbose_name="Modified by"
     )
-    history = HistoricalRecords(inherit=True)
 
     class Meta:
         abstract = True
@@ -88,6 +87,7 @@ class BaseModel(models.Model):
 class Locality(BaseModel):
     abbreviation = models.CharField(max_length=2, help_text="Enter the Abbreviation of the Locality")
     name = models.CharField(max_length=50, help_text="The name of the Locality.")
+    history = HistoricalRecords()
     
     class Meta:
         ordering = ["name"]
@@ -122,6 +122,7 @@ class Place(BaseModel):
     description = models.TextField(null=True, blank=True)
     comment = models.TextField(null=True, blank=True)
     part_of_hierarchy = models.CharField(max_length=255, editable=False)
+    history = HistoricalRecords()
 
     class Meta:
         ordering = ["name"]
@@ -162,6 +163,7 @@ class Place(BaseModel):
 class Collection(BaseModel):
     abbreviation = models.CharField(max_length=4)
     description = models.CharField(max_length=250)
+    history = HistoricalRecords()
 
     def get_absolute_url(self):
         return reverse('collection-detail', args=[str(self.id)])
@@ -229,6 +231,7 @@ class Accession(BaseModel):
         help_text="Additional comments (if any)."
     )
     is_published = models.BooleanField(default=False)
+    history = HistoricalRecords()
 
     def save(self, *args, **kwargs):
         """
@@ -260,6 +263,7 @@ class AccessionNumberSeries(BaseModel):
     end_at = models.PositiveIntegerField()
     current_number = models.PositiveIntegerField()
     is_active = models.BooleanField(default=True)
+    history = HistoricalRecords()
 
     class Meta:
         ordering = ['user', 'start_from']
@@ -323,6 +327,7 @@ class AccessionNumberSeries(BaseModel):
 # Subject Model
 class Subject(BaseModel):
     subject_name = models.CharField(max_length=50)
+    history = HistoricalRecords()
 
     def get_absolute_url(self):
         return reverse('subject-detail', args=[str(self.id)])
@@ -352,6 +357,7 @@ class Comment(BaseModel):
     status = models.CharField(max_length=50, choices=RESPONSE_STATUS, help_text="Please select your response")
     response = models.TextField(null=True, blank=True)
     comment_by = models.CharField(max_length=50)
+    history = HistoricalRecords()
 
     def get_absolute_url(self):
         return reverse('comment-detail', args=[str(self.id)])
@@ -382,6 +388,8 @@ class FieldSlip(BaseModel):
     verbatim_coordinate_system = models.CharField(max_length=255, null=True, blank=True, help_text="Coordinate system used in the field (WGS84 etc.).")
     verbatim_elevation = models.CharField(max_length=255, null=True, blank=True, help_text="Elevation as recorded.")
 
+    history = HistoricalRecords()
+
     def get_absolute_url(self):
         return reverse('fieldslip_detail', args=[str(self.id)])
 
@@ -397,6 +405,7 @@ class FieldSlip(BaseModel):
 class Storage(BaseModel):
     area = models.CharField(max_length=255, blank=False, null=False)
     parent_area = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True)
+    history = HistoricalRecords()
 
     def get_absolute_url(self):
         return reverse('storage-detail', args=[str(self.id)])
@@ -420,6 +429,7 @@ class Reference(BaseModel):
     pages = models.CharField(max_length=10, blank=True, null=True)
     doi = models.CharField(max_length=255, blank=True, null=True)
     citation = models.TextField(blank=False, null=False)
+    history = HistoricalRecords()
 
     def get_absolute_url(self):
         return reverse('reference_detail', args=[str(self.id)])
@@ -455,6 +465,7 @@ class AccessionFieldSlip(BaseModel):
         blank=True,
         help_text="Additional notes."
     )
+    history = HistoricalRecords()
 
     class Meta:
         unique_together = ("accession", "fieldslip")  # Ensures no duplicate relations
@@ -470,6 +481,7 @@ class AccessionReference(BaseModel):
     accession = models.ForeignKey(Accession, on_delete=models.CASCADE)
     reference = models.ForeignKey(Reference, on_delete=models.CASCADE)
     page = models.CharField(max_length=10, blank=True, null=True)
+    history = HistoricalRecords()
 
     class Meta:
         constraints = [
@@ -501,6 +513,7 @@ class AccessionRow(BaseModel):
         null=True,
         help_text="Inventory status of the specimen",
     )
+    history = HistoricalRecords()
 
     def get_absolute_url(self):
         return reverse('accessionrow_detail', args=[str(self.id)])
@@ -564,6 +577,7 @@ class AccessionRow(BaseModel):
 
 class UnexpectedSpecimen(BaseModel):
     identifier = models.CharField(max_length=255)
+    history = HistoricalRecords()
 
     class Meta:
         verbose_name = "Unexpected Specimen"
@@ -581,6 +595,7 @@ class NatureOfSpecimen(BaseModel):
     verbatim_element = models.CharField(max_length=255, blank=True, null=True)
     portion = models.CharField(max_length=255, blank=True, null=True)
     fragments = models.IntegerField(default=0)
+    history = HistoricalRecords()
 
     def get_absolute_url(self):
         return reverse('natureofspecimen-detail', args=[str(self.id)])
@@ -603,6 +618,7 @@ class Element(BaseModel):
         related_name='children'
     )
     name = models.CharField(max_length=255, blank=False, null=False)
+    history = HistoricalRecords()
 
     class Meta:
         ordering = ['parent_element__name', 'name']
@@ -623,6 +639,7 @@ class Person(BaseModel):
     first_name = models.CharField(max_length=255)
     last_name = models.CharField(max_length=255)
     orcid = models.CharField(max_length=255, blank=True, null=True)
+    history = HistoricalRecords()
 
     def get_absolute_url(self):
         return reverse('person-detail', args=[str(self.id)])
@@ -645,6 +662,7 @@ class Identification(BaseModel):
     identification_qualifier = models.CharField(max_length=255, blank=True, null=True)
     verbatim_identification = models.CharField(max_length=255, blank=True, null=True)
     identification_remarks = models.TextField(blank=True, null=True)
+    history = HistoricalRecords()
 
     def get_absolute_url(self):
         return reverse('identification-detail', args=[str(self.id)])
@@ -685,6 +703,7 @@ class Taxon(BaseModel):
     species = models.CharField(max_length=255)
     infraspecific_epithet = models.CharField(max_length=255, null=True, blank=True)
     scientific_name_authorship = models.CharField(max_length=255, null=True, blank=True)
+    history = HistoricalRecords()
 
     class Meta:
         ordering = ['class_name', 'order', 'family', 'genus', 'species']
@@ -771,6 +790,7 @@ class Media(BaseModel):
                                ,default='CC0'  # Default to public domain
                                , help_text="License information for the media file")
     rights_holder = models.CharField(max_length=255, null=True, blank=True, help_text="The individual or organization holding rights to the media")
+    history = HistoricalRecords()
 
     def save(self, *args, **kwargs):
         # If a file is uploaded
@@ -817,11 +837,12 @@ class SpecimenGeology(BaseModel):
         help_text="Earliest geological context of the specimen"
     )
     latest_geological_context = models.ForeignKey(
-        'GeologicalContext', 
+        'GeologicalContext',
         on_delete=models.CASCADE,  # Required field now
-        related_name='specimens_with_latest_context', 
+        related_name='specimens_with_latest_context',
         help_text="Latest geological context of the specimen"
-    )    
+    )
+    history = HistoricalRecords()
 
     class Meta:
         verbose_name = "Specimen Geology"
@@ -854,6 +875,7 @@ class GeologicalContext(BaseModel):
     geological_context_type = models.CharField(max_length=255, help_text="The type of geological context (e.g., Formation, Period, etc.)")
     unit_name = models.CharField(max_length=255, help_text="The name of the geological unit (e.g., stratum, layer, etc.)")
     name = models.CharField(max_length=255, help_text="The name of the geological context (e.g., name of the formation)")
+    history = HistoricalRecords()
 
     def get_absolute_url(self):
         return reverse('geologicalcontext-detail', args=[str(self.id)])
@@ -869,6 +891,7 @@ class PreparationMaterial(BaseModel):
     """ Materials used in the preparation process. """
     name = models.CharField(max_length=255, unique=True, help_text="Name of the preparation material (e.g., Paraloid B72, Cyanoacrylate).")
     description = models.TextField(blank=True, null=True, help_text="Details about the material (e.g., properties, best use cases).")
+    history = HistoricalRecords()
 
     class Meta:
         verbose_name = "Preparation Material"
@@ -1035,16 +1058,17 @@ class Preparation(BaseModel):
     )
 
     report_link = models.URLField(
-        null=True, 
-        blank=True, 
+        null=True,
+        blank=True,
         help_text="Link to an external report or documentation for this preparation."
     )
 
     notes = models.TextField(
-        null=True, 
-        blank=True, 
+        null=True,
+        blank=True,
         help_text="Additional notes or observations about the preparation."
     )
+    history = HistoricalRecords()
 
     def clean(self):
         """
@@ -1097,6 +1121,7 @@ class PreparationMedia(BaseModel):
     )
 
     notes = models.TextField(null=True, blank=True, help_text="Optional comments or observations about this media.")
+    history = HistoricalRecords()
 
     class Meta:
         unique_together = ("preparation", "media")
@@ -1140,6 +1165,7 @@ class DrawerRegister(BaseModel):
         related_name="drawerregisters",
         help_text="Users assigned to scanning",
     )
+    history = HistoricalRecords()
 
     class Meta:
         verbose_name = "Drawer Register"
@@ -1159,6 +1185,7 @@ class Scanning(BaseModel):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="scans")
     start_time = models.DateTimeField()
     end_time = models.DateTimeField(null=True, blank=True)
+    history = HistoricalRecords()
 
     class Meta:
         ordering = ["-start_time"]
