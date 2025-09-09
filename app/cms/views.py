@@ -1260,7 +1260,9 @@ class DrawerRegisterReorderView(LoginRequiredMixin, DrawerRegisterAccessMixin, V
     def post(self, request, *args, **kwargs):
         data = json.loads(request.body)
         order = data.get("order", [])
-        for priority, pk in enumerate(order, start=1):
+        # Assign larger priority values to items appearing earlier in the
+        # provided order so they are shown first when ordered descending.
+        for priority, pk in enumerate(reversed(order), start=1):
             DrawerRegister.objects.filter(pk=pk).update(priority=priority)
         return JsonResponse({"status": "ok"})
 

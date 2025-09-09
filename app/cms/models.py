@@ -1170,7 +1170,9 @@ class DrawerRegister(BaseModel):
     class Meta:
         verbose_name = "Drawer Register"
         verbose_name_plural = "Drawer Register"
-        ordering = ["priority", "code"]
+        # Display entries with higher priority first; items without an
+        # explicit priority (default ``0``) appear last.
+        ordering = ["-priority", "code"]
 
     def clean(self):
         super().clean()
