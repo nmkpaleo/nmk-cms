@@ -5,3 +5,4 @@
 - [Places](places.md)
 - [References](references.md)
 - [Preparations](preparations.md)
+- [Scan Uploads](scan-uploads.md)

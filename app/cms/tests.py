@@ -1064,3 +1064,24 @@ class PlaceImportTests(TestCase):
             self.resource.before_import_row(row, row_number=1)
         self.assertIn('higher-level place cannot be part of its descendant', str(cm.exception))
 
+
+class UploadScanViewTests(TestCase):
+    """Tests for the scan upload view and template link."""
+
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username="cm", password="pass", is_staff=True)
+        Group.objects.create(name="Collection Managers").user_set.add(self.user)
+        self.url = reverse("admin-upload-scan")
+
+    def test_login_required(self):
+        response = self.client.get(self.url)
+        # Anonymous users should be redirected to the login page
+        self.assertEqual(response.status_code, 302)
+
+
+    def test_admin_index_has_upload_link(self):
+        self.client.login(username="cm", password="pass")
+        response = self.client.get(reverse("admin:index"))
+        self.assertContains(response, self.url)
+

@@ -736,7 +736,11 @@ def upload_media(request, accession_id):
 
 @staff_member_required
 def upload_scan(request):
-    """Upload a scan image to the incoming folder."""
+    """Upload one or more scan images to the ``uploads/incoming`` folder.
+
+    The watcher script later validates filenames and moves each file to
+    ``uploads/pending`` or ``uploads/rejected`` as appropriate.
+    """
     incoming_dir = Path(settings.MEDIA_ROOT) / 'uploads' / 'incoming'
     os.makedirs(incoming_dir, exist_ok=True)
 

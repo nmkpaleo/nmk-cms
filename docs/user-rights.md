@@ -8,6 +8,10 @@ This guide outlines visibility and operations available to different user roles.
 - **Collection Manager** – member of the "Collection Managers" group.
 - **Superuser** – Django administrator with all permissions.
 
+## Scan Uploads
+- **Collection Manager / Superuser**: may upload scan images using the admin **Upload scans** button.
+- **Curator / Public User**: no access.
+
 ## Accession
 - **Public User**: can view only published accessions on list pages and locality details. Attempting to access an unpublished accession detail returns a 404 page. No editing actions are available.
 - **Curator**: can view all accessions, including unpublished ones, but cannot create or edit them.
