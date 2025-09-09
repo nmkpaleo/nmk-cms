@@ -1,6 +1,8 @@
 import csv
 import json
+import os
 from datetime import timedelta
+from pathlib import Path
 from dal import autocomplete
 from django import forms
 from django.db import transaction
@@ -49,7 +51,7 @@ from cms.forms import (AccessionBatchForm, AccessionCommentForm,
                     MediaUploadForm, NatureOfSpecimenForm, PreparationForm,
                     PreparationApprovalForm, PreparationMediaUploadForm,
                     SpecimenCompositeForm, ReferenceForm, LocalityForm,
-                    PlaceForm, DrawerRegisterForm)
+                    PlaceForm, DrawerRegisterForm, ScanUploadForm)
 
 from cms.models import (
     Accession,
@@ -730,6 +732,26 @@ def upload_media(request, accession_id):
         form = MediaUploadForm()
 
     return render(request, 'cms/upload_media.html', {'form': form, 'accession': accession})
+
+
+@staff_member_required
+def upload_scan(request):
+    """Upload a scan image to the incoming folder."""
+    incoming_dir = Path(settings.MEDIA_ROOT) / 'uploads' / 'incoming'
+    os.makedirs(incoming_dir, exist_ok=True)
+
+    if request.method == 'POST':
+        form = ScanUploadForm(request.POST, request.FILES)
+        if form.is_valid():
+            file = form.cleaned_data['file']
+            fs = FileSystemStorage(location=incoming_dir)
+            fs.save(file.name, file)
+            messages.success(request, f'Uploaded {file.name}')
+            return redirect('admin-upload-scan')
+    else:
+        form = ScanUploadForm()
+
+    return render(request, 'admin/upload_scan.html', {'form': form})
 
 @login_required
 @user_passes_test(is_collection_manager)

@@ -376,6 +376,10 @@ class MediaUploadForm(forms.ModelForm):
         model = Media
         fields = ['media_location', 'type', 'license', 'rights_holder']
 
+
+class ScanUploadForm(forms.Form):
+    file = forms.ImageField()
+
 class AddAccessionRowForm(forms.ModelForm):
     specimen_suffix = forms.ChoiceField(choices=[], required=True)  # Empty choices initially
     accession = forms.ModelChoiceField(
