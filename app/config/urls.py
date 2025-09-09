@@ -18,11 +18,12 @@ from django.contrib import admin
 from django.conf import settings
 from django.conf.urls.static import static
 from django.urls import include, path
-from cms.views import fieldslip_create, FieldSlipDetailView, base_generic, index,FieldSlipListView
+from cms.views import fieldslip_create, FieldSlipDetailView, base_generic, index, FieldSlipListView, upload_scan
 
 urlpatterns = [
+    path('admin/upload-scan/', upload_scan, name='admin-upload-scan'),
     path('admin/', admin.site.urls),
-    
+
     path('', include('cms.urls')),
     path('accounts/', include('allauth.urls')),
     path('', index, name='index'),

@@ -73,7 +73,6 @@ urlpatterns = [
     path('inventory/reset/', inventory_reset, name='inventory_reset'),
     path('inventory/clear/', inventory_clear, name='inventory_clear'),
     path('inventory/log-unexpected/', inventory_log_unexpected, name='inventory_log_unexpected'),
-    path('admin/upload-scan/', upload_scan, name='admin-upload-scan'),
     path('fieldslips/new/', fieldslip_create, name='fieldslip_create'),
     path('fieldslips/<int:pk>/', FieldSlipDetailView.as_view(), name='fieldslip_detail'),
     path('fieldslips/<int:pk>/edit/', fieldslip_edit, name='fieldslip_edit'),
