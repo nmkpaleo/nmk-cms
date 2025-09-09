@@ -105,18 +105,26 @@ document.addEventListener('DOMContentLoaded', function() {
     if (canEdit) {
         const tbody = document.getElementById('drawerTableBody');
         tbody.querySelectorAll('tr').forEach(function(row) {
-            row.draggable = true;
+            const handle = row.querySelector('.drag-handle');
+            if (handle) {
+                handle.draggable = true;
+            }
         });
 
         let draggingRow = null;
 
         tbody.addEventListener('dragstart', function(e) {
-            if (!e.target.closest('.drag-handle')) {
-                e.preventDefault();
+            const handle = e.target.closest('.drag-handle');
+            if (!handle) {
                 return;
             }
-            draggingRow = e.target.closest('tr');
+            draggingRow = handle.closest('tr');
             e.dataTransfer.setData('text/plain', '');
+            e.dataTransfer.effectAllowed = 'move';
+        });
+
+        tbody.addEventListener('dragend', function() {
+            draggingRow = null;
         });
 
         tbody.addEventListener('dragover', function(e) {
