@@ -24,6 +24,7 @@ from cms.models import (
     UnexpectedSpecimen,
     DrawerRegister,
     Scanning,
+    Media,
     Taxon,
 )
 from cms.utils import generate_accessions_from_series
@@ -1098,9 +1099,22 @@ class UploadScanViewTests(TestCase):
         upload = SimpleUploadedFile("2025-01-01(1).png", b"data", content_type="image/png")
         response = self.client.post(self.url, {"files": upload})
         self.assertEqual(response.status_code, 302)
-        incoming = Path(settings.MEDIA_ROOT) / "uploads" / "incoming" / "2025-01-01(1).png"
-        self.assertTrue(incoming.exists())
-        incoming.unlink()
-        incoming.parent.rmdir()
-        incoming.parent.parent.rmdir()
+        pending = Path(settings.MEDIA_ROOT) / "uploads" / "pending" / "2025-01-01(1).png"
+        self.assertTrue(pending.exists())
+        self.assertTrue(Media.objects.filter(media_location=f"uploads/pending/2025-01-01(1).png").exists())
+        pending.unlink()
+        import shutil
+        shutil.rmtree(pending.parent.parent)
+
+    def test_invalid_names_rejected(self):
+        self.client.login(username="cm", password="pass")
+        upload = SimpleUploadedFile("badname.png", b"data", content_type="image/png")
+        response = self.client.post(self.url, {"files": upload})
+        self.assertEqual(response.status_code, 302)
+        rejected = Path(settings.MEDIA_ROOT) / "uploads" / "rejected" / "badname.png"
+        self.assertTrue(rejected.exists())
+        self.assertFalse(Media.objects.filter(media_location="uploads/rejected/badname.png").exists())
+        rejected.unlink()
+        import shutil
+        shutil.rmtree(rejected.parent.parent)
 

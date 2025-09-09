@@ -83,6 +83,7 @@ from cms.models import (
 from cms.resources import FieldSlipResource
 from .utils import build_history_entries
 from cms.utils import generate_accessions_from_series
+from cms.upload_processing import process_file
 from formtools.wizard.views import SessionWizardView
 
 class FieldSlipAutocomplete(autocomplete.Select2QuerySetView):
@@ -750,7 +751,8 @@ def upload_scan(request):
         if files:
             fs = FileSystemStorage(location=incoming_dir)
             for file in files:
-                fs.save(file.name, file)
+                saved_name = fs.save(file.name, file)
+                process_file(incoming_dir / saved_name)
                 messages.success(request, f'Uploaded {file.name}')
             return redirect('admin-upload-scan')
         else:

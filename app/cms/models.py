@@ -805,10 +805,8 @@ class Media(BaseModel):
         if self.media_location:
             # Get the file name without the directory
             self.file_name = os.path.basename(self.media_location.name)
-            print(os.path.basename(self.media_location.name))
             # Get the file extension
             self.format = os.path.splitext(self.media_location.name)[1].lower().strip('.')
-            print(os.path.splitext(self.media_location.name)[1].lower().strip('.'))       
         # Call the parent save method
         super().save(*args, **kwargs)
 
