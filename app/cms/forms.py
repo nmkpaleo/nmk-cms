@@ -377,8 +377,12 @@ class MediaUploadForm(forms.ModelForm):
         fields = ['media_location', 'type', 'license', 'rights_holder']
 
 
+class MultiFileInput(forms.ClearableFileInput):
+    allow_multiple_selected = True
+
+
 class ScanUploadForm(forms.Form):
-    file = forms.ImageField()
+    files = forms.FileField(widget=MultiFileInput(), label="Scan files")
 
 class AddAccessionRowForm(forms.ModelForm):
     specimen_suffix = forms.ChoiceField(choices=[], required=True)  # Empty choices initially

@@ -743,10 +743,10 @@ def upload_scan(request):
     if request.method == 'POST':
         form = ScanUploadForm(request.POST, request.FILES)
         if form.is_valid():
-            file = form.cleaned_data['file']
             fs = FileSystemStorage(location=incoming_dir)
-            fs.save(file.name, file)
-            messages.success(request, f'Uploaded {file.name}')
+            for file in request.FILES.getlist('files'):
+                fs.save(file.name, file)
+                messages.success(request, f'Uploaded {file.name}')
             return redirect('admin-upload-scan')
     else:
         form = ScanUploadForm()
