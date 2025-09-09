@@ -10,9 +10,33 @@ from simple_history.admin import SimpleHistoryAdmin
 from .forms import AccessionNumberSeriesAdminForm, DrawerRegisterForm
 
 from .models import (
-    AccessionNumberSeries, NatureOfSpecimen, Element, Person, Identification, Taxon, Media, SpecimenGeology, GeologicalContext,
-    AccessionReference, Locality, Place, Collection, Accession, AccessionRow, Subject, Comment, FieldSlip, Reference, Storage, User,
-    Preparation, PreparationMaterial, PreparationMedia, DrawerRegister, Scanning
+    AccessionNumberSeries,
+    NatureOfSpecimen,
+    Element,
+    Person,
+    Identification,
+    Taxon,
+    Media,
+    SpecimenGeology,
+    GeologicalContext,
+    AccessionReference,
+    Locality,
+    Place,
+    Collection,
+    Accession,
+    AccessionRow,
+    Subject,
+    Comment,
+    FieldSlip,
+    Reference,
+    Storage,
+    User,
+    Preparation,
+    PreparationMaterial,
+    PreparationMedia,
+    DrawerRegister,
+    Scanning,
+    UnexpectedSpecimen,
 )
 from .resources import *
 
@@ -456,6 +480,7 @@ if admin.site.is_registered(User):
 admin.site.register(Media, MediaAdmin)
 admin.site.register(SpecimenGeology, SpecimenGeologyAdmin)
 admin.site.register(GeologicalContext, GeologicalContextAdmin)
+admin.site.register(UnexpectedSpecimen, HistoricalAdmin)
 
 
 @admin.register(DrawerRegister)
