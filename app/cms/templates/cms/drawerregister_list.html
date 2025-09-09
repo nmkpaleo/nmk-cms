@@ -55,7 +55,7 @@
       <tbody id="drawerTableBody">
       {% for drawer in drawers %}
       <tr class="template_data" data-id="{{ drawer.pk }}">
-        {% if can_edit %}<td class="drag-handle">☰</td>{% endif %}
+        {% if can_edit %}<td class="drag-handle">✋</td>{% endif %}
         <td><a href="{% url 'drawerregister_detail' drawer.pk %}">{{ drawer.code }}</a></td>
         <td>{{ drawer.description }}</td>
         <td>{{ drawer.taxa.all|join:", " }}</td>
@@ -73,7 +73,6 @@
 {% endblock %}
 
 {% block script %}
-<script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js" integrity="sha256-lRHa+B/1SlZAA4AIskAfKngVKv+Npr/PEn4S3wuPQMw=" crossorigin="anonymous"></script>
 <script>
 function toggleAccordion(id) {
     var panel = document.getElementById(id);
@@ -101,25 +100,49 @@ function getCookie(name) {
     return cookieValue;
 }
 
-$(function() {
+document.addEventListener('DOMContentLoaded', function() {
     var canEdit = {{ can_edit|yesno:'true,false' }};
     if (canEdit) {
-        $('#drawerTableBody').sortable({
-            handle: '.drag-handle',
-            update: function(event, ui) {
-                var order = $(this).children().map(function(){
-                    return $(this).data('id');
-                }).get();
-                fetch('{% url "drawerregister_reorder" %}', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': getCookie('csrftoken')
-                    },
-                    body: JSON.stringify({order: order})
-                });
+        const tbody = document.getElementById('drawerTableBody');
+        tbody.querySelectorAll('tr').forEach(function(row) {
+            row.draggable = true;
+        });
+
+        let draggingRow = null;
+
+        tbody.addEventListener('dragstart', function(e) {
+            if (!e.target.closest('.drag-handle')) {
+                e.preventDefault();
+                return;
             }
-        }).disableSelection();
+            draggingRow = e.target.closest('tr');
+            e.dataTransfer.setData('text/plain', '');
+        });
+
+        tbody.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            const target = e.target.closest('tr');
+            if (draggingRow && target && target !== draggingRow) {
+                const rect = target.getBoundingClientRect();
+                const next = (e.clientY - rect.top) / (rect.bottom - rect.top) > 0.5;
+                target.parentNode.insertBefore(draggingRow, next ? target.nextSibling : target);
+            }
+        });
+
+        tbody.addEventListener('drop', function(e) {
+            e.preventDefault();
+            const order = Array.from(tbody.querySelectorAll('tr')).map(function(tr) {
+                return tr.dataset.id;
+            });
+            fetch('{% url "drawerregister_reorder" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({order: order})
+            });
+        });
     }
 });
 </script>

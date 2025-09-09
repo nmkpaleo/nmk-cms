@@ -1118,3 +1118,7 @@ nav ul {
     color: #000;
     text-decoration: none;
 }
+
+.drag-handle {
+    cursor: grab;
+}
