@@ -746,12 +746,15 @@ def upload_scan(request):
 
     if request.method == 'POST':
         form = ScanUploadForm(request.POST, request.FILES)
-        if form.is_valid():
+        files = request.FILES.getlist('files')
+        if files:
             fs = FileSystemStorage(location=incoming_dir)
-            for file in request.FILES.getlist('files'):
+            for file in files:
                 fs.save(file.name, file)
                 messages.success(request, f'Uploaded {file.name}')
             return redirect('admin-upload-scan')
+        else:
+            form.add_error('files', 'No file was submitted. Check the encoding type on the form.')
     else:
         form = ScanUploadForm()
 

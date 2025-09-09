@@ -6,6 +6,9 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils.timezone import now
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.conf import settings
+from pathlib import Path
 
 from cms.models import (
     Accession,
@@ -1084,4 +1087,20 @@ class UploadScanViewTests(TestCase):
         self.client.login(username="cm", password="pass")
         response = self.client.get(reverse("admin:index"))
         self.assertContains(response, self.url)
+
+    def test_form_has_multipart_enctype(self):
+        self.client.login(username="cm", password="pass")
+        response = self.client.get(self.url)
+        self.assertContains(response, 'enctype="multipart/form-data"')
+
+    def test_upload_saves_file(self):
+        self.client.login(username="cm", password="pass")
+        upload = SimpleUploadedFile("2025-01-01(1).png", b"data", content_type="image/png")
+        response = self.client.post(self.url, {"files": upload})
+        self.assertEqual(response.status_code, 302)
+        incoming = Path(settings.MEDIA_ROOT) / "uploads" / "incoming" / "2025-01-01(1).png"
+        self.assertTrue(incoming.exists())
+        incoming.unlink()
+        incoming.parent.rmdir()
+        incoming.parent.parent.rmdir()
 
