@@ -1,4 +1,6 @@
 from unittest.mock import patch
+from datetime import timedelta
+from types import SimpleNamespace
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -32,6 +34,7 @@ from cms.forms import DrawerRegisterForm
 from cms.filters import DrawerRegisterFilter
 from cms.resources import DrawerRegisterResource, PlaceResource
 from tablib import Dataset
+from cms.upload_processing import process_file
 
 
 class GenerateAccessionsFromSeriesTests(TestCase):
@@ -1118,3 +1121,36 @@ class UploadScanViewTests(TestCase):
         import shutil
         shutil.rmtree(rejected.parent.parent)
 
+
+class UploadProcessingTests(TestCase):
+    """Tests for the file watcher processing logic."""
+
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username="intern", password="pass")
+        patcher = patch("cms.models.get_current_user", return_value=self.user)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.drawer = DrawerRegister.objects.create(
+            code="DRW", description="Drawer", estimated_documents=1
+        )
+        start = now() - timedelta(minutes=5)
+        end = now() + timedelta(minutes=5)
+        self.scanning = Scanning.objects.create(
+            drawer=self.drawer, user=self.user, start_time=start, end_time=end
+        )
+
+    def test_scanning_lookup_uses_creation_time(self):
+        incoming = Path(settings.MEDIA_ROOT) / "uploads" / "incoming"
+        incoming.mkdir(parents=True, exist_ok=True)
+        filename = "2025-09-09(1).png"
+        src = incoming / filename
+        src.write_bytes(b"data")
+        created = self.scanning.start_time + timedelta(minutes=1)
+        stat_result = SimpleNamespace(st_ctime=created.timestamp())
+        with patch("pathlib.Path.stat", return_value=stat_result):
+            process_file(src)
+        media = Media.objects.get(media_location=f"uploads/pending/{filename}")
+        self.assertEqual(media.scanning, self.scanning)
+        import shutil
+        shutil.rmtree(incoming.parent)
