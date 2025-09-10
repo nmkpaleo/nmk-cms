@@ -1246,6 +1246,30 @@ class UploadProcessingTests(TestCase):
         shutil.rmtree(incoming.parent)
 
 
+class MediaFileDeletionTests(TestCase):
+    """Ensure deleting a Media record removes its file from disk."""
+
+    def setUp(self):
+        import shutil
+
+        User = get_user_model()
+        self.user = User.objects.create_user(username="deleter", password="pass")
+        patcher = patch("cms.models.get_current_user", return_value=self.user)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.uploads = Path(settings.MEDIA_ROOT) / "uploads"
+        self.uploads.mkdir(parents=True, exist_ok=True)
+        self.addCleanup(lambda: shutil.rmtree(self.uploads, ignore_errors=True))
+
+    def test_file_removed_on_delete(self):
+        file_path = self.uploads / "deleteme.png"
+        file_path.write_bytes(b"data")
+        media = Media.objects.create(media_location="uploads/deleteme.png")
+        self.assertTrue(file_path.exists())
+        media.delete()
+        self.assertFalse(file_path.exists())
+
+
 class AdminAutocompleteTests(TestCase):
     """Ensure admin uses select2 autocomplete for heavy foreign keys."""
 

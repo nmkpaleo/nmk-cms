@@ -8,6 +8,7 @@ from cms.models import (
     AccessionNumberSeries,
     AccessionReference,
     DrawerRegister,
+    Media,
 )
 
 User = get_user_model()
@@ -48,3 +49,9 @@ def check_series_completion(sender, instance, **kwargs):
     if used_count >= total_slots:
         active_series.is_active = False
         active_series.save()
+
+
+@receiver(post_delete, sender=Media)
+def delete_media_file_on_delete(sender, instance, **kwargs):
+    if instance.media_location:
+        instance.media_location.delete(save=False)
