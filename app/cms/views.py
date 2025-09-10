@@ -1,6 +1,8 @@
 import csv
 import json
+import os
 from datetime import timedelta
+from pathlib import Path
 from dal import autocomplete
 from django import forms
 from django.db import transaction
@@ -49,7 +51,7 @@ from cms.forms import (AccessionBatchForm, AccessionCommentForm,
                     MediaUploadForm, NatureOfSpecimenForm, PreparationForm,
                     PreparationApprovalForm, PreparationMediaUploadForm,
                     SpecimenCompositeForm, ReferenceForm, LocalityForm,
-                    PlaceForm, DrawerRegisterForm)
+                    PlaceForm, DrawerRegisterForm, ScanUploadForm)
 
 from cms.models import (
     Accession,
@@ -81,6 +83,7 @@ from cms.models import (
 from cms.resources import FieldSlipResource
 from .utils import build_history_entries
 from cms.utils import generate_accessions_from_series
+from cms.upload_processing import process_file
 from formtools.wizard.views import SessionWizardView
 
 class FieldSlipAutocomplete(autocomplete.Select2QuerySetView):
@@ -730,6 +733,34 @@ def upload_media(request, accession_id):
         form = MediaUploadForm()
 
     return render(request, 'cms/upload_media.html', {'form': form, 'accession': accession})
+
+
+@staff_member_required
+def upload_scan(request):
+    """Upload one or more scan images to the ``uploads/incoming`` folder.
+
+    The watcher script later validates filenames and moves each file to
+    ``uploads/pending`` or ``uploads/rejected`` as appropriate.
+    """
+    incoming_dir = Path(settings.MEDIA_ROOT) / 'uploads' / 'incoming'
+    os.makedirs(incoming_dir, exist_ok=True)
+
+    if request.method == 'POST':
+        form = ScanUploadForm(request.POST, request.FILES)
+        files = request.FILES.getlist('files')
+        if files:
+            fs = FileSystemStorage(location=incoming_dir)
+            for file in files:
+                saved_name = fs.save(file.name, file)
+                process_file(incoming_dir / saved_name)
+                messages.success(request, f'Uploaded {file.name}')
+            return redirect('admin-upload-scan')
+        else:
+            form.add_error('files', 'No file was submitted. Check the encoding type on the form.')
+    else:
+        form = ScanUploadForm()
+
+    return render(request, 'admin/upload_scan.html', {'form': form})
 
 @login_required
 @user_passes_test(is_collection_manager)

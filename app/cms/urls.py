@@ -36,6 +36,7 @@ from cms.views import (
     place_create,
     place_edit,
     upload_media,
+    upload_scan,
     PreparationListView,
     PreparationDetailView,
     PreparationCreateView,

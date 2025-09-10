@@ -775,7 +775,15 @@ class Media(BaseModel):
      ]
     
     accession = models.ForeignKey('Accession', null=True, blank=True, on_delete=models.CASCADE, related_name='media', help_text="Accession this media belongs to")
-    accession_row = models.ForeignKey('AccessionRow', null=True, blank=True, on_delete=models.CASCADE, related_name='media', help_text="Accession row this media belongs to")    
+    accession_row = models.ForeignKey('AccessionRow', null=True, blank=True, on_delete=models.CASCADE, related_name='media', help_text="Accession row this media belongs to")
+    scanning = models.ForeignKey(
+        'Scanning',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='media',
+        help_text="Scanning session associated with this media",
+    )
     file_name = models.CharField(max_length=255, null=True, blank=True, help_text="The name of the media file")
     type = models.CharField(max_length=50, null=True, blank=True, choices=MEDIA_TYPE_CHOICES, help_text="Type of the media (e.g., photo, video, etc.)")
     format = models.CharField(
@@ -797,10 +805,8 @@ class Media(BaseModel):
         if self.media_location:
             # Get the file name without the directory
             self.file_name = os.path.basename(self.media_location.name)
-            print(os.path.basename(self.media_location.name))
             # Get the file extension
             self.format = os.path.splitext(self.media_location.name)[1].lower().strip('.')
-            print(os.path.splitext(self.media_location.name)[1].lower().strip('.'))       
         # Call the parent save method
         super().save(*args, **kwargs)
 

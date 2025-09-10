@@ -6,6 +6,7 @@ nginx/certbot/*
 
 .vscode/
 media/
+app/media/
 github_kli*
 
 # Byte-compiled / optimized / DLL files

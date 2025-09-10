@@ -286,9 +286,27 @@ class PlaceAdmin(HistoricalImportExportAdmin):
 
 # Media
 class MediaAdmin(HistoricalImportExportAdmin):
-    list_display = ('file_name', 'type', 'format', 'media_location', 'license', 'rights_holder', "created_by", "created_on")
+    list_display = (
+        'file_name',
+        'type',
+        'format',
+        'media_location',
+        'license',
+        'rights_holder',
+        'scanning',
+        "created_by",
+        "created_on",
+    )
     readonly_fields = ("created_by", "modified_by", "created_on", "modified_on")
-    search_fields = ('file_name', 'type', 'format', 'media_location', 'license', 'rights_holder')
+    search_fields = (
+        'file_name',
+        'type',
+        'format',
+        'media_location',
+        'license',
+        'rights_holder',
+        'scanning__drawer__code',
+    )
     list_filter = ('type', 'format')
     ordering = ('file_name',)
 

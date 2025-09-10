@@ -18,6 +18,7 @@ from .models import (
     Preparation,
     PreparationMaterial,
     DrawerRegister,
+    Scanning,
     Reference,
     SpecimenGeology,
     Storage,
@@ -931,11 +932,38 @@ class MediaResource(resources.ModelResource):
         attribute='accession_row',
         widget=ForeignKeyWidget(AccessionRow, 'id')
     )
+    scanning = fields.Field(
+        column_name='scanning',
+        attribute='scanning',
+        widget=ForeignKeyWidget(Scanning, 'id')
+    )
 
     class Meta:
         model = Media
-        fields = ('id', 'file_name', 'type', 'format', 'media_location', 'license', 'rights_holder', 'accession', 'accession_row')
-        export_order = ('id', 'file_name', 'type', 'format', 'media_location', 'license', 'rights_holder', 'accession', 'accession_row')
+        fields = (
+            'id',
+            'file_name',
+            'type',
+            'format',
+            'media_location',
+            'license',
+            'rights_holder',
+            'scanning',
+            'accession',
+            'accession_row',
+        )
+        export_order = (
+            'id',
+            'file_name',
+            'type',
+            'format',
+            'media_location',
+            'license',
+            'rights_holder',
+            'scanning',
+            'accession',
+            'accession_row',
+        )
 
 class SpecimenGeologyResource(resources.ModelResource):
     accession = fields.Field(

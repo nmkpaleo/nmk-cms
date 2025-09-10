@@ -1,4 +1,6 @@
 from unittest.mock import patch
+from datetime import timedelta
+from types import SimpleNamespace
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -6,6 +8,9 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils.timezone import now
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.conf import settings
+from pathlib import Path
 
 from cms.models import (
     Accession,
@@ -21,6 +26,7 @@ from cms.models import (
     UnexpectedSpecimen,
     DrawerRegister,
     Scanning,
+    Media,
     Taxon,
 )
 from cms.utils import generate_accessions_from_series
@@ -28,6 +34,7 @@ from cms.forms import DrawerRegisterForm
 from cms.filters import DrawerRegisterFilter
 from cms.resources import DrawerRegisterResource, PlaceResource
 from tablib import Dataset
+from cms.upload_processing import process_file
 
 
 class GenerateAccessionsFromSeriesTests(TestCase):
@@ -1064,3 +1071,86 @@ class PlaceImportTests(TestCase):
             self.resource.before_import_row(row, row_number=1)
         self.assertIn('higher-level place cannot be part of its descendant', str(cm.exception))
 
+
+class UploadScanViewTests(TestCase):
+    """Tests for the scan upload view and template link."""
+
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username="cm", password="pass", is_staff=True)
+        Group.objects.create(name="Collection Managers").user_set.add(self.user)
+        self.url = reverse("admin-upload-scan")
+
+    def test_login_required(self):
+        response = self.client.get(self.url)
+        # Anonymous users should be redirected to the login page
+        self.assertEqual(response.status_code, 302)
+
+
+    def test_admin_index_has_upload_link(self):
+        self.client.login(username="cm", password="pass")
+        response = self.client.get(reverse("admin:index"))
+        self.assertContains(response, self.url)
+
+    def test_form_has_multipart_enctype(self):
+        self.client.login(username="cm", password="pass")
+        response = self.client.get(self.url)
+        self.assertContains(response, 'enctype="multipart/form-data"')
+
+    def test_upload_saves_file(self):
+        self.client.login(username="cm", password="pass")
+        upload = SimpleUploadedFile("2025-01-01(1).png", b"data", content_type="image/png")
+        response = self.client.post(self.url, {"files": upload})
+        self.assertEqual(response.status_code, 302)
+        pending = Path(settings.MEDIA_ROOT) / "uploads" / "pending" / "2025-01-01(1).png"
+        self.assertTrue(pending.exists())
+        self.assertTrue(Media.objects.filter(media_location=f"uploads/pending/2025-01-01(1).png").exists())
+        pending.unlink()
+        import shutil
+        shutil.rmtree(pending.parent.parent)
+
+    def test_invalid_names_rejected(self):
+        self.client.login(username="cm", password="pass")
+        upload = SimpleUploadedFile("badname.png", b"data", content_type="image/png")
+        response = self.client.post(self.url, {"files": upload})
+        self.assertEqual(response.status_code, 302)
+        rejected = Path(settings.MEDIA_ROOT) / "uploads" / "rejected" / "badname.png"
+        self.assertTrue(rejected.exists())
+        self.assertFalse(Media.objects.filter(media_location="uploads/rejected/badname.png").exists())
+        rejected.unlink()
+        import shutil
+        shutil.rmtree(rejected.parent.parent)
+
+
+class UploadProcessingTests(TestCase):
+    """Tests for the file watcher processing logic."""
+
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username="intern", password="pass")
+        patcher = patch("cms.models.get_current_user", return_value=self.user)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.drawer = DrawerRegister.objects.create(
+            code="DRW", description="Drawer", estimated_documents=1
+        )
+        start = now() - timedelta(minutes=5)
+        end = now() + timedelta(minutes=5)
+        self.scanning = Scanning.objects.create(
+            drawer=self.drawer, user=self.user, start_time=start, end_time=end
+        )
+
+    def test_scanning_lookup_uses_creation_time(self):
+        incoming = Path(settings.MEDIA_ROOT) / "uploads" / "incoming"
+        incoming.mkdir(parents=True, exist_ok=True)
+        filename = "2025-09-09(1).png"
+        src = incoming / filename
+        src.write_bytes(b"data")
+        created = self.scanning.start_time + timedelta(minutes=1)
+        stat_result = SimpleNamespace(st_ctime=created.timestamp())
+        with patch("pathlib.Path.stat", return_value=stat_result):
+            process_file(src)
+        media = Media.objects.get(media_location=f"uploads/pending/{filename}")
+        self.assertEqual(media.scanning, self.scanning)
+        import shutil
+        shutil.rmtree(incoming.parent)
