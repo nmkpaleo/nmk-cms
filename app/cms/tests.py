@@ -1122,6 +1122,49 @@ class UploadScanViewTests(TestCase):
         shutil.rmtree(rejected.parent.parent)
 
 
+class OcrViewTests(TestCase):
+    """Tests for the OCR processing view and link."""
+
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username="cm", password="pass", is_staff=True)
+        Group.objects.create(name="Collection Managers").user_set.add(self.user)
+        self.url = reverse("admin-do-ocr")
+        patcher = patch("cms.models.get_current_user", return_value=self.user)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_login_required(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 302)
+
+    def test_admin_index_has_ocr_link(self):
+        self.client.login(username="cm", password="pass")
+        response = self.client.get(reverse("admin:index"))
+        self.assertContains(response, self.url)
+
+    @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
+    @patch("cms.ocr_processing.chatgpt_ocr", return_value={"foo": "bar"})
+    def test_ocr_moves_file_and_saves_json(self, mock_ocr, mock_detect):
+        self.client.login(username="cm", password="pass")
+        pending = Path(settings.MEDIA_ROOT) / "uploads" / "pending"
+        pending.mkdir(parents=True, exist_ok=True)
+        filename = "2025-01-01(1).png"
+        file_path = pending / filename
+        file_path.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename}")
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 302)
+        ocr_file = Path(settings.MEDIA_ROOT) / "uploads" / "ocr" / filename
+        self.assertTrue(ocr_file.exists())
+        media = Media.objects.get()
+        self.assertEqual(media.ocr_status, Media.OCRStatus.COMPLETED)
+        self.assertEqual(media.media_location.name, f"uploads/ocr/{filename}")
+        self.assertEqual(media.ocr_data["foo"], "bar")
+        import shutil
+        shutil.rmtree(pending.parent)
+
+
 class UploadProcessingTests(TestCase):
     """Tests for the file watcher processing logic."""
 
@@ -1147,7 +1190,7 @@ class UploadProcessingTests(TestCase):
         src = incoming / filename
         src.write_bytes(b"data")
         created = self.scanning.start_time + timedelta(minutes=1)
-        stat_result = SimpleNamespace(st_ctime=created.timestamp())
+        stat_result = SimpleNamespace(st_ctime=created.timestamp(), st_mode=0)
         with patch("pathlib.Path.stat", return_value=stat_result):
             process_file(src)
         media = Media.objects.get(media_location=f"uploads/pending/{filename}")
