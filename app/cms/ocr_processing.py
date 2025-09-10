@@ -6,6 +6,7 @@ import shutil
 import time
 import textwrap
 from pathlib import Path
+from typing import Any
 
 try:  # pragma: no cover - library may not be installed in tests
     from dotenv import load_dotenv
@@ -34,10 +35,28 @@ from .models import Media
 
 logger = logging.getLogger(__name__)
 
-# Load environment variables and initialize OpenAI client
-load_dotenv()
-api_key = os.getenv("OPENAI_API_KEY")
-client = OpenAI(api_key=api_key) if api_key and OpenAI else None
+
+def _load_env() -> None:
+    """Load environment variables from the project root .env file."""
+    env_path = Path(__file__).resolve().parents[2] / ".env"
+    load_dotenv(env_path)
+
+
+_client: Any = None
+
+
+def get_openai_client() -> Any:
+    """Return a configured OpenAI client or ``None`` if unavailable."""
+    global _client
+    if _client is not None:
+        return _client
+
+    _load_env()
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key or OpenAI is None:
+        return None
+    _client = OpenAI(api_key=api_key)
+    return _client
 
 
 def encode_image_to_base64(image_path: Path) -> str:
@@ -46,8 +65,11 @@ def encode_image_to_base64(image_path: Path) -> str:
 
 
 def detect_card_type(image_path: Path, model: str = "gpt-4o", timeout: int = 30, max_retries: int = 3) -> dict:
+    client = get_openai_client()
     if client is None:
-        raise RuntimeError("OpenAI client is not configured")
+        raise RuntimeError(
+            "OpenAI client is not configured. Ensure OPENAI_API_KEY is set and the openai package is installed."
+        )
 
     base64_image = encode_image_to_base64(image_path)
 
@@ -203,8 +225,11 @@ def chatgpt_ocr(
     timeout: int = 60,
     max_retries: int = 3,
 ) -> dict:
+    client = get_openai_client()
     if client is None:
-        raise RuntimeError("OpenAI client is not configured")
+        raise RuntimeError(
+            "OpenAI client is not configured. Ensure OPENAI_API_KEY is set and the openai package is installed."
+        )
 
     base64_image = encode_image_to_base64(image_path)
 
