@@ -120,7 +120,7 @@ JSON schema:
         {
           "reference_first_author": { "raw": string|null, "interpreted": string|null, "confidence": number},   // (e.g., "Harris, John M." from "John M. Harris and Meave G. Leakey (2003) \"Lothagam: The dawn of Humanity in Eastern Africa\" Pg 485-519")
           "reference_year": { "raw": integer|null, "interpreted": string|null, "confidence": number},          // (e.g., "2003" from "John M. Harris and Meave G. Leakey (2003) \"Lothagam: The dawn of Humanity in Eastern Africa\" Pg 485-519")
-          "reference_title": , { "raw": string|null, "interpreted": string|null, "confidence": number}         // (e.g., "Lothagam: The dawn of Humanity in Eastern Africa" from "John M. Harris and Meave G. Leakey (2003) \"Lothagam: The dawn of Humanity in Eastern Africa\" Pg 485-519")
+          "reference_title": { "raw": string|null, "interpreted": string|null, "confidence": number}         // (e.g., "Lothagam: The dawn of Humanity in Eastern Africa" from "John M. Harris and Meave G. Leakey (2003) \"Lothagam: The dawn of Humanity in Eastern Africa\" Pg 485-519")
           "page": { "raw": string|null, "interpreted": string|null, "confidence": number}                      // (e.g., "485-519" from "John M. Harris and Meave G. Leakey (2003) \"Lothagam: The dawn of Humanity in Eastern Africa\" Pg 485-519")
         }
       ],
@@ -136,7 +136,7 @@ JSON schema:
             "bed_or_horizon": { "raw": string|null, "interpreted": string|null, "confidence": number},         // bed/horizon/tuff layer as written (e.g., "above KBS tuff", "Gray tuff member")
             "chronostratigraphy": { "raw": string|null, "interpreted": string|null, "confidence": number}      // period/epoch/age/zone as written (e.g., "Met. andrewsi zone", "Zone C")
           }
-          "aerial_photo": { "raw": string|null, "interpreted": string|null, "confidence": number},             // Handwritten heading, e.g., "Photo \x1612/7", "Photo 0002"
+          "aerial_photo": { "raw": string|null, "interpreted": string|null, "confidence": number},             // Handwritten heading, e.g., "Photo 12/7", "Photo 0002"
           "verbatim_latitude": { "raw": string|null, "interpreted": string|null, "confidence": number},        // Handwritten, e.g., "Y4.9", "3°38'12 N"
           "verbatim_longitude": { "raw": string|null, "interpreted": string|null, "confidence": number},       // Handwritten, e.g., "X4.8", "36°25'30 E"
           "verbatim_elevation": { "raw": string|null, "interpreted": string|null, "confidence": number},       // Handwritten, e.g., "520 m"
