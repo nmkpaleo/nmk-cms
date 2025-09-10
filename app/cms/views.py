@@ -767,11 +767,12 @@ def upload_scan(request):
 @staff_member_required
 def do_ocr(request):
     """Process pending scans with OCR."""
-    successes, failures = process_pending_scans()
+    successes, failures, errors = process_pending_scans()
     if successes:
         messages.success(request, f"OCR succeeded for {successes} scans")
     if failures:
-        messages.error(request, f"OCR failed for {failures} scans")
+        detail = "; ".join(errors)
+        messages.error(request, f"OCR failed for {failures} scans: {detail}")
     return redirect('admin:index')
 
 @login_required

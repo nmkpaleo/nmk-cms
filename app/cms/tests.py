@@ -35,6 +35,7 @@ from cms.filters import DrawerRegisterFilter
 from cms.resources import DrawerRegisterResource, PlaceResource
 from tablib import Dataset
 from cms.upload_processing import process_file
+from cms.ocr_processing import process_pending_scans
 
 
 class GenerateAccessionsFromSeriesTests(TestCase):
@@ -1163,6 +1164,44 @@ class OcrViewTests(TestCase):
         self.assertEqual(media.ocr_data["foo"], "bar")
         import shutil
         shutil.rmtree(pending.parent)
+
+    @patch("cms.views.process_pending_scans", return_value=(0, 1, ["test.png: boom"]))
+    def test_do_ocr_shows_error_details(self, mock_process):
+        self.client.login(username="cm", password="pass")
+        response = self.client.get(self.url, follow=True)
+        self.assertContains(response, "OCR failed for 1 scans: test.png: boom")
+
+
+class ProcessPendingScansTests(TestCase):
+    def setUp(self):
+        import shutil
+
+        User = get_user_model()
+        self.user = User.objects.create_user(username="u", password="pass")
+        patcher = patch("cms.models.get_current_user", return_value=self.user)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.pending = Path(settings.MEDIA_ROOT) / "uploads" / "pending"
+        self.pending.mkdir(parents=True, exist_ok=True)
+        self.addCleanup(lambda: shutil.rmtree(self.pending.parent, ignore_errors=True))
+
+    @patch("cms.ocr_processing.detect_card_type", side_effect=Exception("boom"))
+    def test_failure_logs_and_records_error(self, mock_detect):
+        filename = "error.png"
+        file_path = self.pending / filename
+        file_path.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename}")
+        with self.assertLogs("cms.ocr_processing", level="ERROR") as cm:
+            successes, failures, errors = process_pending_scans()
+        self.assertEqual(successes, 0)
+        self.assertEqual(failures, 1)
+        self.assertTrue(any("boom" in e for e in errors))
+        self.assertTrue(any("boom" in m for m in cm.output))
+        media = Media.objects.get()
+        self.assertEqual(media.ocr_status, Media.OCRStatus.FAILED)
+        self.assertEqual(media.ocr_data["error"], "boom")
+        failed_file = Path(settings.MEDIA_ROOT) / "uploads" / "failed" / filename
+        self.assertTrue(failed_file.exists())
 
 
 class UploadProcessingTests(TestCase):

@@ -1,5 +1,6 @@
 import base64
 import json
+import logging
 import os
 import shutil
 import time
@@ -20,6 +21,9 @@ except ImportError:  # pragma: no cover
 from django.conf import settings
 
 from .models import Media
+
+
+logger = logging.getLogger(__name__)
 
 # Load environment variables and initialize OpenAI client
 load_dotenv()
@@ -246,10 +250,11 @@ class OCRCostEstimator:
         }
 
 
-def process_pending_scans(limit: int = 100) -> tuple[int, int]:
+def process_pending_scans(limit: int = 100) -> tuple[int, int, list[str]]:
     """Process up to ``limit`` scans awaiting OCR.
 
-    Returns a tuple of ``(successes, failures)``.
+    Returns a tuple of ``(successes, failures, errors)`` where ``errors`` is a
+    list of error descriptions for failed scans.
     """
 
     pending = Path(settings.MEDIA_ROOT) / "uploads" / "pending"
@@ -260,6 +265,7 @@ def process_pending_scans(limit: int = 100) -> tuple[int, int]:
     estimator = OCRCostEstimator()
     successes = 0
     failures = 0
+    errors: list[str] = []
 
     for path in files:
         relative = str(path.relative_to(settings.MEDIA_ROOT))
@@ -281,12 +287,16 @@ def process_pending_scans(limit: int = 100) -> tuple[int, int]:
             media.ocr_status = Media.OCRStatus.COMPLETED
             media.save()
             successes += 1
-        except Exception:
+        except Exception as exc:
             failures += 1
+            error_msg = f"{path.name}: {exc}"
+            errors.append(error_msg)
+            logger.exception("OCR processing failed for %s", path)
             failed_dir.mkdir(parents=True, exist_ok=True)
             shutil.move(path, failed_dir / path.name)
             media.ocr_status = Media.OCRStatus.FAILED
+            media.ocr_data = {"error": str(exc)}
             media.save()
 
-    return successes, failures
+    return successes, failures, errors
 
