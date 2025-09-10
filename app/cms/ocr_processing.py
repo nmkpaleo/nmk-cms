@@ -9,9 +9,18 @@ from pathlib import Path
 
 try:  # pragma: no cover - library may not be installed in tests
     from dotenv import load_dotenv
-except ImportError:  # pragma: no cover
-    def load_dotenv():
-        return None
+except Exception:  # pragma: no cover
+    def load_dotenv(dotenv_path: str | Path | None = None) -> None:
+        """Minimal .env loader used when python-dotenv isn't installed."""
+        dotenv_path = Path(dotenv_path) if dotenv_path else Path(__file__).resolve().parents[2] / ".env"
+        if not dotenv_path.exists():
+            return
+        for line in dotenv_path.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            os.environ.setdefault(key.strip(), value.strip())
 
 try:  # pragma: no cover - library may not be installed in tests
     from openai import OpenAI
