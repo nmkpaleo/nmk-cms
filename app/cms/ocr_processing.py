@@ -284,11 +284,12 @@ class OCRCostEstimator:
         }
 
 
-def process_pending_scans(limit: int = 100) -> tuple[int, int, list[str]]:
+def process_pending_scans(limit: int = 100) -> tuple[int, int, int, list[str]]:
     """Process up to ``limit`` scans awaiting OCR.
 
-    Returns a tuple of ``(successes, failures, errors)`` where ``errors`` is a
-    list of error descriptions for failed scans.
+    Returns a tuple of ``(successes, failures, total, errors)`` where ``total``
+    is the number of scans considered and ``errors`` is a list of error
+    descriptions for failed scans.
     """
 
     pending = Path(settings.MEDIA_ROOT) / "uploads" / "pending"
@@ -296,6 +297,7 @@ def process_pending_scans(limit: int = 100) -> tuple[int, int, list[str]]:
     failed_dir = Path(settings.MEDIA_ROOT) / "uploads" / "failed"
 
     files = sorted(pending.glob("*"))[:limit]
+    total = len(files)
     estimator = OCRCostEstimator()
     successes = 0
     failures = 0
@@ -332,5 +334,5 @@ def process_pending_scans(limit: int = 100) -> tuple[int, int, list[str]]:
             media.ocr_data = {"error": str(exc)}
             media.save()
 
-    return successes, failures, errors
+    return successes, failures, total, errors
 

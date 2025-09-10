@@ -1165,11 +1165,18 @@ class OcrViewTests(TestCase):
         import shutil
         shutil.rmtree(pending.parent)
 
-    @patch("cms.views.process_pending_scans", return_value=(0, 1, ["test.png: boom"]))
+    @patch("cms.views.process_pending_scans", return_value=(0, 1, 1, ["test.png: boom"]))
     def test_do_ocr_shows_error_details(self, mock_process):
         self.client.login(username="cm", password="pass")
         response = self.client.get(self.url, follow=True)
+        self.assertContains(response, "0/1 scans OCR&#x27;d")
         self.assertContains(response, "OCR failed for 1 scans: test.png: boom")
+
+    @patch("cms.views.process_pending_scans", return_value=(3, 0, 5, []))
+    def test_do_ocr_reports_progress(self, mock_process):
+        self.client.login(username="cm", password="pass")
+        response = self.client.get(self.url, follow=True)
+        self.assertContains(response, "3/5 scans OCR&#x27;d")
 
 
 class ProcessPendingScansTests(TestCase):
@@ -1192,9 +1199,10 @@ class ProcessPendingScansTests(TestCase):
         file_path.write_bytes(b"data")
         Media.objects.create(media_location=f"uploads/pending/{filename}")
         with self.assertLogs("cms.ocr_processing", level="ERROR") as cm:
-            successes, failures, errors = process_pending_scans()
+            successes, failures, total, errors = process_pending_scans()
         self.assertEqual(successes, 0)
         self.assertEqual(failures, 1)
+        self.assertEqual(total, 1)
         self.assertTrue(any("boom" in e for e in errors))
         self.assertTrue(any("boom" in m for m in cm.output))
         media = Media.objects.get()
