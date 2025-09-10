@@ -798,6 +798,12 @@ class Media(BaseModel):
                                ,default='CC0'  # Default to public domain
                                , help_text="License information for the media file")
     rights_holder = models.CharField(max_length=255, null=True, blank=True, help_text="The individual or organization holding rights to the media")
+    class OCRStatus(models.TextChoices):
+        PENDING = "pending", "Pending"
+        COMPLETED = "completed", "Completed"
+        FAILED = "failed", "Failed"
+    ocr_data = models.JSONField(null=True, blank=True, help_text="OCR extracted data")
+    ocr_status = models.CharField(max_length=20, choices=OCRStatus.choices, default=OCRStatus.PENDING, help_text="Status of OCR processing")
     history = HistoricalRecords()
 
     def save(self, *args, **kwargs):

@@ -307,6 +307,11 @@ class MediaAdmin(HistoricalImportExportAdmin):
         'rights_holder',
         'scanning__drawer__code',
     )
+    autocomplete_fields = [
+        'accession',
+        'accession_row',
+        'scanning',
+    ]
     list_filter = ('type', 'format')
     ordering = ('file_name',)
 
@@ -515,6 +520,7 @@ class DrawerRegisterAdmin(HistoricalImportExportAdmin):
 class ScanningAdmin(admin.ModelAdmin):
     list_display = ("drawer", "user", "start_time", "end_time")
     list_filter = ("user", "drawer")
+    search_fields = ("drawer__code", "user__username")
 
 # ----------------------------------------------------------------------
 # Flat file import integration

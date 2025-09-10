@@ -84,6 +84,7 @@ from cms.resources import FieldSlipResource
 from .utils import build_history_entries
 from cms.utils import generate_accessions_from_series
 from cms.upload_processing import process_file
+from cms.ocr_processing import process_pending_scans
 from formtools.wizard.views import SessionWizardView
 
 class FieldSlipAutocomplete(autocomplete.Select2QuerySetView):
@@ -761,6 +762,17 @@ def upload_scan(request):
         form = ScanUploadForm()
 
     return render(request, 'admin/upload_scan.html', {'form': form})
+
+
+@staff_member_required
+def do_ocr(request):
+    """Process pending scans with OCR."""
+    successes, failures, total, errors = process_pending_scans()
+    messages.info(request, f"{successes}/{total} scans OCR'd")
+    if failures:
+        detail = "; ".join(errors)
+        messages.error(request, f"OCR failed for {failures} scans: {detail}")
+    return redirect('admin:index')
 
 @login_required
 @user_passes_test(is_collection_manager)

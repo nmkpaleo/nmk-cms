@@ -35,6 +35,7 @@ from cms.filters import DrawerRegisterFilter
 from cms.resources import DrawerRegisterResource, PlaceResource
 from tablib import Dataset
 from cms.upload_processing import process_file
+from cms.ocr_processing import process_pending_scans
 
 
 class GenerateAccessionsFromSeriesTests(TestCase):
@@ -1122,6 +1123,95 @@ class UploadScanViewTests(TestCase):
         shutil.rmtree(rejected.parent.parent)
 
 
+class OcrViewTests(TestCase):
+    """Tests for the OCR processing view and link."""
+
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username="cm", password="pass", is_staff=True)
+        Group.objects.create(name="Collection Managers").user_set.add(self.user)
+        self.url = reverse("admin-do-ocr")
+        patcher = patch("cms.models.get_current_user", return_value=self.user)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_login_required(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 302)
+
+    def test_admin_index_has_ocr_link(self):
+        self.client.login(username="cm", password="pass")
+        response = self.client.get(reverse("admin:index"))
+        self.assertContains(response, self.url)
+
+    @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
+    @patch("cms.ocr_processing.chatgpt_ocr", return_value={"foo": "bar"})
+    def test_ocr_moves_file_and_saves_json(self, mock_ocr, mock_detect):
+        self.client.login(username="cm", password="pass")
+        pending = Path(settings.MEDIA_ROOT) / "uploads" / "pending"
+        pending.mkdir(parents=True, exist_ok=True)
+        filename = "2025-01-01(1).png"
+        file_path = pending / filename
+        file_path.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename}")
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 302)
+        ocr_file = Path(settings.MEDIA_ROOT) / "uploads" / "ocr" / filename
+        self.assertTrue(ocr_file.exists())
+        media = Media.objects.get()
+        self.assertEqual(media.ocr_status, Media.OCRStatus.COMPLETED)
+        self.assertEqual(media.media_location.name, f"uploads/ocr/{filename}")
+        self.assertEqual(media.ocr_data["foo"], "bar")
+        import shutil
+        shutil.rmtree(pending.parent)
+
+    @patch("cms.views.process_pending_scans", return_value=(0, 1, 1, ["test.png: boom"]))
+    def test_do_ocr_shows_error_details(self, mock_process):
+        self.client.login(username="cm", password="pass")
+        response = self.client.get(self.url, follow=True)
+        self.assertContains(response, "0/1 scans OCR&#x27;d")
+        self.assertContains(response, "OCR failed for 1 scans: test.png: boom")
+
+    @patch("cms.views.process_pending_scans", return_value=(3, 0, 5, []))
+    def test_do_ocr_reports_progress(self, mock_process):
+        self.client.login(username="cm", password="pass")
+        response = self.client.get(self.url, follow=True)
+        self.assertContains(response, "3/5 scans OCR&#x27;d")
+
+
+class ProcessPendingScansTests(TestCase):
+    def setUp(self):
+        import shutil
+
+        User = get_user_model()
+        self.user = User.objects.create_user(username="u", password="pass")
+        patcher = patch("cms.models.get_current_user", return_value=self.user)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.pending = Path(settings.MEDIA_ROOT) / "uploads" / "pending"
+        self.pending.mkdir(parents=True, exist_ok=True)
+        self.addCleanup(lambda: shutil.rmtree(self.pending.parent, ignore_errors=True))
+
+    @patch("cms.ocr_processing.detect_card_type", side_effect=Exception("boom"))
+    def test_failure_logs_and_records_error(self, mock_detect):
+        filename = "error.png"
+        file_path = self.pending / filename
+        file_path.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename}")
+        with self.assertLogs("cms.ocr_processing", level="ERROR") as cm:
+            successes, failures, total, errors = process_pending_scans()
+        self.assertEqual(successes, 0)
+        self.assertEqual(failures, 1)
+        self.assertEqual(total, 1)
+        self.assertTrue(any("boom" in e for e in errors))
+        self.assertTrue(any("boom" in m for m in cm.output))
+        media = Media.objects.get()
+        self.assertEqual(media.ocr_status, Media.OCRStatus.FAILED)
+        self.assertEqual(media.ocr_data["error"], "boom")
+        failed_file = Path(settings.MEDIA_ROOT) / "uploads" / "failed" / filename
+        self.assertTrue(failed_file.exists())
+
+
 class UploadProcessingTests(TestCase):
     """Tests for the file watcher processing logic."""
 
@@ -1147,10 +1237,54 @@ class UploadProcessingTests(TestCase):
         src = incoming / filename
         src.write_bytes(b"data")
         created = self.scanning.start_time + timedelta(minutes=1)
-        stat_result = SimpleNamespace(st_ctime=created.timestamp())
+        stat_result = SimpleNamespace(st_ctime=created.timestamp(), st_mode=0)
         with patch("pathlib.Path.stat", return_value=stat_result):
             process_file(src)
         media = Media.objects.get(media_location=f"uploads/pending/{filename}")
         self.assertEqual(media.scanning, self.scanning)
         import shutil
         shutil.rmtree(incoming.parent)
+
+
+class MediaFileDeletionTests(TestCase):
+    """Ensure deleting a Media record removes its file from disk."""
+
+    def setUp(self):
+        import shutil
+
+        User = get_user_model()
+        self.user = User.objects.create_user(username="deleter", password="pass")
+        patcher = patch("cms.models.get_current_user", return_value=self.user)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.uploads = Path(settings.MEDIA_ROOT) / "uploads"
+        self.uploads.mkdir(parents=True, exist_ok=True)
+        self.addCleanup(lambda: shutil.rmtree(self.uploads, ignore_errors=True))
+
+    def test_file_removed_on_delete(self):
+        file_path = self.uploads / "deleteme.png"
+        file_path.write_bytes(b"data")
+        media = Media.objects.create(media_location="uploads/deleteme.png")
+        self.assertTrue(file_path.exists())
+        media.delete()
+        self.assertFalse(file_path.exists())
+
+
+class AdminAutocompleteTests(TestCase):
+    """Ensure admin uses select2 autocomplete for heavy foreign keys."""
+
+    def test_media_admin_autocomplete_fields(self):
+        from django.contrib.admin.sites import site
+
+        media_admin = site._registry[Media]
+        self.assertEqual(
+            list(media_admin.autocomplete_fields),
+            ["accession", "accession_row", "scanning"],
+        )
+
+    def test_scanning_admin_search_fields(self):
+        from django.contrib.admin.sites import site
+
+        scanning_admin = site._registry[Scanning]
+        self.assertIn("drawer__code", scanning_admin.search_fields)
+        self.assertIn("user__username", scanning_admin.search_fields)
