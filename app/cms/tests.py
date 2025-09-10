@@ -1244,3 +1244,23 @@ class UploadProcessingTests(TestCase):
         self.assertEqual(media.scanning, self.scanning)
         import shutil
         shutil.rmtree(incoming.parent)
+
+
+class AdminAutocompleteTests(TestCase):
+    """Ensure admin uses select2 autocomplete for heavy foreign keys."""
+
+    def test_media_admin_autocomplete_fields(self):
+        from django.contrib.admin.sites import site
+
+        media_admin = site._registry[Media]
+        self.assertEqual(
+            list(media_admin.autocomplete_fields),
+            ["accession", "accession_row", "scanning"],
+        )
+
+    def test_scanning_admin_search_fields(self):
+        from django.contrib.admin.sites import site
+
+        scanning_admin = site._registry[Scanning]
+        self.assertIn("drawer__code", scanning_admin.search_fields)
+        self.assertIn("user__username", scanning_admin.search_fields)
