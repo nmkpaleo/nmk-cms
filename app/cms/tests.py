@@ -30,6 +30,8 @@ from cms.models import (
     Taxon,
     Reference,
     AccessionReference,
+    FieldSlip,
+    AccessionFieldSlip,
 )
 from cms.utils import generate_accessions_from_series
 from cms.forms import DrawerRegisterForm
@@ -1409,6 +1411,101 @@ class ProcessPendingScansTests(TestCase):
         self.assertEqual(latest.instance_number, 2)
         media = Media.objects.get()
         self.assertEqual(media.accession, latest)
+
+    @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
+    @patch(
+        "cms.ocr_processing.chatgpt_ocr",
+        return_value={
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 123},
+                    "type_status": {"interpreted": "Holotype"},
+                    "publiched": {"interpreted": "Yes"},
+                    "field_slips": [
+                        {
+                            "field_number": {"interpreted": "FS-1"},
+                            "verbatim_locality": {"interpreted": "Loc1"},
+                            "verbatim_taxon": {"interpreted": "Homo"},
+                            "verbatim_element": {"interpreted": "Femur"},
+                            "verbatim_horizon": {
+                                "formation": {"interpreted": "Form"},
+                                "member": {"interpreted": "Member"},
+                                "bed_or_horizon": {"interpreted": "Bed"},
+                                "chronostratigraphy": {"interpreted": None},
+                            },
+                            "aerial_photo": {"interpreted": "P1"},
+                            "verbatim_latitude": {"interpreted": "Lat"},
+                            "verbatim_longitude": {"interpreted": "Lon"},
+                            "verbatim_elevation": {"interpreted": "100"},
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+    def test_creates_field_slip_and_links(self, mock_ocr, mock_detect):
+        Collection.objects.create(abbreviation="KNM", description="Kenya")
+        filename = "acc_fs.png"
+        file_path = self.pending / filename
+        file_path.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename}")
+        process_pending_scans()
+        accession = Accession.objects.get()
+        field_slip = FieldSlip.objects.get()
+        link = AccessionFieldSlip.objects.get()
+        self.assertEqual(link.accession, accession)
+        self.assertEqual(link.fieldslip, field_slip)
+        self.assertEqual(field_slip.field_number, "FS-1")
+        self.assertEqual(field_slip.verbatim_locality, "Loc1")
+        self.assertEqual(field_slip.verbatim_taxon, "Homo")
+        self.assertEqual(field_slip.verbatim_element, "Femur")
+        self.assertEqual(field_slip.verbatim_horizon, "Form | Member | Bed")
+        self.assertEqual(field_slip.aerial_photo, "P1")
+        self.assertEqual(field_slip.verbatim_latitude, "Lat")
+        self.assertEqual(field_slip.verbatim_longitude, "Lon")
+        self.assertEqual(field_slip.verbatim_elevation, "100")
+
+    @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
+    @patch(
+        "cms.ocr_processing.chatgpt_ocr",
+        return_value={
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 123},
+                    "type_status": {"interpreted": "Holotype"},
+                    "publiched": {"interpreted": "Yes"},
+                    "field_slips": [
+                        {
+                            "field_number": {"interpreted": "FS-1"},
+                            "verbatim_locality": {"interpreted": "Loc1"},
+                            "verbatim_taxon": {"interpreted": "Homo"},
+                            "verbatim_element": {"interpreted": "Femur"},
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+    def test_reuses_existing_field_slip(self, mock_ocr, mock_detect):
+        Collection.objects.create(abbreviation="KNM", description="Kenya")
+        existing = FieldSlip.objects.create(
+            field_number="FS-1",
+            verbatim_locality="Loc1",
+            verbatim_taxon="Homo",
+            verbatim_element="Femur",
+        )
+        filename = "acc_fs2.png"
+        file_path = self.pending / filename
+        file_path.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename}")
+        process_pending_scans()
+        self.assertEqual(FieldSlip.objects.count(), 1)
+        link = AccessionFieldSlip.objects.get()
+        self.assertEqual(link.fieldslip, existing)
 
 
 class UploadProcessingTests(TestCase):

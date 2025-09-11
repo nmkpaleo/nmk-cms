@@ -37,6 +37,8 @@ from .models import (
     Locality,
     Reference,
     AccessionReference,
+    FieldSlip,
+    AccessionFieldSlip,
 )
 
 
@@ -398,6 +400,54 @@ def create_accessions_from_media(media: Media) -> None:
                 accession=accession,
                 reference=reference_obj,
                 defaults={"page": page},
+            )
+
+        field_slips = entry.get("field_slips") or []
+        for slip in field_slips:
+            field_number = (slip.get("field_number") or {}).get("interpreted")
+            verb_locality = (slip.get("verbatim_locality") or {}).get("interpreted")
+            verb_taxon = (slip.get("verbatim_taxon") or {}).get("interpreted")
+            if not (field_number and verb_taxon):
+                continue
+
+            field_slip_obj = FieldSlip.objects.filter(
+                field_number=field_number,
+                verbatim_locality=verb_locality,
+                verbatim_taxon=verb_taxon,
+            ).first()
+
+            if not field_slip_obj:
+                verb_element = (slip.get("verbatim_element") or {}).get("interpreted")
+                if not verb_element:
+                    continue
+
+                horizon_data = slip.get("verbatim_horizon") or {}
+                horizon_parts: list[str] = []
+                for key in (
+                    "formation",
+                    "member",
+                    "bed_or_horizon",
+                    "chronostratigraphy",
+                ):
+                    val = (horizon_data.get(key) or {}).get("interpreted")
+                    if val:
+                        horizon_parts.append(str(val))
+                horizon = " | ".join(horizon_parts) if horizon_parts else None
+
+                field_slip_obj = FieldSlip.objects.create(
+                    field_number=field_number,
+                    verbatim_locality=verb_locality,
+                    verbatim_taxon=verb_taxon,
+                    verbatim_element=verb_element,
+                    verbatim_horizon=horizon,
+                    aerial_photo=(slip.get("aerial_photo") or {}).get("interpreted"),
+                    verbatim_latitude=(slip.get("verbatim_latitude") or {}).get("interpreted"),
+                    verbatim_longitude=(slip.get("verbatim_longitude") or {}).get("interpreted"),
+                    verbatim_elevation=(slip.get("verbatim_elevation") or {}).get("interpreted"),
+                )
+
+            AccessionFieldSlip.objects.get_or_create(
+                accession=accession, fieldslip=field_slip_obj
             )
         if first_accession is None:
             first_accession = accession
