@@ -6,7 +6,7 @@ import shutil
 import time
 import textwrap
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 try:  # pragma: no cover - library may not be installed in tests
     from dotenv import load_dotenv
@@ -30,7 +30,7 @@ except ImportError:  # pragma: no cover
 
 from django.conf import settings
 
-from .models import Media
+from .models import Media, Accession, Collection, Locality
 
 
 logger = logging.getLogger(__name__)
@@ -286,6 +286,89 @@ class OCRCostEstimator:
         }
 
 
+def create_accessions_from_media(media: Media) -> None:
+    """Create :class:`Accession` objects from a media's OCR data.
+
+    If ``media.ocr_data`` contains accessions and the detected ``card_type``
+    is ``accession_card``, the data is used to create one or more
+    :class:`Accession` records. The first created accession is linked back to
+    the ``media`` instance via ``media.accession``.
+
+    This function is intentionally forgiving—missing or malformed fields in the
+    OCR data simply result in the accession being skipped.
+    """
+
+    data = media.ocr_data or {}
+    if data.get("card_type") != "accession_card":
+        return
+
+    accessions = data.get("accessions") or []
+    first_accession: Optional[Accession] = None
+    for entry in accessions:
+        coll_abbr = (entry.get("collection_abbreviation") or {}).get("interpreted") or "KNM"
+        collection = Collection.objects.filter(abbreviation=coll_abbr).first()
+        if not collection:
+            collection = Collection.objects.filter(abbreviation="KNM").first()
+        if not collection:
+            continue
+
+        prefix_abbr = (entry.get("specimen_prefix_abbreviation") or {}).get("interpreted")
+        if not prefix_abbr:
+            continue
+        specimen_prefix = Locality.objects.filter(abbreviation=prefix_abbr).first()
+        if not specimen_prefix:
+            specimen_prefix = Locality.objects.create(
+                abbreviation=prefix_abbr,
+                name=f"Temporary Locality {prefix_abbr}",
+            )
+
+        specimen_no = (entry.get("specimen_no") or {}).get("interpreted")
+        if specimen_no is None:
+            continue
+
+        existing = (
+            Accession.objects.filter(
+                collection=collection,
+                specimen_prefix=specimen_prefix,
+                specimen_no=specimen_no,
+            )
+            .order_by("-instance_number")
+            .first()
+        )
+        next_instance = existing.instance_number + 1 if existing else 1
+
+        type_status = (entry.get("type_status") or {}).get("interpreted")
+        published_val = (entry.get("publiched") or {}).get("interpreted")
+        is_published = str(published_val).strip().lower() in {"yes", "true", "1"}
+
+        notes = entry.get("additional_notes") or []
+        comment_parts: list[str] = []
+        for note in notes:
+            heading = (note.get("heading") or {}).get("interpreted")
+            value = (note.get("value") or {}).get("interpreted")
+            if heading and value:
+                comment_parts.append(f"{heading}: {value}")
+            elif value:
+                comment_parts.append(str(value))
+        comment = "\n".join(comment_parts) if comment_parts else None
+
+        accession = Accession.objects.create(
+            collection=collection,
+            specimen_prefix=specimen_prefix,
+            specimen_no=specimen_no,
+            instance_number=next_instance,
+            type_status=type_status,
+            is_published=is_published,
+            comment=comment,
+        )
+        if first_accession is None:
+            first_accession = accession
+
+    if first_accession:
+        media.accession = first_accession
+        media.save(update_fields=["accession"])
+
+
 def process_pending_scans(limit: int = 100) -> tuple[int, int, int, list[str]]:
     """Process up to ``limit`` scans awaiting OCR.
 
@@ -324,6 +407,7 @@ def process_pending_scans(limit: int = 100) -> tuple[int, int, int, list[str]]:
             media.media_location.name = str(dest.relative_to(settings.MEDIA_ROOT))
             media.ocr_status = Media.OCRStatus.COMPLETED
             media.save()
+            create_accessions_from_media(media)
             successes += 1
         except Exception as exc:
             failures += 1

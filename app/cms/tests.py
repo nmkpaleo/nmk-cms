@@ -1212,6 +1212,78 @@ class ProcessPendingScansTests(TestCase):
         failed_file = Path(settings.MEDIA_ROOT) / "uploads" / "failed" / filename
         self.assertTrue(failed_file.exists())
 
+    @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
+    @patch(
+        "cms.ocr_processing.chatgpt_ocr",
+        return_value={
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 123},
+                    "type_status": {"interpreted": "Holotype"},
+                    "publiched": {"interpreted": "Yes"},
+                    "additional_notes": [
+                        {
+                            "heading": {"interpreted": "Note"},
+                            "value": {"interpreted": "something"},
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+    def test_creates_accession_and_links_media(self, mock_ocr, mock_detect):
+        Collection.objects.create(abbreviation="KNM", description="Kenya")
+        filename = "acc.png"
+        file_path = self.pending / filename
+        file_path.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename}")
+        successes, failures, total, errors = process_pending_scans()
+        self.assertEqual((successes, failures, total), (1, 0, 1))
+        accession = Accession.objects.get()
+        self.assertEqual(accession.collection.abbreviation, "KNM")
+        self.assertEqual(accession.specimen_prefix.abbreviation, "AB")
+        self.assertEqual(accession.specimen_no, 123)
+        self.assertEqual(accession.instance_number, 1)
+        self.assertEqual(accession.type_status, "Holotype")
+        self.assertTrue(accession.is_published)
+        self.assertIn("Note: something", accession.comment)
+        media = Media.objects.get()
+        self.assertEqual(media.accession, accession)
+
+    @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
+    @patch(
+        "cms.ocr_processing.chatgpt_ocr",
+        return_value={
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 123},
+                    "type_status": {"interpreted": "Type"},
+                    "publiched": {"interpreted": "No"},
+                    "additional_notes": [],
+                }
+            ]
+        },
+    )
+    def test_existing_accession_creates_new_instance(self, mock_ocr, mock_detect):
+        collection = Collection.objects.create(abbreviation="KNM", description="Kenya")
+        locality = Locality.objects.create(abbreviation="AB", name="Existing")
+        Accession.objects.create(collection=collection, specimen_prefix=locality, specimen_no=123)
+        filename = "acc2.png"
+        file_path = self.pending / filename
+        file_path.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename}")
+        successes, failures, total, errors = process_pending_scans()
+        self.assertEqual((successes, failures, total), (1, 0, 1))
+        self.assertEqual(Accession.objects.count(), 2)
+        latest = Accession.objects.order_by("-id").first()
+        self.assertEqual(latest.instance_number, 2)
+        media = Media.objects.get()
+        self.assertEqual(media.accession, latest)
+
 
 class UploadProcessingTests(TestCase):
     """Tests for the file watcher processing logic."""
