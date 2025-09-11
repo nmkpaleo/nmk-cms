@@ -28,6 +28,8 @@ from cms.models import (
     Scanning,
     Media,
     Taxon,
+    Reference,
+    AccessionReference,
 )
 from cms.utils import generate_accessions_from_series
 from cms.forms import DrawerRegisterForm
@@ -1229,6 +1231,14 @@ class ProcessPendingScansTests(TestCase):
                             "value": {"interpreted": "something"},
                         }
                     ],
+                    "references": [
+                        {
+                            "reference_first_author": {"interpreted": "Harris"},
+                            "reference_title": {"interpreted": "Lothagam"},
+                            "reference_year": {"interpreted": "2003"},
+                            "page": {"interpreted": "485-519"},
+                        }
+                    ],
                 }
             ]
         },
@@ -1249,8 +1259,60 @@ class ProcessPendingScansTests(TestCase):
         self.assertEqual(accession.type_status, "Holotype")
         self.assertTrue(accession.is_published)
         self.assertIn("Note: something", accession.comment)
+        reference = Reference.objects.get()
+        self.assertEqual(reference.first_author, "Harris")
+        self.assertEqual(reference.title, "Lothagam")
+        self.assertEqual(reference.year, "2003")
+        self.assertEqual(reference.citation, "Harris (2003) Lothagam")
+        link = AccessionReference.objects.get()
+        self.assertEqual(link.accession, accession)
+        self.assertEqual(link.reference, reference)
+        self.assertEqual(link.page, "485-519")
         media = Media.objects.get()
         self.assertEqual(media.accession, accession)
+
+    @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
+    @patch(
+        "cms.ocr_processing.chatgpt_ocr",
+        return_value={
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 123},
+                    "type_status": {"interpreted": "Holotype"},
+                    "publiched": {"interpreted": "Yes"},
+                    "references": [
+                        {
+                            "reference_first_author": {"interpreted": "Harris"},
+                            "reference_title": {"interpreted": "Lothagam"},
+                            "reference_year": {"interpreted": "2003"},
+                            "page": {"interpreted": "500"},
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+    def test_reuses_existing_reference(self, mock_ocr, mock_detect):
+        Collection.objects.create(abbreviation="KNM", description="Kenya")
+        reference = Reference.objects.create(
+            first_author="Harris",
+            title="Lothagam",
+            year="2003",
+            citation="Harris (2003) Lothagam",
+        )
+        filename = "acc_ref.png"
+        file_path = self.pending / filename
+        file_path.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename}")
+        process_pending_scans()
+        self.assertEqual(Reference.objects.count(), 1)
+        accession = Accession.objects.get()
+        link = AccessionReference.objects.get()
+        self.assertEqual(link.accession, accession)
+        self.assertEqual(link.reference, reference)
+        self.assertEqual(link.page, "500")
 
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch(

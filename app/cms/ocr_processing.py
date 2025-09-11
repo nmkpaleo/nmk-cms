@@ -30,7 +30,14 @@ except ImportError:  # pragma: no cover
 
 from django.conf import settings
 
-from .models import Media, Accession, Collection, Locality
+from .models import (
+    Media,
+    Accession,
+    Collection,
+    Locality,
+    Reference,
+    AccessionReference,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -361,6 +368,35 @@ def create_accessions_from_media(media: Media) -> None:
             is_published=is_published,
             comment=comment,
         )
+
+        references = entry.get("references") or []
+        for ref in references:
+            first_author = (ref.get("reference_first_author") or {}).get("interpreted")
+            title = (ref.get("reference_title") or {}).get("interpreted")
+            year = (ref.get("reference_year") or {}).get("interpreted")
+            if not (first_author and title and year):
+                continue
+            year_str = str(year)
+            reference_obj = (
+                Reference.objects.filter(
+                    first_author=first_author, title=title, year=year_str
+                ).first()
+            )
+            if not reference_obj:
+                citation = f"{first_author} ({year_str}) {title}"
+                reference_obj = Reference.objects.create(
+                    first_author=first_author,
+                    title=title,
+                    year=year_str,
+                    citation=citation,
+                )
+            page_val = (ref.get("page") or {}).get("interpreted")
+            page = str(page_val) if page_val is not None else None
+            AccessionReference.objects.update_or_create(
+                accession=accession,
+                reference=reference_obj,
+                defaults={"page": page},
+            )
         if first_accession is None:
             first_accession = accession
 
