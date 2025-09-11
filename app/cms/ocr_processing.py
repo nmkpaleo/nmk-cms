@@ -117,10 +117,12 @@ def build_prompt_for_card_type(card_type: str) -> str:
         return textwrap.dedent(
             """You are an expert OCR transcriber for handwritten museum specimen cards. The card is two-sided. The upper part is the frontside and the lower part is the backside. Read the card carefully and return ONLY a single valid JSON object (UTF-8, no trailing commas). For each field:
 - "raw": the exact transcription as written (preserve all formatting, spacing, punctuation, diacritics, abbreviations). Do NOT normalize, guess, or correct.
-- "interpreted": a normalized or searchable interpretation based on text only (e.g., standard taxon name, le=left or rt=right side, Fm=formation, Mbr=member).
+- "interpreted": a normalized or searchable interpretation based on text only (e.g., standard taxon name, lt.=left or rt.=right side, Fm=formation, Mbr=member).
 - "confidence": a number from 0.0 to 1.0 estimating how confident you are in the accuracy of the "interpreted" value.
 
 If a field is missing, set all 3 keys (`raw`, `interpreted`, `confidence`) to null. If multiple values exist for a field, use an array of objects. Use "uncertain_fields" to list any key paths that were difficult to read or ambiguous.
+
+Return ONLY the JSON object in this format:
 
 JSON schema:
 
@@ -132,7 +134,7 @@ JSON schema:
       "specimen_no": { "raw": integer|null, "interpreted": integer|null, "confidence": number},                // Third part of the Accession, full numeric part as written, (e.g., "1234")
       "type_status": { "raw": string|null, "interpreted": string|null, "confidence": number},                  // Usually handwritten with red (e.g., "Type", "Holotype),
       "publiched":  { "raw": string|null, "interpreted": string|null, "confidence": number},                   // is there a red forward slash on the top left corner of the card? Yes or No.
-      "additional_notes": [                                                                                    // all additional extracted data from OCRa
+      "additional_notes": [                                                                                    // all additional extracted data from OCR
         {
           "heading": { "raw": string|null, "interpreted": string|null, "confidence": number},                  // interpreted heading of an additional note based on the value
           "value": { "raw": string|null, "interpreted": string|null, "confidence": number},                    // the OCR:d data value
@@ -151,7 +153,7 @@ JSON schema:
           "field_number": { "raw": string|null, "interpreted": string|null, "confidence": number}              // field/collector number as written (e.g., "FS. 1035 ER. 75", "95 ER 3707", "AB 357 '95")
           "verbatim_locality": { "raw": string|null, "interpreted": string|null, "confidence": number}         // Concatenate "locality", "site", "region" etc., with a pipe "|" as written (do not infer from specimen_prefix_abbreviation, e.g. "E. Rudolf | Area 102"
           "verbatim_taxon": { "raw": string|null, "interpreted": string|null, "confidence": number}            // use identifications.verbatim_identification
-          "verbatim_element": { "raw": string|null, "interpreted": string|null, "confidence": number}          // use natures.verbatim_element raw value
+          "verbatim_element": { "raw": string|null, "interpreted": string|null, "confidence": number}          // Usually found at "Nature of Specimen". Use raw values only. Specific bone or tooth label as written (e.g., "femur", "M1", "A: R C female B: 4 skull frags").
           "verbatim_horizon": {
             "formation": { "raw": string|null, "interpreted": string|null, "confidence": number},              // formation name as written (e.g., "Koobi Fora Formation", "Koobi Fora Fm")
             "member": { "raw": string|null, "interpreted": string|null, "confidence": number},                 // member name as written (e.g., "4m below Moiti", "Okote member")
@@ -166,7 +168,7 @@ JSON schema:
       ],
   "identifications": [
 {
-  "taxon": { "raw": string|null, "interpreted": string|null, "confidence": number},                 // interpret from the verbatim_identification, use the lowest identifiable taxon level without any qualifiers (e.g., use "Homo habilis" instead of "Homo" instead of "PRIMATES"
+  "taxon": { "raw": string|null, "interpreted": string|null, "confidence": number},                 // interpret from the verbatim_identification, use the lowest identifiable taxon level without any qualifiers (e.g., use "Homo habilis" instead of "Homo" instead of "PRIMATES". If the lowest level is species use Genus +" "+ Species combination.
   "identification_qualifier": { "raw": string|null, "interpreted": string|null, "confidence": number}, // interpret from the verbatim_identification, (e.g., "cf.", "aff.", "sp.") if present on the name line
   "verbatim_identification": { "raw": string|null, "interpreted": string|null, "confidence": number}  // use the lowest identifiable taxon level from the taxonomic fields ("TAXON", "FAMILY", "SUB-FAMILY", "GENUS", "SPECIES")as written (may include qualifiers, subspecies, e.g., "cf. Homo habilis"). If the lowest level is species use Genus +" "+ Species combination.
   "identification_remarks": { "raw": string|null, "interpreted": string|null, "confidence": number}  // Concatenate "TAXON", "FAMILY", "SUB-FAMILY", "GENUS", "SPECIES" with a pipe "|".
@@ -181,13 +183,13 @@ JSON schema:
               "element_name": { "raw": string|null, "interpreted": string|null, "confidence": number},         // interpret from the verbatim_element (e.g., "skull", "maxilla", "mandible", "tooth", "femur", "humerus")
               "side": { "raw": string|null, "interpreted": "left"|"right"|"unknown"|null, "confidence": number}, // if side is indicated (e.g., "Lt femur", "Upper Rt. m2")
               "condition": { "raw": string|null, "interpreted": string|null, "confidence": number},            // (e.g., "Damaged", "Broken", "Fragmented")
-              "verbatim_element": { "raw": string|null, "interpreted": string|null, "confidence": number},     // Use raw values only. Specific bone or tooth label as written (e.g., "femur", "M1", "A: R C female B: 4 skull frags"). Assing to the right rows entry (e.g., "A: R C female B: 4 skull frags" should go to rows "A" and "B").
+              "verbatim_element": { "raw": string|null, "interpreted": string|null, "confidence": number},     // Usually found at "Nature of Specimen". Use raw values only. Specific bone or tooth label as written (e.g., "femur", "M1", "A: R C female B: 4 skull frags"). Assing to the right rows entry (e.g., "A: R C female B: 4 skull frags" should go to rows "A" and "B").
               "portion": { "raw": string|null, "interpreted": string|null, "confidence": number},               // (e.g., "distal", "proximal", "shaft")
               "fragments": { "raw": integer|null, "interpreted": integer|null, "confidence": number},           // integer count ONLY if explicitly written, else null
             }
           ]  
         }
-  ]
+      ]
     }
   ]
 }
@@ -335,4 +337,3 @@ def process_pending_scans(limit: int = 100) -> tuple[int, int, int, list[str]]:
             media.save()
 
     return successes, failures, total, errors
-
