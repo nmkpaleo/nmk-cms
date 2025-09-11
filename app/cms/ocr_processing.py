@@ -331,7 +331,9 @@ def process_pending_scans(limit: int = 100) -> tuple[int, int, int, list[str]]:
             errors.append(error_msg)
             logger.exception("OCR processing failed for %s", path)
             failed_dir.mkdir(parents=True, exist_ok=True)
-            shutil.move(path, failed_dir / path.name)
+            dest = failed_dir / path.name
+            shutil.move(path, dest)
+            media.media_location.name = str(dest.relative_to(settings.MEDIA_ROOT))
             media.ocr_status = Media.OCRStatus.FAILED
             media.ocr_data = {"error": str(exc)}
             media.save()
