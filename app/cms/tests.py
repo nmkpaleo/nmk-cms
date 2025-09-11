@@ -1315,6 +1315,70 @@ class ProcessPendingScansTests(TestCase):
         self.assertEqual(link.page, "500")
 
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
+    @patch("cms.ocr_processing.chatgpt_ocr")
+    def test_reference_reused_across_scans_with_variants(self, mock_ocr, mock_detect):
+        Collection.objects.create(abbreviation="KNM", description="Kenya")
+        mock_ocr.side_effect = [
+            {
+                "accessions": [
+                    {
+                        "collection_abbreviation": {"interpreted": "KNM"},
+                        "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                        "specimen_no": {"interpreted": 123},
+                        "type_status": {"interpreted": "Holotype"},
+                        "publiched": {"interpreted": "Yes"},
+                        "references": [
+                            {
+                                "reference_first_author": {"interpreted": "Harris"},
+                                "reference_title": {"interpreted": "Lothagam"},
+                                "reference_year": {"interpreted": "2003"},
+                            }
+                        ],
+                    }
+                ]
+            },
+            {
+                "accessions": [
+                    {
+                        "collection_abbreviation": {"interpreted": "KNM"},
+                        "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                        "specimen_no": {"interpreted": 124},
+                        "type_status": {"interpreted": "Holotype"},
+                        "publiched": {"interpreted": "Yes"},
+                        "references": [
+                            {
+                                "reference_first_author": {"interpreted": "harris "},
+                                "reference_title": {"interpreted": "lothagam "},
+                                "reference_year": {"interpreted": "2003 "},
+                            }
+                        ],
+                    }
+                ]
+            },
+        ]
+
+        filename1 = "acc_ref1.png"
+        file_path1 = self.pending / filename1
+        file_path1.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename1}")
+        process_pending_scans()
+
+        self.assertEqual(Reference.objects.count(), 1)
+        reference = Reference.objects.get()
+
+        filename2 = "acc_ref2.png"
+        file_path2 = self.pending / filename2
+        file_path2.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename2}")
+        process_pending_scans()
+
+        self.assertEqual(Reference.objects.count(), 1)
+        links = AccessionReference.objects.all()
+        self.assertEqual(links.count(), 2)
+        for link in links:
+            self.assertEqual(link.reference, reference)
+
+    @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch(
         "cms.ocr_processing.chatgpt_ocr",
         return_value={

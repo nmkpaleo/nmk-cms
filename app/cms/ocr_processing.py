@@ -376,12 +376,14 @@ def create_accessions_from_media(media: Media) -> None:
             year = (ref.get("reference_year") or {}).get("interpreted")
             if not (first_author and title and year):
                 continue
-            year_str = str(year)
-            reference_obj = (
-                Reference.objects.filter(
-                    first_author=first_author, title=title, year=year_str
-                ).first()
-            )
+            first_author = first_author.strip()
+            title = title.strip()
+            year_str = str(year).strip()
+            reference_obj = Reference.objects.filter(
+                first_author__iexact=first_author,
+                title__iexact=title,
+                year=year_str,
+            ).first()
             if not reference_obj:
                 citation = f"{first_author} ({year_str}) {title}"
                 reference_obj = Reference.objects.create(
