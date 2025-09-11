@@ -16,6 +16,8 @@ from cms.models import (
     Accession,
     AccessionNumberSeries,
     AccessionRow,
+    Storage,
+    InventoryStatus,
     Collection,
     Locality,
     Place,
@@ -1506,6 +1508,74 @@ class ProcessPendingScansTests(TestCase):
         self.assertEqual(FieldSlip.objects.count(), 1)
         link = AccessionFieldSlip.objects.get()
         self.assertEqual(link.fieldslip, existing)
+
+
+    @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
+    @patch(
+        "cms.ocr_processing.chatgpt_ocr",
+        return_value={
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 123},
+                    "rows": [
+                        {
+                            "specimen_suffix": {"interpreted": "A"},
+                            "storage_area": {"interpreted": "99AA"},
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+    def test_creates_rows_and_storage(self, mock_ocr, mock_detect):
+        Collection.objects.create(abbreviation="KNM", description="Kenya")
+        filename = "acc_row.png"
+        file_path = self.pending / filename
+        file_path.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename}")
+        process_pending_scans()
+        accession = Accession.objects.get()
+        row = AccessionRow.objects.get()
+        self.assertEqual(row.accession, accession)
+        self.assertEqual(row.specimen_suffix, "A")
+        self.assertEqual(row.status, InventoryStatus.UNKNOWN)
+        self.assertIsNotNone(row.storage)
+        self.assertEqual(row.storage.area, "99AA")
+        self.assertEqual(row.storage.parent_area.area, "-Undefined")
+
+    @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
+    @patch(
+        "cms.ocr_processing.chatgpt_ocr",
+        return_value={
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 123},
+                    "rows": [
+                        {
+                            "specimen_suffix": {"interpreted": "A"},
+                            "storage_area": {"interpreted": "99AA"},
+                        },
+                        {
+                            "specimen_suffix": {"interpreted": "A"},
+                            "storage_area": {"interpreted": "99AA"},
+                        },
+                    ],
+                }
+            ]
+        },
+    )
+    def test_reuses_existing_row(self, mock_ocr, mock_detect):
+        Collection.objects.create(abbreviation="KNM", description="Kenya")
+        filename = "acc_row_dup.png"
+        file_path = self.pending / filename
+        file_path.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename}")
+        process_pending_scans()
+        self.assertEqual(AccessionRow.objects.count(), 1)
 
 
 class UploadProcessingTests(TestCase):

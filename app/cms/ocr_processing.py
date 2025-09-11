@@ -39,6 +39,9 @@ from .models import (
     AccessionReference,
     FieldSlip,
     AccessionFieldSlip,
+    AccessionRow,
+    Storage,
+    InventoryStatus,
 )
 
 
@@ -448,6 +451,27 @@ def create_accessions_from_media(media: Media) -> None:
 
             AccessionFieldSlip.objects.get_or_create(
                 accession=accession, fieldslip=field_slip_obj
+            )
+
+        rows = entry.get("rows") or []
+        for row in rows:
+            suffix = (row.get("specimen_suffix") or {}).get("interpreted") or "-"
+            storage_name = (row.get("storage_area") or {}).get("interpreted")
+            storage_obj = None
+            if storage_name:
+                storage_obj = Storage.objects.filter(area=storage_name).first()
+                if not storage_obj:
+                    parent = Storage.objects.filter(area="-Undefined").first()
+                    if not parent:
+                        parent = Storage.objects.create(area="-Undefined")
+                    storage_obj = Storage.objects.create(area=storage_name, parent_area=parent)
+            AccessionRow.objects.get_or_create(
+                accession=accession,
+                specimen_suffix=suffix,
+                defaults={
+                    "storage": storage_obj,
+                    "status": InventoryStatus.UNKNOWN,
+                },
             )
         if first_accession is None:
             first_accession = accession
