@@ -1208,6 +1208,7 @@ class ProcessPendingScansTests(TestCase):
         media = Media.objects.get()
         self.assertEqual(media.ocr_status, Media.OCRStatus.FAILED)
         self.assertEqual(media.ocr_data["error"], "boom")
+        self.assertEqual(media.media_location.name, f"uploads/failed/{filename}")
         failed_file = Path(settings.MEDIA_ROOT) / "uploads" / "failed" / filename
         self.assertTrue(failed_file.exists())
 
