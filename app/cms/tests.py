@@ -284,8 +284,12 @@ class DashboardViewCuratorTests(TestCase):
             specimen_no=1,
             accessioned_by=self.preparator,
         )
-        self.accession_row1 = AccessionRow.objects.create(accession=self.accession)
-        self.accession_row2 = AccessionRow.objects.create(accession=self.accession)
+        self.accession_row1 = AccessionRow.objects.create(
+            accession=self.accession, specimen_suffix="A"
+        )
+        self.accession_row2 = AccessionRow.objects.create(
+            accession=self.accession, specimen_suffix="B"
+        )
 
         self.curator_prep = Preparation.objects.create(
             accession_row=self.accession_row1,
@@ -1576,6 +1580,32 @@ class ProcessPendingScansTests(TestCase):
         Media.objects.create(media_location=f"uploads/pending/{filename}")
         process_pending_scans()
         self.assertEqual(AccessionRow.objects.count(), 1)
+
+    @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
+    @patch(
+        "cms.ocr_processing.chatgpt_ocr",
+        return_value={
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 124},
+                    "rows": [
+                        {"specimen_suffix": {"interpreted": "-"}}
+                    ],
+                }
+            ]
+        },
+    )
+    def test_preserves_dash_suffix(self, mock_ocr, mock_detect):
+        Collection.objects.create(abbreviation="KNM", description="Kenya")
+        filename = "acc_row_dash.png"
+        file_path = self.pending / filename
+        file_path.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename}")
+        process_pending_scans()
+        row = AccessionRow.objects.get()
+        self.assertEqual(row.specimen_suffix, "-")
 
 
 class UploadProcessingTests(TestCase):

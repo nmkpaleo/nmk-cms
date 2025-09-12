@@ -559,8 +559,8 @@ class AccessionRow(BaseModel):
         return suffixes
 
     def save(self, *args, **kwargs):
-        """ Assign the next available suffix if specimen_suffix is not provided """
-        if not self.specimen_suffix or self.specimen_suffix == '-':
+        """Assign the next available suffix only when none is provided."""
+        if self.specimen_suffix in (None, ""):
             self.specimen_suffix = self.get_next_available_suffix()
         super().save(*args, **kwargs)
 
