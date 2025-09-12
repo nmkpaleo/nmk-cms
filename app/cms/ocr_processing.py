@@ -6,7 +6,7 @@ import shutil
 import time
 import textwrap
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 try:  # pragma: no cover - library may not be installed in tests
     from dotenv import load_dotenv
@@ -30,7 +30,22 @@ except ImportError:  # pragma: no cover
 
 from django.conf import settings
 
-from .models import Media
+from .models import (
+    Media,
+    Accession,
+    Collection,
+    Locality,
+    Reference,
+    AccessionReference,
+    FieldSlip,
+    AccessionFieldSlip,
+    AccessionRow,
+    Storage,
+    InventoryStatus,
+    Identification,
+    NatureOfSpecimen,
+    Element,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -286,6 +301,228 @@ class OCRCostEstimator:
         }
 
 
+def create_accessions_from_media(media: Media) -> None:
+    """Create :class:`Accession` objects from a media's OCR data.
+
+    If ``media.ocr_data`` contains accessions and the detected ``card_type``
+    is ``accession_card``, the data is used to create one or more
+    :class:`Accession` records. The first created accession is linked back to
+    the ``media`` instance via ``media.accession``.
+
+    This function is intentionally forgiving—missing or malformed fields in the
+    OCR data simply result in the accession being skipped.
+    """
+
+    data = media.ocr_data or {}
+    if data.get("card_type") != "accession_card":
+        return
+
+    accessions = data.get("accessions") or []
+    first_accession: Optional[Accession] = None
+    for entry in accessions:
+        coll_abbr = (entry.get("collection_abbreviation") or {}).get("interpreted") or "KNM"
+        collection = Collection.objects.filter(abbreviation=coll_abbr).first()
+        if not collection:
+            collection = Collection.objects.filter(abbreviation="KNM").first()
+        if not collection:
+            continue
+
+        prefix_abbr = (entry.get("specimen_prefix_abbreviation") or {}).get("interpreted")
+        if not prefix_abbr:
+            continue
+        specimen_prefix = Locality.objects.filter(abbreviation=prefix_abbr).first()
+        if not specimen_prefix:
+            specimen_prefix = Locality.objects.create(
+                abbreviation=prefix_abbr,
+                name=f"Temporary Locality {prefix_abbr}",
+            )
+
+        specimen_no = (entry.get("specimen_no") or {}).get("interpreted")
+        if specimen_no is None:
+            continue
+
+        existing = (
+            Accession.objects.filter(
+                collection=collection,
+                specimen_prefix=specimen_prefix,
+                specimen_no=specimen_no,
+            )
+            .order_by("-instance_number")
+            .first()
+        )
+        next_instance = existing.instance_number + 1 if existing else 1
+
+        type_status = (entry.get("type_status") or {}).get("interpreted")
+        published_val = (entry.get("publiched") or {}).get("interpreted")
+        is_published = str(published_val).strip().lower() in {"yes", "true", "1"}
+
+        notes = entry.get("additional_notes") or []
+        comment_parts: list[str] = []
+        for note in notes:
+            heading = (note.get("heading") or {}).get("interpreted")
+            value = (note.get("value") or {}).get("interpreted")
+            if heading and value:
+                comment_parts.append(f"{heading}: {value}")
+            elif value:
+                comment_parts.append(str(value))
+        comment = "\n".join(comment_parts) if comment_parts else None
+
+        accession = Accession.objects.create(
+            collection=collection,
+            specimen_prefix=specimen_prefix,
+            specimen_no=specimen_no,
+            instance_number=next_instance,
+            type_status=type_status,
+            is_published=is_published,
+            comment=comment,
+        )
+
+        references = entry.get("references") or []
+        for ref in references:
+            first_author = (ref.get("reference_first_author") or {}).get("interpreted")
+            title = (ref.get("reference_title") or {}).get("interpreted")
+            year = (ref.get("reference_year") or {}).get("interpreted")
+            if not (first_author and title and year):
+                continue
+            first_author = first_author.strip()
+            title = title.strip()
+            year_str = str(year).strip()
+            reference_obj = Reference.objects.filter(
+                first_author__iexact=first_author,
+                title__iexact=title,
+                year=year_str,
+            ).first()
+            if not reference_obj:
+                citation = f"{first_author} ({year_str}) {title}"
+                reference_obj = Reference.objects.create(
+                    first_author=first_author,
+                    title=title,
+                    year=year_str,
+                    citation=citation,
+                )
+            page_val = (ref.get("page") or {}).get("interpreted")
+            page = str(page_val) if page_val is not None else None
+            AccessionReference.objects.update_or_create(
+                accession=accession,
+                reference=reference_obj,
+                defaults={"page": page},
+            )
+
+        field_slips = entry.get("field_slips") or []
+        for slip in field_slips:
+            field_number = (slip.get("field_number") or {}).get("interpreted")
+            verb_locality = (slip.get("verbatim_locality") or {}).get("interpreted")
+            verb_taxon = (slip.get("verbatim_taxon") or {}).get("interpreted")
+            if not (field_number and verb_taxon):
+                continue
+
+            field_slip_obj = FieldSlip.objects.filter(
+                field_number=field_number,
+                verbatim_locality=verb_locality,
+                verbatim_taxon=verb_taxon,
+            ).first()
+
+            if not field_slip_obj:
+                verb_element = (slip.get("verbatim_element") or {}).get("interpreted")
+                if not verb_element:
+                    continue
+
+                horizon_data = slip.get("verbatim_horizon") or {}
+                horizon_parts: list[str] = []
+                for key in (
+                    "formation",
+                    "member",
+                    "bed_or_horizon",
+                    "chronostratigraphy",
+                ):
+                    val = (horizon_data.get(key) or {}).get("interpreted")
+                    if val:
+                        horizon_parts.append(str(val))
+                horizon = " | ".join(horizon_parts) if horizon_parts else None
+
+                field_slip_obj = FieldSlip.objects.create(
+                    field_number=field_number,
+                    verbatim_locality=verb_locality,
+                    verbatim_taxon=verb_taxon,
+                    verbatim_element=verb_element,
+                    verbatim_horizon=horizon,
+                    aerial_photo=(slip.get("aerial_photo") or {}).get("interpreted"),
+                    verbatim_latitude=(slip.get("verbatim_latitude") or {}).get("interpreted"),
+                    verbatim_longitude=(slip.get("verbatim_longitude") or {}).get("interpreted"),
+                    verbatim_elevation=(slip.get("verbatim_elevation") or {}).get("interpreted"),
+                )
+
+            AccessionFieldSlip.objects.get_or_create(
+                accession=accession, fieldslip=field_slip_obj
+            )
+
+        rows = entry.get("rows") or []
+        identifications = entry.get("identifications") or []
+        for idx, row in enumerate(rows):
+            suffix = (row.get("specimen_suffix") or {}).get("interpreted") or "-"
+            storage_name = (row.get("storage_area") or {}).get("interpreted")
+            storage_obj = None
+            if storage_name:
+                storage_obj = Storage.objects.filter(area=storage_name).first()
+                if not storage_obj:
+                    parent = Storage.objects.filter(area="-Undefined").first()
+                    if not parent:
+                        parent = Storage.objects.create(area="-Undefined")
+                    storage_obj = Storage.objects.create(area=storage_name, parent_area=parent)
+            row_obj, _ = AccessionRow.objects.get_or_create(
+                accession=accession,
+                specimen_suffix=suffix,
+                defaults={
+                    "storage": storage_obj,
+                    "status": InventoryStatus.UNKNOWN,
+                },
+            )
+            if identifications:
+                ident = identifications[idx] if idx < len(identifications) else {}
+                taxon = (ident.get("taxon") or {}).get("interpreted")
+                qualifier = (ident.get("identification_qualifier") or {}).get("interpreted")
+                verbatim_id = (ident.get("verbatim_identification") or {}).get("interpreted")
+                remarks = (ident.get("identification_remarks") or {}).get("interpreted")
+                if taxon or qualifier or verbatim_id or remarks:
+                    Identification.objects.create(
+                        accession_row=row_obj,
+                        taxon=taxon,
+                        identification_qualifier=qualifier,
+                        verbatim_identification=verbatim_id,
+                        identification_remarks=remarks,
+                    )
+            natures = row.get("natures") or []
+            for nature in natures:
+                element_name = (nature.get("element_name") or {}).get("interpreted")
+                if not element_name:
+                    continue
+                element_obj = Element.objects.filter(name=element_name).first()
+                if not element_obj:
+                    parent = Element.objects.filter(name="-Undefined").first()
+                    if not parent:
+                        parent = Element.objects.create(name="-Undefined")
+                    element_obj = Element.objects.create(
+                        name=element_name, parent_element=parent
+                    )
+                fragments_raw = (nature.get("fragments") or {}).get("interpreted")
+                fragments = int(fragments_raw) if fragments_raw not in (None, "") else 0
+                NatureOfSpecimen.objects.create(
+                    accession_row=row_obj,
+                    element=element_obj,
+                    side=(nature.get("side") or {}).get("interpreted"),
+                    condition=(nature.get("condition") or {}).get("interpreted"),
+                    verbatim_element=(nature.get("verbatim_element") or {}).get("interpreted"),
+                    portion=(nature.get("portion") or {}).get("interpreted"),
+                    fragments=fragments,
+                )
+        if first_accession is None:
+            first_accession = accession
+
+    if first_accession:
+        media.accession = first_accession
+        media.save(update_fields=["accession"])
+
+
 def process_pending_scans(limit: int = 100) -> tuple[int, int, int, list[str]]:
     """Process up to ``limit`` scans awaiting OCR.
 
@@ -324,6 +561,7 @@ def process_pending_scans(limit: int = 100) -> tuple[int, int, int, list[str]]:
             media.media_location.name = str(dest.relative_to(settings.MEDIA_ROOT))
             media.ocr_status = Media.OCRStatus.COMPLETED
             media.save()
+            create_accessions_from_media(media)
             successes += 1
         except Exception as exc:
             failures += 1
