@@ -43,6 +43,8 @@ from .models import (
     Storage,
     InventoryStatus,
     Identification,
+    NatureOfSpecimen,
+    Element,
 )
 
 
@@ -489,6 +491,30 @@ def create_accessions_from_media(media: Media) -> None:
                         verbatim_identification=verbatim_id,
                         identification_remarks=remarks,
                     )
+            natures = row.get("natures") or []
+            for nature in natures:
+                element_name = (nature.get("element_name") or {}).get("interpreted")
+                if not element_name:
+                    continue
+                element_obj = Element.objects.filter(name=element_name).first()
+                if not element_obj:
+                    parent = Element.objects.filter(name="-Undefined").first()
+                    if not parent:
+                        parent = Element.objects.create(name="-Undefined")
+                    element_obj = Element.objects.create(
+                        name=element_name, parent_element=parent
+                    )
+                fragments_raw = (nature.get("fragments") or {}).get("interpreted")
+                fragments = int(fragments_raw) if fragments_raw not in (None, "") else 0
+                NatureOfSpecimen.objects.create(
+                    accession_row=row_obj,
+                    element=element_obj,
+                    side=(nature.get("side") or {}).get("interpreted"),
+                    condition=(nature.get("condition") or {}).get("interpreted"),
+                    verbatim_element=(nature.get("verbatim_element") or {}).get("interpreted"),
+                    portion=(nature.get("portion") or {}).get("interpreted"),
+                    fragments=fragments,
+                )
         if first_accession is None:
             first_accession = accession
 

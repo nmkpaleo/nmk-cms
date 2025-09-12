@@ -35,6 +35,7 @@ from cms.models import (
     FieldSlip,
     AccessionFieldSlip,
     Identification,
+    NatureOfSpecimen,
 )
 from cms.utils import generate_accessions_from_series
 from cms.forms import DrawerRegisterForm
@@ -1646,6 +1647,52 @@ class ProcessPendingScansTests(TestCase):
         self.assertEqual(ident.identification_qualifier, "cf.")
         self.assertEqual(ident.verbatim_identification, "cf. Homo habilis")
         self.assertEqual(ident.identification_remarks, "Primates|Hominidae|Homo|habilis")
+
+    @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
+    @patch(
+        "cms.ocr_processing.chatgpt_ocr",
+        return_value={
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 123},
+                    "rows": [
+                        {
+                            "specimen_suffix": {"interpreted": "A"},
+                            "natures": [
+                                {
+                                    "element_name": {"interpreted": "Femur"},
+                                    "side": {"interpreted": "Left"},
+                                    "condition": {"interpreted": "Intact"},
+                                    "verbatim_element": {"interpreted": "Left Femur"},
+                                    "portion": {"interpreted": "proximal"},
+                                    "fragments": {"interpreted": 1},
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+    def test_creates_natures_for_rows(self, mock_ocr, mock_detect):
+        Collection.objects.create(abbreviation="KNM", description="Kenya")
+        filename = "acc_nature.png"
+        file_path = self.pending / filename
+        file_path.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename}")
+        process_pending_scans()
+        row = AccessionRow.objects.get()
+        nature = NatureOfSpecimen.objects.get()
+        self.assertEqual(nature.accession_row, row)
+        self.assertEqual(nature.element.name, "Femur")
+        self.assertEqual(nature.element.parent_element.name, "-Undefined")
+        self.assertEqual(nature.side, "Left")
+        self.assertEqual(nature.condition, "Intact")
+        self.assertEqual(nature.verbatim_element, "Left Femur")
+        self.assertEqual(nature.portion, "proximal")
+        self.assertEqual(nature.fragments, 1)
 
 
 class UploadProcessingTests(TestCase):
