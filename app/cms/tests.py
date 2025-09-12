@@ -34,6 +34,7 @@ from cms.models import (
     AccessionReference,
     FieldSlip,
     AccessionFieldSlip,
+    Identification,
 )
 from cms.utils import generate_accessions_from_series
 from cms.forms import DrawerRegisterForm
@@ -1606,6 +1607,45 @@ class ProcessPendingScansTests(TestCase):
         process_pending_scans()
         row = AccessionRow.objects.get()
         self.assertEqual(row.specimen_suffix, "-")
+
+    @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
+    @patch(
+        "cms.ocr_processing.chatgpt_ocr",
+        return_value={
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 123},
+                    "rows": [
+                        {"specimen_suffix": {"interpreted": "A"}}
+                    ],
+                    "identifications": [
+                        {
+                            "taxon": {"interpreted": "Homo habilis"},
+                            "identification_qualifier": {"interpreted": "cf."},
+                            "verbatim_identification": {"interpreted": "cf. Homo habilis"},
+                            "identification_remarks": {"interpreted": "Primates|Hominidae|Homo|habilis"},
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+    def test_creates_identifications_for_rows(self, mock_ocr, mock_detect):
+        Collection.objects.create(abbreviation="KNM", description="Kenya")
+        filename = "acc_ident.png"
+        file_path = self.pending / filename
+        file_path.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename}")
+        process_pending_scans()
+        row = AccessionRow.objects.get()
+        ident = Identification.objects.get()
+        self.assertEqual(ident.accession_row, row)
+        self.assertEqual(ident.taxon, "Homo habilis")
+        self.assertEqual(ident.identification_qualifier, "cf.")
+        self.assertEqual(ident.verbatim_identification, "cf. Homo habilis")
+        self.assertEqual(ident.identification_remarks, "Primates|Hominidae|Homo|habilis")
 
 
 class UploadProcessingTests(TestCase):

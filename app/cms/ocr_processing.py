@@ -42,6 +42,7 @@ from .models import (
     AccessionRow,
     Storage,
     InventoryStatus,
+    Identification,
 )
 
 
@@ -454,7 +455,8 @@ def create_accessions_from_media(media: Media) -> None:
             )
 
         rows = entry.get("rows") or []
-        for row in rows:
+        identifications = entry.get("identifications") or []
+        for idx, row in enumerate(rows):
             suffix = (row.get("specimen_suffix") or {}).get("interpreted") or "-"
             storage_name = (row.get("storage_area") or {}).get("interpreted")
             storage_obj = None
@@ -465,7 +467,7 @@ def create_accessions_from_media(media: Media) -> None:
                     if not parent:
                         parent = Storage.objects.create(area="-Undefined")
                     storage_obj = Storage.objects.create(area=storage_name, parent_area=parent)
-            AccessionRow.objects.get_or_create(
+            row_obj, _ = AccessionRow.objects.get_or_create(
                 accession=accession,
                 specimen_suffix=suffix,
                 defaults={
@@ -473,6 +475,20 @@ def create_accessions_from_media(media: Media) -> None:
                     "status": InventoryStatus.UNKNOWN,
                 },
             )
+            if identifications:
+                ident = identifications[idx] if idx < len(identifications) else {}
+                taxon = (ident.get("taxon") or {}).get("interpreted")
+                qualifier = (ident.get("identification_qualifier") or {}).get("interpreted")
+                verbatim_id = (ident.get("verbatim_identification") or {}).get("interpreted")
+                remarks = (ident.get("identification_remarks") or {}).get("interpreted")
+                if taxon or qualifier or verbatim_id or remarks:
+                    Identification.objects.create(
+                        accession_row=row_obj,
+                        taxon=taxon,
+                        identification_qualifier=qualifier,
+                        verbatim_identification=verbatim_id,
+                        identification_remarks=remarks,
+                    )
         if first_accession is None:
             first_accession = accession
 
