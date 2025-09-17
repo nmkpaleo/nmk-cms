@@ -57,6 +57,10 @@ from cms.views import (
     DrawerRegisterCreateView,
     DrawerRegisterUpdateView,
     DrawerRegisterReorderView,
+    StorageListView,
+    StorageDetailView,
+    StorageCreateView,
+    StorageUpdateView,
 )
 from .views import PreparationMediaUploadView
 from .views import FieldSlipAutocomplete
@@ -123,6 +127,11 @@ urlpatterns = [
     path('drawers/<int:pk>/start/', start_scan, name='drawer_start_scan'),
     path('drawers/<int:pk>/stop/', stop_scan, name='drawer_stop_scan'),
     path('drawers/reorder/', DrawerRegisterReorderView.as_view(), name='drawerregister_reorder'),
+
+    path('storages/', StorageListView.as_view(), name='storage_list'),
+    path('storages/new/', StorageCreateView.as_view(), name='storage_create'),
+    path('storages/<int:pk>/', StorageDetailView.as_view(), name='storage_detail'),
+    path('storages/<int:pk>/edit/', StorageUpdateView.as_view(), name='storage_edit'),
 
 
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -57,6 +57,7 @@
 
               {% if user.is_superuser or user|has_group:"Collection Managers" %}
                 <li><a href="{% url 'drawerregister_list' %}">Drawers</a></li>
+                <li><a href="{% url 'storage_list' %}">Storages</a></li>
               {% endif %}
 
               {% if user.is_authenticated %}

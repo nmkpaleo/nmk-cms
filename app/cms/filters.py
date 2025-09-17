@@ -9,6 +9,7 @@ from .models import (
     Reference,
     FieldSlip,
     DrawerRegister,
+    Storage,
     Taxon,
 )
 from django.contrib.auth import get_user_model
@@ -229,4 +230,21 @@ class DrawerRegisterFilter(django_filters.FilterSet):
     class Meta:
         model = DrawerRegister
         fields = ["code", "scanning_status", "localities", "taxa"]
+
+
+class StorageFilter(django_filters.FilterSet):
+    area = django_filters.CharFilter(
+        lookup_expr="icontains",
+        label="Area",
+        widget=forms.TextInput(attrs={"class": "w3-input"}),
+    )
+    parent_area = django_filters.ModelChoiceFilter(
+        queryset=Storage.objects.all(),
+        label="Parent Area",
+        widget=forms.Select(attrs={"class": "w3-select"}),
+    )
+
+    class Meta:
+        model = Storage
+        fields = ["area", "parent_area"]
 

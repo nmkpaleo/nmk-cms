@@ -408,7 +408,7 @@ class Storage(BaseModel):
     history = HistoricalRecords()
 
     def get_absolute_url(self):
-        return reverse('storage-detail', args=[str(self.id)])
+        return reverse('storage_detail', args=[str(self.id)])
 
     class Meta:
         verbose_name = "Storage"
