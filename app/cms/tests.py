@@ -16,6 +16,8 @@ from cms.models import (
     Accession,
     AccessionNumberSeries,
     AccessionRow,
+    Storage,
+    InventoryStatus,
     Collection,
     Locality,
     Place,
@@ -28,6 +30,12 @@ from cms.models import (
     Scanning,
     Media,
     Taxon,
+    Reference,
+    AccessionReference,
+    FieldSlip,
+    AccessionFieldSlip,
+    Identification,
+    NatureOfSpecimen,
 )
 from cms.utils import generate_accessions_from_series
 from cms.forms import DrawerRegisterForm
@@ -278,8 +286,12 @@ class DashboardViewCuratorTests(TestCase):
             specimen_no=1,
             accessioned_by=self.preparator,
         )
-        self.accession_row1 = AccessionRow.objects.create(accession=self.accession)
-        self.accession_row2 = AccessionRow.objects.create(accession=self.accession)
+        self.accession_row1 = AccessionRow.objects.create(
+            accession=self.accession, specimen_suffix="A"
+        )
+        self.accession_row2 = AccessionRow.objects.create(
+            accession=self.accession, specimen_suffix="B"
+        )
 
         self.curator_prep = Preparation.objects.create(
             accession_row=self.accession_row1,
@@ -1211,6 +1223,476 @@ class ProcessPendingScansTests(TestCase):
         self.assertEqual(media.media_location.name, f"uploads/failed/{filename}")
         failed_file = Path(settings.MEDIA_ROOT) / "uploads" / "failed" / filename
         self.assertTrue(failed_file.exists())
+
+    @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
+    @patch(
+        "cms.ocr_processing.chatgpt_ocr",
+        return_value={
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 123},
+                    "type_status": {"interpreted": "Holotype"},
+                    "publiched": {"interpreted": "Yes"},
+                    "additional_notes": [
+                        {
+                            "heading": {"interpreted": "Note"},
+                            "value": {"interpreted": "something"},
+                        }
+                    ],
+                    "references": [
+                        {
+                            "reference_first_author": {"interpreted": "Harris"},
+                            "reference_title": {"interpreted": "Lothagam"},
+                            "reference_year": {"interpreted": "2003"},
+                            "page": {"interpreted": "485-519"},
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+    def test_creates_accession_and_links_media(self, mock_ocr, mock_detect):
+        Collection.objects.create(abbreviation="KNM", description="Kenya")
+        filename = "acc.png"
+        file_path = self.pending / filename
+        file_path.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename}")
+        successes, failures, total, errors = process_pending_scans()
+        self.assertEqual((successes, failures, total), (1, 0, 1))
+        accession = Accession.objects.get()
+        self.assertEqual(accession.collection.abbreviation, "KNM")
+        self.assertEqual(accession.specimen_prefix.abbreviation, "AB")
+        self.assertEqual(accession.specimen_no, 123)
+        self.assertEqual(accession.instance_number, 1)
+        self.assertEqual(accession.type_status, "Holotype")
+        self.assertTrue(accession.is_published)
+        self.assertIn("Note: something", accession.comment)
+        reference = Reference.objects.get()
+        self.assertEqual(reference.first_author, "Harris")
+        self.assertEqual(reference.title, "Lothagam")
+        self.assertEqual(reference.year, "2003")
+        self.assertEqual(reference.citation, "Harris (2003) Lothagam")
+        link = AccessionReference.objects.get()
+        self.assertEqual(link.accession, accession)
+        self.assertEqual(link.reference, reference)
+        self.assertEqual(link.page, "485-519")
+        media = Media.objects.get()
+        self.assertEqual(media.accession, accession)
+
+    @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
+    @patch(
+        "cms.ocr_processing.chatgpt_ocr",
+        return_value={
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 123},
+                    "type_status": {"interpreted": "Holotype"},
+                    "publiched": {"interpreted": "Yes"},
+                    "references": [
+                        {
+                            "reference_first_author": {"interpreted": "Harris"},
+                            "reference_title": {"interpreted": "Lothagam"},
+                            "reference_year": {"interpreted": "2003"},
+                            "page": {"interpreted": "500"},
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+    def test_reuses_existing_reference(self, mock_ocr, mock_detect):
+        Collection.objects.create(abbreviation="KNM", description="Kenya")
+        reference = Reference.objects.create(
+            first_author="Harris",
+            title="Lothagam",
+            year="2003",
+            citation="Harris (2003) Lothagam",
+        )
+        filename = "acc_ref.png"
+        file_path = self.pending / filename
+        file_path.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename}")
+        process_pending_scans()
+        self.assertEqual(Reference.objects.count(), 1)
+        accession = Accession.objects.get()
+        link = AccessionReference.objects.get()
+        self.assertEqual(link.accession, accession)
+        self.assertEqual(link.reference, reference)
+        self.assertEqual(link.page, "500")
+
+    @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
+    @patch("cms.ocr_processing.chatgpt_ocr")
+    def test_reference_reused_across_scans_with_variants(self, mock_ocr, mock_detect):
+        Collection.objects.create(abbreviation="KNM", description="Kenya")
+        mock_ocr.side_effect = [
+            {
+                "accessions": [
+                    {
+                        "collection_abbreviation": {"interpreted": "KNM"},
+                        "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                        "specimen_no": {"interpreted": 123},
+                        "type_status": {"interpreted": "Holotype"},
+                        "publiched": {"interpreted": "Yes"},
+                        "references": [
+                            {
+                                "reference_first_author": {"interpreted": "Harris"},
+                                "reference_title": {"interpreted": "Lothagam"},
+                                "reference_year": {"interpreted": "2003"},
+                            }
+                        ],
+                    }
+                ]
+            },
+            {
+                "accessions": [
+                    {
+                        "collection_abbreviation": {"interpreted": "KNM"},
+                        "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                        "specimen_no": {"interpreted": 124},
+                        "type_status": {"interpreted": "Holotype"},
+                        "publiched": {"interpreted": "Yes"},
+                        "references": [
+                            {
+                                "reference_first_author": {"interpreted": "harris "},
+                                "reference_title": {"interpreted": "lothagam "},
+                                "reference_year": {"interpreted": "2003 "},
+                            }
+                        ],
+                    }
+                ]
+            },
+        ]
+
+        filename1 = "acc_ref1.png"
+        file_path1 = self.pending / filename1
+        file_path1.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename1}")
+        process_pending_scans()
+
+        self.assertEqual(Reference.objects.count(), 1)
+        reference = Reference.objects.get()
+
+        filename2 = "acc_ref2.png"
+        file_path2 = self.pending / filename2
+        file_path2.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename2}")
+        process_pending_scans()
+
+        self.assertEqual(Reference.objects.count(), 1)
+        links = AccessionReference.objects.all()
+        self.assertEqual(links.count(), 2)
+        for link in links:
+            self.assertEqual(link.reference, reference)
+
+    @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
+    @patch(
+        "cms.ocr_processing.chatgpt_ocr",
+        return_value={
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 123},
+                    "type_status": {"interpreted": "Type"},
+                    "publiched": {"interpreted": "No"},
+                    "additional_notes": [],
+                }
+            ]
+        },
+    )
+    def test_existing_accession_creates_new_instance(self, mock_ocr, mock_detect):
+        collection = Collection.objects.create(abbreviation="KNM", description="Kenya")
+        locality = Locality.objects.create(abbreviation="AB", name="Existing")
+        Accession.objects.create(collection=collection, specimen_prefix=locality, specimen_no=123)
+        filename = "acc2.png"
+        file_path = self.pending / filename
+        file_path.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename}")
+        successes, failures, total, errors = process_pending_scans()
+        self.assertEqual((successes, failures, total), (1, 0, 1))
+        self.assertEqual(Accession.objects.count(), 2)
+        latest = Accession.objects.order_by("-id").first()
+        self.assertEqual(latest.instance_number, 2)
+        media = Media.objects.get()
+        self.assertEqual(media.accession, latest)
+
+    @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
+    @patch(
+        "cms.ocr_processing.chatgpt_ocr",
+        return_value={
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 123},
+                    "type_status": {"interpreted": "Holotype"},
+                    "publiched": {"interpreted": "Yes"},
+                    "field_slips": [
+                        {
+                            "field_number": {"interpreted": "FS-1"},
+                            "verbatim_locality": {"interpreted": "Loc1"},
+                            "verbatim_taxon": {"interpreted": "Homo"},
+                            "verbatim_element": {"interpreted": "Femur"},
+                            "verbatim_horizon": {
+                                "formation": {"interpreted": "Form"},
+                                "member": {"interpreted": "Member"},
+                                "bed_or_horizon": {"interpreted": "Bed"},
+                                "chronostratigraphy": {"interpreted": None},
+                            },
+                            "aerial_photo": {"interpreted": "P1"},
+                            "verbatim_latitude": {"interpreted": "Lat"},
+                            "verbatim_longitude": {"interpreted": "Lon"},
+                            "verbatim_elevation": {"interpreted": "100"},
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+    def test_creates_field_slip_and_links(self, mock_ocr, mock_detect):
+        Collection.objects.create(abbreviation="KNM", description="Kenya")
+        filename = "acc_fs.png"
+        file_path = self.pending / filename
+        file_path.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename}")
+        process_pending_scans()
+        accession = Accession.objects.get()
+        field_slip = FieldSlip.objects.get()
+        link = AccessionFieldSlip.objects.get()
+        self.assertEqual(link.accession, accession)
+        self.assertEqual(link.fieldslip, field_slip)
+        self.assertEqual(field_slip.field_number, "FS-1")
+        self.assertEqual(field_slip.verbatim_locality, "Loc1")
+        self.assertEqual(field_slip.verbatim_taxon, "Homo")
+        self.assertEqual(field_slip.verbatim_element, "Femur")
+        self.assertEqual(field_slip.verbatim_horizon, "Form | Member | Bed")
+        self.assertEqual(field_slip.aerial_photo, "P1")
+        self.assertEqual(field_slip.verbatim_latitude, "Lat")
+        self.assertEqual(field_slip.verbatim_longitude, "Lon")
+        self.assertEqual(field_slip.verbatim_elevation, "100")
+
+    @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
+    @patch(
+        "cms.ocr_processing.chatgpt_ocr",
+        return_value={
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 123},
+                    "type_status": {"interpreted": "Holotype"},
+                    "publiched": {"interpreted": "Yes"},
+                    "field_slips": [
+                        {
+                            "field_number": {"interpreted": "FS-1"},
+                            "verbatim_locality": {"interpreted": "Loc1"},
+                            "verbatim_taxon": {"interpreted": "Homo"},
+                            "verbatim_element": {"interpreted": "Femur"},
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+    def test_reuses_existing_field_slip(self, mock_ocr, mock_detect):
+        Collection.objects.create(abbreviation="KNM", description="Kenya")
+        existing = FieldSlip.objects.create(
+            field_number="FS-1",
+            verbatim_locality="Loc1",
+            verbatim_taxon="Homo",
+            verbatim_element="Femur",
+        )
+        filename = "acc_fs2.png"
+        file_path = self.pending / filename
+        file_path.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename}")
+        process_pending_scans()
+        self.assertEqual(FieldSlip.objects.count(), 1)
+        link = AccessionFieldSlip.objects.get()
+        self.assertEqual(link.fieldslip, existing)
+
+
+    @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
+    @patch(
+        "cms.ocr_processing.chatgpt_ocr",
+        return_value={
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 123},
+                    "rows": [
+                        {
+                            "specimen_suffix": {"interpreted": "A"},
+                            "storage_area": {"interpreted": "99AA"},
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+    def test_creates_rows_and_storage(self, mock_ocr, mock_detect):
+        Collection.objects.create(abbreviation="KNM", description="Kenya")
+        filename = "acc_row.png"
+        file_path = self.pending / filename
+        file_path.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename}")
+        process_pending_scans()
+        accession = Accession.objects.get()
+        row = AccessionRow.objects.get()
+        self.assertEqual(row.accession, accession)
+        self.assertEqual(row.specimen_suffix, "A")
+        self.assertEqual(row.status, InventoryStatus.UNKNOWN)
+        self.assertIsNotNone(row.storage)
+        self.assertEqual(row.storage.area, "99AA")
+        self.assertEqual(row.storage.parent_area.area, "-Undefined")
+
+    @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
+    @patch(
+        "cms.ocr_processing.chatgpt_ocr",
+        return_value={
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 123},
+                    "rows": [
+                        {
+                            "specimen_suffix": {"interpreted": "A"},
+                            "storage_area": {"interpreted": "99AA"},
+                        },
+                        {
+                            "specimen_suffix": {"interpreted": "A"},
+                            "storage_area": {"interpreted": "99AA"},
+                        },
+                    ],
+                }
+            ]
+        },
+    )
+    def test_reuses_existing_row(self, mock_ocr, mock_detect):
+        Collection.objects.create(abbreviation="KNM", description="Kenya")
+        filename = "acc_row_dup.png"
+        file_path = self.pending / filename
+        file_path.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename}")
+        process_pending_scans()
+        self.assertEqual(AccessionRow.objects.count(), 1)
+
+    @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
+    @patch(
+        "cms.ocr_processing.chatgpt_ocr",
+        return_value={
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 124},
+                    "rows": [
+                        {"specimen_suffix": {"interpreted": "-"}}
+                    ],
+                }
+            ]
+        },
+    )
+    def test_preserves_dash_suffix(self, mock_ocr, mock_detect):
+        Collection.objects.create(abbreviation="KNM", description="Kenya")
+        filename = "acc_row_dash.png"
+        file_path = self.pending / filename
+        file_path.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename}")
+        process_pending_scans()
+        row = AccessionRow.objects.get()
+        self.assertEqual(row.specimen_suffix, "-")
+
+    @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
+    @patch(
+        "cms.ocr_processing.chatgpt_ocr",
+        return_value={
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 123},
+                    "rows": [
+                        {"specimen_suffix": {"interpreted": "A"}}
+                    ],
+                    "identifications": [
+                        {
+                            "taxon": {"interpreted": "Homo habilis"},
+                            "identification_qualifier": {"interpreted": "cf."},
+                            "verbatim_identification": {"interpreted": "cf. Homo habilis"},
+                            "identification_remarks": {"interpreted": "Primates|Hominidae|Homo|habilis"},
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+    def test_creates_identifications_for_rows(self, mock_ocr, mock_detect):
+        Collection.objects.create(abbreviation="KNM", description="Kenya")
+        filename = "acc_ident.png"
+        file_path = self.pending / filename
+        file_path.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename}")
+        process_pending_scans()
+        row = AccessionRow.objects.get()
+        ident = Identification.objects.get()
+        self.assertEqual(ident.accession_row, row)
+        self.assertEqual(ident.taxon, "Homo habilis")
+        self.assertEqual(ident.identification_qualifier, "cf.")
+        self.assertEqual(ident.verbatim_identification, "cf. Homo habilis")
+        self.assertEqual(ident.identification_remarks, "Primates|Hominidae|Homo|habilis")
+
+    @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
+    @patch(
+        "cms.ocr_processing.chatgpt_ocr",
+        return_value={
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 123},
+                    "rows": [
+                        {
+                            "specimen_suffix": {"interpreted": "A"},
+                            "natures": [
+                                {
+                                    "element_name": {"interpreted": "Femur"},
+                                    "side": {"interpreted": "Left"},
+                                    "condition": {"interpreted": "Intact"},
+                                    "verbatim_element": {"interpreted": "Left Femur"},
+                                    "portion": {"interpreted": "proximal"},
+                                    "fragments": {"interpreted": 1},
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+    def test_creates_natures_for_rows(self, mock_ocr, mock_detect):
+        Collection.objects.create(abbreviation="KNM", description="Kenya")
+        filename = "acc_nature.png"
+        file_path = self.pending / filename
+        file_path.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename}")
+        process_pending_scans()
+        row = AccessionRow.objects.get()
+        nature = NatureOfSpecimen.objects.get()
+        self.assertEqual(nature.accession_row, row)
+        self.assertEqual(nature.element.name, "Femur")
+        self.assertEqual(nature.element.parent_element.name, "-Undefined")
+        self.assertEqual(nature.side, "Left")
+        self.assertEqual(nature.condition, "Intact")
+        self.assertEqual(nature.verbatim_element, "Left Femur")
+        self.assertEqual(nature.portion, "proximal")
+        self.assertEqual(nature.fragments, 1)
 
 
 class UploadProcessingTests(TestCase):
