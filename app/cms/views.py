@@ -947,7 +947,7 @@ class PreparationListView(LoginRequiredMixin, PreparationAccessMixin, FilterView
     model = Preparation
     template_name = "cms/preparation_list.html"
     context_object_name = "preparations"
-    paginate_by = 2
+    paginate_by = 10
     ordering = ["-created_on"]
     filterset_class = PreparationFilter
 

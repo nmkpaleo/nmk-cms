@@ -6,42 +6,53 @@
 {% block content %}
 
 <div class="w3-container w3-margin-top">
-    <div class="list-page-header">
-        <h2>Localities</h2>
-
-        {% if user.is_superuser or user|has_group:"Collection Managers" %}
-            <a href="{% url 'locality_create' %}" class="w3-button w3-green">New Locality</a>
-        {% endif %}
+    <div class="w3-row w3-margin-bottom w3-padding-16 w3-border-bottom">
+        <div class="w3-col s12 m6 l6">
+            <h2 class="w3-margin-0">Localities</h2>
+        </div>
+        <div class="w3-col s12 m6 l6 w3-right-align w3-margin-top">
+            {% if user.is_superuser or user|has_group:"Collection Managers" %}
+                <a href="{% url 'locality_create' %}" class="w3-button w3-green w3-round">
+                    <i class="fa-solid fa-plus-circle"></i>
+                    New Locality
+                </a>
+            {% endif %}
+        </div>
     </div>
 
-    <button onclick="toggleAccordion('accessionFilterPanel')" class="w3-button w3-block w3-light-grey w3-left-align">
-      🔍 Show/Hide Filters
+    <button type="button" onclick="toggleAccordion('localityFilterPanel')" class="w3-button w3-light-grey w3-round-large">
+        <i class="fa-solid fa-filter"></i>
+        <span class="w3-margin-left">Show/Hide Filters</span>
     </button>
-  
-    <div id="accessionFilterPanel" class="w3-hide w3-animate-opacity w3-padding w3-light-grey w3-round-large w3-margin-top">
+
+    <div id="localityFilterPanel" class="w3-hide w3-animate-opacity w3-padding w3-light-grey w3-round-large w3-margin-top w3-card">
         <form method="get">
             <div class="w3-row-padding">
-                <div class="w3-third">
-                    <label>Abbreviation</label>
+                <div class="w3-col s12 m6 l6 w3-margin-bottom">
+                    <label class="w3-text-grey">Abbreviation</label>
                     {{ filter.form.abbreviation }}
                 </div>
-                <div class="w3-third">
-                    <label>Name</label>
+                <div class="w3-col s12 m6 l6 w3-margin-bottom">
+                    <label class="w3-text-grey">Name</label>
                     {{ filter.form.name }}
                 </div>
             </div>
 
-            <div class="w3-container w3-padding-16">
-                <button type="submit" class="w3-button w3-blue w3-margin-right">Apply Filters</button>
-                <a href="{% url 'locality_list' %}" class="w3-button w3-gray">Clear</a>
+            <div class="w3-margin-top">
+                <button type="submit" class="w3-button w3-blue w3-round w3-margin-right">
+                    <i class="fa-solid fa-check"></i>
+                    Apply Filters
+                </button>
+                <a href="{% url 'locality_list' %}" class="w3-button w3-gray w3-round">
+                    <i class="fa-solid fa-rotate-left"></i>
+                    Clear
+                </a>
             </div>
         </form>
     </div>
-</div>
 
-
-    <div class="table-container">
-        <table class="lists_table">
+    <div class="w3-responsive w3-margin-top">
+        <table class="w3-table-all w3-hoverable">
             <thead>
                 <tr>
                     <th>Abbreviation</th>
@@ -50,32 +61,33 @@
             </thead>
             <tbody>
                 {% for locality in localities %}
-                    <tr class="template_data">
+                    <tr>
                         <td><a href="{% url 'locality_detail' locality.pk %}">{{ locality.abbreviation }}</a></td>
                         <td>{{ locality.name }}</td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="2" class="w3-center">No localities found.</td>
                     </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
-
 </div>
 
 {% endblock %}
 
 {% block script %}
-
-    <script>
-    function toggleAccordion(id) {
-    var panel = document.getElementById(id);
-    if (panel.classList.contains("w3-show")) {
-        panel.classList.remove("w3-show");
-        panel.classList.add("w3-hide");
+<script>
+function toggleAccordion(id) {
+    const panel = document.getElementById(id);
+    if (panel.classList.contains('w3-show')) {
+        panel.classList.remove('w3-show');
+        panel.classList.add('w3-hide');
     } else {
-        panel.classList.remove("w3-hide");
-        panel.classList.add("w3-show");
+        panel.classList.remove('w3-hide');
+        panel.classList.add('w3-show');
     }
-    }
-    </script>
+}
+</script>
 {% endblock %}
-

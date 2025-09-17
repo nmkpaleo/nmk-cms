@@ -6,114 +6,165 @@
 {% block content %}
 
 <div class="w3-container w3-margin-top">
-    <div class="list-page-header">
-        <h2>Field Slips</h2>
-
-        {% if user.is_superuser or user|has_group:"Collection Managers" %}
-            <a href="{% url 'fieldslip_create' %}" class="w3-button w3-green">New Field Slip</a>
-        {% endif %}
+    <div class="w3-row w3-margin-bottom w3-padding-16 w3-border-bottom">
+        <div class="w3-col s12 m6 l6">
+            <h2 class="w3-margin-0">Field Slips</h2>
+        </div>
+        <div class="w3-col s12 m6 l6 w3-right-align w3-margin-top">
+            {% if user.is_superuser or user|has_group:"Collection Managers" %}
+                <a href="{% url 'fieldslip_create' %}" class="w3-button w3-green w3-round">
+                    <i class="fa-solid fa-plus-circle"></i>
+                    New Field Slip
+                </a>
+            {% endif %}
+        </div>
     </div>
 
-    <button onclick="toggleAccordion('fieldslipFilterPanel')" class="w3-button w3-block w3-light-grey w3-left-align">
-        🔍 Show/Hide Filters
+    <button type="button" onclick="toggleAccordion('fieldslipFilterPanel')" class="w3-button w3-light-grey w3-round-large">
+        <i class="fa-solid fa-filter"></i>
+        <span class="w3-margin-left">Show/Hide Filters</span>
     </button>
 
-    <div id="fieldslipFilterPanel" class="w3-hide w3-animate-opacity w3-padding w3-light-grey w3-round-large w3-margin-top">
+    <div id="fieldslipFilterPanel" class="w3-hide w3-animate-opacity w3-padding w3-light-grey w3-round-large w3-margin-top w3-card">
         <form method="get">
             <div class="w3-row-padding">
-                <div class="w3-third">
-                    <label>Collector</label>
+                <div class="w3-col s12 m6 l4 w3-margin-bottom">
+                    <label class="w3-text-grey">Collector</label>
                     {{ filter.form.collector }}
                 </div>
-                <div class="w3-third">
-                    <label>Collection Date</label>
+                <div class="w3-col s12 m6 l4 w3-margin-bottom">
+                    <label class="w3-text-grey">Collection Date</label>
                     {{ filter.form.collection_date }}
                 </div>
-                <div class="w3-third">
-                    <label>Verbatim Locality</label>
+                <div class="w3-col s12 m6 l4 w3-margin-bottom">
+                    <label class="w3-text-grey">Verbatim Locality</label>
                     {{ filter.form.verbatim_locality }}
                 </div>
             </div>
 
             <div class="w3-row-padding">
-                <div class="w3-third">
-                    <label>Verbatim Taxon</label>
+                <div class="w3-col s12 m6 l4 w3-margin-bottom">
+                    <label class="w3-text-grey">Verbatim Taxon</label>
                     {{ filter.form.verbatim_taxon }}
                 </div>
-                <div class="w3-third">
-                    <label>Verbatim Element</label>
+                <div class="w3-col s12 m6 l4 w3-margin-bottom">
+                    <label class="w3-text-grey">Verbatim Element</label>
                     {{ filter.form.verbatim_element }}
                 </div>
-                <div class="w3-third">
-                    <label>Verbatim Horizon</label>
+                <div class="w3-col s12 m6 l4 w3-margin-bottom">
+                    <label class="w3-text-grey">Verbatim Horizon</label>
                     {{ filter.form.verbatim_horizon }}
                 </div>
             </div>
 
-            <div class="w3-container w3-padding-16">
-                <button type="submit" class="w3-button w3-blue w3-margin-right">Apply Filters</button>
-                <a href="{% url 'fieldslip_list' %}" class="w3-button w3-gray">Clear</a>
+            <div class="w3-margin-top">
+                <button type="submit" class="w3-button w3-blue w3-round w3-margin-right">
+                    <i class="fa-solid fa-check"></i>
+                    Apply Filters
+                </button>
+                <a href="{% url 'fieldslip_list' %}" class="w3-button w3-gray w3-round">
+                    <i class="fa-solid fa-rotate-left"></i>
+                    Clear
+                </a>
             </div>
         </form>
     </div>
-</div>
 
-    <div class="template_list_body">
-        <div class="container"></div>
-    </div>
-
-    <div class="table-container">
-        <table class="lists_table">
+    <div class="w3-responsive w3-margin-top">
+        <table class="w3-table-all w3-hoverable">
             <thead>
                 <tr>
                     <th>Field Number</th>
                     <th>Collector</th>
                     <th>Collection Date</th>
-                    <th class="hidden-mobile">Verbatim Locality</th>
-                    <th class="hidden-mobile">Verbatim Taxon</th>
-                    <th class="hidden-mobile">Verbatim Element</th>
-                    <th class="hidden-mobile">Verbatim Horizon</th>
-                    <th class="hidden-mobile">Aerial Photo</th>
-                    <th><button id="toggleColumns">Show More</button></th>
+                    <th class="responsive-column w3-hide-small" data-hide-classes="w3-hide-small">Verbatim Locality</th>
+                    <th class="responsive-column w3-hide-small w3-hide-medium" data-hide-classes="w3-hide-small w3-hide-medium">Verbatim Taxon</th>
+                    <th class="responsive-column w3-hide-small w3-hide-medium" data-hide-classes="w3-hide-small w3-hide-medium">Verbatim Element</th>
+                    <th class="responsive-column w3-hide-small w3-hide-medium" data-hide-classes="w3-hide-small w3-hide-medium">Verbatim Horizon</th>
+                    <th class="responsive-column w3-hide-small w3-hide-medium" data-hide-classes="w3-hide-small w3-hide-medium">Aerial Photo</th>
+                    <th class="w3-right-align">
+                        <button type="button" id="toggleColumns" class="w3-button w3-light-grey w3-round w3-small">
+                            <i class="fa-solid fa-expand"></i>
+                            Show More
+                        </button>
+                    </th>
                 </tr>
             </thead>
             <tbody>
                 {% for fieldslip in fieldslips %}
-                    <tr class="template_data">
+                    <tr>
                         <td><a href="{% url 'fieldslip_detail' fieldslip.pk %}">{{ fieldslip.field_number }}</a></td>
                         <td>{{ fieldslip.collector }}</td>
                         <td>{{ fieldslip.collection_date }}</td>
-                        <td class="hidden-mobile">{{ fieldslip.verbatim_locality }}</td>
-                        <td class="hidden-mobile">{{ fieldslip.verbatim_taxon }}</td>
-                        <td class="hidden-mobile">{{ fieldslip.verbatim_element }}</td>
-                        <td class="hidden-mobile">{{ fieldslip.verbatim_horizon }}</td>
-                        <td class="hidden-mobile">
+                        <td class="responsive-column w3-hide-small" data-hide-classes="w3-hide-small">{{ fieldslip.verbatim_locality }}</td>
+                        <td class="responsive-column w3-hide-small w3-hide-medium" data-hide-classes="w3-hide-small w3-hide-medium">{{ fieldslip.verbatim_taxon }}</td>
+                        <td class="responsive-column w3-hide-small w3-hide-medium" data-hide-classes="w3-hide-small w3-hide-medium">{{ fieldslip.verbatim_element }}</td>
+                        <td class="responsive-column w3-hide-small w3-hide-medium" data-hide-classes="w3-hide-small w3-hide-medium">{{ fieldslip.verbatim_horizon }}</td>
+                        <td class="responsive-column w3-hide-small w3-hide-medium" data-hide-classes="w3-hide-small w3-hide-medium">
                             {% if fieldslip.aerial_photo %}
-                                <img src="{{ fieldslip.aerial_photo.url }}" alt="Aerial Photo" style="max-width: 100px; height: auto;">
+                                <img src="{{ fieldslip.aerial_photo.url }}" alt="Aerial Photo" style="max-width: 100px; height:auto;">
                             {% else %}
                                 No photo
                             {% endif %}
                         </td>
                         <td></td>
                     </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="9" class="w3-center">No field slips found.</td>
+                    </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
+</div>
 
 {% endblock %}
 
 {% block script %}
 <script>
 function toggleAccordion(id) {
-    var panel = document.getElementById(id);
-    if (panel.classList.contains("w3-show")) {
-        panel.classList.remove("w3-show");
-        panel.classList.add("w3-hide");
+    const panel = document.getElementById(id);
+    if (panel.classList.contains('w3-show')) {
+        panel.classList.remove('w3-show');
+        panel.classList.add('w3-hide');
     } else {
-        panel.classList.remove("w3-hide");
-        panel.classList.add("w3-show");
+        panel.classList.remove('w3-hide');
+        panel.classList.add('w3-show');
     }
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    const toggleBtn = document.getElementById('toggleColumns');
+    if (!toggleBtn) {
+        return;
+    }
+    const columns = document.querySelectorAll('.responsive-column');
+    let expanded = false;
+
+    toggleBtn.addEventListener('click', function() {
+        expanded = !expanded;
+        columns.forEach(function(column) {
+            const classes = column.dataset.hideClasses;
+            if (!classes) {
+                return;
+            }
+            classes.split(' ').forEach(function(cls) {
+                if (!cls) {
+                    return;
+                }
+                if (expanded) {
+                    column.classList.remove(cls);
+                } else {
+                    column.classList.add(cls);
+                }
+            });
+        });
+
+        toggleBtn.innerHTML = expanded
+            ? '<i class="fa-solid fa-compress"></i> Show Less'
+            : '<i class="fa-solid fa-expand"></i> Show More';
+    });
+});
 </script>
 {% endblock %}

@@ -80,30 +80,44 @@
           {% block content %}
 
           {% endblock %}
-          
-          {% block pagination %}
-    {% if is_paginated %}
-        <div class="pagination">
-            <span class="page-links">
-                {% if page_obj.has_previous %}
-                    <a href="{{ request.path }}?page={{ page_obj.previous_page_number }}" class="pagination_previous">
-                      <i class="fa-solid fa-angles-left"></i>
-                      Previous
-                    </a>
-                {% endif %}
-                <span class="page-current">
-                    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}.
-                </span>
-                {% if page_obj.has_next %}
-                    <a href="{{ request.path }}?page={{ page_obj.next_page_number }}" class="pagination_next">Next
-                    <i class="fa-solid fa-angles-right"></i></a>
-                {% endif %}
-            </span>
-        </div>
-    {% endif %}
-  {% endblock %}
 
-        
+          {% block pagination %}
+            {% if is_paginated %}
+              <div class="w3-container w3-center w3-margin-top">
+                <div class="w3-bar w3-border w3-round-large w3-white w3-card">
+                  {% if page_obj.has_previous %}
+                    <a href="{{ request.path }}?page={{ page_obj.previous_page_number }}" class="w3-bar-item w3-button" aria-label="Previous page">
+                      <i class="fa-solid fa-angles-left"></i>
+                      <span class="w3-hide-small">Previous</span>
+                    </a>
+                  {% else %}
+                    <span class="w3-bar-item w3-button w3-disabled">
+                      <i class="fa-solid fa-angles-left"></i>
+                      <span class="w3-hide-small">Previous</span>
+                    </span>
+                  {% endif %}
+
+                  <span class="w3-bar-item">
+                    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                  </span>
+
+                  {% if page_obj.has_next %}
+                    <a href="{{ request.path }}?page={{ page_obj.next_page_number }}" class="w3-bar-item w3-button" aria-label="Next page">
+                      <span class="w3-hide-small">Next</span>
+                      <i class="fa-solid fa-angles-right"></i>
+                    </a>
+                  {% else %}
+                    <span class="w3-bar-item w3-button w3-disabled">
+                      <span class="w3-hide-small">Next</span>
+                      <i class="fa-solid fa-angles-right"></i>
+                    </span>
+                  {% endif %}
+                </div>
+              </div>
+            {% endif %}
+          {% endblock %}
+
+
         </div>
       </div>
     </div>
