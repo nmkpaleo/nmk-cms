@@ -10,80 +10,78 @@
 <div class="w3-container w3-margin-top">
     <h2>Accessions</h2>
 
-    {% if user.is_authenticated and (user.is_superuser or user|has_group:"Collection Managers") %}
-    <a href="{% url 'accession-wizard' %}" class="w3-button w3-green w3-margin-bottom">New Accession</a>
+    {% if user.is_authenticated %}
+        {% if user.is_superuser or user|has_group:"Collection Managers" %}
+            <a href="{% url 'accession-wizard' %}" class="w3-button w3-green w3-margin-bottom">New Accession</a>
+        {% endif %}
     {% endif %}
 
     <button onclick="toggleAccordion('accessionFilterPanel')" class="w3-button w3-block w3-light-grey w3-left-align">
-      🔍 Show/Hide Filters
+        🔍 Show/Hide Filters
     </button>
-  
+
     <div id="accessionFilterPanel" class="w3-hide w3-animate-opacity w3-padding w3-light-grey w3-round-large w3-margin-top">
-      <form method="get">
-        <div class="w3-row-padding">
-          <div class="w3-third">
-            <label>Specimen Number</label>
-            {{ filter.form.specimen_no }}
-          </div>
-          <div class="w3-third">
-            <label>Specimen Prefix</label>
-            {{ filter.form.specimen_prefix }}
-          </div>
-          <div class="w3-third">
-            <label>Comment</label>
-            {{ filter.form.comment }}
-          </div>
-        </div>
-  
-        <div class="w3-container w3-padding-16">
-          <button type="submit" class="w3-button w3-blue w3-margin-right">Apply Filters</button>
-          <a href="{% url 'accession_list' %}" class="w3-button w3-gray">Clear</a>
-        </div>
-      </form>
-    </div>
-  </div>
-  
+        <form method="get">
+            <div class="w3-row-padding">
+                <div class="w3-third">
+                    <label>Specimen Number</label>
+                    {{ filter.form.specimen_no }}
+                </div>
+                <div class="w3-third">
+                    <label>Specimen Prefix</label>
+                    {{ filter.form.specimen_prefix }}
+                </div>
+                <div class="w3-third">
+                    <label>Comment</label>
+                    {{ filter.form.comment }}
+                </div>
+            </div>
 
-
-            <table class="lists_table">
-               
-            <thead>
-                <th>Collection</th>
-                <th>Specimen Prefix</th>
-                <th>Specimen Number</th>
-                {% if user.is_superuser or user|has_group:"Collection Managers" %}
-                <th>accessioned By</th>
-                {% endif %}
-            </thead>
-            <tbody>
-                {% for accession in accessions %}
-                    <tr >
-                        
-                        <td> <a href="{% url 'accession_detail' accession.pk %}"> {{ accession.collection.abbreviation }}</a></td>
-                        <td>&nbsp;{{ accession.specimen_prefix.abbreviation }}</td>
-                        <td>{{ accession.specimen_no }}</td>
-                        {% if user.is_superuser or user|has_group:"Collection Managers" %}
-                        <td>&nbsp;{{ accession.accessioned_by }}</td>
-                        {% endif %}
-                    </tr>
-                 {% endfor %}
-            </tbody>
-        </table>
+            <div class="w3-container w3-padding-16">
+                <button type="submit" class="w3-button w3-blue w3-margin-right">Apply Filters</button>
+                <a href="{% url 'accession_list' %}" class="w3-button w3-gray">Clear</a>
+            </div>
+        </form>
     </div>
+
+    <table class="lists_table">
+        <thead>
+            <th>Collection</th>
+            <th>Specimen Prefix</th>
+            <th>Specimen Number</th>
+            {% if user.is_superuser or user|has_group:"Collection Managers" %}
+                <th>Accessioned By</th>
+            {% endif %}
+        </thead>
+        <tbody>
+            {% for accession in accessions %}
+                <tr>
+                    <td>
+                        <a href="{% url 'accession_detail' accession.pk %}">{{ accession.collection.abbreviation }}</a>
+                    </td>
+                    <td>{{ accession.specimen_prefix.abbreviation }}</td>
+                    <td>{{ accession.specimen_no }}</td>
+                    {% if user.is_superuser or user|has_group:"Collection Managers" %}
+                        <td>{{ accession.accessioned_by }}</td>
+                    {% endif %}
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 </div>
 {% endblock %}
 
 {% block script %}
     <script>
-    function toggleAccordion(id) {
-    var panel = document.getElementById(id);
-    if (panel.classList.contains("w3-show")) {
-        panel.classList.remove("w3-show");
-        panel.classList.add("w3-hide");
-    } else {
-        panel.classList.remove("w3-hide");
-        panel.classList.add("w3-show");
-    }
-    }
+        function toggleAccordion(id) {
+            var panel = document.getElementById(id);
+            if (panel.classList.contains("w3-show")) {
+                panel.classList.remove("w3-show");
+                panel.classList.add("w3-hide");
+            } else {
+                panel.classList.remove("w3-hide");
+                panel.classList.add("w3-show");
+            }
+        }
     </script>
 {% endblock %}
