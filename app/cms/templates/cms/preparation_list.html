@@ -60,27 +60,16 @@
             <th>Status</th>
             <th>Curator</th>
             <th>Approval Status</th>
-            <th>Actions</th>
         </tr>
     </thead>
     <tbody>
         {% for preparation in preparations %}
         <tr>
-            <td>{{ preparation.accession_row }}</td>
+            <td><a href="{% url 'preparation_detail' preparation.id %}">{{ preparation.accession_row }}</a></td>
             <td>{{ preparation.preparator }}</td>
             <td>{{ preparation.status }}</td>
             <td>{{ preparation.curator|default:"N/A" }}</td>
             <td>{{ preparation.approval_status }}</td>
-            <td>
-                <a href="{% url 'preparation_detail' preparation.id %}" class="btn btn-sm btn-info">View</a>
-                {% if user == preparation.preparator %}
-                <a href="{% url 'preparation_edit' preparation.id %}" class="btn btn-sm btn-warning">Edit</a>
-                <a href="{% url 'preparation_delete' preparation.id %}" class="btn btn-sm btn-danger">Delete</a>
-                {% endif %}
-                {% if user != preparation.preparator and user|has_group:"Curators" %}
-                <a href="{% url 'preparation_approve' preparation.id %}" class="btn btn-sm btn-success">Curate</a>
-                {% endif %}
-            </td>
         </tr>
         {% endfor %}
     </tbody>

@@ -1316,6 +1316,9 @@ class DrawerRegisterDetailView(LoginRequiredMixin, DrawerRegisterAccessMixin, De
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        context["can_edit"] = (
+            is_collection_manager(self.request.user) or self.request.user.is_superuser
+        )
         context["history_entries"] = build_history_entries(self.object)
         return context
 

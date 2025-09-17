@@ -49,7 +49,6 @@
                 <th>Specimen Number</th>
                 {% if user.is_superuser or user|has_group:"Collection Managers" %}
                 <th>accessioned By</th>
-                <th>Edit Accession</th>
                 {% endif %}
             </thead>
             <tbody>
@@ -61,7 +60,6 @@
                         <td>{{ accession.specimen_no }}</td>
                         {% if user.is_superuser or user|has_group:"Collection Managers" %}
                         <td>&nbsp;{{ accession.accessioned_by }}</td>
-                        <td><a href="{% url 'accession_edit' accession.pk %}" class="edit-icon">✏️</a></td>
                         {% endif %}
                     </tr>
                  {% endfor %}

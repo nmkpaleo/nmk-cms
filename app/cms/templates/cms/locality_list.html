@@ -49,9 +49,6 @@
 
                     <th>Abbreviation</th>
                     <th>Name</b>
-                    {% if user.is_superuser or user|has_group:"Collection Managers" %}
-                    <th>Edit Locality</th>
-                    {% endif %}
                     
 
      
@@ -63,12 +60,6 @@
                         <td><a href="{% url 'locality_detail' locality.pk %}">{{ locality.abbreviation }}</a></td>
                         
                         <td>{{ locality.name }}</td>
-
-                        {% if user.is_superuser or user|has_group:"Collection Managers" %}
-                        <td>
-                            <a href="{% url 'locality_edit' locality.pk %}" class="edit-icon">✏️</a>
-                        </td>
-                        {% endif %}
 
                     </tr>
   

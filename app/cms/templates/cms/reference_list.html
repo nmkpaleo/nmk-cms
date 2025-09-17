@@ -50,9 +50,6 @@
         <th>First Author</th>
         <th>Year</th>
         <th>Title</th>
-        {% if user.is_superuser or user|has_group:"Collection Managers" %}
-        <th>Edit Reference</th>
-        {% endif %}
       </thead>
       <tbody>
         {% for reference in references %}
@@ -62,11 +59,6 @@
           </td>
           <td>{{ reference.year }}</td>
           <td>{{ reference.title }}</td>
-          {% if user.is_superuser or user|has_group:"Collection Managers" %}
-          <td>
-            <a href="{% url 'reference_edit' reference.pk %}" class="edit-icon">✏️</a>
-          </td>
-          {% endif %}
         </tr>
         {% endfor %}
       </tbody>

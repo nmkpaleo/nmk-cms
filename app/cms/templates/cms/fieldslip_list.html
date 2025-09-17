@@ -70,7 +70,6 @@
                     <th class="hidden-mobile">Verbatim Element</b>
                     <th class="hidden-mobile">Verbatim Horizon</b>
                     <th class="hidden-mobile">Aerial Photo</b>
-                    <th class="hidden-mobile">Edit Fieldslip</b>
                     <th> <button id="toggleColumns">Show More</button></th>
               
 
@@ -96,9 +95,6 @@
                             {% else %}
                                 No photo
                             {% endif %}
-                        </td>
-                        <td>
-                            &emsp;<a href="{% url 'fieldslip_edit' fieldslip.pk %}" class="edit-icon">✏️</a>
                         </td>
                     </tr>
                 <!--</div>--> 

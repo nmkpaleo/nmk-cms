@@ -65,6 +65,8 @@
   {% else %}
     <p>No changes logged.</p>
   {% endif %}
+  {% if can_edit %}
   <a href="{% url 'drawerregister_edit' object.pk %}" class="w3-button w3-blue">Edit</a>
+  {% endif %}
 </div>
 {% endblock %}

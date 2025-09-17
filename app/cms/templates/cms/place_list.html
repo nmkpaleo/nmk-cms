@@ -42,18 +42,12 @@
         <th>Name</th>
         <th>Type</th>
         <th>Locality</th>
-        {% if user.is_superuser or user|has_group:"Collection Managers" %}
-        <th>Edit Place</th>
-        {% endif %}
 
         {% for place in places %}
         <tr class="template_data">
             <td><a href="{% url 'place_detail' place.pk %}">{{ place.name }}</a></td>
             <td>{{ place.get_place_type_display }}</td>
             <td>{{ place.locality.abbreviation }}</td>
-            {% if user.is_superuser or user|has_group:"Collection Managers" %}
-            <td><a href="{% url 'place_edit' place.pk %}" class="edit-icon">✏️</a></td>
-            {% endif %}
         </tr>
         {% endfor %}
     </table>
