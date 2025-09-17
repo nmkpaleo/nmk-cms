@@ -372,8 +372,23 @@ def reference_create(request):
         form = ReferenceForm()
     return render(request, 'cms/reference_form.html', {'form': form})
 
+
+@login_required
+@user_passes_test(is_collection_manager)
+def locality_create(request):
+    if request.method == 'POST':
+        form = LocalityForm(request.POST, request.FILES)
+        if form.is_valid():
+            form.save()
+            return redirect('locality_list')
+    else:
+        form = LocalityForm()
+
+    return render(request, 'cms/locality_form.html', {'form': form})
+
+
 def reference_edit(request, pk):
-    
+
     reference = get_object_or_404(Reference, pk=pk)
     if request.method == 'POST':
         form = ReferenceForm(request.POST, request.FILES, instance=reference)

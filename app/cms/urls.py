@@ -30,6 +30,7 @@ from cms.views import (
     reference_edit,
     LocalityListView,
     LocalityDetailView,
+    locality_create,
     locality_edit,
     PlaceListView,
     PlaceDetailView,
@@ -106,6 +107,7 @@ urlpatterns = [
 
 
     path('localities/', LocalityListView.as_view(), name='locality_list'),
+    path('localities/new/', locality_create, name='locality_create'),
     path('localities/<int:pk>/', LocalityDetailView.as_view(), name='locality_detail'),
     path('localities/<int:pk>/edit/', locality_edit, name='locality_edit'),
 

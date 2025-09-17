@@ -9,7 +9,11 @@
 
 <div class="w3-container w3-margin-top">
     <h2>Localities</h2>
-  
+
+    {% if user.is_superuser or user|has_group:"Collection Managers" %}
+    <a href="{% url 'locality_create' %}" class="w3-button w3-green w3-margin-bottom">New Locality</a>
+    {% endif %}
+
     <button onclick="toggleAccordion('accessionFilterPanel')" class="w3-button w3-block w3-light-grey w3-left-align">
       🔍 Show/Hide Filters
     </button>

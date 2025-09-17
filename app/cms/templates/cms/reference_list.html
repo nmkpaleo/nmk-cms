@@ -12,6 +12,10 @@
 
     <h2>References</h2>
 
+    {% if user.is_superuser or user|has_group:"Collection Managers" %}
+    <a href="{% url 'reference_create' %}" class="w3-button w3-green w3-margin-bottom">New Reference</a>
+    {% endif %}
+
     <button onclick="toggleAccordion('referenceFilterPanel')" class="w3-button w3-block w3-light-grey w3-left-align">
       🔍 Show/Hide Filters
     </button>

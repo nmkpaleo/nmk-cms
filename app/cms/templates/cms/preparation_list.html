@@ -2,9 +2,12 @@
 {% load user_tags %}
 
 {% block content %}
-<h2>Preparation Records</h2>
-
 <div class="w3-container w3-margin-top">
+  <h2>Preparation Records</h2>
+
+  {% if user.is_superuser or user|has_group:"Collection Managers" or user|has_group:"Curators" or user|has_group:"Preparators" %}
+    <a href="{% url 'preparation_create' %}" class="w3-button w3-green w3-margin-bottom">New Preparation</a>
+  {% endif %}
 
   <button onclick="toggleAccordion('prepFilterPanel')" class="w3-button w3-block w3-light-grey w3-left-align">
     🔍 Show/Hide Filters
@@ -49,10 +52,8 @@
       </div>
     </form>
   </div>
-</div>
-  
-  <a href="{% url 'preparation_create' %}" class="btn btn-primary">New Preparation</a>
-  <table class="table">
+  <div class="table-container">
+    <table class="table">
     <thead>
         <tr>
             <th>Specimen</th>
@@ -74,6 +75,8 @@
         {% endfor %}
     </tbody>
 </table>
+  </div>
+</div>
 {% endblock %}
 
 {% block script %}

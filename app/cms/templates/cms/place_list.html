@@ -9,6 +9,10 @@
 <div class="w3-container w3-margin-top">
     <h2>Places</h2>
 
+    {% if user.is_superuser or user|has_group:"Collection Managers" %}
+    <a href="{% url 'place_create' %}" class="w3-button w3-green w3-margin-bottom">New Place</a>
+    {% endif %}
+
     <button onclick="toggleAccordion('placeFilterPanel')" class="w3-button w3-block w3-light-grey w3-left-align">
       🔍 Show/Hide Filters
     </button>
