@@ -45,7 +45,7 @@
             </div>
             <div class="cards">
 
-                {% if user.is_authenticated and user.groups.all.0.name == "Collection Managers" %}
+                {% if user.is_authenticated and user|has_group:"Collection Managers" %}
                     <a href="{% url 'accession_add_geology' accession.id %}">➕ Add Horizon</a>
                 {% endif %}
 
@@ -68,7 +68,7 @@
                 </table>
                 
                 <hr class="accession_hr">
-                {% if user.is_authenticated and user.groups.all.0.name == "Collection Managers" %}
+                {% if user.is_authenticated and user|has_group:"Collection Managers" %}
                     <a href="{% url 'accession_add_row' accession.id %}">➕ Add Specimen</a>
                 {% endif %}
                 <table>
@@ -120,7 +120,7 @@
                     </tbody>
                 </table>                
                 <hr class="accession_hr">
-                {% if user.is_authenticated and user.groups.all.0.name == "Collection Managers" %}
+                {% if user.is_authenticated and user|has_group:"Collection Managers" %}
                   <a href="{% url 'accession_add_reference' accession.id %}">➕ Add Reference</a>
                 {% endif %}
                 {% if references %}
@@ -155,7 +155,7 @@
                 {% endif %}
                 <hr class="accession_hr">                
 
-                {% if user.is_authenticated and user.groups.all.0.name == "Collection Managers" %}
+                {% if user.is_authenticated and user|has_group:"Collection Managers" %}
                     <a href="{% url 'accession_upload_media' accession.id %}">➕ Upload Media</a>
                 {% endif %}
                 <table>
@@ -197,7 +197,7 @@
                 </table>
                 <hr class="accession_hr">
 
-                {% if user.is_authenticated and user.groups.all.0.name == "Collection Managers" %}
+                {% if user.is_authenticated and user|has_group:"Collection Managers" %}
                   <a href="{% url 'accession_add_comment' accession.id %}">➕ Add Comment</a>
                 {% endif %}
                 {% if comments %}

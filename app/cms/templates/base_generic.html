@@ -1,4 +1,4 @@
-{% load static %}
+{% load static user_tags %}
 <!doctype html>
 <html lang="en">
   <head>
@@ -49,15 +49,15 @@
               <li><a href="{% url 'place_list' %}">Places</a></li>
               <li><a href="{% url 'reference_list' %}">References</a></li>
               
-              {% if user.is_superuser or user.groups.first.name in "Curators Collection Managers" %}
+              {% if user.is_superuser or user|has_group:"Collection Managers" %}
                 <li><a href="{% url 'fieldslip_list' %}">Field Slips</a></li>
               {% endif %}
 
-              {% if user.is_superuser or user.groups.first.name in "Curators Collection Managers" %}
+              {% if user.is_superuser or user|has_group:"Collection Managers" or user|has_group:"Curators" %}
                 <li><a href="{% url 'preparation_list' %}">Preparations</a></li>
               {% endif %}
 
-              {% if user.is_superuser or user.groups.first.name in "Collection Managers" %}
+              {% if user.is_superuser or user|has_group:"Collection Managers" %}
                 <li><a href="{% url 'drawerregister_list' %}">Drawer Register</a></li>
               {% endif %}
 

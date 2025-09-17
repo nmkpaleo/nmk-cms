@@ -1,4 +1,5 @@
 {% extends "base_generic.html" %}
+{% load user_tags %}
 
 {% block content %}
   {% if is_preparator %}
@@ -151,7 +152,11 @@
         <tbody>
           {% for drawer in my_drawers %}
             <tr>
-              <td><a href="{% url 'drawerregister_detail' drawer.id %}">{{ drawer.code }}</a></td>
+              {% if user.is_superuser or user|has_group:"Collection Managers" %}
+                <td><a href="{% url 'drawerregister_detail' drawer.id %}">{{ drawer.code }}</a></td>
+              {% else %}
+                <td>{{ drawer.code }}</td>
+              {% endif %}
               <td>{{ drawer.description }}</td>
               <td>
                 {% if drawer.active_scan_start %}

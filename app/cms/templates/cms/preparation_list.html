@@ -1,4 +1,5 @@
 {% extends "base_generic.html" %}
+{% load user_tags %}
 
 {% block content %}
 <h2>Preparation Records</h2>
@@ -72,11 +73,11 @@
             <td>{{ preparation.approval_status }}</td>
             <td>
                 <a href="{% url 'preparation_detail' preparation.id %}" class="btn btn-sm btn-info">View</a>
-                {% if request.user == preparation.preparator %}
+                {% if user == preparation.preparator %}
                 <a href="{% url 'preparation_edit' preparation.id %}" class="btn btn-sm btn-warning">Edit</a>
                 <a href="{% url 'preparation_delete' preparation.id %}" class="btn btn-sm btn-danger">Delete</a>
                 {% endif %}
-                {% if request.user != preparation.preparator and request.user.groups.all.0.name == "Curators" %}
+                {% if user != preparation.preparator and user|has_group:"Curators" %}
                 <a href="{% url 'preparation_approve' preparation.id %}" class="btn btn-sm btn-success">Curate</a>
                 {% endif %}
             </td>
