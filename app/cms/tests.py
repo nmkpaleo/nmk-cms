@@ -1234,7 +1234,7 @@ class ProcessPendingScansTests(TestCase):
                     "specimen_prefix_abbreviation": {"interpreted": "AB"},
                     "specimen_no": {"interpreted": 123},
                     "type_status": {"interpreted": "Holotype"},
-                    "publiched": {"interpreted": "Yes"},
+                    "published": {"interpreted": "Yes"},
                     "additional_notes": [
                         {
                             "heading": {"interpreted": "Note"},
@@ -1291,7 +1291,7 @@ class ProcessPendingScansTests(TestCase):
                     "specimen_prefix_abbreviation": {"interpreted": "AB"},
                     "specimen_no": {"interpreted": 123},
                     "type_status": {"interpreted": "Holotype"},
-                    "publiched": {"interpreted": "Yes"},
+                    "published": {"interpreted": "Yes"},
                     "references": [
                         {
                             "reference_first_author": {"interpreted": "Harris"},
@@ -1336,7 +1336,7 @@ class ProcessPendingScansTests(TestCase):
                         "specimen_prefix_abbreviation": {"interpreted": "AB"},
                         "specimen_no": {"interpreted": 123},
                         "type_status": {"interpreted": "Holotype"},
-                        "publiched": {"interpreted": "Yes"},
+                        "published": {"interpreted": "Yes"},
                         "references": [
                             {
                                 "reference_first_author": {"interpreted": "Harris"},
@@ -1354,7 +1354,7 @@ class ProcessPendingScansTests(TestCase):
                         "specimen_prefix_abbreviation": {"interpreted": "AB"},
                         "specimen_no": {"interpreted": 124},
                         "type_status": {"interpreted": "Holotype"},
-                        "publiched": {"interpreted": "Yes"},
+                        "published": {"interpreted": "Yes"},
                         "references": [
                             {
                                 "reference_first_author": {"interpreted": "harris "},
@@ -1398,7 +1398,7 @@ class ProcessPendingScansTests(TestCase):
                     "specimen_prefix_abbreviation": {"interpreted": "AB"},
                     "specimen_no": {"interpreted": 123},
                     "type_status": {"interpreted": "Type"},
-                    "publiched": {"interpreted": "No"},
+                    "published": {"interpreted": "No"},
                     "additional_notes": [],
                 }
             ]
@@ -1430,7 +1430,7 @@ class ProcessPendingScansTests(TestCase):
                     "specimen_prefix_abbreviation": {"interpreted": "AB"},
                     "specimen_no": {"interpreted": 123},
                     "type_status": {"interpreted": "Holotype"},
-                    "publiched": {"interpreted": "Yes"},
+                    "published": {"interpreted": "Yes"},
                     "field_slips": [
                         {
                             "field_number": {"interpreted": "FS-1"},
@@ -1485,7 +1485,7 @@ class ProcessPendingScansTests(TestCase):
                     "specimen_prefix_abbreviation": {"interpreted": "AB"},
                     "specimen_no": {"interpreted": 123},
                     "type_status": {"interpreted": "Holotype"},
-                    "publiched": {"interpreted": "Yes"},
+                    "published": {"interpreted": "Yes"},
                     "field_slips": [
                         {
                             "field_number": {"interpreted": "FS-1"},

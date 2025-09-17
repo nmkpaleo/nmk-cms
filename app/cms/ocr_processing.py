@@ -148,7 +148,7 @@ JSON schema:
       "specimen_prefix_abbreviation": { "raw": string|null, "interpreted": string|null, "confidence": number}, // Second part of the Accession, two capital letters. e.g., "AB", "ER"; should always be present
       "specimen_no": { "raw": integer|null, "interpreted": integer|null, "confidence": number},                // Third part of the Accession, full numeric part as written, (e.g., "1234")
       "type_status": { "raw": string|null, "interpreted": string|null, "confidence": number},                  // Usually handwritten with red (e.g., "Type", "Holotype),
-      "publiched":  { "raw": string|null, "interpreted": string|null, "confidence": number},                   // is there a red forward slash on the top left corner of the card? Yes or No.
+      "published":  { "raw": string|null, "interpreted": string|null, "confidence": number},                   // is there a red forward slash on the top left corner of the card? Yes or No.
       "additional_notes": [                                                                                    // all additional extracted data from OCR
         {
           "heading": { "raw": string|null, "interpreted": string|null, "confidence": number},                  // interpreted heading of an additional note based on the value
@@ -218,7 +218,7 @@ Rules:
 - The suffix -IDAE is used for a family name, -INAE for a subfamily name, -INI for the name of a tribe.
 - "specimen_suffix": Each specimen_suffix creates a rows entry. Default is "-". If several, (e.g., "A-C"), creates three rows with a specimen_suffix "A", "B", and "C".
 - "storage_area": set the same value to all rows
-- "publiched": Yes or No
+- "published": Yes or No
 - "reference_first_author": set the interpreted value as "surname, firstname" (i.e., "John M. Harris" would be "Harris, John M."
 - "verbatim_taxon": use identifications.verbatim_identification
 
@@ -353,7 +353,7 @@ def create_accessions_from_media(media: Media) -> None:
         next_instance = existing.instance_number + 1 if existing else 1
 
         type_status = (entry.get("type_status") or {}).get("interpreted")
-        published_val = (entry.get("publiched") or {}).get("interpreted")
+        published_val = (entry.get("published") or {}).get("interpreted")
         is_published = str(published_val).strip().lower() in {"yes", "true", "1"}
 
         notes = entry.get("additional_notes") or []
