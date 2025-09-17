@@ -1,20 +1,20 @@
 {% extends "base_generic.html" %}
 {% load user_tags %}
 
-{% block title %}
-      <title>Accession list</title>
-{% endblock %}
+{% block title %}Accessions{% endblock %}
 
 {% block content %}
 
 <div class="w3-container w3-margin-top">
-    <h2>Accessions</h2>
+    <div class="list-page-header">
+        <h2>Accessions</h2>
 
-    {% if user.is_authenticated %}
-        {% if user.is_superuser or user|has_group:"Collection Managers" %}
-            <a href="{% url 'accession-wizard' %}" class="w3-button w3-green w3-margin-bottom">New Accession</a>
+        {% if user.is_authenticated %}
+            {% if user.is_superuser or user|has_group:"Collection Managers" %}
+                <a href="{% url 'accession-wizard' %}" class="w3-button w3-green">New Accession</a>
+            {% endif %}
         {% endif %}
-    {% endif %}
+    </div>
 
     <button onclick="toggleAccordion('accessionFilterPanel')" class="w3-button w3-block w3-light-grey w3-left-align">
         🔍 Show/Hide Filters

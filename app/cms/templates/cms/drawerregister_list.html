@@ -1,9 +1,15 @@
 {% extends "base_generic.html" %}
 
+{% block title %}Drawers{% endblock %}
+
 {% block content %}
 <div class="w3-container w3-margin-top">
-  <h2>Drawer Register</h2>
-  <a href="{% url 'drawerregister_create' %}" class="w3-button w3-green w3-margin-bottom">New Drawer</a>
+  <div class="list-page-header">
+    <h2>Drawers</h2>
+    {% if can_edit %}
+      <a href="{% url 'drawerregister_create' %}" class="w3-button w3-green">New Drawer</a>
+    {% endif %}
+  </div>
   <button onclick="toggleAccordion('drawerFilterPanel')" class="w3-button w3-block w3-light-grey w3-left-align">
     🔍 Show/Hide Filters
   </button>

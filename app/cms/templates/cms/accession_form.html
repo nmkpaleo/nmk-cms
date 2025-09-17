@@ -1,7 +1,9 @@
 {% extends "base_generic.html" %}
 
+{% block title %}{% if form.instance.pk %}Edit Accession{% else %}New Accession{% endif %}{% endblock %}
+
 {% block content %}
     {% include "includes/base_form.html" with form=form submit_label="Save" method="post" action=request.path title="Accession" %}
     
-    <a href="{% url 'accession_list' %}">Back to Accession list</a>
+    <a href="{% url 'accession_list' %}">Back to Accessions</a>
 {% endblock %}

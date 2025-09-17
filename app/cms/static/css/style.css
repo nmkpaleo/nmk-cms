@@ -143,6 +143,19 @@
     justify-content: space-between;
 }
 
+.list-page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+.list-page-header h2 {
+    margin: 0;
+}
+
 .search-bar {
     margin-left: 20px;
     margin-top: 11px;

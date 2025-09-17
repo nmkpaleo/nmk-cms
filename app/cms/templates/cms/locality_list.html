@@ -1,79 +1,65 @@
 {% extends "base_generic.html" %}
 {% load user_tags %}
 
-{% block title %}
-      <title>locality_list</title>
-{% endblock %}
+{% block title %}Localities{% endblock %}
 
 {% block content %}
 
 <div class="w3-container w3-margin-top">
-    <h2>Localities</h2>
+    <div class="list-page-header">
+        <h2>Localities</h2>
 
-    {% if user.is_superuser or user|has_group:"Collection Managers" %}
-    <a href="{% url 'locality_create' %}" class="w3-button w3-green w3-margin-bottom">New Locality</a>
-    {% endif %}
+        {% if user.is_superuser or user|has_group:"Collection Managers" %}
+            <a href="{% url 'locality_create' %}" class="w3-button w3-green">New Locality</a>
+        {% endif %}
+    </div>
 
     <button onclick="toggleAccordion('accessionFilterPanel')" class="w3-button w3-block w3-light-grey w3-left-align">
       🔍 Show/Hide Filters
     </button>
   
     <div id="accessionFilterPanel" class="w3-hide w3-animate-opacity w3-padding w3-light-grey w3-round-large w3-margin-top">
-      
-<form method="get">
-    <div class="w3-row-padding">
-        <div class="w3-third">
-            <label>Abbreviation</label>
-            {{ filter.form.abbreviation }}
-            
-            
-        </div>
-        <div class="w3-third">
-            <label>Name</label>
-            {{ filter.form.name }}
-        </div>
-        
+        <form method="get">
+            <div class="w3-row-padding">
+                <div class="w3-third">
+                    <label>Abbreviation</label>
+                    {{ filter.form.abbreviation }}
+                </div>
+                <div class="w3-third">
+                    <label>Name</label>
+                    {{ filter.form.name }}
+                </div>
+            </div>
+
+            <div class="w3-container w3-padding-16">
+                <button type="submit" class="w3-button w3-blue w3-margin-right">Apply Filters</button>
+                <a href="{% url 'locality_list' %}" class="w3-button w3-gray">Clear</a>
+            </div>
+        </form>
     </div>
-
-    <div class="w3-container w3-padding-16">
-        <button type="submit" class="w3-button w3-blue w3-margin-right">Apply Filters</button>
-        <a href="{% url 'locality_list' %}" class="w3-button w3-gray">Clear</a>
-    </div>
-</form>
+</div>
 
 
-    </div>
-  </div>
-
-
-        <div class="table-container">
-            <table class="lists_table">
-
-
-
+    <div class="table-container">
+        <table class="lists_table">
+            <thead>
+                <tr>
                     <th>Abbreviation</th>
-                    <th>Name</b>
-                    
-
-     
-                 {% for locality in localities %}
-
-                   <tr class="template_data">
-
-                        
+                    <th>Name</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for locality in localities %}
+                    <tr class="template_data">
                         <td><a href="{% url 'locality_detail' locality.pk %}">{{ locality.abbreviation }}</a></td>
-                        
                         <td>{{ locality.name }}</td>
-
                     </tr>
-  
                 {% endfor %}
-            </table>
             </tbody>
-            
-        </div>
-
+        </table>
     </div>
+
+</div>
 
 {% endblock %}
 

@@ -1,7 +1,9 @@
 {% extends "base_generic.html" %}
+{% load user_tags %}
+
+{% block title %}Preparation {{ preparation.accession_row }}{% endblock %}
 
 {% block content %}
-{% load user_tags %}
 
 <div class="template-detail-container">
     <div class="template-detail-header">

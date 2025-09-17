@@ -1,13 +1,17 @@
 {% extends "base_generic.html" %}
 {% load user_tags %}
 
+{% block title %}Preparations{% endblock %}
+
 {% block content %}
 <div class="w3-container w3-margin-top">
-  <h2>Preparation Records</h2>
+  <div class="list-page-header">
+    <h2>Preparations</h2>
 
-  {% if user.is_superuser or user|has_group:"Collection Managers" or user|has_group:"Curators" or user|has_group:"Preparators" %}
-    <a href="{% url 'preparation_create' %}" class="w3-button w3-green w3-margin-bottom">New Preparation</a>
-  {% endif %}
+    {% if user.is_superuser or user|has_group:"Collection Managers" or user|has_group:"Curators" or user|has_group:"Preparators" %}
+      <a href="{% url 'preparation_create' %}" class="w3-button w3-green">New Preparation</a>
+    {% endif %}
+  </div>
 
   <button onclick="toggleAccordion('prepFilterPanel')" class="w3-button w3-block w3-light-grey w3-left-align">
     🔍 Show/Hide Filters

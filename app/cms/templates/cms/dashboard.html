@@ -1,6 +1,8 @@
 {% extends "base_generic.html" %}
 {% load user_tags %}
 
+{% block title %}Dashboard{% endblock %}
+
 {% block content %}
   {% if is_preparator %}
     <h2>My Preparations</h2>
@@ -137,7 +139,7 @@
   {% endif %}
 
   {% if is_intern %}
-    <h2>My Drawer Registers</h2>
+    <h2>My Drawers</h2>
     {% if my_drawers %}
       <table class="w3-table w3-striped">
         <thead>

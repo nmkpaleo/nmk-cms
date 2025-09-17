@@ -28,9 +28,7 @@
         z-index: 10000;
       }
     </style>
-    {% block title %}
-      <title>NMK CMS</title>
-    {% endblock %}
+    <title>{% block title %}NMK CMS{% endblock %}</title>
   
   </head>
 
@@ -58,7 +56,7 @@
               {% endif %}
 
               {% if user.is_superuser or user|has_group:"Collection Managers" %}
-                <li><a href="{% url 'drawerregister_list' %}">Drawer Register</a></li>
+                <li><a href="{% url 'drawerregister_list' %}">Drawers</a></li>
               {% endif %}
 
               {% if user.is_authenticated %}

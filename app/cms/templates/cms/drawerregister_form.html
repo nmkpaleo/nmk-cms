@@ -1,6 +1,8 @@
 {% extends "base_generic.html" %}
 
+{% block title %}{% if form.instance.pk %}Edit Drawer{% else %}New Drawer{% endif %}{% endblock %}
+
 {% block content %}
-    {% include "includes/base_form.html" with form=form submit_label="Save" method="post" action=request.path title="Drawer Register" %}
-    <a href="{% url 'drawerregister_list' %}">Back to Drawer Register list</a>
+    {% include "includes/base_form.html" with form=form submit_label="Save" method="post" action=request.path title="Drawer" %}
+    <a href="{% url 'drawerregister_list' %}">Back to Drawers</a>
 {% endblock %}

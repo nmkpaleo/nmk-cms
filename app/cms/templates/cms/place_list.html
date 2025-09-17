@@ -1,17 +1,17 @@
 {% extends "base_generic.html" %}
 {% load user_tags %}
 
-{% block title %}
-      <title>place_list</title>
-{% endblock %}
+{% block title %}Places{% endblock %}
 
 {% block content %}
 <div class="w3-container w3-margin-top">
-    <h2>Places</h2>
+    <div class="list-page-header">
+        <h2>Places</h2>
 
-    {% if user.is_superuser or user|has_group:"Collection Managers" %}
-    <a href="{% url 'place_create' %}" class="w3-button w3-green w3-margin-bottom">New Place</a>
-    {% endif %}
+        {% if user.is_superuser or user|has_group:"Collection Managers" %}
+            <a href="{% url 'place_create' %}" class="w3-button w3-green">New Place</a>
+        {% endif %}
+    </div>
 
     <button onclick="toggleAccordion('placeFilterPanel')" class="w3-button w3-block w3-light-grey w3-left-align">
       🔍 Show/Hide Filters
@@ -43,17 +43,22 @@
 
 <div class="table-container">
     <table class="lists_table">
-        <th>Name</th>
-        <th>Type</th>
-        <th>Locality</th>
-
-        {% for place in places %}
-        <tr class="template_data">
-            <td><a href="{% url 'place_detail' place.pk %}">{{ place.name }}</a></td>
-            <td>{{ place.get_place_type_display }}</td>
-            <td>{{ place.locality.abbreviation }}</td>
-        </tr>
-        {% endfor %}
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Locality</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for place in places %}
+                <tr class="template_data">
+                    <td><a href="{% url 'place_detail' place.pk %}">{{ place.name }}</a></td>
+                    <td>{{ place.get_place_type_display }}</td>
+                    <td>{{ place.locality.abbreviation }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
     </table>
 </div>
 {% endblock %}

@@ -1,18 +1,18 @@
 {% extends "base_generic.html" %}
 {% load user_tags %}
 
-{% block title %}
-      <title>fieldslip_list</title>
-{% endblock %}
+{% block title %}Field Slips{% endblock %}
 
 {% block content %}
 
 <div class="w3-container w3-margin-top">
-    <h2>Field Slips</h2>
+    <div class="list-page-header">
+        <h2>Field Slips</h2>
 
-    {% if user.is_superuser or user|has_group:"Collection Managers" %}
-    <a href="{% url 'fieldslip_create' %}" class="w3-button w3-green w3-margin-bottom">New Field Slip</a>
-    {% endif %}
+        {% if user.is_superuser or user|has_group:"Collection Managers" %}
+            <a href="{% url 'fieldslip_create' %}" class="w3-button w3-green">New Field Slip</a>
+        {% endif %}
+    </div>
 
     <button onclick="toggleAccordion('fieldslipFilterPanel')" class="w3-button w3-block w3-light-grey w3-left-align">
         🔍 Show/Hide Filters
@@ -59,55 +59,46 @@
 </div>
 
     <div class="template_list_body">
-        <div class="container"></div>       
-        </div>
- 
-        <div class="table-container">
-            <table class="lists_table">
-            
-               
+        <div class="container"></div>
+    </div>
 
-                  <th>Field Number</th>
-                  <th>Collector</b>
-                    <th>Collection Date</b>
-                    <th class="hidden-mobile">Verbatim Locality</b>
-                    <th class="hidden-mobile">Verbatim Taxon</b>
-                    <th class="hidden-mobile">Verbatim Element</b>
-                    <th class="hidden-mobile">Verbatim Horizon</b>
-                    <th class="hidden-mobile">Aerial Photo</b>
-                    <th> <button id="toggleColumns">Show More</button></th>
-              
-
-     
+    <div class="table-container">
+        <table class="lists_table">
+            <thead>
+                <tr>
+                    <th>Field Number</th>
+                    <th>Collector</th>
+                    <th>Collection Date</th>
+                    <th class="hidden-mobile">Verbatim Locality</th>
+                    <th class="hidden-mobile">Verbatim Taxon</th>
+                    <th class="hidden-mobile">Verbatim Element</th>
+                    <th class="hidden-mobile">Verbatim Horizon</th>
+                    <th class="hidden-mobile">Aerial Photo</th>
+                    <th><button id="toggleColumns">Show More</button></th>
+                </tr>
+            </thead>
+            <tbody>
                 {% for fieldslip in fieldslips %}
-
-     
-                   <tr class="template_data">
- 
-                        <td>
-                            
-                            <a href="{% url 'fieldslip_detail' fieldslip.pk %}">{{ fieldslip.field_number }}</a></td>
+                    <tr class="template_data">
+                        <td><a href="{% url 'fieldslip_detail' fieldslip.pk %}">{{ fieldslip.field_number }}</a></td>
                         <td>{{ fieldslip.collector }}</td>
-                        
                         <td>{{ fieldslip.collection_date }}</td>
-                        <td class="hidden-mobile">&nbsp;{{ fieldslip.verbatim_locality }}</td>
-                        <td class="hidden-mobile">&nbsp;{{ fieldslip.verbatim_taxon }}</td>
-                        <td class="hidden-mobile">&nbsp;{{ fieldslip.verbatim_element }}</td>
-                        <td class="hidden-mobile">&nbsp;{{ fieldslip.verbatim_horizon }}</td>
+                        <td class="hidden-mobile">{{ fieldslip.verbatim_locality }}</td>
+                        <td class="hidden-mobile">{{ fieldslip.verbatim_taxon }}</td>
+                        <td class="hidden-mobile">{{ fieldslip.verbatim_element }}</td>
+                        <td class="hidden-mobile">{{ fieldslip.verbatim_horizon }}</td>
                         <td class="hidden-mobile">
                             {% if fieldslip.aerial_photo %}
-                                <img src="{{ fieldslip.aerial_photo.url }}" alt="Aerial Photo" style="max-width: 100px; height: auto; ">
+                                <img src="{{ fieldslip.aerial_photo.url }}" alt="Aerial Photo" style="max-width: 100px; height: auto;">
                             {% else %}
                                 No photo
                             {% endif %}
                         </td>
+                        <td></td>
                     </tr>
-                <!--</div>--> 
                 {% endfor %}
-            </table>
             </tbody>
-            
-        </div>
+        </table>
     </div>
 
 {% endblock %}

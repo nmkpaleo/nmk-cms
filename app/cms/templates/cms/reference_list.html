@@ -1,20 +1,20 @@
 {% extends "base_generic.html" %}
 {% load user_tags %}
 
-{% block title %}
-  <title>reference_list</title>
-{% endblock %}
+{% block title %}References{% endblock %}
 
 {% block content %}
 
 
 <div class="template_list_body">
 
-    <h2>References</h2>
+    <div class="list-page-header">
+        <h2>References</h2>
 
-    {% if user.is_superuser or user|has_group:"Collection Managers" %}
-    <a href="{% url 'reference_create' %}" class="w3-button w3-green w3-margin-bottom">New Reference</a>
-    {% endif %}
+        {% if user.is_superuser or user|has_group:"Collection Managers" %}
+            <a href="{% url 'reference_create' %}" class="w3-button w3-green">New Reference</a>
+        {% endif %}
+    </div>
 
     <button onclick="toggleAccordion('referenceFilterPanel')" class="w3-button w3-block w3-light-grey w3-left-align">
       🔍 Show/Hide Filters
@@ -51,9 +51,11 @@
 
     <table class="lists_table">
       <thead>
-        <th>First Author</th>
-        <th>Year</th>
-        <th>Title</th>
+        <tr>
+          <th>First Author</th>
+          <th>Year</th>
+          <th>Title</th>
+        </tr>
       </thead>
       <tbody>
         {% for reference in references %}
