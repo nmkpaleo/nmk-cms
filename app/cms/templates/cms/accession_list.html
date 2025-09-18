@@ -1,70 +1,91 @@
 {% extends "base_generic.html" %}
 {% load user_tags %}
 
-{% block title %}
-      <title>Accession list</title>
-{% endblock %}
+{% block title %}Accessions{% endblock %}
 
 {% block content %}
 
 <div class="w3-container w3-margin-top">
-    <h2>Accessions</h2>
-  
-    <button onclick="toggleAccordion('accessionFilterPanel')" class="w3-button w3-block w3-light-grey w3-left-align">
-      🔍 Show/Hide Filters
-    </button>
-  
-    <div id="accessionFilterPanel" class="w3-hide w3-animate-opacity w3-padding w3-light-grey w3-round-large w3-margin-top">
-      <form method="get">
-        <div class="w3-row-padding">
-          <div class="w3-third">
-            <label>Specimen Number</label>
-            {{ filter.form.specimen_no }}
-          </div>
-          <div class="w3-third">
-            <label>Specimen Prefix</label>
-            {{ filter.form.specimen_prefix }}
-          </div>
-          <div class="w3-third">
-            <label>Comment</label>
-            {{ filter.form.comment }}
-          </div>
+    <div class="w3-row w3-margin-bottom w3-padding-16 w3-border-bottom">
+        <div class="w3-col s12 m6 l6">
+            <h2 class="w3-margin-0">Accessions</h2>
         </div>
-  
-        <div class="w3-container w3-padding-16">
-          <button type="submit" class="w3-button w3-blue w3-margin-right">Apply Filters</button>
-          <a href="{% url 'accession_list' %}" class="w3-button w3-gray">Clear</a>
-        </div>
-      </form>
-    </div>
-  </div>
-  
-
-
-            <table class="lists_table">
-               
-            <thead>
-                <th>Collection</th>
-                <th>Specimen Prefix</th>
-                <th>Specimen Number</th>
+        <div class="w3-col s12 m6 l6 w3-right-align w3-margin-top">
+            {% if user.is_authenticated %}
                 {% if user.is_superuser or user|has_group:"Collection Managers" %}
-                <th>accessioned By</th>
-                <th>Edit Accession</th>
+                    <a href="{% url 'accession-wizard' %}" class="w3-button w3-green w3-round">
+                        <i class="fa-solid fa-plus-circle"></i>
+                        New Accession
+                    </a>
                 {% endif %}
+            {% endif %}
+        </div>
+    </div>
+
+    <button type="button" onclick="toggleAccordion('accessionFilterPanel')" class="w3-button w3-light-grey w3-round-large">
+        <i class="fa-solid fa-filter"></i>
+        <span class="w3-margin-left">Show/Hide Filters</span>
+    </button>
+
+    <div id="accessionFilterPanel" class="w3-hide w3-animate-opacity w3-padding w3-light-grey w3-round-large w3-margin-top w3-card">
+        <form method="get">
+            <div class="w3-row-padding">
+                <div class="w3-col s12 m6 l4 w3-margin-bottom">
+                    <label class="w3-text-grey">Specimen Number</label>
+                    {{ filter.form.specimen_no }}
+                </div>
+                <div class="w3-col s12 m6 l4 w3-margin-bottom">
+                    <label class="w3-text-grey">Specimen Prefix</label>
+                    {{ filter.form.specimen_prefix }}
+                </div>
+                <div class="w3-col s12 m6 l4 w3-margin-bottom">
+                    <label class="w3-text-grey">Comment</label>
+                    {{ filter.form.comment }}
+                </div>
+            </div>
+
+            <div class="w3-margin-top">
+                <button type="submit" class="w3-button w3-blue w3-round w3-margin-right">
+                    <i class="fa-solid fa-check"></i>
+                    Apply Filters
+                </button>
+                <a href="{% url 'accession_list' %}" class="w3-button w3-gray w3-round">
+                    <i class="fa-solid fa-rotate-left"></i>
+                    Clear
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <div class="w3-responsive w3-margin-top">
+        <table class="w3-table-all w3-hoverable">
+            <thead>
+                <tr>
+                    <th>Collection</th>
+                    <th>Specimen Prefix</th>
+                    <th>Specimen Number</th>
+                    {% if user.is_superuser or user|has_group:"Collection Managers" %}
+                        <th>Accessioned By</th>
+                    {% endif %}
+                </tr>
             </thead>
             <tbody>
                 {% for accession in accessions %}
-                    <tr >
-                        
-                        <td> <a href="{% url 'accession_detail' accession.pk %}"> {{ accession.collection.abbreviation }}</a></td>
-                        <td>&nbsp;{{ accession.specimen_prefix.abbreviation }}</td>
+                    <tr>
+                        <td>
+                            <a href="{% url 'accession_detail' accession.pk %}">{{ accession.collection.abbreviation }}</a>
+                        </td>
+                        <td>{{ accession.specimen_prefix.abbreviation }}</td>
                         <td>{{ accession.specimen_no }}</td>
                         {% if user.is_superuser or user|has_group:"Collection Managers" %}
-                        <td>&nbsp;{{ accession.accessioned_by }}</td>
-                        <td><a href="{% url 'accession_edit' accession.pk %}" class="edit-icon">✏️</a></td>
+                            <td>{{ accession.accessioned_by }}</td>
                         {% endif %}
                     </tr>
-                 {% endfor %}
+                {% empty %}
+                    <tr>
+                        <td colspan="{% if user.is_superuser or user|has_group:"Collection Managers" %}4{% else %}3{% endif %}" class="w3-center">No accessions found.</td>
+                    </tr>
+                {% endfor %}
             </tbody>
         </table>
     </div>
@@ -73,15 +94,15 @@
 
 {% block script %}
     <script>
-    function toggleAccordion(id) {
-    var panel = document.getElementById(id);
-    if (panel.classList.contains("w3-show")) {
-        panel.classList.remove("w3-show");
-        panel.classList.add("w3-hide");
-    } else {
-        panel.classList.remove("w3-hide");
-        panel.classList.add("w3-show");
-    }
-    }
+        function toggleAccordion(id) {
+            const panel = document.getElementById(id);
+            if (panel.classList.contains('w3-show')) {
+                panel.classList.remove('w3-show');
+                panel.classList.add('w3-hide');
+            } else {
+                panel.classList.remove('w3-hide');
+                panel.classList.add('w3-show');
+            }
+        }
     </script>
 {% endblock %}

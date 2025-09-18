@@ -1,47 +1,67 @@
 {% extends "base_generic.html" %}
 
+{% block title %}Drawers{% endblock %}
+
 {% block content %}
 <div class="w3-container w3-margin-top">
-  <h2>Drawer Register</h2>
-  <a href="{% url 'drawerregister_create' %}" class="w3-button w3-green w3-margin-bottom">New Drawer</a>
-  <button onclick="toggleAccordion('drawerFilterPanel')" class="w3-button w3-block w3-light-grey w3-left-align">
-    🔍 Show/Hide Filters
+  <div class="w3-row w3-margin-bottom w3-padding-16 w3-border-bottom">
+    <div class="w3-col s12 m6 l6">
+      <h2 class="w3-margin-0">Drawers</h2>
+    </div>
+    <div class="w3-col s12 m6 l6 w3-right-align w3-margin-top">
+      {% if can_edit %}
+        <a href="{% url 'drawerregister_create' %}" class="w3-button w3-green w3-round">
+          <i class="fa-solid fa-plus-circle"></i>
+          New Drawer
+        </a>
+      {% endif %}
+    </div>
+  </div>
+  <button type="button" onclick="toggleAccordion('drawerFilterPanel')" class="w3-button w3-light-grey w3-round-large">
+    <i class="fa-solid fa-filter"></i>
+    <span class="w3-margin-left">Show/Hide Filters</span>
   </button>
 
-  <div id="drawerFilterPanel" class="w3-hide w3-animate-opacity w3-padding w3-light-grey w3-round-large w3-margin-top">
+  <div id="drawerFilterPanel" class="w3-hide w3-animate-opacity w3-padding w3-light-grey w3-round-large w3-margin-top w3-card">
     <form method="get">
       <div class="w3-row-padding">
-        <div class="w3-third">
-          <label>Code</label>
+        <div class="w3-col s12 m6 l4 w3-margin-bottom">
+          <label class="w3-text-grey">Code</label>
           {{ filter.form.code }}
         </div>
-        <div class="w3-third">
-          <label>Status</label>
+        <div class="w3-col s12 m6 l4 w3-margin-bottom">
+          <label class="w3-text-grey">Status</label>
           {{ filter.form.scanning_status }}
         </div>
-        <div class="w3-third">
-          <label>Locality</label>
+        <div class="w3-col s12 m6 l4 w3-margin-bottom">
+          <label class="w3-text-grey">Locality</label>
           {{ filter.form.localities }}
         </div>
       </div>
       <div class="w3-row-padding">
-        <div class="w3-third">
-          <label>Taxon</label>
+        <div class="w3-col s12 m6 l4 w3-margin-bottom">
+          <label class="w3-text-grey">Taxon</label>
           {{ filter.form.taxa }}
         </div>
       </div>
-      <div class="w3-container w3-padding-16">
-        <button type="submit" class="w3-button w3-blue w3-margin-right">Apply Filters</button>
-        <a href="{% url 'drawerregister_list' %}" class="w3-button w3-gray">Clear</a>
+      <div class="w3-margin-top">
+        <button type="submit" class="w3-button w3-blue w3-round w3-margin-right">
+          <i class="fa-solid fa-check"></i>
+          Apply Filters
+        </button>
+        <a href="{% url 'drawerregister_list' %}" class="w3-button w3-gray w3-round">
+          <i class="fa-solid fa-rotate-left"></i>
+          Clear
+        </a>
       </div>
     </form>
   </div>
 
-  <div class="table-container">
-    <table id="drawerTable" class="lists_table">
+  <div class="w3-responsive w3-margin-top">
+    <table id="drawerTable" class="w3-table-all w3-hoverable">
       <thead>
         <tr>
-          {% if can_edit %}<th></th>{% endif %}
+          {% if can_edit %}<th class="w3-center" aria-label="Reorder"></th>{% endif %}
           <th>Code</th>
           <th>Description</th>
           <th>Taxa</th>
@@ -49,13 +69,16 @@
           <th>Estimated Documents</th>
           <th>Status</th>
           <th>Scanning Users</th>
-          <th>Edit</th>
         </tr>
       </thead>
       <tbody id="drawerTableBody">
       {% for drawer in drawers %}
-      <tr class="template_data" data-id="{{ drawer.pk }}">
-        {% if can_edit %}<td class="drag-handle">✋</td>{% endif %}
+      <tr data-id="{{ drawer.pk }}">
+        {% if can_edit %}
+          <td class="drag-handle w3-center" style="cursor: move;">
+            <i class="fa-solid fa-grip-lines"></i>
+          </td>
+        {% endif %}
         <td><a href="{% url 'drawerregister_detail' drawer.pk %}">{{ drawer.code }}</a></td>
         <td>{{ drawer.description }}</td>
         <td>{{ drawer.taxa.all|join:", " }}</td>
@@ -63,7 +86,10 @@
         <td>{{ drawer.estimated_documents }}</td>
         <td>{{ drawer.get_scanning_status_display }}</td>
         <td>{{ drawer.scanning_users.all|join:", " }}</td>
-        <td><a href="{% url 'drawerregister_edit' drawer.pk %}" class="edit-icon">✏️</a></td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="{% if can_edit %}8{% else %}7{% endif %}" class="w3-center">No drawers found.</td>
       </tr>
       {% endfor %}
       </tbody>

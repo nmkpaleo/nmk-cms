@@ -1,6 +1,8 @@
 {% extends "base_generic.html" %}
 
+{% block title %}{% if form.instance.pk %}Edit Place{% else %}New Place{% endif %}{% endblock %}
+
 {% block content %}
     {% include "includes/base_form.html" with form=form submit_label="Save" method="post" action=request.path title="Place" %}
-    <a href="{% url 'place_list' %}">Back to Place list</a>
+    <a href="{% url 'place_list' %}">Back to Places</a>
 {% endblock %}

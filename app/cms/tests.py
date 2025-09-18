@@ -1729,6 +1729,75 @@ class UploadProcessingTests(TestCase):
         shutil.rmtree(incoming.parent)
 
 
+class StorageViewTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.manager = User.objects.create_user(username="manager", password="pass")
+        self.observer = User.objects.create_user(username="observer", password="pass")
+
+        self.patcher = patch("cms.models.get_current_user", return_value=self.manager)
+        self.patcher.start()
+        self.addCleanup(self.patcher.stop)
+
+        self.collection = Collection.objects.create(
+            abbreviation="COL", description="Collection"
+        )
+        self.locality = Locality.objects.create(abbreviation="LC", name="Locality")
+
+        self.cm_group = Group.objects.create(name="Collection Managers")
+        self.cm_group.user_set.add(self.manager)
+
+    def create_storage_with_specimen(self):
+        parent = Storage.objects.create(area="Room A")
+        Storage.objects.create(area="Shelf 1", parent_area=parent)
+        accession = Accession.objects.create(
+            collection=self.collection,
+            specimen_prefix=self.locality,
+            specimen_no=1,
+            accessioned_by=self.manager,
+        )
+        AccessionRow.objects.create(
+            accession=accession,
+            storage=parent,
+            specimen_suffix="A",
+        )
+        return parent
+
+    def test_storage_list_requires_collection_manager(self):
+        self.client.login(username="observer", password="pass")
+        response = self.client.get(reverse("storage_list"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_storage_list_shows_counts_for_authorised_user(self):
+        self.create_storage_with_specimen()
+        self.client.login(username="manager", password="pass")
+        response = self.client.get(reverse("storage_list"))
+        self.assertEqual(response.status_code, 200)
+        storages = list(response.context["storages"])
+        self.assertGreaterEqual(len(storages), 2)
+        parent_entry = next(s for s in storages if s.area == "Room A")
+        self.assertEqual(parent_entry.specimen_count, 1)
+        self.assertEqual(len(parent_entry.storage_set.all()), 1)
+
+    def test_storage_detail_lists_children_and_specimens(self):
+        parent = self.create_storage_with_specimen()
+        self.client.login(username="manager", password="pass")
+        response = self.client.get(reverse("storage_detail", args=[parent.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context["children"]), 1)
+        self.assertEqual(len(response.context["specimens"]), 1)
+
+    def test_storage_create_creates_record(self):
+        self.client.login(username="manager", password="pass")
+        response = self.client.post(
+            reverse("storage_create"),
+            {"area": "New Storage", "parent_area": ""},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(Storage.objects.filter(area="New Storage").exists())
+
+
 class MediaFileDeletionTests(TestCase):
     """Ensure deleting a Media record removes its file from disk."""
 

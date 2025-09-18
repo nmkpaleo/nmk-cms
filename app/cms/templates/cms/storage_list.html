@@ -1,0 +1,99 @@
+{% extends "base_generic.html" %}
+
+{% block title %}Storages{% endblock %}
+
+{% block content %}
+<div class="w3-container w3-margin-top">
+  <div class="w3-row w3-margin-bottom w3-padding-16 w3-border-bottom">
+    <div class="w3-col s12 m6 l6">
+      <h2 class="w3-margin-0">Storages</h2>
+    </div>
+    <div class="w3-col s12 m6 l6 w3-right-align w3-margin-top">
+      {% if can_edit %}
+        <a href="{% url 'storage_create' %}" class="w3-button w3-green w3-round">
+          <i class="fa-solid fa-plus-circle"></i>
+          New Storage
+        </a>
+      {% endif %}
+    </div>
+  </div>
+
+  <button type="button" onclick="toggleAccordion('storageFilterPanel')" class="w3-button w3-light-grey w3-round-large">
+    <i class="fa-solid fa-filter"></i>
+    <span class="w3-margin-left">Show/Hide Filters</span>
+  </button>
+
+  <div id="storageFilterPanel" class="w3-hide w3-animate-opacity w3-padding w3-light-grey w3-round-large w3-margin-top w3-card">
+    <form method="get">
+      <div class="w3-row-padding">
+        <div class="w3-col s12 m6 l4 w3-margin-bottom">
+          <label class="w3-text-grey">Area</label>
+          {{ filter.form.area }}
+        </div>
+        <div class="w3-col s12 m6 l4 w3-margin-bottom">
+          <label class="w3-text-grey">Parent Area</label>
+          {{ filter.form.parent_area }}
+        </div>
+      </div>
+      <div class="w3-margin-top">
+        <button type="submit" class="w3-button w3-blue w3-round w3-margin-right">
+          <i class="fa-solid fa-check"></i>
+          Apply Filters
+        </button>
+        <a href="{% url 'storage_list' %}" class="w3-button w3-gray w3-round">
+          <i class="fa-solid fa-rotate-left"></i>
+          Clear
+        </a>
+      </div>
+    </form>
+  </div>
+
+  <div class="w3-responsive w3-margin-top">
+    <table class="w3-table-all w3-hoverable">
+      <thead>
+        <tr>
+          <th>Area</th>
+          <th>Parent Area</th>
+          <th>Child Storages</th>
+          <th>Specimen Records</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for storage in storages %}
+          <tr>
+            <td><a href="{% url 'storage_detail' storage.pk %}">{{ storage.area }}</a></td>
+            <td>
+              {% if storage.parent_area %}
+                <a href="{% url 'storage_detail' storage.parent_area.pk %}">{{ storage.parent_area.area }}</a>
+              {% else %}
+                <span class="w3-text-gray">None</span>
+              {% endif %}
+            </td>
+            <td>{{ storage.storage_set.all|length }}</td>
+            <td>{{ storage.specimen_count }}</td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="4" class="w3-center">No storages found.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+function toggleAccordion(id) {
+  const panel = document.getElementById(id);
+  if (panel.classList.contains('w3-show')) {
+    panel.classList.remove('w3-show');
+    panel.classList.add('w3-hide');
+  } else {
+    panel.classList.remove('w3-hide');
+    panel.classList.add('w3-show');
+  }
+}
+</script>
+{% endblock %}

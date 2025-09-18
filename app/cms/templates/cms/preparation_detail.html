@@ -1,7 +1,9 @@
 {% extends "base_generic.html" %}
+{% load user_tags %}
+
+{% block title %}Preparation {{ preparation.accession_row }}{% endblock %}
 
 {% block content %}
-{% load user_tags %}
 
 <div class="template-detail-container">
     <div class="template-detail-header">
@@ -38,11 +40,11 @@
         </div>
 
       <div class="card">
-        {% if request.user.is_superuser %}
+        {% if user.is_superuser %}
           <!-- Admin can always curate, even if they are the preparator -->
           <a href="{% url 'preparation_approve' preparation.id %}" class="btn btn-success">Curate</a>
-    
-        {% elif request.user.groups.all.0.name == "Curators" and request.user != preparation.preparator %}
+
+        {% elif user|has_group:"Curators" and user != preparation.preparator %}
           <!-- Curators can curate if they're not the preparator -->
           <a href="{% url 'preparation_approve' preparation.id %}" class="btn btn-success">Curate</a>
         {% endif %}

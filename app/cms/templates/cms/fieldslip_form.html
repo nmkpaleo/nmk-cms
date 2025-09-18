@@ -1,7 +1,9 @@
 {% extends "base_generic.html" %}
 
+{% block title %}{% if form.instance.pk %}Edit Field Slip{% else %}New Field Slip{% endif %}{% endblock %}
+
 {% block content %}
     {% include "includes/base_form.html" with form=form submit_label="Save" method="post" action=request.path title="Field Slip" %}
     
-    <a href="{% url 'fieldslip_list' %}">Back to FieldSlip list</a>
+    <a href="{% url 'fieldslip_list' %}">Back to Field Slips</a>
 {% endblock %}

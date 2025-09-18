@@ -1,5 +1,7 @@
 {% extends "base_generic.html" %}
 
+{% block title %}Upload Accession Media{% endblock %}
+
 {% block content %}
     {% include "includes/base_form.html" with form=form submit_label="Save" method="post" enctype="multipart/form-data" action=request.path title="Media to Accession: " access=accession %}
     

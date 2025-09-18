@@ -22,6 +22,7 @@ from .filters import (
     LocalityFilter,
     PlaceFilter,
     DrawerRegisterFilter,
+    StorageFilter,
 )
 
 
@@ -51,7 +52,7 @@ from cms.forms import (AccessionBatchForm, AccessionCommentForm,
                     MediaUploadForm, NatureOfSpecimenForm, PreparationForm,
                     PreparationApprovalForm, PreparationMediaUploadForm,
                     SpecimenCompositeForm, ReferenceForm, LocalityForm,
-                    PlaceForm, DrawerRegisterForm, ScanUploadForm)
+                    PlaceForm, DrawerRegisterForm, StorageForm, ScanUploadForm)
 
 from cms.models import (
     Accession,
@@ -372,8 +373,23 @@ def reference_create(request):
         form = ReferenceForm()
     return render(request, 'cms/reference_form.html', {'form': form})
 
+
+@login_required
+@user_passes_test(is_collection_manager)
+def locality_create(request):
+    if request.method == 'POST':
+        form = LocalityForm(request.POST, request.FILES)
+        if form.is_valid():
+            form.save()
+            return redirect('locality_list')
+    else:
+        form = LocalityForm()
+
+    return render(request, 'cms/locality_form.html', {'form': form})
+
+
 def reference_edit(request, pk):
-    
+
     reference = get_object_or_404(Reference, pk=pk)
     if request.method == 'POST':
         form = ReferenceForm(request.POST, request.FILES, instance=reference)
@@ -932,7 +948,7 @@ class PreparationListView(LoginRequiredMixin, PreparationAccessMixin, FilterView
     model = Preparation
     template_name = "cms/preparation_list.html"
     context_object_name = "preparations"
-    paginate_by = 2
+    paginate_by = 10
     ordering = ["-created_on"]
     filterset_class = PreparationFilter
 
@@ -1279,9 +1295,84 @@ def inventory_log_unexpected(request):
     return JsonResponse({"success": True})
 
 
-class DrawerRegisterAccessMixin(UserPassesTestMixin):
+class CollectionManagerAccessMixin(UserPassesTestMixin):
     def test_func(self):
         return is_collection_manager(self.request.user) or self.request.user.is_superuser
+
+
+class DrawerRegisterAccessMixin(CollectionManagerAccessMixin):
+    pass
+
+
+class StorageListView(LoginRequiredMixin, CollectionManagerAccessMixin, FilterView):
+    model = Storage
+    template_name = "cms/storage_list.html"
+    context_object_name = "storages"
+    paginate_by = 10
+    filterset_class = StorageFilter
+
+    def get_queryset(self):
+        return (
+            Storage.objects.select_related("parent_area")
+            .prefetch_related("storage_set")
+            .annotate(specimen_count=Count("accessionrow", distinct=True))
+            .order_by("area")
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["can_edit"] = (
+            is_collection_manager(self.request.user) or self.request.user.is_superuser
+        )
+        return context
+
+
+class StorageDetailView(LoginRequiredMixin, CollectionManagerAccessMixin, DetailView):
+    model = Storage
+    template_name = "cms/storage_detail.html"
+    context_object_name = "storage"
+
+    def get_queryset(self):
+        accession_rows = AccessionRow.objects.select_related(
+            "accession__collection",
+            "accession__specimen_prefix",
+        ).order_by(
+            "accession__collection__abbreviation",
+            "accession__specimen_no",
+            "specimen_suffix",
+        )
+        child_storages = Storage.objects.select_related("parent_area").order_by("area")
+        return (
+            Storage.objects.select_related("parent_area")
+            .prefetch_related(
+                Prefetch("accessionrow_set", queryset=accession_rows, to_attr="prefetched_rows"),
+                Prefetch("storage_set", queryset=child_storages, to_attr="child_storages"),
+            )
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["can_edit"] = (
+            is_collection_manager(self.request.user) or self.request.user.is_superuser
+        )
+        context["specimens"] = getattr(self.object, "prefetched_rows", [])
+        context["children"] = getattr(self.object, "child_storages", [])
+        context["history_entries"] = build_history_entries(self.object)
+        return context
+
+
+class StorageCreateView(LoginRequiredMixin, CollectionManagerAccessMixin, CreateView):
+    model = Storage
+    form_class = StorageForm
+    template_name = "cms/storage_form.html"
+    success_url = reverse_lazy("storage_list")
+
+
+class StorageUpdateView(LoginRequiredMixin, CollectionManagerAccessMixin, UpdateView):
+    model = Storage
+    form_class = StorageForm
+    template_name = "cms/storage_form.html"
+    success_url = reverse_lazy("storage_list")
 
 
 class DrawerRegisterListView(LoginRequiredMixin, DrawerRegisterAccessMixin, FilterView):
@@ -1316,6 +1407,9 @@ class DrawerRegisterDetailView(LoginRequiredMixin, DrawerRegisterAccessMixin, De
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        context["can_edit"] = (
+            is_collection_manager(self.request.user) or self.request.user.is_superuser
+        )
         context["history_entries"] = build_history_entries(self.object)
         return context
 

@@ -1,102 +1,113 @@
 {% extends "base_generic.html" %}
+{% load user_tags %}
+
+{% block title %}Preparations{% endblock %}
 
 {% block content %}
-<h2>Preparation Records</h2>
-
 <div class="w3-container w3-margin-top">
+  <div class="w3-row w3-margin-bottom w3-padding-16 w3-border-bottom">
+    <div class="w3-col s12 m6 l6">
+      <h2 class="w3-margin-0">Preparations</h2>
+    </div>
+    <div class="w3-col s12 m6 l6 w3-right-align w3-margin-top">
+      {% if user.is_superuser or user|has_group:"Collection Managers" or user|has_group:"Curators" or user|has_group:"Preparators" %}
+        <a href="{% url 'preparation_create' %}" class="w3-button w3-green w3-round">
+          <i class="fa-solid fa-plus-circle"></i>
+          New Preparation
+        </a>
+      {% endif %}
+    </div>
+  </div>
 
-  <button onclick="toggleAccordion('prepFilterPanel')" class="w3-button w3-block w3-light-grey w3-left-align">
-    🔍 Show/Hide Filters
+  <button type="button" onclick="toggleAccordion('prepFilterPanel')" class="w3-button w3-light-grey w3-round-large">
+    <i class="fa-solid fa-filter"></i>
+    <span class="w3-margin-left">Show/Hide Filters</span>
   </button>
 
-  <div id="prepFilterPanel" class="w3-hide w3-animate-opacity w3-padding w3-light-grey w3-round-large w3-margin-top">
+  <div id="prepFilterPanel" class="w3-hide w3-animate-opacity w3-padding w3-light-grey w3-round-large w3-margin-top w3-card">
     <form method="get">
-<!-- Row 1: quarters -->
-<div class="w3-row-padding">
-  <div class="w3-quarter">
-    <label>Specimen</label>
-    {{ filter.form.accession_label }}
-  </div>
-  <div class="w3-quarter">
-    <label>Status</label>
-    {{ filter.form.status }}
-  </div>
-  <div class="w3-quarter">
-    <label>Approval Status</label>
-    {{ filter.form.approval_status }}
-  </div>
-  <div class="w3-quarter">
-    <label>Preparator</label>
-    {{ filter.form.preparator }}
-  </div>
-</div>
-
-<!-- Row 2: halves -->
-<div class="w3-row-padding">
-  <div class="w3-half">
-    <label>Started Between</label>
-    {{ filter.form.started_on }}
-  </div>
-  <div class="w3-half">
-    <label>Completed Between</label>
-    {{ filter.form.completed_on }}
-  </div>
-</div>
-      <div class="w3-container w3-padding-16">
-        <button type="submit" class="w3-button w3-blue w3-margin-right">Apply Filters</button>
-        <a href="{% url 'preparation_list' %}" class="w3-button w3-gray">Clear</a>
+      <div class="w3-row-padding">
+        <div class="w3-col s12 m6 l3 w3-margin-bottom">
+          <label class="w3-text-grey">Specimen</label>
+          {{ filter.form.accession_label }}
+        </div>
+        <div class="w3-col s12 m6 l3 w3-margin-bottom">
+          <label class="w3-text-grey">Status</label>
+          {{ filter.form.status }}
+        </div>
+        <div class="w3-col s12 m6 l3 w3-margin-bottom">
+          <label class="w3-text-grey">Approval Status</label>
+          {{ filter.form.approval_status }}
+        </div>
+        <div class="w3-col s12 m6 l3 w3-margin-bottom">
+          <label class="w3-text-grey">Preparator</label>
+          {{ filter.form.preparator }}
+        </div>
+      </div>
+      <div class="w3-row-padding">
+        <div class="w3-col s12 m6 l6 w3-margin-bottom">
+          <label class="w3-text-grey">Started Between</label>
+          {{ filter.form.started_on }}
+        </div>
+        <div class="w3-col s12 m6 l6 w3-margin-bottom">
+          <label class="w3-text-grey">Completed Between</label>
+          {{ filter.form.completed_on }}
+        </div>
+      </div>
+      <div class="w3-margin-top">
+        <button type="submit" class="w3-button w3-blue w3-round w3-margin-right">
+          <i class="fa-solid fa-check"></i>
+          Apply Filters
+        </button>
+        <a href="{% url 'preparation_list' %}" class="w3-button w3-gray w3-round">
+          <i class="fa-solid fa-rotate-left"></i>
+          Clear
+        </a>
       </div>
     </form>
   </div>
-</div>
-  
-  <a href="{% url 'preparation_create' %}" class="btn btn-primary">New Preparation</a>
-  <table class="table">
-    <thead>
+  <div class="w3-responsive w3-margin-top">
+    <table class="w3-table-all w3-hoverable">
+      <thead>
         <tr>
             <th>Specimen</th>
             <th>Preparator</th>
             <th>Status</th>
             <th>Curator</th>
             <th>Approval Status</th>
-            <th>Actions</th>
         </tr>
-    </thead>
-    <tbody>
+      </thead>
+      <tbody>
         {% for preparation in preparations %}
         <tr>
-            <td>{{ preparation.accession_row }}</td>
+            <td><a href="{% url 'preparation_detail' preparation.id %}">{{ preparation.accession_row }}</a></td>
             <td>{{ preparation.preparator }}</td>
             <td>{{ preparation.status }}</td>
             <td>{{ preparation.curator|default:"N/A" }}</td>
             <td>{{ preparation.approval_status }}</td>
-            <td>
-                <a href="{% url 'preparation_detail' preparation.id %}" class="btn btn-sm btn-info">View</a>
-                {% if request.user == preparation.preparator %}
-                <a href="{% url 'preparation_edit' preparation.id %}" class="btn btn-sm btn-warning">Edit</a>
-                <a href="{% url 'preparation_delete' preparation.id %}" class="btn btn-sm btn-danger">Delete</a>
-                {% endif %}
-                {% if request.user != preparation.preparator and request.user.groups.all.0.name == "Curators" %}
-                <a href="{% url 'preparation_approve' preparation.id %}" class="btn btn-sm btn-success">Curate</a>
-                {% endif %}
-            </td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="5" class="w3-center">No preparations found.</td>
         </tr>
         {% endfor %}
-    </tbody>
-</table>
+      </tbody>
+    </table>
+  </div>
+</div>
 {% endblock %}
 
 {% block script %}
   <script>
     function toggleAccordion(id) {
-      var panel = document.getElementById(id);
-      if (panel.classList.contains("w3-show")) {
-        panel.classList.remove("w3-show");
-        panel.classList.add("w3-hide");
+      const panel = document.getElementById(id);
+      if (panel.classList.contains('w3-show')) {
+        panel.classList.remove('w3-show');
+        panel.classList.add('w3-hide');
       } else {
-        panel.classList.remove("w3-hide");
-        panel.classList.add("w3-show");
+        panel.classList.remove('w3-hide');
+        panel.classList.add('w3-show');
       }
     }
-  </script>  
+  </script>
 {% endblock %}

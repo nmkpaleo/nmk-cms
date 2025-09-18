@@ -1,5 +1,7 @@
 {% extends "base_generic.html" %}
 
+{% block title %}Generate Accession Numbers{% endblock %}
+
 {% block content %}
   <div class="w3-container w3-card w3-padding-large w3-white w3-round-large w3-margin-top">
     <h2 class="w3-xlarge">Generate Accession Numbers</h2>
@@ -46,7 +48,7 @@
 
       <p class="w3-margin-top">
         <button type="submit" class="w3-button w3-green">Create Accessions</button>
-        <a href="{% url 'fieldslip_list' %}" class="w3-button w3-gray w3-margin-left">Back to Field Slip list</a>
+        <a href="{% url 'fieldslip_list' %}" class="w3-button w3-gray w3-margin-left">Back to Field Slips</a>
       </p>
     </form>
   </div>

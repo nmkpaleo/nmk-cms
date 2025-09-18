@@ -30,6 +30,7 @@ from cms.views import (
     reference_edit,
     LocalityListView,
     LocalityDetailView,
+    locality_create,
     locality_edit,
     PlaceListView,
     PlaceDetailView,
@@ -56,6 +57,10 @@ from cms.views import (
     DrawerRegisterCreateView,
     DrawerRegisterUpdateView,
     DrawerRegisterReorderView,
+    StorageListView,
+    StorageDetailView,
+    StorageCreateView,
+    StorageUpdateView,
 )
 from .views import PreparationMediaUploadView
 from .views import FieldSlipAutocomplete
@@ -106,6 +111,7 @@ urlpatterns = [
 
 
     path('localities/', LocalityListView.as_view(), name='locality_list'),
+    path('localities/new/', locality_create, name='locality_create'),
     path('localities/<int:pk>/', LocalityDetailView.as_view(), name='locality_detail'),
     path('localities/<int:pk>/edit/', locality_edit, name='locality_edit'),
 
@@ -121,6 +127,11 @@ urlpatterns = [
     path('drawers/<int:pk>/start/', start_scan, name='drawer_start_scan'),
     path('drawers/<int:pk>/stop/', stop_scan, name='drawer_stop_scan'),
     path('drawers/reorder/', DrawerRegisterReorderView.as_view(), name='drawerregister_reorder'),
+
+    path('storages/', StorageListView.as_view(), name='storage_list'),
+    path('storages/new/', StorageCreateView.as_view(), name='storage_create'),
+    path('storages/<int:pk>/', StorageDetailView.as_view(), name='storage_detail'),
+    path('storages/<int:pk>/edit/', StorageUpdateView.as_view(), name='storage_edit'),
 
 
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

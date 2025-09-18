@@ -1,75 +1,95 @@
 {% extends "base_generic.html" %}
 {% load user_tags %}
 
-{% block title %}
-      <title>place_list</title>
-{% endblock %}
+{% block title %}Places{% endblock %}
 
 {% block content %}
 <div class="w3-container w3-margin-top">
-    <h2>Places</h2>
+    <div class="w3-row w3-margin-bottom w3-padding-16 w3-border-bottom">
+        <div class="w3-col s12 m6 l6">
+            <h2 class="w3-margin-0">Places</h2>
+        </div>
+        <div class="w3-col s12 m6 l6 w3-right-align w3-margin-top">
+            {% if user.is_superuser or user|has_group:"Collection Managers" %}
+                <a href="{% url 'place_create' %}" class="w3-button w3-green w3-round">
+                    <i class="fa-solid fa-plus-circle"></i>
+                    New Place
+                </a>
+            {% endif %}
+        </div>
+    </div>
 
-    <button onclick="toggleAccordion('placeFilterPanel')" class="w3-button w3-block w3-light-grey w3-left-align">
-      🔍 Show/Hide Filters
+    <button type="button" onclick="toggleAccordion('placeFilterPanel')" class="w3-button w3-light-grey w3-round-large">
+      <i class="fa-solid fa-filter"></i>
+      <span class="w3-margin-left">Show/Hide Filters</span>
     </button>
 
-    <div id="placeFilterPanel" class="w3-hide w3-animate-opacity w3-padding w3-light-grey w3-round-large w3-margin-top">
+    <div id="placeFilterPanel" class="w3-hide w3-animate-opacity w3-padding w3-light-grey w3-round-large w3-margin-top w3-card">
         <form method="get">
             <div class="w3-row-padding">
-                <div class="w3-third">
-                    <label>Name</label>
+                <div class="w3-col s12 m6 l4 w3-margin-bottom">
+                    <label class="w3-text-grey">Name</label>
                     {{ filter.form.name }}
                 </div>
-                <div class="w3-third">
-                    <label>Type</label>
+                <div class="w3-col s12 m6 l4 w3-margin-bottom">
+                    <label class="w3-text-grey">Type</label>
                     {{ filter.form.place_type }}
                 </div>
-                <div class="w3-third">
-                    <label>Locality</label>
+                <div class="w3-col s12 m6 l4 w3-margin-bottom">
+                    <label class="w3-text-grey">Locality</label>
                     {{ filter.form.locality }}
                 </div>
             </div>
-            <div class="w3-container w3-padding-16">
-                <button type="submit" class="w3-button w3-blue w3-margin-right">Apply Filters</button>
-                <a href="{% url 'place_list' %}" class="w3-button w3-gray">Clear</a>
+            <div class="w3-margin-top">
+                <button type="submit" class="w3-button w3-blue w3-round w3-margin-right">
+                    <i class="fa-solid fa-check"></i>
+                    Apply Filters
+                </button>
+                <a href="{% url 'place_list' %}" class="w3-button w3-gray w3-round">
+                    <i class="fa-solid fa-rotate-left"></i>
+                    Clear
+                </a>
             </div>
         </form>
     </div>
-</div>
 
-<div class="table-container">
-    <table class="lists_table">
-        <th>Name</th>
-        <th>Type</th>
-        <th>Locality</th>
-        {% if user.is_superuser or user|has_group:"Collection Managers" %}
-        <th>Edit Place</th>
-        {% endif %}
-
-        {% for place in places %}
-        <tr class="template_data">
-            <td><a href="{% url 'place_detail' place.pk %}">{{ place.name }}</a></td>
-            <td>{{ place.get_place_type_display }}</td>
-            <td>{{ place.locality.abbreviation }}</td>
-            {% if user.is_superuser or user|has_group:"Collection Managers" %}
-            <td><a href="{% url 'place_edit' place.pk %}" class="edit-icon">✏️</a></td>
-            {% endif %}
-        </tr>
-        {% endfor %}
-    </table>
+    <div class="w3-responsive w3-margin-top">
+        <table class="w3-table-all w3-hoverable">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Locality</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for place in places %}
+                    <tr>
+                        <td><a href="{% url 'place_detail' place.pk %}">{{ place.name }}</a></td>
+                        <td>{{ place.get_place_type_display }}</td>
+                        <td>{{ place.locality.abbreviation }}</td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="3" class="w3-center">No places found.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
 {% endblock %}
 
 {% block script %}
 <script>
 function toggleAccordion(id) {
-    var panel = document.getElementById(id);
-    if (panel.classList.contains("w3-show")) {
-        panel.classList.remove("w3-show");
-        panel.classList.add("w3-hide");
+    const panel = document.getElementById(id);
+    if (panel.classList.contains('w3-show')) {
+        panel.classList.remove('w3-show');
+        panel.classList.add('w3-hide');
     } else {
-        panel.classList.remove("w3-hide");
-        panel.classList.add("w3-show");
+        panel.classList.remove('w3-hide');
+        panel.classList.add('w3-show');
     }
 }
 </script>

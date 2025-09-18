@@ -1,4 +1,4 @@
-{% load static %}
+{% load static user_tags %}
 <!doctype html>
 <html lang="en">
   <head>
@@ -28,9 +28,7 @@
         z-index: 10000;
       }
     </style>
-    {% block title %}
-      <title>NMK CMS</title>
-    {% endblock %}
+    <title>{% block title %}NMK CMS{% endblock %}</title>
   
   </head>
 
@@ -49,16 +47,17 @@
               <li><a href="{% url 'place_list' %}">Places</a></li>
               <li><a href="{% url 'reference_list' %}">References</a></li>
               
-              {% if user.is_superuser or user.groups.first.name in "Curators Collection Managers" %}
+              {% if user.is_superuser or user|has_group:"Collection Managers" %}
                 <li><a href="{% url 'fieldslip_list' %}">Field Slips</a></li>
               {% endif %}
 
-              {% if user.is_superuser or user.groups.first.name in "Curators Collection Managers" %}
+              {% if user.is_superuser or user|has_group:"Collection Managers" or user|has_group:"Curators" %}
                 <li><a href="{% url 'preparation_list' %}">Preparations</a></li>
               {% endif %}
 
-              {% if user.is_superuser or user.groups.first.name in "Collection Managers" %}
-                <li><a href="{% url 'drawerregister_list' %}">Drawer Register</a></li>
+              {% if user.is_superuser or user|has_group:"Collection Managers" %}
+                <li><a href="{% url 'drawerregister_list' %}">Drawers</a></li>
+                <li><a href="{% url 'storage_list' %}">Storages</a></li>
               {% endif %}
 
               {% if user.is_authenticated %}
@@ -82,30 +81,44 @@
           {% block content %}
 
           {% endblock %}
-          
-          {% block pagination %}
-    {% if is_paginated %}
-        <div class="pagination">
-            <span class="page-links">
-                {% if page_obj.has_previous %}
-                    <a href="{{ request.path }}?page={{ page_obj.previous_page_number }}" class="pagination_previous">
-                      <i class="fa-solid fa-angles-left"></i>
-                      Previous
-                    </a>
-                {% endif %}
-                <span class="page-current">
-                    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}.
-                </span>
-                {% if page_obj.has_next %}
-                    <a href="{{ request.path }}?page={{ page_obj.next_page_number }}" class="pagination_next">Next
-                    <i class="fa-solid fa-angles-right"></i></a>
-                {% endif %}
-            </span>
-        </div>
-    {% endif %}
-  {% endblock %}
 
-        
+          {% block pagination %}
+            {% if is_paginated %}
+              <div class="w3-container w3-center w3-margin-top">
+                <div class="w3-bar w3-border w3-round-large w3-white w3-card">
+                  {% if page_obj.has_previous %}
+                    <a href="{{ request.path }}?page={{ page_obj.previous_page_number }}" class="w3-bar-item w3-button" aria-label="Previous page">
+                      <i class="fa-solid fa-angles-left"></i>
+                      <span class="w3-hide-small">Previous</span>
+                    </a>
+                  {% else %}
+                    <span class="w3-bar-item w3-button w3-disabled">
+                      <i class="fa-solid fa-angles-left"></i>
+                      <span class="w3-hide-small">Previous</span>
+                    </span>
+                  {% endif %}
+
+                  <span class="w3-bar-item">
+                    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                  </span>
+
+                  {% if page_obj.has_next %}
+                    <a href="{{ request.path }}?page={{ page_obj.next_page_number }}" class="w3-bar-item w3-button" aria-label="Next page">
+                      <span class="w3-hide-small">Next</span>
+                      <i class="fa-solid fa-angles-right"></i>
+                    </a>
+                  {% else %}
+                    <span class="w3-bar-item w3-button w3-disabled">
+                      <span class="w3-hide-small">Next</span>
+                      <i class="fa-solid fa-angles-right"></i>
+                    </span>
+                  {% endif %}
+                </div>
+              </div>
+            {% endif %}
+          {% endblock %}
+
+
         </div>
       </div>
     </div>

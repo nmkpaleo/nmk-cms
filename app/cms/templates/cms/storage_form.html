@@ -1,0 +1,9 @@
+{% extends "base_generic.html" %}
+
+{% block title %}{% if form.instance.pk %}Edit Storage{% else %}New Storage{% endif %}{% endblock %}
+
+{% block content %}
+  {% include "includes/base_form.html" with form=form submit_label="Save" method="post" action=request.path title="Storage" %}
+
+  <a href="{% url 'storage_list' %}">Back to Storages</a>
+{% endblock %}

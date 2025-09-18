@@ -1,5 +1,7 @@
 {% extends "base_generic.html" %}
 
+{% block title %}Drawer {{ object.code }}{% endblock %}
+
 {% block content %}
 <div class="w3-container w3-margin-top">
   <h2>Drawer {{ object.code }}</h2>
@@ -65,6 +67,8 @@
   {% else %}
     <p>No changes logged.</p>
   {% endif %}
+  {% if can_edit %}
   <a href="{% url 'drawerregister_edit' object.pk %}" class="w3-button w3-blue">Edit</a>
+  {% endif %}
 </div>
 {% endblock %}

@@ -1,7 +1,9 @@
 {% extends "base_generic.html" %}
 
+{% block title %}{% if form.instance.pk %}Edit Reference{% else %}New Reference{% endif %}{% endblock %}
+
 {% block content %}
     {% include "includes/base_form.html" with form=form submit_label="Save" method="post" action=request.path title="Reference" %}
-    
-    <a href="{% url 'reference_list' %}">Back to References list</a>
+
+    <a href="{% url 'reference_list' %}">Back to References</a>
 {% endblock %}

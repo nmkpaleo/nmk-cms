@@ -26,6 +26,7 @@ from .models import (
     Reference,
     SpecimenGeology,
     DrawerRegister,
+    Storage,
     Taxon,
 )
 
@@ -546,3 +547,13 @@ class DrawerRegisterForm(forms.ModelForm):
                 "Scanning user is required when status is In progress."
             )
         return cleaned_data
+
+
+class StorageForm(forms.ModelForm):
+    class Meta:
+        model = Storage
+        fields = ["area", "parent_area"]
+        widgets = {
+            "area": forms.TextInput(attrs={"class": "w3-input"}),
+            "parent_area": forms.Select(attrs={"class": "w3-select"}),
+        }
