@@ -1,7 +1,7 @@
 from django import forms
 from django.contrib.auth import get_user_model
 from django_select2 import forms as s2forms
-from django_select2.forms import ModelSelect2Widget, Select2Widget
+from django_select2.forms import ModelSelect2TagWidget, ModelSelect2Widget, Select2Widget
 from django.contrib.auth.models import User
 
 from .models import (
@@ -252,11 +252,15 @@ class TaxonWidget(s2forms.ModelSelect2Widget):
         ]
 
 
-class IdentifiedByWidget(s2forms.ModelSelect2Widget):
+class IdentifiedByWidget(s2forms.ModelSelect2TagWidget):
+    model = Person
     search_fields = [
         "first_name__icontains",
         "last_name__icontains",
     ]
+
+    def get_queryset(self):
+        return Person.objects.order_by("last_name", "first_name")
 
     def __init__(self, *args, **kwargs):
         attrs = kwargs.pop("attrs", {})
@@ -333,6 +337,7 @@ class AccessionFieldSlipForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["fieldslip"].queryset = FieldSlip.objects.order_by("field_number", "id")
         self.fields["fieldslip"].empty_label = "Select a Field Slip"
+        self.fields["fieldslip"].widget.choices = self.fields["fieldslip"].choices
 
 class AccessionGeologyForm(forms.ModelForm):
     class Meta:
@@ -532,7 +537,7 @@ class AccessionRowUpdateForm(forms.ModelForm):
 class NatureOfSpecimenForm(forms.ModelForm):
     element = forms.ModelChoiceField(
         queryset=Element.objects.order_by("name"),
-        widget=forms.Select(attrs={"class": "template_form_select"}),
+        widget=ElementWidget(),
     )
 
     class Meta:
@@ -560,7 +565,7 @@ class AccessionRowIdentificationForm(forms.ModelForm):
     reference = forms.ModelChoiceField(
         queryset=Reference.objects.order_by("first_author", "year", "title"),
         required=False,
-        widget=forms.Select(attrs={"class": "template_form_select"}),
+        widget=ReferenceWidget(),
     )
 
     class Meta:
@@ -583,7 +588,7 @@ class AccessionRowIdentificationForm(forms.ModelForm):
 class AccessionRowSpecimenForm(forms.ModelForm):
     element = forms.ModelChoiceField(
         queryset=Element.objects.order_by("name"),
-        widget=forms.Select(attrs={"class": "template_form_select"}),
+        widget=ElementWidget(),
     )
 
     class Meta:

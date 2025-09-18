@@ -107,9 +107,11 @@ class PreparationAccessMixin(UserPassesTestMixin):
             user.groups.filter(name__in=["Curators", "Collection Managers"]).exists()
         )
 
-# Helper function to check if user is in the "Collection Managers" group
+# Helper function to check if user can manage collection content
 def is_collection_manager(user):
-    return user.groups.filter(name="Collection Managers").exists()
+    if not getattr(user, "is_authenticated", False):
+        return False
+    return user.is_superuser or user.groups.filter(name="Collection Managers").exists()
 
 
 def can_manage_places(user):
@@ -531,13 +533,62 @@ class AccessionListView(FilterView):
         qs = super().get_queryset()
         user = self.request.user
 
-        if user.is_authenticated and (
-            user.is_superuser or
-            user.groups.filter(name__in=["Collection Managers", "Curators"]).exists()
+        if not (
+            user.is_authenticated
+            and (
+                user.is_superuser
+                or user.groups.filter(name__in=["Collection Managers", "Curators"]).exists()
+            )
         ):
-            return qs  # Show all
+            qs = qs.filter(is_published=True)
 
-        return qs.filter(is_published=True)  # Public users only see published accessions
+        accession_row_prefetch = Prefetch(
+            'accessionrow_set',
+            queryset=AccessionRow.objects.prefetch_related(
+                Prefetch(
+                    'natureofspecimen_set',
+                    queryset=NatureOfSpecimen.objects.select_related('element')
+                ),
+                Prefetch(
+                    'identification_set',
+                    queryset=Identification.objects.all().order_by('-date_identified', '-id')
+                ),
+            )
+        )
+
+        return (
+            qs.select_related('collection', 'specimen_prefix')
+            .prefetch_related(accession_row_prefetch)
+            .distinct()
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        accessions = context.get('accessions')
+        if accessions is not None:
+            if hasattr(accessions, 'object_list'):
+                accession_list = accessions.object_list
+            else:
+                accession_list = accessions
+
+            for accession in accession_list:
+                taxa = set()
+                elements = set()
+
+                for row in accession.accessionrow_set.all():
+                    for identification in row.identification_set.all():
+                        taxon = (identification.taxon or "").strip()
+                        if taxon:
+                            taxa.add(taxon)
+                    for specimen in row.natureofspecimen_set.all():
+                        element = getattr(specimen, 'element', None)
+                        if element and element.name:
+                            elements.add(element.name)
+
+                accession.taxa_list = sorted(taxa)
+                accession.element_list = sorted(elements)
+
+        return context
 
 class AccessionRowDetailView(DetailView):
     model = AccessionRow
@@ -551,6 +602,7 @@ class AccessionRowDetailView(DetailView):
         context['can_edit'] = (
             self.request.user.is_superuser or is_collection_manager(self.request.user)
         )
+        context['can_manage'] = context['can_edit']
         context['show_inventory_status'] = not is_public_user(self.request.user)
         return context
 

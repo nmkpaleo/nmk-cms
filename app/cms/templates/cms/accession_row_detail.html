@@ -39,11 +39,16 @@
         </tbody>
       </table>
 
-      <div class="section-actions" style="margin: 1rem 0;">
-        <a href="{% url 'accessionrow_add_specimen' accessionrow.id %}" class="w3-button w3-light-grey w3-round">Add Element to Specimen</a>
+      <div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
+        <h2 class="section-title" style="margin:0;">Elements</h2>
+        {% if can_manage %}
+        <a href="{% url 'accessionrow_add_specimen' accessionrow.id %}" class="w3-button w3-blue w3-round">
+          <i class="fa-solid fa-plus"></i>
+          Add Element
+        </a>
+        {% endif %}
       </div>
-            
-      <h2>Elements</h2>
+
       <table>
         <tr>
           <th>Element</th>
@@ -62,13 +67,23 @@
           <td>{{ specimen.portion }}</td>
           <td>{{ specimen.fragments }}</td>
         </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6" class="w3-center">No elements recorded.</td>
+        </tr>
         {% endfor %}
       </table>
 
-      <a href="{% url 'accessionrow_add_identification' accessionrow.id %}">Add New Identification</a>
-      <h2>Identification</h2>
+      <div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-top:1.5rem;">
+        <h2 class="section-title" style="margin:0;">Identification</h2>
+        {% if can_manage %}
+        <a href="{% url 'accessionrow_add_identification' accessionrow.id %}" class="w3-button w3-blue w3-round">
+          <i class="fa-solid fa-plus"></i>
+          Add Identification
+        </a>
+        {% endif %}
+      </div>
       <table>
-        {% for identification in identifications %}
         <tr>
           <th>Identified by</th>
           <th>Date</th>
@@ -78,6 +93,7 @@
           <th>Remarks</th>
           <th>Reference</th>
         </tr>
+        {% for identification in identifications %}
         <tr>
           <td>{{ identification.identified_by }}</td>
           <td>{{ identification.date_identified }}</td>
@@ -87,10 +103,14 @@
           <td>{{ identification.identification_remarks }}</td>
           <td>{{ identification.reference }}</td>
         </tr>
+        {% empty %}
+        <tr>
+          <td colspan="7" class="w3-center">No identifications recorded.</td>
+        </tr>
         {% endfor %}
       </table>
       <a href="{% url 'accession_detail' accessionrow.accession.id %}">Back to Accession</a>
-    </div>  
+    </div>
   </div>
 </div>
 

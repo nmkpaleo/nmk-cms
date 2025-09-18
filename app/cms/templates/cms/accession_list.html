@@ -30,17 +30,55 @@
     <div id="accessionFilterPanel" class="w3-hide w3-animate-opacity w3-padding w3-light-grey w3-round-large w3-margin-top w3-card">
         <form method="get">
             <div class="w3-row-padding">
-                <div class="w3-col s12 m6 l4 w3-margin-bottom">
+                <div class="w3-col s12 m6 l3 w3-margin-bottom">
                     <label class="w3-text-grey">Specimen Number</label>
                     {{ filter.form.specimen_no }}
                 </div>
-                <div class="w3-col s12 m6 l4 w3-margin-bottom">
+                <div class="w3-col s12 m6 l3 w3-margin-bottom">
                     <label class="w3-text-grey">Specimen Prefix</label>
                     {{ filter.form.specimen_prefix }}
                 </div>
-                <div class="w3-col s12 m6 l4 w3-margin-bottom">
+                <div class="w3-col s12 m6 l3 w3-margin-bottom">
+                    <label class="w3-text-grey">Specimen Suffix</label>
+                    {{ filter.form.specimen_suffix }}
+                </div>
+                <div class="w3-col s12 m6 l3 w3-margin-bottom">
                     <label class="w3-text-grey">Comment</label>
                     {{ filter.form.comment }}
+                </div>
+            </div>
+
+            <div class="w3-row-padding">
+                <div class="w3-col s12 m6 l3 w3-margin-bottom">
+                    <label class="w3-text-grey">Taxon</label>
+                    {{ filter.form.taxon }}
+                </div>
+                <div class="w3-col s12 m6 l3 w3-margin-bottom">
+                    <label class="w3-text-grey">Element</label>
+                    {{ filter.form.element }}
+                </div>
+                <div class="w3-col s12 m6 l3 w3-margin-bottom">
+                    <label class="w3-text-grey">Family</label>
+                    {{ filter.form.family }}
+                </div>
+                <div class="w3-col s12 m6 l3 w3-margin-bottom">
+                    <label class="w3-text-grey">Subfamily</label>
+                    {{ filter.form.subfamily }}
+                </div>
+            </div>
+
+            <div class="w3-row-padding">
+                <div class="w3-col s12 m6 l3 w3-margin-bottom">
+                    <label class="w3-text-grey">Tribe</label>
+                    {{ filter.form.tribe }}
+                </div>
+                <div class="w3-col s12 m6 l3 w3-margin-bottom">
+                    <label class="w3-text-grey">Genus</label>
+                    {{ filter.form.genus }}
+                </div>
+                <div class="w3-col s12 m6 l3 w3-margin-bottom">
+                    <label class="w3-text-grey">Species</label>
+                    {{ filter.form.species }}
                 </div>
             </div>
 
@@ -64,6 +102,8 @@
                     <th>Collection</th>
                     <th>Specimen Prefix</th>
                     <th>Specimen Number</th>
+                    <th>Taxon</th>
+                    <th>Element</th>
                     {% if user.is_superuser or user|has_group:"Collection Managers" %}
                         <th>Accessioned By</th>
                     {% endif %}
@@ -77,13 +117,27 @@
                         </td>
                         <td>{{ accession.specimen_prefix.abbreviation }}</td>
                         <td>{{ accession.specimen_no }}</td>
+                        <td>
+                            {% if accession.taxa_list %}
+                                {{ accession.taxa_list|join:", " }}
+                            {% else %}
+                                &mdash;
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if accession.element_list %}
+                                {{ accession.element_list|join:", " }}
+                            {% else %}
+                                &mdash;
+                            {% endif %}
+                        </td>
                         {% if user.is_superuser or user|has_group:"Collection Managers" %}
                             <td>{{ accession.accessioned_by }}</td>
                         {% endif %}
                     </tr>
                 {% empty %}
                     <tr>
-                        <td colspan="{% if user.is_superuser or user|has_group:"Collection Managers" %}4{% else %}3{% endif %}" class="w3-center">No accessions found.</td>
+                        <td colspan="{% if user.is_superuser or user|has_group:"Collection Managers" %}6{% else %}5{% endif %}" class="w3-center">No accessions found.</td>
                     </tr>
                 {% endfor %}
             </tbody>
