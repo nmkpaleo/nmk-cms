@@ -1,6 +1,7 @@
 from unittest.mock import patch
 from datetime import timedelta
 from types import SimpleNamespace
+import json
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -38,7 +39,7 @@ from cms.models import (
     NatureOfSpecimen,
 )
 from cms.utils import generate_accessions_from_series
-from cms.forms import DrawerRegisterForm
+from cms.forms import DrawerRegisterForm, AccessionNumberSeriesAdminForm
 from cms.filters import DrawerRegisterFilter
 from cms.resources import DrawerRegisterResource, PlaceResource
 from tablib import Dataset
@@ -109,6 +110,92 @@ class GenerateAccessionsFromSeriesTests(TestCase):
                 specimen_prefix=self.locality,
                 creator_user=self.creator,
             )
+
+
+class AccessionNumberSeriesAdminFormTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.tbi_user = User.objects.create_user(username="TBI", password="pass")
+        self.shared_user = User.objects.create_user(username="shared", password="pass")
+        self.other_shared_user = User.objects.create_user(username="shared2", password="pass")
+
+    def test_form_exposes_widget_metadata_for_client_side(self):
+        form = AccessionNumberSeriesAdminForm()
+
+        widget_attrs = form.fields["user"].widget.attrs
+        self.assertEqual(
+            widget_attrs.get("data-dedicated-user-id"),
+            str(self.tbi_user.pk),
+        )
+
+        series_map = json.loads(widget_attrs["data-series-starts"])
+        self.assertEqual(series_map["tbi"], 1_000_000)
+        self.assertEqual(series_map["shared"], 1)
+
+    def test_tbi_series_uses_dedicated_pool(self):
+        form = AccessionNumberSeriesAdminForm(data={
+            "user": str(self.tbi_user.pk),
+            "count": "5",
+            "start_from": "",
+            "current_number": "",
+            "is_active": "True",
+        })
+
+        self.assertTrue(form.is_valid(), form.errors)
+
+        series = form.save()
+        self.assertEqual(series.user, self.tbi_user)
+        self.assertEqual(series.start_from, 1_000_000)
+        self.assertEqual(series.current_number, 1_000_000)
+        self.assertEqual(series.end_at, 1_000_004)
+
+    def test_tbi_series_advances_after_existing_range(self):
+        AccessionNumberSeries.objects.create(
+            user=self.tbi_user,
+            start_from=1_000_000,
+            end_at=1_000_009,
+            current_number=1_000_005,
+            is_active=False,
+        )
+
+        form = AccessionNumberSeriesAdminForm(data={
+            "user": str(self.tbi_user.pk),
+            "count": "3",
+            "start_from": "",
+            "current_number": "",
+            "is_active": "True",
+        })
+
+        self.assertTrue(form.is_valid(), form.errors)
+
+        series = form.save()
+        self.assertEqual(series.start_from, 1_000_010)
+        self.assertEqual(series.current_number, 1_000_010)
+        self.assertEqual(series.end_at, 1_000_012)
+
+    def test_shared_series_uses_shared_pool(self):
+        AccessionNumberSeries.objects.create(
+            user=self.shared_user,
+            start_from=1,
+            end_at=50,
+            current_number=10,
+            is_active=False,
+        )
+
+        form = AccessionNumberSeriesAdminForm(data={
+            "user": str(self.other_shared_user.pk),
+            "count": "10",
+            "start_from": "",
+            "current_number": "",
+            "is_active": "True",
+        })
+
+        self.assertTrue(form.is_valid(), form.errors)
+
+        series = form.save()
+        self.assertEqual(series.start_from, 51)
+        self.assertEqual(series.current_number, 51)
+        self.assertEqual(series.end_at, 60)
 
 
 class PreparationUpdateViewTests(TestCase):
