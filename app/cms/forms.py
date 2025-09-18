@@ -211,10 +211,11 @@ class FieldSlipWidget(autocomplete.ModelSelect2):
 
     def __init__(self, *args, **kwargs):
         kwargs["url"] = reverse_lazy("fieldslip-autocomplete")
-        kwargs["attrs"] = {
-            "data-placeholder": "Search Field Slips...",
-            "data-minimum-input-length": 1,
-        }
+        attrs = kwargs.pop("attrs", {})
+        attrs.setdefault("data-placeholder", "Search Field Slips...")
+        attrs.setdefault("data-minimum-input-length", 0)
+        attrs.setdefault("data-allow-clear", "true")
+        kwargs["attrs"] = attrs
         super().__init__(*args, **kwargs)
 
     class Media:
@@ -235,15 +236,35 @@ class FieldSlipWidget(autocomplete.ModelSelect2):
         return f"{obj.field_number} - {obj.verbatim_locality or 'No locality'}"
 
 class ElementWidget(s2forms.ModelSelect2Widget):
-    search_fields = [
-        "name__icontains",
-        ]
+    search_fields = ["name__icontains"]
+
+    model = Element
+
+    def get_queryset(self):
+        return Element.objects.order_by("name")
+
+    def __init__(self, *args, **kwargs):
+        attrs = kwargs.pop("attrs", {})
+        attrs.setdefault("data-placeholder", "Select an element")
+        attrs.setdefault("data-minimum-input-length", 0)
+        kwargs["attrs"] = attrs
+        super().__init__(*args, **kwargs)
+
 
 class ReferenceWidget(s2forms.ModelSelect2Widget):
-    search_fields = [
-        "title__icontains",
-        "first_author__icontains",
-        ]
+    search_fields = ["title__icontains", "first_author__icontains"]
+
+    model = Reference
+
+    def get_queryset(self):
+        return Reference.objects.order_by("first_author", "year", "title")
+
+    def __init__(self, *args, **kwargs):
+        attrs = kwargs.pop("attrs", {})
+        attrs.setdefault("data-placeholder", "Select a reference")
+        attrs.setdefault("data-minimum-input-length", 0)
+        kwargs["attrs"] = attrs
+        super().__init__(*args, **kwargs)
     
 class TaxonWidget(s2forms.ModelSelect2Widget):
     search_fields = [
@@ -283,6 +304,10 @@ class AccessionFieldSlipForm(forms.ModelForm):
         widgets = {
             "fieldslip": FieldSlipWidget(url=reverse_lazy("fieldslip-autocomplete")),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["fieldslip"].queryset = FieldSlip.objects.order_by("field_number")
 
 class AccessionGeologyForm(forms.ModelForm):
     class Meta:
@@ -443,7 +468,48 @@ class AddAccessionRowForm(forms.ModelForm):
 
         return available_suffixes
 
+
+class AccessionRowUpdateForm(forms.ModelForm):
+    specimen_suffix = forms.ChoiceField(choices=[], required=False)
+
+    class Meta:
+        model = AccessionRow
+        fields = ['storage', 'specimen_suffix', 'status']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        accession_row = self.instance
+        accession = getattr(accession_row, 'accession', None)
+
+        if accession:
+            taken_suffixes = set(
+                AccessionRow.objects.filter(accession=accession)
+                .exclude(pk=accession_row.pk)
+                .values_list('specimen_suffix', flat=True)
+            )
+            valid_suffixes = accession_row.generate_valid_suffixes()
+            choices = [("-", "-")]
+            for suffix in valid_suffixes:
+                if suffix not in taken_suffixes or suffix == accession_row.specimen_suffix:
+                    choices.append((suffix, suffix))
+            if accession_row.specimen_suffix and accession_row.specimen_suffix not in dict(choices):
+                choices.append((accession_row.specimen_suffix, accession_row.specimen_suffix))
+            self.fields['specimen_suffix'].choices = choices
+            self.fields['specimen_suffix'].initial = accession_row.specimen_suffix or "-"
+
+        self.fields['storage'].queryset = Storage.objects.order_by('area')
+        self.fields['storage'].required = False
+
+    def clean_specimen_suffix(self):
+        suffix = self.cleaned_data.get('specimen_suffix')
+        return suffix or "-"
+
 class NatureOfSpecimenForm(forms.ModelForm):
+    element = forms.ModelChoiceField(
+        queryset=Element.objects.order_by("name"),
+        widget=forms.Select(attrs={"class": "template_form_select"}),
+    )
+
     class Meta:
         model = NatureOfSpecimen
         fields = ['element', 'side', 'condition', 'verbatim_element', 'portion', 'fragments']
@@ -466,10 +532,15 @@ class AddSpecimenForm(forms.ModelForm):
             self.fields['accession_row'].initial = accession_row  # Set initial accession_row value
 
 class AccessionRowIdentificationForm(forms.ModelForm):
+    reference = forms.ModelChoiceField(
+        queryset=Reference.objects.order_by("first_author", "year", "title"),
+        required=False,
+        widget=forms.Select(attrs={"class": "template_form_select"}),
+    )
+
     class Meta:
         model = Identification
         fields = ['identified_by', 'taxon', 'reference', 'date_identified', 'identification_qualifier', 'verbatim_identification', 'identification_remarks']
-        widgets = {"reference": ReferenceWidget}
         labels = {
             'identification_qualifier': 'Taxon Qualifier',
             'verbatim_identification': 'Taxon Verbatim',
@@ -477,11 +548,14 @@ class AccessionRowIdentificationForm(forms.ModelForm):
         }
 
 class AccessionRowSpecimenForm(forms.ModelForm):
+    element = forms.ModelChoiceField(
+        queryset=Element.objects.order_by("name"),
+        widget=forms.Select(attrs={"class": "template_form_select"}),
+    )
+
     class Meta:
         model = NatureOfSpecimen
         fields = ['element', 'side', 'condition', 'verbatim_element', 'portion', 'fragments']
-        widgets = {
-            "element": ElementWidget,}
 
 class PreparationForm(forms.ModelForm):
     """ Form for creating/updating preparation records. """

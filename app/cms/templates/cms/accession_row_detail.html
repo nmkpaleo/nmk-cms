@@ -24,7 +24,14 @@
         </tbody>
       </table>
 
-      <a href="{% url 'accessionrow_add_specimen' accessionrow.id %}">Add Elemet to Specimen</a>
+      {% if can_edit %}
+      <a href="{% url 'accessionrow_edit' accessionrow.pk %}" class="w3-button w3-blue w3-round w3-margin-bottom">
+        <i class="fa-solid fa-pen-to-square"></i>
+        Edit Specimen Detail
+      </a>
+      {% endif %}
+
+      <a href="{% url 'accessionrow_add_specimen' accessionrow.id %}">Add Element to Specimen</a>
             
       <h2>Elements</h2>
       <table>

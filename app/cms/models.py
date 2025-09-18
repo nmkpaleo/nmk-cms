@@ -85,7 +85,11 @@ class BaseModel(models.Model):
 
 # Locality Model
 class Locality(BaseModel):
-    abbreviation = models.CharField(max_length=2, help_text="Enter the Abbreviation of the Locality")
+    abbreviation = models.CharField(
+        max_length=2,
+        unique=True,
+        help_text="Enter the Abbreviation of the Locality",
+    )
     name = models.CharField(max_length=50, help_text="The name of the Locality.")
     history = HistoricalRecords()
     

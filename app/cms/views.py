@@ -47,7 +47,7 @@ from cms.forms import (AccessionBatchForm, AccessionCommentForm,
                     AccessionForm, AccessionFieldSlipForm, AccessionGeologyForm,
                     AccessionNumberSelectForm,
                     AccessionRowIdentificationForm, AccessionMediaUploadForm,
-                    AccessionRowSpecimenForm,
+                    AccessionRowSpecimenForm, AccessionRowUpdateForm,
                     AccessionReferenceForm, AddAccessionRowForm, FieldSlipForm,
                     MediaUploadForm, NatureOfSpecimenForm, PreparationForm,
                     PreparationApprovalForm, PreparationMediaUploadForm,
@@ -542,7 +542,23 @@ class AccessionRowDetailView(DetailView):
         context = super().get_context_data(**kwargs)
         context['natureofspecimens'] = NatureOfSpecimen.objects.filter(accession_row=self.object)
         context['identifications'] = Identification.objects.filter(accession_row=self.object)
+        context['can_edit'] = (
+            self.request.user.is_superuser or is_collection_manager(self.request.user)
+        )
         return context
+
+
+class AccessionRowUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
+    model = AccessionRow
+    form_class = AccessionRowUpdateForm
+    template_name = 'cms/accession_row_form.html'
+    context_object_name = 'accessionrow'
+
+    def test_func(self):
+        return self.request.user.is_superuser or is_collection_manager(self.request.user)
+
+    def get_success_url(self):
+        return self.object.get_absolute_url()
 
 class AccessionWizard(SessionWizardView):
     file_storage = FileSystemStorage(location=settings.MEDIA_ROOT)
@@ -670,6 +686,48 @@ class ReferenceListView(FilterView):
     template_name = 'cms/reference_list.html'
     context_object_name = 'references'
     paginate_by = 10
+    filterset_class = ReferenceFilter
+
+    ordering_fields = {
+        "first_author": "first_author",
+        "year": "year",
+        "title": "title",
+    }
+    default_order = "first_author"
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        sort_key = self.request.GET.get("sort") or self.default_order
+        direction = self.request.GET.get("direction", "asc")
+
+        if sort_key not in self.ordering_fields:
+            sort_key = self.default_order
+        if direction not in {"asc", "desc"}:
+            direction = "asc"
+
+        order_expression = self.ordering_fields[sort_key]
+        if direction == "desc":
+            order_expression = f"-{order_expression}"
+
+        return queryset.order_by(order_expression, "title")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        sort_key = self.request.GET.get("sort") or self.default_order
+        direction = self.request.GET.get("direction", "asc")
+
+        if sort_key not in self.ordering_fields:
+            sort_key = self.default_order
+        if direction not in {"asc", "desc"}:
+            direction = "asc"
+
+        context["current_sort"] = sort_key
+        context["current_direction"] = direction
+        context["sort_directions"] = {
+            field: "desc" if sort_key == field and direction == "asc" else "asc"
+            for field in self.ordering_fields
+        }
+        return context
 
 
 
@@ -1355,7 +1413,13 @@ class StorageDetailView(LoginRequiredMixin, CollectionManagerAccessMixin, Detail
         context["can_edit"] = (
             is_collection_manager(self.request.user) or self.request.user.is_superuser
         )
-        context["specimens"] = getattr(self.object, "prefetched_rows", [])
+        specimens = getattr(self.object, "prefetched_rows", [])
+        paginator = Paginator(specimens, 10)
+        page_number = self.request.GET.get("page")
+        page_obj = paginator.get_page(page_number)
+        context["specimen_page_obj"] = page_obj
+        context["specimens"] = page_obj.object_list
+        context["specimen_count"] = paginator.count
         context["children"] = getattr(self.object, "child_storages", [])
         context["history_entries"] = build_history_entries(self.object)
         return context
