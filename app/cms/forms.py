@@ -109,11 +109,11 @@ class AccessionNumberSeriesAdminForm(forms.ModelForm):
             
         # Inject JS data for user field
         if 'user' in self.fields:
-            mary_series = AccessionNumberSeries.objects.filter(user__username__iexact='mary').order_by('-end_at').first()
-            shared_series = AccessionNumberSeries.objects.exclude(user__username__iexact='mary').order_by('-end_at').first()
+            tbi_series = AccessionNumberSeries.objects.filter(user__username__iexact='tbi').order_by('-end_at').first()
+            shared_series = AccessionNumberSeries.objects.exclude(user__username__iexact='tbi').order_by('-end_at').first()
 
             series_map = {
-                "mary": mary_series.end_at + 1 if mary_series and mary_series.end_at else 1_000_000,
+                "tbi": tbi_series.end_at + 1 if tbi_series and tbi_series.end_at else 1_000_000,
                 "shared": shared_series.end_at + 1 if shared_series and shared_series.end_at else 1
             }
 
@@ -124,7 +124,7 @@ class AccessionNumberSeriesAdminForm(forms.ModelForm):
         series_map = {}
         for user in User.objects.all():
             qs = AccessionNumberSeries.objects.filter(user=user).order_by('-end_at')
-            base = 1_000_000 if user.username.lower() == 'mary' else 1
+            base = 1_000_000 if user.username.lower() == 'tbi' else 1
 
             if qs.exists() and qs.first().end_at is not None:
                 next_start = qs.first().end_at + 1
@@ -133,7 +133,7 @@ class AccessionNumberSeriesAdminForm(forms.ModelForm):
 
             series_map[user.username.lower()] = next_start
             self.fields['user'].widget.attrs['data-series-starts'] = json.dumps({
-                "mary": 1_000_000,
+                "tbi": 1_000_000,
                 "default": 1
             })
             self.fields['user'].label_from_instance = lambda obj: obj.username

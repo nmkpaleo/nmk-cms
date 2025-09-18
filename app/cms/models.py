@@ -278,21 +278,21 @@ class AccessionNumberSeries(BaseModel):
         if self.start_from >= self.end_at:
             raise ValidationError("Start number must be less than end number.")
         
-        # Determine if this is Mary or shared user series
-        is_mary = self.user.username.strip().lower() == "mary"
+        # Determine if this is TBI or shared user series
+        is_tbi = self.user.username.strip().lower() == "tbi"
 
         # Build appropriate queryset to check overlaps
-        if is_mary:
-            # Only check overlap among Mary's series
+        if is_tbi:
+            # Only check overlap among TBI's series
             conflicting_series = AccessionNumberSeries.objects.exclude(pk=self.pk).filter(
-                user__username__iexact="mary",
+                user__username__iexact="tbi",
                 start_from__lte=self.end_at,
                 end_at__gte=self.start_from,
             )
         else:
-            # Shared users (everyone except Mary)
+            # Shared users (everyone except TBI)
             conflicting_series = AccessionNumberSeries.objects.exclude(pk=self.pk).exclude(
-                user__username__iexact="mary"
+                user__username__iexact="tbi"
             ).filter(
                 start_from__lte=self.end_at,
                 end_at__gte=self.start_from,

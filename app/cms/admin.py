@@ -165,19 +165,19 @@ class AccessionNumberSeriesAdmin(HistoricalAdmin):
         formfield = super().formfield_for_dbfield(db_field, request, **kwargs)
 
         if db_field.name == "user":
-            # Compute shared vs Mary series
+            # Compute shared vs TBI series
             from django.contrib.auth import get_user_model
             User = get_user_model()
 
         try:
-            mary_series = AccessionNumberSeries.objects.filter(user__username__iexact="mary")
-            shared_series = AccessionNumberSeries.objects.exclude(user__username__iexact="mary")
+            tbi_series = AccessionNumberSeries.objects.filter(user__username__iexact="tbi")
+            shared_series = AccessionNumberSeries.objects.exclude(user__username__iexact="tbi")
 
-            mary_end = mary_series.order_by('-end_at').first()
+            tbi_end = tbi_series.order_by('-end_at').first()
             shared_end = shared_series.order_by('-end_at').first()
 
             series_map = {
-                "mary": mary_end.end_at + 1 if mary_end and mary_end.end_at else 1_000_000,
+                "tbi": tbi_end.end_at + 1 if tbi_end and tbi_end.end_at else 1_000_000,
                 "shared": shared_end.end_at + 1 if shared_end and shared_end.end_at else 1,
             }
 

@@ -20,7 +20,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const selectedOption = userSelect.options[userSelect.selectedIndex];
     const label = selectedOption?.textContent?.trim().toLowerCase();
 
-    const seriesKey = label.includes("mary") ? "mary" : "shared";
+    const seriesKey = label.includes("tbi") ? "tbi" : "shared";
     const nextStart = seriesMap[seriesKey];
 
     if (!nextStart) return;

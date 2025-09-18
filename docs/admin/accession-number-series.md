@@ -1,6 +1,6 @@
 # Accession Number Series (Admin)
 
-Accession number series issue sequential specimen numbers to individual users. Each series tracks the next number that will be assigned when a collection manager generates accessions, and only one active series is allowed per user at a time. Series created for the user **mary** use a dedicated numbering pool that starts at one million; every other user shares a pool that starts at one.
+Accession number series issue sequential specimen numbers to individual users. Each series tracks the next number that will be assigned when a collection manager generates accessions, and only one active series is allowed per user at a time. Series created for the organisation user **TBI** use a dedicated numbering pool that starts at one million; every other user shares a pool that starts at one.
 
 ## Creating a series
 
@@ -22,7 +22,7 @@ Collection managers see shortcuts to create single accessions or batches only wh
 
 1. Open the user’s existing accession number series from the admin list.
 2. Confirm the current range has been fully used and is now marked inactive. Only one active range is allowed per user, so wait for the current numbers to be exhausted before issuing more.
-3. Add a new series for the same user. The form again proposes the next available number—either right after the previous shared pool range or, for Mary’s dedicated pool, immediately after her last issued number.
+3. Add a new series for the same user. The form again proposes the next available number—either right after the previous shared pool range or, for TBI’s dedicated pool, immediately after the last issued number.
 4. Save the record to activate the new range.
 
 Deactivate any old series as soon as the numbers are exhausted. This prevents overlapping ranges and ensures the correct counts are displayed to collection managers while they work.
