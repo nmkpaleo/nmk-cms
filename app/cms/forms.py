@@ -107,12 +107,7 @@ class AccessionNumberSeriesAdminForm(forms.ModelForm):
 
         # Inject JS data for user field
         if 'user' in self.fields:
-            series_map = {
-                "tbi": self._next_start_for_pool(is_tbi_pool=True),
-                "shared": self._next_start_for_pool(is_tbi_pool=False),
-            }
-
-            self.fields['user'].widget.attrs['data-series-starts'] = json.dumps(series_map)
+            self.fields['user'].widget.attrs.update(self._widget_metadata())
             self.fields['user'].label_from_instance = lambda obj: obj.username  # ensure username shown
 
     @classmethod
@@ -137,6 +132,24 @@ class AccessionNumberSeriesAdminForm(forms.ModelForm):
 
     def _next_start_for_user(self, user):
         return self._next_start_for_pool(is_tbi_pool=self._is_tbi_user(user))
+
+    @classmethod
+    def _widget_metadata(cls):
+        series_map = {
+            "tbi": cls._next_start_for_pool(is_tbi_pool=True),
+            "shared": cls._next_start_for_pool(is_tbi_pool=False),
+        }
+
+        metadata = {"data-series-starts": json.dumps(series_map)}
+
+        dedicated_user_id = User.objects.filter(
+            username__iexact=cls.TBI_USERNAME
+        ).values_list("pk", flat=True).first()
+
+        if dedicated_user_id is not None:
+            metadata["data-dedicated-user-id"] = str(dedicated_user_id)
+
+        return metadata
 
     def clean(self):
         cleaned_data = super().clean()

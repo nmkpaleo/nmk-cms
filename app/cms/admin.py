@@ -40,7 +40,6 @@ from .models import (
 )
 from .resources import *
 
-import json
 import logging
 
 from django import forms
@@ -166,13 +165,10 @@ class AccessionNumberSeriesAdmin(HistoricalAdmin):
 
         if db_field.name == "user":
             try:
-                series_map = {
-                    "tbi": AccessionNumberSeriesAdminForm._next_start_for_pool(is_tbi_pool=True),
-                    "shared": AccessionNumberSeriesAdminForm._next_start_for_pool(is_tbi_pool=False),
-                }
-
                 if hasattr(formfield.widget, 'attrs'):
-                    formfield.widget.attrs["data-series-starts"] = json.dumps(series_map)
+                    formfield.widget.attrs.update(
+                        AccessionNumberSeriesAdminForm._widget_metadata()
+                    )
 
             except Exception as e:
                 # Just log the issue, don't block the form rendering or validation

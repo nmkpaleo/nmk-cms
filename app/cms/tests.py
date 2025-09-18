@@ -1,6 +1,7 @@
 from unittest.mock import patch
 from datetime import timedelta
 from types import SimpleNamespace
+import json
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -117,6 +118,19 @@ class AccessionNumberSeriesAdminFormTests(TestCase):
         self.tbi_user = User.objects.create_user(username="TBI", password="pass")
         self.shared_user = User.objects.create_user(username="shared", password="pass")
         self.other_shared_user = User.objects.create_user(username="shared2", password="pass")
+
+    def test_form_exposes_widget_metadata_for_client_side(self):
+        form = AccessionNumberSeriesAdminForm()
+
+        widget_attrs = form.fields["user"].widget.attrs
+        self.assertEqual(
+            widget_attrs.get("data-dedicated-user-id"),
+            str(self.tbi_user.pk),
+        )
+
+        series_map = json.loads(widget_attrs["data-series-starts"])
+        self.assertEqual(series_map["tbi"], 1_000_000)
+        self.assertEqual(series_map["shared"], 1)
 
     def test_tbi_series_uses_dedicated_pool(self):
         form = AccessionNumberSeriesAdminForm(data={

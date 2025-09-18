@@ -16,11 +16,38 @@ document.addEventListener("DOMContentLoaded", function () {
     return;
   }
 
+  const dedicatedUserId = userSelect.getAttribute("data-dedicated-user-id");
+
+  function determineSeriesKey(selectedOption) {
+    if (!selectedOption) {
+      return "shared";
+    }
+
+    const selectedValue = selectedOption.value;
+    if (
+      dedicatedUserId !== null &&
+      dedicatedUserId !== undefined &&
+      dedicatedUserId !== "" &&
+      selectedValue !== undefined &&
+      selectedValue !== null &&
+      selectedValue !== "" &&
+      String(selectedValue) === String(dedicatedUserId)
+    ) {
+      return "tbi";
+    }
+
+    const label = selectedOption.textContent?.trim().toLowerCase();
+    if (label && label.includes("tbi")) {
+      return "tbi";
+    }
+
+    return "shared";
+  }
+
   function updateFields(force = false) {
     const selectedOption = userSelect.options[userSelect.selectedIndex];
-    const label = selectedOption?.textContent?.trim().toLowerCase();
 
-    const seriesKey = label.includes("tbi") ? "tbi" : "shared";
+    const seriesKey = determineSeriesKey(selectedOption);
     const nextStart = seriesMap[seriesKey];
 
     if (!nextStart) return;
