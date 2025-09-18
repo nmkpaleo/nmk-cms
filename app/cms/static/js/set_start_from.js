@@ -44,6 +44,12 @@ document.addEventListener("DOMContentLoaded", function () {
     return "shared";
   }
 
+  function dispatchInputEvent(element) {
+    if (!element) return;
+
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
   function updateFields(force = false) {
     const selectedOption = userSelect.options[userSelect.selectedIndex];
 
@@ -52,14 +58,22 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (!nextStart) return;
 
+    const nextStartValue = String(nextStart);
+    let startValueChanged = false;
+
     if (force || !startFromInput.value || startFromInput.value === "0") {
-      startFromInput.value = nextStart;
+      startValueChanged = startFromInput.value !== nextStartValue;
+      startFromInput.value = nextStartValue;
       startFromInput.readOnly = true;
     }
 
     if (force || !currentNumberInput.value || currentNumberInput.value === "0") {
-      currentNumberInput.value = nextStart;
+      currentNumberInput.value = nextStartValue;
       currentNumberInput.readOnly = true;
+    }
+
+    if (startValueChanged) {
+      dispatchInputEvent(startFromInput);
     }
   }
 
