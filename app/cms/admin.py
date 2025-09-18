@@ -165,29 +165,19 @@ class AccessionNumberSeriesAdmin(HistoricalAdmin):
         formfield = super().formfield_for_dbfield(db_field, request, **kwargs)
 
         if db_field.name == "user":
-            # Compute shared vs TBI series
-            from django.contrib.auth import get_user_model
-            User = get_user_model()
+            try:
+                series_map = {
+                    "tbi": AccessionNumberSeriesAdminForm._next_start_for_pool(is_tbi_pool=True),
+                    "shared": AccessionNumberSeriesAdminForm._next_start_for_pool(is_tbi_pool=False),
+                }
 
-        try:
-            tbi_series = AccessionNumberSeries.objects.filter(user__username__iexact="tbi")
-            shared_series = AccessionNumberSeries.objects.exclude(user__username__iexact="tbi")
+                if hasattr(formfield.widget, 'attrs'):
+                    formfield.widget.attrs["data-series-starts"] = json.dumps(series_map)
 
-            tbi_end = tbi_series.order_by('-end_at').first()
-            shared_end = shared_series.order_by('-end_at').first()
-
-            series_map = {
-                "tbi": tbi_end.end_at + 1 if tbi_end and tbi_end.end_at else 1_000_000,
-                "shared": shared_end.end_at + 1 if shared_end and shared_end.end_at else 1,
-            }
-
-            if hasattr(formfield.widget, 'attrs'):
-                formfield.widget.attrs["data-series-starts"] = json.dumps(series_map)
-
-        except Exception as e:
-            # Just log the issue, don't block the form rendering or validation
-            import logging
-            logging.warning(f"Series mapping failed: {e}")
+            except Exception as e:
+                # Just log the issue, don't block the form rendering or validation
+                import logging
+                logging.warning(f"Series mapping failed: {e}")
 
         return formfield
 

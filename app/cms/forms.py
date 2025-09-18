@@ -63,6 +63,8 @@ class AccessionNumberSelectForm(forms.Form):
         self.fields["accession_number"].choices = [(n, n) for n in available_numbers]
 
 class AccessionNumberSeriesAdminForm(forms.ModelForm):
+    TBI_USERNAME = "tbi"
+
     count = forms.IntegerField(
         label="Count",
         min_value=1,
@@ -76,11 +78,6 @@ class AccessionNumberSeriesAdminForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
-        from django.contrib.auth import get_user_model
-        import json
-        from .models import AccessionNumberSeries
-        User = get_user_model()
 
         # Always add count to the form manually
         self.fields['count'] = forms.IntegerField(
@@ -100,61 +97,74 @@ class AccessionNumberSeriesAdminForm(forms.ModelForm):
             self.fields['count'].initial = total
             self.fields['count'].disabled = True
         else:
-            # Add view: make start_from and current_number readonly
+            # Add view: make start_from and current_number readonly and optional
             for field_name in ['start_from', 'current_number']:
                 if field_name in self.fields:
                     self.fields[field_name].widget.attrs['readonly'] = True
+                    self.fields[field_name].required = False
             self.fields['is_active'].initial = True
             self.fields['is_active'].widget = forms.HiddenInput()
-            
+
         # Inject JS data for user field
         if 'user' in self.fields:
-            tbi_series = AccessionNumberSeries.objects.filter(user__username__iexact='tbi').order_by('-end_at').first()
-            shared_series = AccessionNumberSeries.objects.exclude(user__username__iexact='tbi').order_by('-end_at').first()
-
             series_map = {
-                "tbi": tbi_series.end_at + 1 if tbi_series and tbi_series.end_at else 1_000_000,
-                "shared": shared_series.end_at + 1 if shared_series and shared_series.end_at else 1
+                "tbi": self._next_start_for_pool(is_tbi_pool=True),
+                "shared": self._next_start_for_pool(is_tbi_pool=False),
             }
 
             self.fields['user'].widget.attrs['data-series-starts'] = json.dumps(series_map)
             self.fields['user'].label_from_instance = lambda obj: obj.username  # ensure username shown
 
-    def _build_series_map(self):
-        series_map = {}
-        for user in User.objects.all():
-            qs = AccessionNumberSeries.objects.filter(user=user).order_by('-end_at')
-            base = 1_000_000 if user.username.lower() == 'tbi' else 1
+    @classmethod
+    def _next_start_for_pool(cls, *, is_tbi_pool):
+        if is_tbi_pool:
+            queryset = AccessionNumberSeries.objects.filter(user__username__iexact=cls.TBI_USERNAME)
+            base = 1_000_000
+        else:
+            queryset = AccessionNumberSeries.objects.exclude(user__username__iexact=cls.TBI_USERNAME)
+            base = 1
 
-            if qs.exists() and qs.first().end_at is not None:
-                next_start = qs.first().end_at + 1
-            else:
-                next_start = base
+        latest_series = queryset.order_by('-end_at').first()
+        if latest_series and latest_series.end_at:
+            return latest_series.end_at + 1
+        return base
 
-            series_map[user.username.lower()] = next_start
-            self.fields['user'].widget.attrs['data-series-starts'] = json.dumps({
-                "tbi": 1_000_000,
-                "default": 1
-            })
-            self.fields['user'].label_from_instance = lambda obj: obj.username
+    @classmethod
+    def _is_tbi_user(cls, user):
+        if not user or not user.username:
+            return False
+        return user.username.strip().lower() == cls.TBI_USERNAME
 
-        return json.dumps(series_map)
+    def _next_start_for_user(self, user):
+        return self._next_start_for_pool(is_tbi_pool=self._is_tbi_user(user))
 
     def clean(self):
         cleaned_data = super().clean()
         user = cleaned_data.get("user")
 
         if not self.instance.pk and user:
-            from .models import AccessionNumberSeries
+            # Ensure unique active series per user
             if AccessionNumberSeries.objects.filter(user=user, is_active=True).exists():
                 self.add_error("user", "This user already has an active accession number series.")
+
+            next_start = self._next_start_for_user(user)
+            cleaned_data['start_from'] = next_start
+            cleaned_data['current_number'] = next_start
+
+            # Keep instance in sync with the cleaned values so model validation sees them
+            self.instance.start_from = next_start
+            self.instance.current_number = next_start
+
         return cleaned_data
 
     def save(self, commit=True):
         if not self.instance.pk:
+            start_from = self.cleaned_data.get('start_from') or self.instance.start_from
             count = self.cleaned_data.get("count")
-            if count:
-                self.instance.end_at = self.instance.start_from + count - 1
+            if start_from and count:
+                self.instance.start_from = start_from
+                self.instance.current_number = start_from
+                self.instance.end_at = start_from + count - 1
         return super().save(commit=commit)
         
 class AccessionRowWidget(s2forms.ModelSelect2Widget):
