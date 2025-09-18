@@ -1,10 +1,8 @@
-from dal import autocomplete
 from django import forms
 from django.contrib.auth import get_user_model
 from django_select2 import forms as s2forms
 from django_select2.forms import ModelSelect2Widget, Select2Widget
 from django.contrib.auth.models import User
-from django.urls import reverse_lazy
 
 from .models import (
     Accession,
@@ -206,34 +204,16 @@ class AccessionMediaUploadForm(forms.ModelForm):
             'media_location': forms.ClearableFileInput(attrs={'multiple': False}),
         }
 
-class FieldSlipWidget(autocomplete.ModelSelect2):
-    search_fields = ["field_number__icontains", "verbatim_locality__icontains"]
+class FieldSlipWidget(Select2Widget):
+    """Simple Select2 widget that preloads all field slips for selection."""
 
-    def __init__(self, *args, **kwargs):
-        kwargs["url"] = reverse_lazy("fieldslip-autocomplete")
-        attrs = kwargs.pop("attrs", {})
-        attrs.setdefault("data-placeholder", "Search Field Slips...")
-        attrs.setdefault("data-minimum-input-length", 0)
+    def __init__(self, attrs=None, choices=()):
+        attrs = attrs or {}
+        attrs.setdefault("data-placeholder", "Select a Field Slip")
         attrs.setdefault("data-allow-clear", "true")
-        kwargs["attrs"] = attrs
-        super().__init__(*args, **kwargs)
-
-    class Media:
-        # ONLY load DAL’s compatible JS and CSS
-        js = (
-            "autocomplete_light/jquery.init.js",
-            "autocomplete_light/autocomplete_light.js",
-            "autocomplete_light/autocomplete.init.js",
-        )
-        css = {
-            'screen': [
-                'autocomplete_light/select2.css',
-                'autocomplete_light/autocomplete.css',
-            ]
-        }
-
-    def label_from_instance(self, obj):
-        return f"{obj.field_number} - {obj.verbatim_locality or 'No locality'}"
+        attrs.setdefault("data-minimum-results-for-search", "0")
+        attrs.setdefault("class", "template_form_select")
+        super().__init__(attrs, choices)
 
 class ElementWidget(s2forms.ModelSelect2Widget):
     search_fields = ["name__icontains"]
@@ -265,11 +245,52 @@ class ReferenceWidget(s2forms.ModelSelect2Widget):
         attrs.setdefault("data-minimum-input-length", 0)
         kwargs["attrs"] = attrs
         super().__init__(*args, **kwargs)
-    
+
 class TaxonWidget(s2forms.ModelSelect2Widget):
     search_fields = [
         "taxon_name__icontains",
         ]
+
+
+class IdentifiedByWidget(s2forms.ModelSelect2Widget):
+    search_fields = [
+        "first_name__icontains",
+        "last_name__icontains",
+    ]
+
+    def __init__(self, *args, **kwargs):
+        attrs = kwargs.pop("attrs", {})
+        attrs.setdefault("data-placeholder", "Select or add a person")
+        attrs.setdefault("data-allow-clear", "true")
+        attrs.setdefault("data-tags", "true")
+        attrs.setdefault("data-minimum-input-length", 0)
+        kwargs["attrs"] = attrs
+        super().__init__(*args, **kwargs)
+
+    def create_value(self, value):
+        value = (value or "").strip()
+        if not value:
+            raise forms.ValidationError("Please enter a name for the identifier.")
+
+        if "," in value:
+            last_name, first_name = [part.strip() for part in value.split(",", 1)]
+        else:
+            parts = value.split()
+            if len(parts) < 2:
+                raise forms.ValidationError("Enter both first and last names, e.g. 'Jane Doe'.")
+            first_name = parts[0]
+            last_name = " ".join(parts[1:])
+
+        existing = Person.objects.filter(
+            first_name__iexact=first_name,
+            last_name__iexact=last_name,
+        ).first()
+
+        if existing:
+            return existing.pk
+
+        person = Person.objects.create(first_name=first_name, last_name=last_name)
+        return person.pk
 
 class AccessionForm(forms.ModelForm):
     class Meta:
@@ -298,16 +319,20 @@ class AccessionCommentForm(forms.ModelForm):
         fields = ['subject', 'comment', 'comment_by']
 
 class AccessionFieldSlipForm(forms.ModelForm):
+    fieldslip = forms.ModelChoiceField(
+        queryset=FieldSlip.objects.none(),
+        widget=FieldSlipWidget(),
+        label="Field Slip",
+    )
+
     class Meta:
         model = AccessionFieldSlip
         fields = ["fieldslip", "notes"]
-        widgets = {
-            "fieldslip": FieldSlipWidget(url=reverse_lazy("fieldslip-autocomplete")),
-        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["fieldslip"].queryset = FieldSlip.objects.order_by("field_number")
+        self.fields["fieldslip"].queryset = FieldSlip.objects.order_by("field_number", "id")
+        self.fields["fieldslip"].empty_label = "Select a Field Slip"
 
 class AccessionGeologyForm(forms.ModelForm):
     class Meta:
@@ -546,6 +571,14 @@ class AccessionRowIdentificationForm(forms.ModelForm):
             'verbatim_identification': 'Taxon Verbatim',
             'identification_remarks': 'Remarks',
         }
+        widgets = {
+            'identified_by': IdentifiedByWidget(),
+            'date_identified': forms.DateInput(attrs={'type': 'date'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['identified_by'].queryset = Person.objects.order_by('last_name', 'first_name')
 
 class AccessionRowSpecimenForm(forms.ModelForm):
     element = forms.ModelChoiceField(

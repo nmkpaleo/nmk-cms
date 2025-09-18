@@ -6,8 +6,17 @@
 <div class="template-detail-container">
   <div class="grid-container">
     <div class="card">
+      <div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
+        <h2 class="section-title" style="margin:0;">Specimen Detail</h2>
+        {% if can_edit %}
+        <a href="{% url 'accessionrow_edit' accessionrow.pk %}" class="w3-button w3-blue w3-round">
+          <i class="fa-solid fa-pen-to-square"></i>
+          Edit Specimen Detail
+        </a>
+        {% endif %}
+      </div>
+
       <table>
-        <caption>Specimen Detail</caption>
         <tbody>
           <tr>
             <th>Accession:</th>
@@ -21,17 +30,18 @@
             <th>Storage:</th>
             <td>{{ accessionrow.storage }}</td>
           </tr>
+          {% if show_inventory_status %}
+          <tr>
+            <th>Inventory Status:</th>
+            <td>{{ accessionrow.get_status_display|default:"Not recorded" }}</td>
+          </tr>
+          {% endif %}
         </tbody>
       </table>
 
-      {% if can_edit %}
-      <a href="{% url 'accessionrow_edit' accessionrow.pk %}" class="w3-button w3-blue w3-round w3-margin-bottom">
-        <i class="fa-solid fa-pen-to-square"></i>
-        Edit Specimen Detail
-      </a>
-      {% endif %}
-
-      <a href="{% url 'accessionrow_add_specimen' accessionrow.id %}">Add Element to Specimen</a>
+      <div class="section-actions" style="margin: 1rem 0;">
+        <a href="{% url 'accessionrow_add_specimen' accessionrow.id %}" class="w3-button w3-light-grey w3-round">Add Element to Specimen</a>
+      </div>
             
       <h2>Elements</h2>
       <table>

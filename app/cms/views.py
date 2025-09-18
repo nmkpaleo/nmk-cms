@@ -115,6 +115,12 @@ def is_collection_manager(user):
 def can_manage_places(user):
     return user.is_superuser or user.groups.filter(name="Collection Managers").exists()
 
+
+def is_public_user(user):
+    if not user.is_authenticated:
+        return True
+    return user.groups.filter(name__iexact="Public").exists()
+
 def add_fieldslip_to_accession(request, pk):
     """
     Adds an existing FieldSlip to an Accession.
@@ -545,6 +551,7 @@ class AccessionRowDetailView(DetailView):
         context['can_edit'] = (
             self.request.user.is_superuser or is_collection_manager(self.request.user)
         )
+        context['show_inventory_status'] = not is_public_user(self.request.user)
         return context
 
 
