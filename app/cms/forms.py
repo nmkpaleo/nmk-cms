@@ -225,8 +225,9 @@ class ElementWidget(s2forms.ModelSelect2Widget):
 
     def __init__(self, *args, **kwargs):
         attrs = kwargs.pop("attrs", {})
-        attrs.setdefault("data-placeholder", "Select an element")
-        attrs.setdefault("data-minimum-input-length", 0)
+        attrs.setdefault("data-placeholder", "Search for an element")
+        attrs.setdefault("data-minimum-input-length", 3)
+        attrs.setdefault("data-allow-clear", "true")
         kwargs["attrs"] = attrs
         super().__init__(*args, **kwargs)
 
@@ -241,8 +242,9 @@ class ReferenceWidget(s2forms.ModelSelect2Widget):
 
     def __init__(self, *args, **kwargs):
         attrs = kwargs.pop("attrs", {})
-        attrs.setdefault("data-placeholder", "Select a reference")
-        attrs.setdefault("data-minimum-input-length", 0)
+        attrs.setdefault("data-placeholder", "Search for a reference")
+        attrs.setdefault("data-minimum-input-length", 3)
+        attrs.setdefault("data-allow-clear", "true")
         kwargs["attrs"] = attrs
         super().__init__(*args, **kwargs)
 
