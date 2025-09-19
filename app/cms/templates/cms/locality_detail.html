@@ -28,14 +28,17 @@
                 </div>
 
                 <div class="cards">
-                    <table>
-                        <caption><em><h2>Accession details</h2></em></caption>
+                    <table class="w3-table-all w3-hoverable">
+                        <caption class="w3-large"><strong>Accession details</strong></caption>
                         <thead>
                             <tr>
-                                <th><u>Collection</u></th>
-                                <th><u>Specimen  Number</u></th>
+                                <th>Collection</th>
+                                <th>Specimen Prefix</th>
+                                <th>Specimen Number</th>
+                                <th>Taxon</th>
+                                <th>Element</th>
                                 {% if user.is_superuser or user|has_group:"Collection Managers" %}
-                                <th><u>Accesioned by</u></th>
+                                <th>Accessioned by</th>
                                 {% endif %}
                             </tr>
                         </thead>
@@ -43,51 +46,35 @@
                             {% for accession in accessions %}
                             <tr>
                                 <td>{{ accession.collection.abbreviation }}</td>
+                                <td>{{ accession.specimen_prefix.abbreviation }}</td>
                                 <td><a href="{% url 'accession_detail' accession.pk %}">{{ accession.specimen_no }}</a></td>
+                                <td>
+                                    {% if accession.taxa_list %}
+                                        {{ accession.taxa_list|join:", " }}
+                                    {% else %}
+                                        &mdash;
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if accession.element_list %}
+                                        {{ accession.element_list|join:", " }}
+                                    {% else %}
+                                        &mdash;
+                                    {% endif %}
+                                </td>
                                 {% if user.is_superuser or user|has_group:"Collection Managers" %}
-                                <td>&nbsp;{{ accession.accessioned_by }}</td>
+                                <td>{{ accession.accessioned_by }}</td>
                                 {% endif %}
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="{% if user.is_superuser or user|has_group:"Collection Managers" %}6{% else %}5{% endif %}" class="w3-center">No accessions found.</td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
-                    <hr class="accession_hr">
-                    <div class="pagination">
-
-                                            <span class="step-links">
-
-                                                {% if accessions.has_previous %}
-
-                                                    <a href="?page=1"  class="pagination_previous">&laquo; first</a>
-
-                                                    <a href="?page={{ accessions.previous_page_number }}" class="pagination_previous">previous</a>
-
-                                                {% endif %}
-
-                                        
-
-                                                <span class="current">
-
-                                                    Page {{ accessions.number }} of {{ accessions.paginator.num_pages }}.
-
-                                                </span>
-
-                                        
-
-                                                {% if accessions.has_next %}
-
-                                                    <a href="?page={{ accessions.next_page_number }}" class="pagination_next">next</a>
-
-                                                    <a href="?page={{ accessions.paginator.num_pages }}" class="pagination_next">last &raquo;</a>
-
-                                                {% endif %}
-
-                                            </span>
-
-                                        </div>
-
                 </div>
-    
+
             </div>
         </div>
 

@@ -1,0 +1,14 @@
+{% extends "base_generic.html" %}
+
+{% block title %}Edit Specimen {{ accessionrow.specimen_suffix|default:"-" }}{% endblock %}
+
+{% block content %}
+<div class="w3-container w3-margin-top">
+  <h2>Edit Specimen Details</h2>
+  {% include "includes/base_form.html" with form=form submit_label="Save" method="post" action=request.path title="Specimen Detail" %}
+  <a href="{% url 'accessionrow_detail' accessionrow.pk %}" class="w3-button w3-light-grey w3-round w3-margin-top">
+    <i class="fa-solid fa-arrow-left"></i>
+    Back to Specimen
+  </a>
+</div>
+{% endblock %}

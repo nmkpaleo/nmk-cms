@@ -47,7 +47,7 @@ from cms.forms import (AccessionBatchForm, AccessionCommentForm,
                     AccessionForm, AccessionFieldSlipForm, AccessionGeologyForm,
                     AccessionNumberSelectForm,
                     AccessionRowIdentificationForm, AccessionMediaUploadForm,
-                    AccessionRowSpecimenForm,
+                    AccessionRowSpecimenForm, AccessionRowUpdateForm,
                     AccessionReferenceForm, AddAccessionRowForm, FieldSlipForm,
                     MediaUploadForm, NatureOfSpecimenForm, PreparationForm,
                     PreparationApprovalForm, PreparationMediaUploadForm,
@@ -107,13 +107,69 @@ class PreparationAccessMixin(UserPassesTestMixin):
             user.groups.filter(name__in=["Curators", "Collection Managers"]).exists()
         )
 
-# Helper function to check if user is in the "Collection Managers" group
+# Helper function to check if user can manage collection content
 def is_collection_manager(user):
-    return user.groups.filter(name="Collection Managers").exists()
+    if not getattr(user, "is_authenticated", False):
+        return False
+    return user.is_superuser or user.groups.filter(name="Collection Managers").exists()
 
 
 def can_manage_places(user):
     return user.is_superuser or user.groups.filter(name="Collection Managers").exists()
+
+
+def is_public_user(user):
+    if not user.is_authenticated:
+        return True
+    return user.groups.filter(name__iexact="Public").exists()
+
+
+def prefetch_accession_related(qs):
+    """Prefetch accession row data needed for taxon and element summaries."""
+    accession_row_prefetch = Prefetch(
+        'accessionrow_set',
+        queryset=AccessionRow.objects.prefetch_related(
+            Prefetch(
+                'natureofspecimen_set',
+                queryset=NatureOfSpecimen.objects.select_related('element')
+            ),
+            Prefetch(
+                'identification_set',
+                queryset=Identification.objects.all().order_by('-date_identified', '-id')
+            ),
+        )
+    )
+
+    return (
+        qs.select_related('collection', 'specimen_prefix')
+        .prefetch_related(accession_row_prefetch)
+        .distinct()
+    )
+
+
+def attach_accession_summaries(accessions):
+    """Attach taxon and element summaries to each accession in the iterable."""
+    if accessions is None:
+        return
+
+    accession_list = getattr(accessions, 'object_list', accessions)
+
+    for accession in accession_list:
+        taxa = set()
+        elements = set()
+
+        for row in accession.accessionrow_set.all():
+            for identification in row.identification_set.all():
+                taxon = (identification.taxon or "").strip()
+                if taxon:
+                    taxa.add(taxon)
+            for specimen in row.natureofspecimen_set.all():
+                element = getattr(specimen, 'element', None)
+                if element and element.name:
+                    elements.add(element.name)
+
+        accession.taxa_list = sorted(taxa)
+        accession.element_list = sorted(elements)
 
 def add_fieldslip_to_accession(request, pk):
     """
@@ -525,13 +581,24 @@ class AccessionListView(FilterView):
         qs = super().get_queryset()
         user = self.request.user
 
-        if user.is_authenticated and (
-            user.is_superuser or
-            user.groups.filter(name__in=["Collection Managers", "Curators"]).exists()
+        if not (
+            user.is_authenticated
+            and (
+                user.is_superuser
+                or user.groups.filter(name__in=["Collection Managers", "Curators"]).exists()
+            )
         ):
-            return qs  # Show all
+            qs = qs.filter(is_published=True)
 
-        return qs.filter(is_published=True)  # Public users only see published accessions
+        return prefetch_accession_related(qs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        accessions = context.get('accessions')
+        if accessions is not None:
+            attach_accession_summaries(accessions)
+
+        return context
 
 class AccessionRowDetailView(DetailView):
     model = AccessionRow
@@ -542,7 +609,25 @@ class AccessionRowDetailView(DetailView):
         context = super().get_context_data(**kwargs)
         context['natureofspecimens'] = NatureOfSpecimen.objects.filter(accession_row=self.object)
         context['identifications'] = Identification.objects.filter(accession_row=self.object)
+        context['can_edit'] = (
+            self.request.user.is_superuser or is_collection_manager(self.request.user)
+        )
+        context['can_manage'] = context['can_edit']
+        context['show_inventory_status'] = not is_public_user(self.request.user)
         return context
+
+
+class AccessionRowUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
+    model = AccessionRow
+    form_class = AccessionRowUpdateForm
+    template_name = 'cms/accession_row_form.html'
+    context_object_name = 'accessionrow'
+
+    def test_func(self):
+        return self.request.user.is_superuser or is_collection_manager(self.request.user)
+
+    def get_success_url(self):
+        return self.object.get_absolute_url()
 
 class AccessionWizard(SessionWizardView):
     file_storage = FileSystemStorage(location=settings.MEDIA_ROOT)
@@ -670,6 +755,48 @@ class ReferenceListView(FilterView):
     template_name = 'cms/reference_list.html'
     context_object_name = 'references'
     paginate_by = 10
+    filterset_class = ReferenceFilter
+
+    ordering_fields = {
+        "first_author": "first_author",
+        "year": "year",
+        "title": "title",
+    }
+    default_order = "first_author"
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        sort_key = self.request.GET.get("sort") or self.default_order
+        direction = self.request.GET.get("direction", "asc")
+
+        if sort_key not in self.ordering_fields:
+            sort_key = self.default_order
+        if direction not in {"asc", "desc"}:
+            direction = "asc"
+
+        order_expression = self.ordering_fields[sort_key]
+        if direction == "desc":
+            order_expression = f"-{order_expression}"
+
+        return queryset.order_by(order_expression, "title")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        sort_key = self.request.GET.get("sort") or self.default_order
+        direction = self.request.GET.get("direction", "asc")
+
+        if sort_key not in self.ordering_fields:
+            sort_key = self.default_order
+        if direction not in {"asc", "desc"}:
+            direction = "asc"
+
+        context["current_sort"] = sort_key
+        context["current_direction"] = direction
+        context["sort_directions"] = {
+            field: "desc" if sort_key == field and direction == "asc" else "asc"
+            for field in self.ordering_fields
+        }
+        return context
 
 
 
@@ -699,11 +826,17 @@ class LocalityDetailView(DetailView):
         ):
             accessions = accessions.filter(is_published=True)
 
-        paginator = Paginator(accessions, 5)
+        accessions = prefetch_accession_related(accessions)
+
+        paginator = Paginator(accessions, 10)
         page_number = self.request.GET.get('page')
         accessions = paginator.get_page(page_number)
 
+        attach_accession_summaries(accessions)
+
         context['accessions'] = accessions
+        context['page_obj'] = accessions
+        context['is_paginated'] = accessions.paginator.num_pages > 1
 
         return context
 
@@ -1355,7 +1488,13 @@ class StorageDetailView(LoginRequiredMixin, CollectionManagerAccessMixin, Detail
         context["can_edit"] = (
             is_collection_manager(self.request.user) or self.request.user.is_superuser
         )
-        context["specimens"] = getattr(self.object, "prefetched_rows", [])
+        specimens = getattr(self.object, "prefetched_rows", [])
+        paginator = Paginator(specimens, 10)
+        page_number = self.request.GET.get("page")
+        page_obj = paginator.get_page(page_number)
+        context["specimen_page_obj"] = page_obj
+        context["specimens"] = page_obj.object_list
+        context["specimen_count"] = paginator.count
         context["children"] = getattr(self.object, "child_storages", [])
         context["history_entries"] = build_history_entries(self.object)
         return context

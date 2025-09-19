@@ -1,10 +1,8 @@
-from dal import autocomplete
 from django import forms
 from django.contrib.auth import get_user_model
 from django_select2 import forms as s2forms
-from django_select2.forms import ModelSelect2Widget, Select2Widget
+from django_select2.forms import ModelSelect2TagWidget, ModelSelect2Widget, Select2Widget
 from django.contrib.auth.models import User
-from django.urls import reverse_lazy
 
 from .models import (
     Accession,
@@ -206,49 +204,99 @@ class AccessionMediaUploadForm(forms.ModelForm):
             'media_location': forms.ClearableFileInput(attrs={'multiple': False}),
         }
 
-class FieldSlipWidget(autocomplete.ModelSelect2):
-    search_fields = ["field_number__icontains", "verbatim_locality__icontains"]
+class FieldSlipWidget(Select2Widget):
+    """Simple Select2 widget that preloads all field slips for selection."""
 
-    def __init__(self, *args, **kwargs):
-        kwargs["url"] = reverse_lazy("fieldslip-autocomplete")
-        kwargs["attrs"] = {
-            "data-placeholder": "Search Field Slips...",
-            "data-minimum-input-length": 1,
-        }
-        super().__init__(*args, **kwargs)
-
-    class Media:
-        # ONLY load DAL’s compatible JS and CSS
-        js = (
-            "autocomplete_light/jquery.init.js",
-            "autocomplete_light/autocomplete_light.js",
-            "autocomplete_light/autocomplete.init.js",
-        )
-        css = {
-            'screen': [
-                'autocomplete_light/select2.css',
-                'autocomplete_light/autocomplete.css',
-            ]
-        }
-
-    def label_from_instance(self, obj):
-        return f"{obj.field_number} - {obj.verbatim_locality or 'No locality'}"
+    def __init__(self, attrs=None, choices=()):
+        attrs = attrs or {}
+        attrs.setdefault("data-placeholder", "Select a Field Slip")
+        attrs.setdefault("data-allow-clear", "true")
+        attrs.setdefault("data-minimum-results-for-search", "0")
+        attrs.setdefault("class", "template_form_select")
+        super().__init__(attrs, choices)
 
 class ElementWidget(s2forms.ModelSelect2Widget):
-    search_fields = [
-        "name__icontains",
-        ]
+    search_fields = ["name__icontains"]
+
+    model = Element
+
+    def get_queryset(self):
+        return Element.objects.order_by("name")
+
+    def __init__(self, *args, **kwargs):
+        attrs = kwargs.pop("attrs", {})
+        attrs.setdefault("data-placeholder", "Search for an element")
+        attrs.setdefault("data-minimum-input-length", 3)
+        attrs.setdefault("data-allow-clear", "true")
+        kwargs["attrs"] = attrs
+        super().__init__(*args, **kwargs)
+
 
 class ReferenceWidget(s2forms.ModelSelect2Widget):
-    search_fields = [
-        "title__icontains",
-        "first_author__icontains",
-        ]
-    
+    search_fields = ["title__icontains", "first_author__icontains"]
+
+    model = Reference
+
+    def get_queryset(self):
+        return Reference.objects.order_by("first_author", "year", "title")
+
+    def __init__(self, *args, **kwargs):
+        attrs = kwargs.pop("attrs", {})
+        attrs.setdefault("data-placeholder", "Search for a reference")
+        attrs.setdefault("data-minimum-input-length", 3)
+        attrs.setdefault("data-allow-clear", "true")
+        kwargs["attrs"] = attrs
+        super().__init__(*args, **kwargs)
+
 class TaxonWidget(s2forms.ModelSelect2Widget):
     search_fields = [
         "taxon_name__icontains",
         ]
+
+
+class IdentifiedByWidget(s2forms.ModelSelect2TagWidget):
+    model = Person
+    search_fields = [
+        "first_name__icontains",
+        "last_name__icontains",
+    ]
+
+    def get_queryset(self):
+        return Person.objects.order_by("last_name", "first_name")
+
+    def __init__(self, *args, **kwargs):
+        attrs = kwargs.pop("attrs", {})
+        attrs.setdefault("data-placeholder", "Select or add a person")
+        attrs.setdefault("data-allow-clear", "true")
+        attrs.setdefault("data-tags", "true")
+        attrs.setdefault("data-minimum-input-length", 0)
+        kwargs["attrs"] = attrs
+        super().__init__(*args, **kwargs)
+
+    def create_value(self, value):
+        value = (value or "").strip()
+        if not value:
+            raise forms.ValidationError("Please enter a name for the identifier.")
+
+        if "," in value:
+            last_name, first_name = [part.strip() for part in value.split(",", 1)]
+        else:
+            parts = value.split()
+            if len(parts) < 2:
+                raise forms.ValidationError("Enter both first and last names, e.g. 'Jane Doe'.")
+            first_name = parts[0]
+            last_name = " ".join(parts[1:])
+
+        existing = Person.objects.filter(
+            first_name__iexact=first_name,
+            last_name__iexact=last_name,
+        ).first()
+
+        if existing:
+            return existing.pk
+
+        person = Person.objects.create(first_name=first_name, last_name=last_name)
+        return person.pk
 
 class AccessionForm(forms.ModelForm):
     class Meta:
@@ -277,12 +325,21 @@ class AccessionCommentForm(forms.ModelForm):
         fields = ['subject', 'comment', 'comment_by']
 
 class AccessionFieldSlipForm(forms.ModelForm):
+    fieldslip = forms.ModelChoiceField(
+        queryset=FieldSlip.objects.none(),
+        widget=FieldSlipWidget(),
+        label="Field Slip",
+    )
+
     class Meta:
         model = AccessionFieldSlip
         fields = ["fieldslip", "notes"]
-        widgets = {
-            "fieldslip": FieldSlipWidget(url=reverse_lazy("fieldslip-autocomplete")),
-        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["fieldslip"].queryset = FieldSlip.objects.order_by("field_number", "id")
+        self.fields["fieldslip"].empty_label = "Select a Field Slip"
+        self.fields["fieldslip"].widget.choices = self.fields["fieldslip"].choices
 
 class AccessionGeologyForm(forms.ModelForm):
     class Meta:
@@ -409,14 +466,14 @@ class ScanUploadForm(forms.Form):
     files = forms.FileField(widget=MultiFileInput(), label="Scan files")
 
 class AddAccessionRowForm(forms.ModelForm):
-    specimen_suffix = forms.ChoiceField(choices=[], required=True)  # Empty choices initially
+    specimen_suffix = forms.ChoiceField(choices=[], required=False)
     accession = forms.ModelChoiceField(
         queryset=Accession.objects.all(),
         widget=forms.HiddenInput()  # Ensure it's hidden in the form
     )
     class Meta:
         model = AccessionRow
-        fields = ['accession', 'storage', 'specimen_suffix']
+        fields = ['accession', 'storage', 'specimen_suffix', 'status']
 
     def __init__(self, *args, **kwargs):
         """ Dynamically populate specimen_suffix choices based on the accession """
@@ -424,9 +481,18 @@ class AddAccessionRowForm(forms.ModelForm):
 
         super().__init__(*args, **kwargs)
 
+        self.fields['storage'].queryset = Storage.objects.order_by('area')
+        self.fields['storage'].required = False
+        self.fields['status'].required = False
+
         if accession:
             self.fields['accession'].initial = accession  # Set initial accession value
             self.fields['specimen_suffix'].choices = self.get_available_specimen_suffixes(accession)
+        else:
+            self.fields['specimen_suffix'].choices = [("-", "-")]
+
+        if not self.fields['specimen_suffix'].initial:
+            self.fields['specimen_suffix'].initial = "-"
 
     def get_available_specimen_suffixes(self, accession):
         """ Returns a list of available specimen_suffix options """
@@ -436,14 +502,59 @@ class AddAccessionRowForm(forms.ModelForm):
         )
         all_valid_suffixes = AccessionRow().generate_valid_suffixes()  # Get valid suffixes
         available_suffixes = [("-", "-")]  # Default choice
-        
+
         for suffix in all_valid_suffixes:
             if suffix not in taken_suffixes:
                 available_suffixes.append((suffix, suffix))
 
         return available_suffixes
 
+    def clean_specimen_suffix(self):
+        suffix = self.cleaned_data.get('specimen_suffix')
+        return suffix or "-"
+
+
+class AccessionRowUpdateForm(forms.ModelForm):
+    specimen_suffix = forms.ChoiceField(choices=[], required=False)
+
+    class Meta:
+        model = AccessionRow
+        fields = ['storage', 'specimen_suffix', 'status']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        accession_row = self.instance
+        accession = getattr(accession_row, 'accession', None)
+
+        if accession:
+            taken_suffixes = set(
+                AccessionRow.objects.filter(accession=accession)
+                .exclude(pk=accession_row.pk)
+                .values_list('specimen_suffix', flat=True)
+            )
+            valid_suffixes = accession_row.generate_valid_suffixes()
+            choices = [("-", "-")]
+            for suffix in valid_suffixes:
+                if suffix not in taken_suffixes or suffix == accession_row.specimen_suffix:
+                    choices.append((suffix, suffix))
+            if accession_row.specimen_suffix and accession_row.specimen_suffix not in dict(choices):
+                choices.append((accession_row.specimen_suffix, accession_row.specimen_suffix))
+            self.fields['specimen_suffix'].choices = choices
+            self.fields['specimen_suffix'].initial = accession_row.specimen_suffix or "-"
+
+        self.fields['storage'].queryset = Storage.objects.order_by('area')
+        self.fields['storage'].required = False
+
+    def clean_specimen_suffix(self):
+        suffix = self.cleaned_data.get('specimen_suffix')
+        return suffix or "-"
+
 class NatureOfSpecimenForm(forms.ModelForm):
+    element = forms.ModelChoiceField(
+        queryset=Element.objects.order_by("name"),
+        widget=ElementWidget(),
+    )
+
     class Meta:
         model = NatureOfSpecimen
         fields = ['element', 'side', 'condition', 'verbatim_element', 'portion', 'fragments']
@@ -466,22 +577,38 @@ class AddSpecimenForm(forms.ModelForm):
             self.fields['accession_row'].initial = accession_row  # Set initial accession_row value
 
 class AccessionRowIdentificationForm(forms.ModelForm):
+    reference = forms.ModelChoiceField(
+        queryset=Reference.objects.order_by("first_author", "year", "title"),
+        required=False,
+        widget=ReferenceWidget(),
+    )
+
     class Meta:
         model = Identification
         fields = ['identified_by', 'taxon', 'reference', 'date_identified', 'identification_qualifier', 'verbatim_identification', 'identification_remarks']
-        widgets = {"reference": ReferenceWidget}
         labels = {
             'identification_qualifier': 'Taxon Qualifier',
             'verbatim_identification': 'Taxon Verbatim',
             'identification_remarks': 'Remarks',
         }
+        widgets = {
+            'identified_by': IdentifiedByWidget(),
+            'date_identified': forms.DateInput(attrs={'type': 'date'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['identified_by'].queryset = Person.objects.order_by('last_name', 'first_name')
 
 class AccessionRowSpecimenForm(forms.ModelForm):
+    element = forms.ModelChoiceField(
+        queryset=Element.objects.order_by("name"),
+        widget=ElementWidget(),
+    )
+
     class Meta:
         model = NatureOfSpecimen
         fields = ['element', 'side', 'condition', 'verbatim_element', 'portion', 'fragments']
-        widgets = {
-            "element": ElementWidget,}
 
 class PreparationForm(forms.ModelForm):
     """ Form for creating/updating preparation records. """
