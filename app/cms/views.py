@@ -782,6 +782,59 @@ class ReferenceDetailView(DetailView):
     template_name = 'cms/reference_detail.html'
     context_object_name = 'reference'
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+
+        accession_references = self.object.accessionreference_set.select_related(
+            "accession__collection",
+            "accession__specimen_prefix",
+            "accession__accessioned_by",
+        ).order_by(
+            "accession__collection__abbreviation",
+            "accession__specimen_prefix__abbreviation",
+            "accession__specimen_no",
+            "accession__instance_number",
+        )
+
+        if not (
+            user.is_authenticated
+            and (
+                user.is_superuser
+                or user.groups.filter(name__in=["Collection Managers", "Curators"]).exists()
+            )
+        ):
+            accession_references = accession_references.filter(accession__is_published=True)
+
+        accession_ids = list(
+            dict.fromkeys(accession_references.values_list("accession_id", flat=True))
+        )
+
+        accession_entries = []
+        if accession_ids:
+            accessions = list(
+                prefetch_accession_related(
+                    Accession.objects.filter(id__in=accession_ids)
+                )
+            )
+            attach_accession_summaries(accessions)
+            accession_map = {accession.id: accession for accession in accessions}
+
+            for accession_reference in accession_references:
+                accession = accession_map.get(accession_reference.accession_id)
+                if accession is not None:
+                    accession_entries.append((accession, accession_reference.page))
+
+        doi_value = (self.object.doi or "").strip()
+        if doi_value:
+            if doi_value.lower().startswith("http"):
+                context["doi_url"] = doi_value
+            else:
+                context["doi_url"] = f"https://doi.org/{doi_value}"
+
+        context["accession_entries"] = accession_entries
+        return context
+
 class ReferenceListView(FilterView):
     model = Reference
     template_name = 'cms/reference_list.html'
