@@ -233,20 +233,42 @@ class ElementWidget(s2forms.ModelSelect2Widget):
 
 
 class ReferenceWidget(s2forms.ModelSelect2Widget):
-    search_fields = ["title__icontains", "first_author__icontains"]
+    search_fields = [
+        "title__icontains",
+        "first_author__icontains",
+        "citation__icontains",
+        "year__icontains",
+    ]
 
     model = Reference
+    data_view = "reference-autocomplete"
 
     def get_queryset(self):
         return Reference.objects.order_by("first_author", "year", "title")
 
     def __init__(self, *args, **kwargs):
         attrs = kwargs.pop("attrs", {})
-        attrs.setdefault("data-placeholder", "Search for a reference")
+        attrs.setdefault(
+            "data-placeholder",
+            "Search for a reference (type at least 3 characters)",
+        )
         attrs.setdefault("data-minimum-input-length", 3)
         attrs.setdefault("data-allow-clear", "true")
         kwargs["attrs"] = attrs
+        kwargs.setdefault("data_view", "reference-autocomplete")
         super().__init__(*args, **kwargs)
+
+    def filter_queryset(self, request, term, queryset=None, **dependent_fields):
+        term = (term or "").strip()
+        if len(term) < 3:
+            qs = queryset if queryset is not None else self.get_queryset()
+            return qs.none()
+        return super().filter_queryset(
+            request,
+            term,
+            queryset=queryset,
+            **dependent_fields,
+        )
 
 class TaxonWidget(s2forms.ModelSelect2Widget):
     search_fields = [
@@ -255,6 +277,7 @@ class TaxonWidget(s2forms.ModelSelect2Widget):
 
 
 class IdentifiedByWidget(s2forms.ModelSelect2TagWidget):
+    allow_multiple_selected = False
     model = Person
     search_fields = [
         "first_name__icontains",
@@ -269,9 +292,44 @@ class IdentifiedByWidget(s2forms.ModelSelect2TagWidget):
         attrs.setdefault("data-placeholder", "Select or add a person")
         attrs.setdefault("data-allow-clear", "true")
         attrs.setdefault("data-tags", "true")
+        attrs.setdefault("data-token-separators", "[]")
         attrs.setdefault("data-minimum-input-length", 0)
         kwargs["attrs"] = attrs
         super().__init__(*args, **kwargs)
+
+    def value_from_datadict(self, data, files, name):
+        self._pending_validation_error = None
+        values = super().value_from_datadict(data, files, name)
+
+        if not values:
+            return ""
+
+        if isinstance(values, (list, tuple)):
+            # Filter out empty placeholders Select2 may submit
+            filtered = [value for value in values if value not in (None, "")]
+            if not filtered:
+                return ""
+            value = filtered[0]
+        else:
+            value = values
+
+        if value in (None, ""):
+            return ""
+
+        queryset = self.get_queryset()
+        try:
+            if queryset.filter(pk=value).exists():
+                return str(value)
+        except (TypeError, ValueError):
+            pass
+
+        try:
+            created_pk = self.create_value(value)
+        except forms.ValidationError as exc:
+            self._pending_validation_error = exc
+            return ""
+
+        return str(created_pk)
 
     def create_value(self, value):
         value = (value or "").strip()
@@ -599,6 +657,15 @@ class AccessionRowIdentificationForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['identified_by'].queryset = Person.objects.order_by('last_name', 'first_name')
+
+    def clean_identified_by(self):
+        widget = self.fields['identified_by'].widget
+        pending_error = getattr(widget, "_pending_validation_error", None)
+        if pending_error is not None:
+            widget._pending_validation_error = None
+            raise pending_error
+
+        return self.cleaned_data.get('identified_by')
 
 class AccessionRowSpecimenForm(forms.ModelForm):
     element = forms.ModelChoiceField(

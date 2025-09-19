@@ -64,14 +64,12 @@ from cms.views import (
     StorageUpdateView,
 )
 from .views import PreparationMediaUploadView
-from .views import FieldSlipAutocomplete
+from .views import FieldSlipAutocomplete, ReferenceAutocomplete
 
 from cms.forms import (AccessionForm,
                        AccessionNumberSelectForm,
                        SpecimenCompositeForm)
 from cms.views import AccessionWizard
-
-from django_select2.views import AutoResponseView
 
 urlpatterns = [
     path('inventory/', inventory_start, name='inventory_start'),
@@ -108,7 +106,8 @@ urlpatterns = [
     path('references/<int:pk>/', ReferenceDetailView.as_view(), name='reference_detail'),
     path('references/<int:pk>/edit/', reference_edit, name='reference_edit'),
     path('references/new/', reference_create, name='reference_create'),
-  
+    path('references/autocomplete/', ReferenceAutocomplete.as_view(), name='reference-autocomplete'),
+
     path("select2/", include("django_select2.urls")),
 
 

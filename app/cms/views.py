@@ -52,7 +52,8 @@ from cms.forms import (AccessionBatchForm, AccessionCommentForm,
                     MediaUploadForm, NatureOfSpecimenForm, PreparationForm,
                     PreparationApprovalForm, PreparationMediaUploadForm,
                     SpecimenCompositeForm, ReferenceForm, LocalityForm,
-                    PlaceForm, DrawerRegisterForm, StorageForm, ScanUploadForm)
+                    PlaceForm, DrawerRegisterForm, StorageForm, ScanUploadForm,
+                    ReferenceWidget)
 
 from cms.models import (
     Accession,
@@ -98,7 +99,33 @@ class FieldSlipAutocomplete(autocomplete.Select2QuerySetView):
                 verbatim_locality__icontains=self.q
             )
         return qs
-    
+
+
+class ReferenceAutocomplete(LoginRequiredMixin, View):
+    """Serve reference choices for Select2 widgets without relying on cache."""
+
+    http_method_names = ["get"]
+    raise_exception = True
+
+    def get(self, request, *args, **kwargs):
+        widget = ReferenceWidget()
+        term = (request.GET.get("term") or "").strip()
+
+        queryset = widget.filter_queryset(request, term, widget.get_queryset())
+        limit = getattr(widget, "max_results", 25)
+
+        objects = list(queryset[: limit + 1])
+        has_more = len(objects) > limit
+        if has_more:
+            objects = objects[:limit]
+
+        results = [
+            {"id": obj.pk, "text": widget.label_from_instance(obj)}
+            for obj in objects
+        ]
+
+        return JsonResponse({"results": results, "more": has_more})
+
 class PreparationAccessMixin(UserPassesTestMixin):
     def test_func(self):
         user = self.request.user
