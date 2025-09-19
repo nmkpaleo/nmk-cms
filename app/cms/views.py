@@ -42,6 +42,7 @@ from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse_lazy, reverse
 from django.utils.timezone import now
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, FormView
+from django_select2.views import AutoResponseView
 
 from cms.forms import (AccessionBatchForm, AccessionCommentForm,
                     AccessionForm, AccessionFieldSlipForm, AccessionGeologyForm,
@@ -98,7 +99,13 @@ class FieldSlipAutocomplete(autocomplete.Select2QuerySetView):
                 verbatim_locality__icontains=self.q
             )
         return qs
-    
+
+
+class ReferenceAutocomplete(LoginRequiredMixin, AutoResponseView):
+    """Serve reference choices for Select2 widgets."""
+
+    raise_exception = True
+
 class PreparationAccessMixin(UserPassesTestMixin):
     def test_func(self):
         user = self.request.user

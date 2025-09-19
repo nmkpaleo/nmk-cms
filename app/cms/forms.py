@@ -233,20 +233,42 @@ class ElementWidget(s2forms.ModelSelect2Widget):
 
 
 class ReferenceWidget(s2forms.ModelSelect2Widget):
-    search_fields = ["title__icontains", "first_author__icontains"]
+    search_fields = [
+        "title__icontains",
+        "first_author__icontains",
+        "citation__icontains",
+        "year__icontains",
+    ]
 
     model = Reference
+    data_view = "reference-autocomplete"
 
     def get_queryset(self):
         return Reference.objects.order_by("first_author", "year", "title")
 
     def __init__(self, *args, **kwargs):
         attrs = kwargs.pop("attrs", {})
-        attrs.setdefault("data-placeholder", "Search for a reference")
+        attrs.setdefault(
+            "data-placeholder",
+            "Search for a reference (type at least 3 characters)",
+        )
         attrs.setdefault("data-minimum-input-length", 3)
         attrs.setdefault("data-allow-clear", "true")
         kwargs["attrs"] = attrs
+        kwargs.setdefault("data_view", "reference-autocomplete")
         super().__init__(*args, **kwargs)
+
+    def filter_queryset(self, request, term, queryset=None, **dependent_fields):
+        term = (term or "").strip()
+        if len(term) < 3:
+            qs = queryset if queryset is not None else self.get_queryset()
+            return qs.none()
+        return super().filter_queryset(
+            request,
+            term,
+            queryset=queryset,
+            **dependent_fields,
+        )
 
 class TaxonWidget(s2forms.ModelSelect2Widget):
     search_fields = [
