@@ -560,7 +560,12 @@ class AccessionDetailView(DetailView):
         context['references'] = AccessionReference.objects.filter(accession=self.object).select_related('reference')
         context['geologies'] = SpecimenGeology.objects.filter(accession=self.object)
         context['comments'] = Comment.objects.filter(specimen_no=self.object)
-        accession_rows = AccessionRow.objects.filter(accession=self.object)
+        accession_rows = AccessionRow.objects.filter(accession=self.object).prefetch_related(
+            Prefetch(
+                'natureofspecimen_set',
+                queryset=NatureOfSpecimen.objects.select_related('element'),
+            )
+        )
         # Form for adding existing FieldSlips
         context["add_fieldslip_form"] = AccessionFieldSlipForm()
 
