@@ -79,6 +79,9 @@
                         <tr>
                             <th>Specimen</th>
                             <th>Storage</th>
+                            <th>Element</th>
+                            <th>Side</th>
+                            <th>Description</th>
                             <th>Taxon</th>
                             <th>Family</th>
                             <th>Subfamily</th>
@@ -88,11 +91,39 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for accessionrow in accession.accessionrow_set.all %}                   
+                        {% for accessionrow in accession_rows %}
+                            {% with specimens=accessionrow.natureofspecimen_set.all %}
                             <tr>
                                 <td><a href="{% url 'accessionrow_detail' accessionrow.pk %}">{{ accessionrow.specimen_suffix }}</a></td>
                                 <td>{{ accessionrow.storage }}</td>
-                        
+                                <td>
+                                    {% if specimens %}
+                                        {% for specimen in specimens %}
+                                            {{ specimen.element|default:"—" }}{% if not forloop.last %}<br>{% endif %}
+                                        {% endfor %}
+                                    {% else %}
+                                        &mdash;
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if specimens %}
+                                        {% for specimen in specimens %}
+                                            {{ specimen.side|default:"—" }}{% if not forloop.last %}<br>{% endif %}
+                                        {% endfor %}
+                                    {% else %}
+                                        &mdash;
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if specimens %}
+                                        {% for specimen in specimens %}
+                                            {{ specimen.verbatim_element|default:"—" }}{% if not forloop.last %}<br>{% endif %}
+                                        {% endfor %}
+                                    {% else %}
+                                        &mdash;
+                                    {% endif %}
+                                </td>
+
                                 {% with first_identifications|get_item:accessionrow.id as first_identification %}
                                     {% if first_identification %}
                                         {% with taxonomy|get_item:first_identification.id as matched_taxon %}
@@ -118,9 +149,10 @@
                                     {% endif %}
                                 {% endwith %}
                             </tr>
-                        {% endfor %}                    
+                            {% endwith %}
+                        {% endfor %}
                     </tbody>
-                </table>                
+                </table>
                 <hr class="accession_hr">
                 {% if user.is_authenticated and user|has_group:"Collection Managers" %}
                   <a href="{% url 'accession_add_reference' accession.id %}">➕ Add Reference</a>

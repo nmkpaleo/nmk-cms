@@ -29,31 +29,76 @@
                 <div class="card">
                     <p><strong>Journal:</strong> <br> {{ reference.journal }}</p>
                     <p><strong>Volume: </strong> <br> {{ reference.volume }}</p>
-                    <p><strong>Issue:</strong> <br> {{ reference.issue}} </p>           
+                    <p><strong>Issue:</strong> <br> {{ reference.issue }}</p>
                     <p><strong>Pages: </strong> <br> {{ reference.pages }}</p>
-                    <p><strong>DOI: </strong> <br> <a href="https://doi.org/10.1016/j.jhevol.2008.02.001" target="_blank">{{ reference.doi }}</a>
-            
-                    
+                    {% if doi_url %}
+                    <p>
+                        <strong>DOI: </strong>
+                        <br>
+                        <a href="{{ doi_url }}" target="_blank" rel="noopener">{{ reference.doi }}</a>
+                    </p>
+                    {% endif %}
                 </div>
                 
                 <div class="card">
                     <p><strong>Citation:</strong> <br> {{ reference.citation }}</p>
-                    
-                </div>               
-    
-                
+
+                </div>
+
+
+                <div class="cards">
+                    <table class="w3-table-all w3-hoverable">
+                        <caption class="w3-large"><strong>Accession details</strong></caption>
+                        <thead>
+                            <tr>
+                                <th>Collection</th>
+                                <th>Specimen Prefix</th>
+                                <th>Specimen Number</th>
+                                <th>Taxon</th>
+                                <th>Element</th>
+                                <th>Page(s)</th>
+                                {% if user.is_superuser or user|has_group:"Collection Managers" %}
+                                <th>Accessioned by</th>
+                                {% endif %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for accession, page in accession_entries %}
+                            <tr>
+                                <td>{{ accession.collection.abbreviation }}</td>
+                                <td>{{ accession.specimen_prefix.abbreviation }}</td>
+                                <td><a href="{% url 'accession_detail' accession.pk %}">{{ accession.specimen_no }}</a></td>
+                                <td>
+                                    {% if accession.taxa_list %}
+                                        {{ accession.taxa_list|join:", " }}
+                                    {% else %}
+                                        &mdash;
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if accession.element_list %}
+                                        {{ accession.element_list|join:", " }}
+                                    {% else %}
+                                        &mdash;
+                                    {% endif %}
+                                </td>
+                                <td>{{ page|default:"—" }}</td>
+                                {% if user.is_superuser or user|has_group:"Collection Managers" %}
+                                <td>{{ accession.accessioned_by|default_if_none:"—" }}</td>
+                                {% endif %}
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="{% if user.is_superuser or user|has_group:"Collection Managers" %}7{% else %}6{% endif %}" class="w3-center">No accessions found.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+
             </div>
         </div>
-<!--10.1016/j.jhevol.2008.02.001
-
- 
-
-https://doi.org/10.1016/j.jhevol.2008.02.001
-
-
-
-
--->
-{% endblock %}
+        {% endblock %}
 
 

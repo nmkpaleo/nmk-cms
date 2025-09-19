@@ -14,15 +14,15 @@
     <div class="grid-container">
         <div class="card">
             <p><strong>Name:</strong> <br> {{ place.name }}</p>
-        </div>
-        <div class="card">
             <p><strong>Type:</strong> <br> {{ place.get_place_type_display }}</p>
-        </div>
-        <div class="card">
             <p><strong>Locality:</strong> <br> {{ place.locality.abbreviation }}</p>
-        </div>
-        <div class="card">
             <p><strong>Higher Geography:</strong> <br> {{ place.part_of_hierarchy }}</p>
+            {% if place.description %}
+            <p><strong>Description:</strong> <br> {{ place.description }}</p>
+            {% endif %}
+            {% if place.comment %}
+            <p><strong>Comment:</strong> <br> {{ place.comment }}</p>
+            {% endif %}
         </div>
         {% if children %}
         <div class="card">
@@ -36,16 +36,6 @@
         {% if place.related_place %}
         <div class="card">
             <p><strong>Relation:</strong> <br> {{ place.get_relation_type_display }} → {{ place.related_place.name }}</p>
-        </div>
-        {% endif %}
-        {% if place.description %}
-        <div class="card">
-            <p><strong>Description:</strong> <br> {{ place.description }}</p>
-        </div>
-        {% endif %}
-        {% if place.comment %}
-        <div class="card">
-            <p><strong>Comment:</strong> <br> {{ place.comment }}</p>
         </div>
         {% endif %}
     </div>
