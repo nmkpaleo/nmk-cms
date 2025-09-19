@@ -464,14 +464,14 @@ class ScanUploadForm(forms.Form):
     files = forms.FileField(widget=MultiFileInput(), label="Scan files")
 
 class AddAccessionRowForm(forms.ModelForm):
-    specimen_suffix = forms.ChoiceField(choices=[], required=True)  # Empty choices initially
+    specimen_suffix = forms.ChoiceField(choices=[], required=False)
     accession = forms.ModelChoiceField(
         queryset=Accession.objects.all(),
         widget=forms.HiddenInput()  # Ensure it's hidden in the form
     )
     class Meta:
         model = AccessionRow
-        fields = ['accession', 'storage', 'specimen_suffix']
+        fields = ['accession', 'storage', 'specimen_suffix', 'status']
 
     def __init__(self, *args, **kwargs):
         """ Dynamically populate specimen_suffix choices based on the accession """
@@ -479,9 +479,18 @@ class AddAccessionRowForm(forms.ModelForm):
 
         super().__init__(*args, **kwargs)
 
+        self.fields['storage'].queryset = Storage.objects.order_by('area')
+        self.fields['storage'].required = False
+        self.fields['status'].required = False
+
         if accession:
             self.fields['accession'].initial = accession  # Set initial accession value
             self.fields['specimen_suffix'].choices = self.get_available_specimen_suffixes(accession)
+        else:
+            self.fields['specimen_suffix'].choices = [("-", "-")]
+
+        if not self.fields['specimen_suffix'].initial:
+            self.fields['specimen_suffix'].initial = "-"
 
     def get_available_specimen_suffixes(self, accession):
         """ Returns a list of available specimen_suffix options """
@@ -491,12 +500,16 @@ class AddAccessionRowForm(forms.ModelForm):
         )
         all_valid_suffixes = AccessionRow().generate_valid_suffixes()  # Get valid suffixes
         available_suffixes = [("-", "-")]  # Default choice
-        
+
         for suffix in all_valid_suffixes:
             if suffix not in taken_suffixes:
                 available_suffixes.append((suffix, suffix))
 
         return available_suffixes
+
+    def clean_specimen_suffix(self):
+        suffix = self.cleaned_data.get('specimen_suffix')
+        return suffix or "-"
 
 
 class AccessionRowUpdateForm(forms.ModelForm):

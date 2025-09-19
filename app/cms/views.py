@@ -123,6 +123,54 @@ def is_public_user(user):
         return True
     return user.groups.filter(name__iexact="Public").exists()
 
+
+def prefetch_accession_related(qs):
+    """Prefetch accession row data needed for taxon and element summaries."""
+    accession_row_prefetch = Prefetch(
+        'accessionrow_set',
+        queryset=AccessionRow.objects.prefetch_related(
+            Prefetch(
+                'natureofspecimen_set',
+                queryset=NatureOfSpecimen.objects.select_related('element')
+            ),
+            Prefetch(
+                'identification_set',
+                queryset=Identification.objects.all().order_by('-date_identified', '-id')
+            ),
+        )
+    )
+
+    return (
+        qs.select_related('collection', 'specimen_prefix')
+        .prefetch_related(accession_row_prefetch)
+        .distinct()
+    )
+
+
+def attach_accession_summaries(accessions):
+    """Attach taxon and element summaries to each accession in the iterable."""
+    if accessions is None:
+        return
+
+    accession_list = getattr(accessions, 'object_list', accessions)
+
+    for accession in accession_list:
+        taxa = set()
+        elements = set()
+
+        for row in accession.accessionrow_set.all():
+            for identification in row.identification_set.all():
+                taxon = (identification.taxon or "").strip()
+                if taxon:
+                    taxa.add(taxon)
+            for specimen in row.natureofspecimen_set.all():
+                element = getattr(specimen, 'element', None)
+                if element and element.name:
+                    elements.add(element.name)
+
+        accession.taxa_list = sorted(taxa)
+        accession.element_list = sorted(elements)
+
 def add_fieldslip_to_accession(request, pk):
     """
     Adds an existing FieldSlip to an Accession.
@@ -542,51 +590,13 @@ class AccessionListView(FilterView):
         ):
             qs = qs.filter(is_published=True)
 
-        accession_row_prefetch = Prefetch(
-            'accessionrow_set',
-            queryset=AccessionRow.objects.prefetch_related(
-                Prefetch(
-                    'natureofspecimen_set',
-                    queryset=NatureOfSpecimen.objects.select_related('element')
-                ),
-                Prefetch(
-                    'identification_set',
-                    queryset=Identification.objects.all().order_by('-date_identified', '-id')
-                ),
-            )
-        )
-
-        return (
-            qs.select_related('collection', 'specimen_prefix')
-            .prefetch_related(accession_row_prefetch)
-            .distinct()
-        )
+        return prefetch_accession_related(qs)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         accessions = context.get('accessions')
         if accessions is not None:
-            if hasattr(accessions, 'object_list'):
-                accession_list = accessions.object_list
-            else:
-                accession_list = accessions
-
-            for accession in accession_list:
-                taxa = set()
-                elements = set()
-
-                for row in accession.accessionrow_set.all():
-                    for identification in row.identification_set.all():
-                        taxon = (identification.taxon or "").strip()
-                        if taxon:
-                            taxa.add(taxon)
-                    for specimen in row.natureofspecimen_set.all():
-                        element = getattr(specimen, 'element', None)
-                        if element and element.name:
-                            elements.add(element.name)
-
-                accession.taxa_list = sorted(taxa)
-                accession.element_list = sorted(elements)
+            attach_accession_summaries(accessions)
 
         return context
 
@@ -816,11 +826,17 @@ class LocalityDetailView(DetailView):
         ):
             accessions = accessions.filter(is_published=True)
 
-        paginator = Paginator(accessions, 5)
+        accessions = prefetch_accession_related(accessions)
+
+        paginator = Paginator(accessions, 10)
         page_number = self.request.GET.get('page')
         accessions = paginator.get_page(page_number)
 
+        attach_accession_summaries(accessions)
+
         context['accessions'] = accessions
+        context['page_obj'] = accessions
+        context['is_paginated'] = accessions.paginator.num_pages > 1
 
         return context
 

@@ -2,7 +2,6 @@ import django_filters
 from django import forms
 from .models import (
     Accession,
-    Element,
     Locality,
     Place,
     PlaceType,
@@ -38,17 +37,15 @@ class AccessionFilter(django_filters.FilterSet):
         label="Comment",
         widget=forms.TextInput(attrs={'class': 'w3-input'})
     )
-    taxon = django_filters.ModelChoiceFilter(
-        queryset=Taxon.objects.order_by('taxon_name'),
+    taxon = django_filters.CharFilter(
         label="Taxon",
         method='filter_by_taxon',
-        widget=forms.Select(attrs={'class': 'w3-select'})
+        widget=forms.TextInput(attrs={'class': 'w3-input'})
     )
-    element = django_filters.ModelChoiceFilter(
-        queryset=Element.objects.order_by('name'),
+    element = django_filters.CharFilter(
         label="Element",
         method='filter_by_element',
-        widget=forms.Select(attrs={'class': 'w3-select'})
+        widget=forms.TextInput(attrs={'class': 'w3-input'})
     )
     family = django_filters.CharFilter(
         label="Family",
@@ -92,22 +89,17 @@ class AccessionFilter(django_filters.FilterSet):
             'species',
         ]
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.filters['taxon'].field.empty_label = 'Any Taxon'
-        self.filters['element'].field.empty_label = 'Any Element'
-
     def filter_by_taxon(self, queryset, name, value):
         if value:
             return queryset.filter(
-                accessionrow__identification__taxon__iexact=value.taxon_name
+                accessionrow__identification__taxon__icontains=value
             ).distinct()
         return queryset
 
     def filter_by_element(self, queryset, name, value):
         if value:
             return queryset.filter(
-                accessionrow__natureofspecimen__element=value
+                accessionrow__natureofspecimen__element__name__icontains=value
             ).distinct()
         return queryset
 
