@@ -88,7 +88,16 @@
               {% endif %}
             </a>
           </th>
-          <th class="w3-center">Accessions</th>
+          <th class="w3-center">
+            <a href="?{% querystring_replace sort='accessions' direction=sort_directions|get_item:'accessions' page=None %}">
+              Accessions
+              {% if current_sort == 'accessions' %}
+                <i class="fa-solid {% if current_direction == 'asc' %}fa-sort-up{% else %}fa-sort-down{% endif %}"></i>
+              {% else %}
+                <i class="fa-solid fa-sort"></i>
+              {% endif %}
+            </a>
+          </th>
         </tr>
       </thead>
       <tbody>

@@ -846,6 +846,7 @@ class ReferenceListView(FilterView):
         "first_author": "first_author",
         "year": "year",
         "title": "title",
+        "accessions": "accession_count",
     }
     default_order = "first_author"
 

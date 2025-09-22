@@ -1017,6 +1017,11 @@ class ReferenceListViewTests(TestCase):
             specimen_prefix=self.locality,
             specimen_no=2,
         )
+        self.second_published_accession = Accession.objects.create(
+            collection=self.collection,
+            specimen_prefix=self.locality,
+            specimen_no=3,
+        )
 
         AccessionReference.objects.create(
             accession=self.published_accession,
@@ -1026,9 +1031,14 @@ class ReferenceListViewTests(TestCase):
             accession=self.unpublished_accession,
             reference=self.reference_with_unpublished,
         )
+        AccessionReference.objects.create(
+            accession=self.second_published_accession,
+            reference=self.reference_with_published,
+        )
 
         self.published_accession.refresh_from_db()
         self.unpublished_accession.refresh_from_db()
+        self.second_published_accession.refresh_from_db()
 
         Accession.objects.filter(pk=self.unpublished_accession.pk).update(is_published=False)
         self.unpublished_accession.refresh_from_db()
@@ -1042,9 +1052,12 @@ class ReferenceListViewTests(TestCase):
             [reference.pk for reference in page.object_list],
             [self.reference_with_published.pk],
         )
-        self.assertEqual(page.object_list[0].accession_count, 1)
+        self.assertEqual(page.object_list[0].accession_count, 2)
 
-        self.assertContains(response, "<th class=\"w3-center\">Accessions</th>", html=True)
+        self.assertContains(
+            response,
+            '<a href="?sort=accessions&amp;direction=asc"',
+        )
         self.assertContains(response, self.reference_with_published.first_author)
         self.assertNotContains(response, self.reference_with_unpublished.first_author)
         self.assertNotContains(response, self.reference_without_accessions.first_author)
@@ -1067,9 +1080,44 @@ class ReferenceListViewTests(TestCase):
         accession_counts = {
             reference.pk: reference.accession_count for reference in page.object_list
         }
-        self.assertEqual(accession_counts[self.reference_with_published.pk], 1)
+        self.assertEqual(accession_counts[self.reference_with_published.pk], 2)
         self.assertEqual(accession_counts[self.reference_with_unpublished.pk], 1)
         self.assertEqual(accession_counts[self.reference_without_accessions.pk], 0)
+
+    def test_collection_manager_can_sort_by_accession_count(self):
+        self.client.login(username="manager", password="pass")
+
+        response = self.client.get(
+            reverse("reference_list"), {"sort": "accessions", "direction": "desc"}
+        )
+        self.assertEqual(response.status_code, 200)
+
+        page = response.context["page_obj"]
+        self.assertEqual(
+            [reference.pk for reference in page.object_list],
+            [
+                self.reference_with_published.pk,
+                self.reference_with_unpublished.pk,
+                self.reference_without_accessions.pk,
+            ],
+        )
+        self.assertEqual(response.context["current_sort"], "accessions")
+        self.assertEqual(response.context["current_direction"], "desc")
+        self.assertEqual(response.context["sort_directions"]["accessions"], "asc")
+
+        response = self.client.get(
+            reverse("reference_list"), {"sort": "accessions", "direction": "asc"}
+        )
+
+        page = response.context["page_obj"]
+        self.assertEqual(
+            [reference.pk for reference in page.object_list],
+            [
+                self.reference_without_accessions.pk,
+                self.reference_with_unpublished.pk,
+                self.reference_with_published.pk,
+            ],
+        )
 
 class PlaceModelTests(TestCase):
     def setUp(self):
