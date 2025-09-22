@@ -88,6 +88,7 @@
               {% endif %}
             </a>
           </th>
+          <th class="w3-center">Accessions</th>
         </tr>
       </thead>
       <tbody>
@@ -98,10 +99,11 @@
           </td>
           <td>{{ reference.year }}</td>
           <td>{{ reference.title }}</td>
+          <td class="w3-center">{{ reference.accession_count }}</td>
         </tr>
         {% empty %}
         <tr>
-          <td colspan="3" class="w3-center">No references found.</td>
+          <td colspan="4" class="w3-center">No references found.</td>
         </tr>
         {% endfor %}
       </tbody>

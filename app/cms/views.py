@@ -851,6 +851,21 @@ class ReferenceListView(FilterView):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        user = self.request.user
+
+        if is_public_user(user):
+            queryset = queryset.annotate(
+                accession_count=Count(
+                    "accessionreference",
+                    filter=Q(accessionreference__accession__is_published=True),
+                    distinct=True,
+                )
+            ).filter(accession_count__gt=0)
+        else:
+            queryset = queryset.annotate(
+                accession_count=Count("accessionreference", distinct=True)
+            )
+
         sort_key = self.request.GET.get("sort") or self.default_order
         direction = self.request.GET.get("direction", "asc")
 
