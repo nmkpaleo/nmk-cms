@@ -88,6 +88,16 @@
               {% endif %}
             </a>
           </th>
+          <th class="w3-center">
+            <a href="?{% querystring_replace sort='accessions' direction=sort_directions|get_item:'accessions' page=None %}">
+              Accessions
+              {% if current_sort == 'accessions' %}
+                <i class="fa-solid {% if current_direction == 'asc' %}fa-sort-up{% else %}fa-sort-down{% endif %}"></i>
+              {% else %}
+                <i class="fa-solid fa-sort"></i>
+              {% endif %}
+            </a>
+          </th>
         </tr>
       </thead>
       <tbody>
@@ -98,10 +108,11 @@
           </td>
           <td>{{ reference.year }}</td>
           <td>{{ reference.title }}</td>
+          <td class="w3-center">{{ reference.accession_count }}</td>
         </tr>
         {% empty %}
         <tr>
-          <td colspan="3" class="w3-center">No references found.</td>
+          <td colspan="4" class="w3-center">No references found.</td>
         </tr>
         {% endfor %}
       </tbody>

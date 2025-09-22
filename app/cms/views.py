@@ -560,7 +560,12 @@ class AccessionDetailView(DetailView):
         context['references'] = AccessionReference.objects.filter(accession=self.object).select_related('reference')
         context['geologies'] = SpecimenGeology.objects.filter(accession=self.object)
         context['comments'] = Comment.objects.filter(specimen_no=self.object)
-        accession_rows = AccessionRow.objects.filter(accession=self.object)
+        accession_rows = AccessionRow.objects.filter(accession=self.object).prefetch_related(
+            Prefetch(
+                'natureofspecimen_set',
+                queryset=NatureOfSpecimen.objects.select_related('element'),
+            )
+        )
         # Form for adding existing FieldSlips
         context["add_fieldslip_form"] = AccessionFieldSlipForm()
 
@@ -777,6 +782,59 @@ class ReferenceDetailView(DetailView):
     template_name = 'cms/reference_detail.html'
     context_object_name = 'reference'
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+
+        accession_references = self.object.accessionreference_set.select_related(
+            "accession__collection",
+            "accession__specimen_prefix",
+            "accession__accessioned_by",
+        ).order_by(
+            "accession__collection__abbreviation",
+            "accession__specimen_prefix__abbreviation",
+            "accession__specimen_no",
+            "accession__instance_number",
+        )
+
+        if not (
+            user.is_authenticated
+            and (
+                user.is_superuser
+                or user.groups.filter(name__in=["Collection Managers", "Curators"]).exists()
+            )
+        ):
+            accession_references = accession_references.filter(accession__is_published=True)
+
+        accession_ids = list(
+            dict.fromkeys(accession_references.values_list("accession_id", flat=True))
+        )
+
+        accession_entries = []
+        if accession_ids:
+            accessions = list(
+                prefetch_accession_related(
+                    Accession.objects.filter(id__in=accession_ids)
+                )
+            )
+            attach_accession_summaries(accessions)
+            accession_map = {accession.id: accession for accession in accessions}
+
+            for accession_reference in accession_references:
+                accession = accession_map.get(accession_reference.accession_id)
+                if accession is not None:
+                    accession_entries.append((accession, accession_reference.page))
+
+        doi_value = (self.object.doi or "").strip()
+        if doi_value:
+            if doi_value.lower().startswith("http"):
+                context["doi_url"] = doi_value
+            else:
+                context["doi_url"] = f"https://doi.org/{doi_value}"
+
+        context["accession_entries"] = accession_entries
+        return context
+
 class ReferenceListView(FilterView):
     model = Reference
     template_name = 'cms/reference_list.html'
@@ -788,11 +846,27 @@ class ReferenceListView(FilterView):
         "first_author": "first_author",
         "year": "year",
         "title": "title",
+        "accessions": "accession_count",
     }
     default_order = "first_author"
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        user = self.request.user
+
+        if is_public_user(user):
+            queryset = queryset.annotate(
+                accession_count=Count(
+                    "accessionreference",
+                    filter=Q(accessionreference__accession__is_published=True),
+                    distinct=True,
+                )
+            ).filter(accession_count__gt=0)
+        else:
+            queryset = queryset.annotate(
+                accession_count=Count("accessionreference", distinct=True)
+            )
+
         sort_key = self.request.GET.get("sort") or self.default_order
         direction = self.request.GET.get("direction", "asc")
 
