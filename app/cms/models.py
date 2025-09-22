@@ -37,8 +37,16 @@ class PlaceType(models.TextChoices):
 
 
 class BaseModel(models.Model):
-    created_on = models.DateTimeField(auto_now_add=True, verbose_name="Date Created")
-    modified_on = models.DateTimeField(auto_now=True, verbose_name="Date Modified")
+    created_on = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Date Created",
+        help_text="Timestamp when this record was created.",
+    )
+    modified_on = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Date Modified",
+        help_text="Timestamp when this record was last updated.",
+    )
     
     created_by = models.ForeignKey(
         User,
@@ -46,7 +54,8 @@ class BaseModel(models.Model):
         null=True,
         blank=True,
         related_name="%(app_label)s_%(class)s_created",
-        verbose_name="Created by"
+        verbose_name="Created by",
+        help_text="User who created this record."
     )
     modified_by = models.ForeignKey(
         User,
@@ -54,7 +63,8 @@ class BaseModel(models.Model):
         null=True,
         blank=True,
         related_name="%(app_label)s_%(class)s_modified",
-        verbose_name="Modified by"
+        verbose_name="Modified by",
+        help_text="User who most recently updated this record."
     )
 
     class Meta:
@@ -109,7 +119,10 @@ class Locality(BaseModel):
 
 class Place(BaseModel):
     locality = models.ForeignKey(
-        "Locality", on_delete=models.CASCADE, related_name="places"
+        "Locality",
+        on_delete=models.CASCADE,
+        related_name="places",
+        help_text="Locality that contains this place.",
     )
     related_place = models.ForeignKey(
         "self",
@@ -117,15 +130,39 @@ class Place(BaseModel):
         null=True,
         blank=True,
         related_name="related_places",
+        help_text="Another place linked to this place (if applicable).",
     )
     relation_type = models.CharField(
-        max_length=20, choices=PlaceRelation.choices, null=True, blank=True
+        max_length=20,
+        choices=PlaceRelation.choices,
+        null=True,
+        blank=True,
+        help_text="Type of relationship with the related place.",
     )
-    name = models.CharField(max_length=100)
-    place_type = models.CharField(max_length=20, choices=PlaceType.choices)
-    description = models.TextField(null=True, blank=True)
-    comment = models.TextField(null=True, blank=True)
-    part_of_hierarchy = models.CharField(max_length=255, editable=False)
+    name = models.CharField(
+        max_length=100,
+        help_text="Name of the place.",
+    )
+    place_type = models.CharField(
+        max_length=20,
+        choices=PlaceType.choices,
+        help_text="Type of place within the locality hierarchy.",
+    )
+    description = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Detailed description of the place.",
+    )
+    comment = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Additional notes about the place.",
+    )
+    part_of_hierarchy = models.CharField(
+        max_length=255,
+        editable=False,
+        help_text="Auto-generated hierarchy string for this place.",
+    )
     history = HistoricalRecords()
 
     class Meta:
@@ -165,8 +202,14 @@ class Place(BaseModel):
 
 # Collection Model
 class Collection(BaseModel):
-    abbreviation = models.CharField(max_length=4)
-    description = models.CharField(max_length=250)
+    abbreviation = models.CharField(
+        max_length=4,
+        help_text="Short code used to identify the collection.",
+    )
+    description = models.CharField(
+        max_length=250,
+        help_text="Full description or name of the collection.",
+    )
     history = HistoricalRecords()
 
     def get_absolute_url(self):
@@ -234,7 +277,10 @@ class Accession(BaseModel):
         blank=True,
         help_text="Additional comments (if any)."
     )
-    is_published = models.BooleanField(default=False)
+    is_published = models.BooleanField(
+        default=False,
+        help_text="Indicates whether this accession has been cited in references.",
+    )
     history = HistoricalRecords()
 
     def save(self, *args, **kwargs):
@@ -262,11 +308,25 @@ class Accession(BaseModel):
         unique_together = ('specimen_no', 'specimen_prefix', 'instance_number')
 
 class AccessionNumberSeries(BaseModel):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="accession_series")
-    start_from = models.PositiveIntegerField()
-    end_at = models.PositiveIntegerField()
-    current_number = models.PositiveIntegerField()
-    is_active = models.BooleanField(default=True)
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="accession_series",
+        help_text="User who owns this accession number range.",
+    )
+    start_from = models.PositiveIntegerField(
+        help_text="First accession number in the range.",
+    )
+    end_at = models.PositiveIntegerField(
+        help_text="Last accession number in the range.",
+    )
+    current_number = models.PositiveIntegerField(
+        help_text="Next accession number to allocate.",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this series is currently available for allocation.",
+    )
     history = HistoricalRecords()
 
     class Meta:
@@ -330,7 +390,10 @@ class AccessionNumberSeries(BaseModel):
 
 # Subject Model
 class Subject(BaseModel):
-    subject_name = models.CharField(max_length=50)
+    subject_name = models.CharField(
+        max_length=50,
+        help_text="Name of the comment subject.",
+    )
     history = HistoricalRecords()
 
     def get_absolute_url(self):
@@ -346,9 +409,20 @@ class Subject(BaseModel):
 
 # Comment Model
 class Comment(BaseModel):
-    specimen_no = models.ForeignKey(Accession, on_delete=models.CASCADE, related_name='comments')
-    comment = models.TextField()
-    subject = models.ForeignKey(Subject, on_delete=models.CASCADE)
+    specimen_no = models.ForeignKey(
+        Accession,
+        on_delete=models.CASCADE,
+        related_name='comments',
+        help_text="Accession this comment relates to.",
+    )
+    comment = models.TextField(
+        help_text="Comment text provided by the user.",
+    )
+    subject = models.ForeignKey(
+        Subject,
+        on_delete=models.CASCADE,
+        help_text="Subject category for this comment.",
+    )
 
     RESPONSE_STATUS = (
         ('N', 'New'),
@@ -359,8 +433,15 @@ class Comment(BaseModel):
     )
     
     status = models.CharField(max_length=50, choices=RESPONSE_STATUS, help_text="Please select your response")
-    response = models.TextField(null=True, blank=True)
-    comment_by = models.CharField(max_length=50)
+    response = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Response text to the comment.",
+    )
+    comment_by = models.CharField(
+        max_length=50,
+        help_text="Name of the person who left the comment.",
+    )
     history = HistoricalRecords()
 
     def get_absolute_url(self):
@@ -407,8 +488,19 @@ class FieldSlip(BaseModel):
 
 # Storage Model
 class Storage(BaseModel):
-    area = models.CharField(max_length=255, blank=False, null=False)
-    parent_area = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True)
+    area = models.CharField(
+        max_length=255,
+        blank=False,
+        null=False,
+        help_text="Name or code of the storage location.",
+    )
+    parent_area = models.ForeignKey(
+        'self',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        help_text="Broader storage location that contains this area.",
+    )
     history = HistoricalRecords()
 
     def get_absolute_url(self):
@@ -424,15 +516,59 @@ class Storage(BaseModel):
 
 # Reference Model
 class Reference(BaseModel):
-    title = models.CharField(max_length=255, blank=False, null=False)
-    first_author = models.CharField(max_length=255, blank=False, null=False)
-    year = models.CharField(max_length=4, blank=False, null=False)
-    journal = models.CharField(max_length=255, blank=True, null=True)
-    volume = models.CharField(max_length=10, blank=True, null=True)
-    issue = models.CharField(max_length=10, blank=True, null=True)
-    pages = models.CharField(max_length=10, blank=True, null=True)
-    doi = models.CharField(max_length=255, blank=True, null=True)
-    citation = models.TextField(blank=False, null=False)
+    title = models.CharField(
+        max_length=255,
+        blank=False,
+        null=False,
+        help_text="Title of the published work.",
+    )
+    first_author = models.CharField(
+        max_length=255,
+        blank=False,
+        null=False,
+        help_text="Name of the first author of the work.",
+    )
+    year = models.CharField(
+        max_length=4,
+        blank=False,
+        null=False,
+        help_text="Publication year (YYYY).",
+    )
+    journal = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Journal or source where the work was published.",
+    )
+    volume = models.CharField(
+        max_length=10,
+        blank=True,
+        null=True,
+        help_text="Volume information for the publication.",
+    )
+    issue = models.CharField(
+        max_length=10,
+        blank=True,
+        null=True,
+        help_text="Issue number for the publication.",
+    )
+    pages = models.CharField(
+        max_length=10,
+        blank=True,
+        null=True,
+        help_text="Page range within the publication.",
+    )
+    doi = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Digital Object Identifier (if available).",
+    )
+    citation = models.TextField(
+        blank=False,
+        null=False,
+        help_text="Formatted citation text.",
+    )
     history = HistoricalRecords()
 
     def get_absolute_url(self):
@@ -482,9 +618,22 @@ class AccessionFieldSlip(BaseModel):
 
 # AccessionReference Model
 class AccessionReference(BaseModel):
-    accession = models.ForeignKey(Accession, on_delete=models.CASCADE)
-    reference = models.ForeignKey(Reference, on_delete=models.CASCADE)
-    page = models.CharField(max_length=10, blank=True, null=True)
+    accession = models.ForeignKey(
+        Accession,
+        on_delete=models.CASCADE,
+        help_text="Accession linked to the reference.",
+    )
+    reference = models.ForeignKey(
+        Reference,
+        on_delete=models.CASCADE,
+        help_text="Reference that cites the accession.",
+    )
+    page = models.CharField(
+        max_length=10,
+        blank=True,
+        null=True,
+        help_text="Page or figure citation within the reference.",
+    )
     history = HistoricalRecords()
 
     class Meta:
@@ -507,9 +656,25 @@ class AccessionReference(BaseModel):
 
 # AccessionRow Model
 class AccessionRow(BaseModel):
-    accession = models.ForeignKey(Accession, on_delete=models.CASCADE)
-    storage = models.ForeignKey(Storage, on_delete=models.SET_NULL, blank=True, null=True)
-    specimen_suffix = models.CharField(max_length=25, blank=True, null=True, default='-')
+    accession = models.ForeignKey(
+        Accession,
+        on_delete=models.CASCADE,
+        help_text="Accession to which this row belongs.",
+    )
+    storage = models.ForeignKey(
+        Storage,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        help_text="Storage location for this specimen instance.",
+    )
+    specimen_suffix = models.CharField(
+        max_length=25,
+        blank=True,
+        null=True,
+        default='-',
+        help_text="Suffix distinguishing multiple items under the same accession.",
+    )
     status = models.CharField(
         max_length=10,
         choices=InventoryStatus.choices,
@@ -580,7 +745,10 @@ class AccessionRow(BaseModel):
 
 
 class UnexpectedSpecimen(BaseModel):
-    identifier = models.CharField(max_length=255)
+    identifier = models.CharField(
+        max_length=255,
+        help_text="Identifier assigned to the unexpected specimen.",
+    )
     history = HistoricalRecords()
 
     class Meta:
@@ -592,13 +760,44 @@ class UnexpectedSpecimen(BaseModel):
 
 # NatureOfSpecimen Model
 class NatureOfSpecimen(BaseModel):
-    accession_row = models.ForeignKey(AccessionRow, on_delete=models.CASCADE)
-    element = models.ForeignKey('Element', on_delete=models.CASCADE)
-    side = models.CharField(max_length=50, blank=True, null=True)
-    condition = models.CharField(max_length=255, blank=True, null=True)
-    verbatim_element = models.CharField(max_length=255, blank=True, null=True)
-    portion = models.CharField(max_length=255, blank=True, null=True)
-    fragments = models.IntegerField(default=0)
+    accession_row = models.ForeignKey(
+        AccessionRow,
+        on_delete=models.CASCADE,
+        help_text="Accession row describing this specimen.",
+    )
+    element = models.ForeignKey(
+        'Element',
+        on_delete=models.CASCADE,
+        help_text="Element represented by the specimen.",
+    )
+    side = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="Side of the body or element, if applicable.",
+    )
+    condition = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Observed condition of the specimen.",
+    )
+    verbatim_element = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Element description as originally recorded.",
+    )
+    portion = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Portion of the element represented by the specimen.",
+    )
+    fragments = models.IntegerField(
+        default=0,
+        help_text="Number of fragments associated with this specimen.",
+    )
     history = HistoricalRecords()
 
     def get_absolute_url(self):
@@ -619,9 +818,15 @@ class Element(BaseModel):
         on_delete=models.CASCADE,
         null=True,
         blank=True,
-        related_name='children'
+        related_name='children',
+        help_text="Broader anatomical element in the hierarchy.",
     )
-    name = models.CharField(max_length=255, blank=False, null=False)
+    name = models.CharField(
+        max_length=255,
+        blank=False,
+        null=False,
+        help_text="Name of the anatomical element.",
+    )
     history = HistoricalRecords()
 
     class Meta:
@@ -640,9 +845,20 @@ class Element(BaseModel):
 
 # Person Model
 class Person(BaseModel):
-    first_name = models.CharField(max_length=255)
-    last_name = models.CharField(max_length=255)
-    orcid = models.CharField(max_length=255, blank=True, null=True)
+    first_name = models.CharField(
+        max_length=255,
+        help_text="Person's first name.",
+    )
+    last_name = models.CharField(
+        max_length=255,
+        help_text="Person's last name.",
+    )
+    orcid = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="ORCID identifier for the person, if available.",
+    )
     history = HistoricalRecords()
 
     def get_absolute_url(self):
@@ -658,14 +874,53 @@ class Person(BaseModel):
 
 # Identification Model
 class Identification(BaseModel):
-    accession_row = models.ForeignKey(AccessionRow, on_delete=models.CASCADE)
-    identified_by = models.ForeignKey(Person, on_delete=models.SET_NULL, null=True, blank=True)
-    taxon = models.CharField(max_length=255, blank=True, null=True)
-    reference = models.ForeignKey(Reference, on_delete=models.SET_NULL, null=True, blank=True)
-    date_identified = models.DateField(null=True, blank=True)
-    identification_qualifier = models.CharField(max_length=255, blank=True, null=True)
-    verbatim_identification = models.CharField(max_length=255, blank=True, null=True)
-    identification_remarks = models.TextField(blank=True, null=True)
+    accession_row = models.ForeignKey(
+        AccessionRow,
+        on_delete=models.CASCADE,
+        help_text="Specimen instance that was identified.",
+    )
+    identified_by = models.ForeignKey(
+        Person,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        help_text="Person who made the identification.",
+    )
+    taxon = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Determined taxon name.",
+    )
+    reference = models.ForeignKey(
+        Reference,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        help_text="Reference supporting the identification, if any.",
+    )
+    date_identified = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date when the identification was made.",
+    )
+    identification_qualifier = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Qualifier indicating certainty (cf., aff., etc.).",
+    )
+    verbatim_identification = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Identification text as originally recorded.",
+    )
+    identification_remarks = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Additional remarks about the identification.",
+    )
     history = HistoricalRecords()
 
     def get_absolute_url(self):
@@ -693,20 +948,76 @@ TAXON_RANK_CHOICES = [
 ]
 
 class Taxon(BaseModel):
-    taxon_rank = models.CharField(max_length=50, choices=TAXON_RANK_CHOICES)
-    taxon_name = models.CharField(max_length=50)
-    kingdom = models.CharField(max_length=255)
-    phylum = models.CharField(max_length=255)
-    class_name = models.CharField(max_length=255)
-    order = models.CharField(max_length=255)
-    superfamily = models.CharField(max_length=255, null=True, blank=True, default="")
-    family = models.CharField(max_length=255)
-    subfamily = models.CharField(max_length=255, null=True, blank=True, default="")
-    tribe = models.CharField(max_length=255, null=True, blank=True, default="")
-    genus = models.CharField(max_length=255)
-    species = models.CharField(max_length=255)
-    infraspecific_epithet = models.CharField(max_length=255, null=True, blank=True)
-    scientific_name_authorship = models.CharField(max_length=255, null=True, blank=True)
+    taxon_rank = models.CharField(
+        max_length=50,
+        choices=TAXON_RANK_CHOICES,
+        help_text="Taxonomic rank represented by this record.",
+    )
+    taxon_name = models.CharField(
+        max_length=50,
+        help_text="Primary taxon name for the selected rank.",
+    )
+    kingdom = models.CharField(
+        max_length=255,
+        help_text="Kingdom assignment for the taxon.",
+    )
+    phylum = models.CharField(
+        max_length=255,
+        help_text="Phylum assignment for the taxon.",
+    )
+    class_name = models.CharField(
+        max_length=255,
+        help_text="Class assignment for the taxon.",
+    )
+    order = models.CharField(
+        max_length=255,
+        help_text="Order assignment for the taxon.",
+    )
+    superfamily = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        default="",
+        help_text="Superfamily assignment, if applicable.",
+    )
+    family = models.CharField(
+        max_length=255,
+        help_text="Family assignment for the taxon.",
+    )
+    subfamily = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        default="",
+        help_text="Subfamily assignment, if applicable.",
+    )
+    tribe = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        default="",
+        help_text="Tribal assignment, if applicable.",
+    )
+    genus = models.CharField(
+        max_length=255,
+        help_text="Genus portion of the taxon name.",
+    )
+    species = models.CharField(
+        max_length=255,
+        help_text="Species epithet of the taxon.",
+    )
+    infraspecific_epithet = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text="Infraspecific epithet (subspecies, variety, etc.).",
+    )
+    scientific_name_authorship = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text="Authorship citation for the scientific name.",
+    )
     history = HistoricalRecords()
 
     class Meta:
@@ -797,7 +1108,10 @@ class Media(BaseModel):
         choices=MEDIA_FORMAT_CHOICES,
         help_text="File format of the media (supported formats: 'jpg', 'jpeg', 'png', 'gif', 'bmp')"
     )
-    media_location = models.ImageField(upload_to='media/')
+    media_location = models.ImageField(
+        upload_to='media/',
+        help_text="Uploaded media file.",
+    )
     license = models.CharField(max_length=30, choices=LICENSE_CHOICES
                                ,default='CC0'  # Default to public domain
                                , help_text="License information for the media file")
@@ -1120,8 +1434,16 @@ class Preparation(BaseModel):
 
 
 class PreparationMedia(BaseModel):
-    preparation = models.ForeignKey("Preparation", on_delete=models.CASCADE)
-    media = models.ForeignKey("Media", on_delete=models.CASCADE)
+    preparation = models.ForeignKey(
+        "Preparation",
+        on_delete=models.CASCADE,
+        help_text="Preparation record associated with this media.",
+    )
+    media = models.ForeignKey(
+        "Media",
+        on_delete=models.CASCADE,
+        help_text="Media file linked to the preparation.",
+    )
 
     MEDIA_CONTEXT_CHOICES = [
         ("before", "Before Preparation"),
@@ -1174,6 +1496,7 @@ class DrawerRegister(BaseModel):
         max_length=20,
         choices=ScanningStatus.choices,
         default=ScanningStatus.WAITING,
+        help_text="Current scanning workflow status.",
     )
     scanning_users = models.ManyToManyField(
         User,
@@ -1198,11 +1521,25 @@ class DrawerRegister(BaseModel):
 
 class Scanning(BaseModel):
     drawer = models.ForeignKey(
-        DrawerRegister, on_delete=models.CASCADE, related_name="scans"
+        DrawerRegister,
+        on_delete=models.CASCADE,
+        related_name="scans",
+        help_text="Drawer register being scanned.",
     )
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="scans")
-    start_time = models.DateTimeField()
-    end_time = models.DateTimeField(null=True, blank=True)
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="scans",
+        help_text="User performing the scanning session.",
+    )
+    start_time = models.DateTimeField(
+        help_text="Date and time the scanning session began.",
+    )
+    end_time = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Date and time the scanning session ended.",
+    )
     history = HistoricalRecords()
 
     class Meta:
