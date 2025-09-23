@@ -37,6 +37,7 @@ from cms.models import (
     AccessionFieldSlip,
     Identification,
     NatureOfSpecimen,
+    MediaQCLog,
 )
 from cms.utils import generate_accessions_from_series
 from cms.forms import DrawerRegisterForm, AccessionNumberSeriesAdminForm
@@ -1497,6 +1498,13 @@ class ProcessPendingScansTests(TestCase):
         Media.objects.create(media_location=f"uploads/pending/{filename}")
         successes, failures, total, errors = process_pending_scans()
         self.assertEqual((successes, failures, total), (1, 0, 1))
+        self.assertEqual(Accession.objects.count(), 0)
+        media = Media.objects.get()
+        self.assertEqual(media.ocr_status, Media.OCRStatus.COMPLETED)
+        self.assertEqual(media.qc_status, Media.QCStatus.PENDING_INTERN)
+        result = media.transition_qc(Media.QCStatus.APPROVED, user=self.user)
+        self.assertEqual(result["conflicts"], [])
+        self.assertEqual(len(result["created"]), 1)
         accession = Accession.objects.get()
         self.assertEqual(accession.collection.abbreviation, "KNM")
         self.assertEqual(accession.specimen_prefix.abbreviation, "AB")
@@ -1514,8 +1522,13 @@ class ProcessPendingScansTests(TestCase):
         self.assertEqual(link.accession, accession)
         self.assertEqual(link.reference, reference)
         self.assertEqual(link.page, "485-519")
-        media = Media.objects.get()
+        media.refresh_from_db()
         self.assertEqual(media.accession, accession)
+        self.assertEqual(media.qc_status, Media.QCStatus.APPROVED)
+        self.assertIn("_processed_accessions", media.ocr_data)
+        repeat = media.transition_qc(Media.QCStatus.APPROVED, user=self.user)
+        self.assertEqual(repeat["created"], [])
+        self.assertEqual(Accession.objects.count(), 1)
 
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch(
@@ -1554,6 +1567,8 @@ class ProcessPendingScansTests(TestCase):
         Media.objects.create(media_location=f"uploads/pending/{filename}")
         process_pending_scans()
         self.assertEqual(Reference.objects.count(), 1)
+        media = Media.objects.get()
+        media.transition_qc(Media.QCStatus.APPROVED, user=self.user)
         accession = Accession.objects.get()
         link = AccessionReference.objects.get()
         self.assertEqual(link.accession, accession)
@@ -1608,6 +1623,8 @@ class ProcessPendingScansTests(TestCase):
         file_path1.write_bytes(b"data")
         Media.objects.create(media_location=f"uploads/pending/{filename1}")
         process_pending_scans()
+        media1 = Media.objects.get(media_location=f"uploads/ocr/{filename1}")
+        media1.transition_qc(Media.QCStatus.APPROVED, user=self.user)
 
         self.assertEqual(Reference.objects.count(), 1)
         reference = Reference.objects.get()
@@ -1617,6 +1634,8 @@ class ProcessPendingScansTests(TestCase):
         file_path2.write_bytes(b"data")
         Media.objects.create(media_location=f"uploads/pending/{filename2}")
         process_pending_scans()
+        media2 = Media.objects.get(media_location=f"uploads/ocr/{filename2}")
+        media2.transition_qc(Media.QCStatus.APPROVED, user=self.user)
 
         self.assertEqual(Reference.objects.count(), 1)
         links = AccessionReference.objects.all()
@@ -1640,7 +1659,7 @@ class ProcessPendingScansTests(TestCase):
             ]
         },
     )
-    def test_existing_accession_creates_new_instance(self, mock_ocr, mock_detect):
+    def test_existing_accession_reports_conflict(self, mock_ocr, mock_detect):
         collection = Collection.objects.create(abbreviation="KNM", description="Kenya")
         locality = Locality.objects.create(abbreviation="AB", name="Existing")
         Accession.objects.create(collection=collection, specimen_prefix=locality, specimen_no=123)
@@ -1650,11 +1669,14 @@ class ProcessPendingScansTests(TestCase):
         Media.objects.create(media_location=f"uploads/pending/{filename}")
         successes, failures, total, errors = process_pending_scans()
         self.assertEqual((successes, failures, total), (1, 0, 1))
-        self.assertEqual(Accession.objects.count(), 2)
-        latest = Accession.objects.order_by("-id").first()
-        self.assertEqual(latest.instance_number, 2)
         media = Media.objects.get()
-        self.assertEqual(media.accession, latest)
+        with self.assertRaises(ValidationError) as exc:
+            media.transition_qc(Media.QCStatus.APPROVED, user=self.user)
+        self.assertIn("Accession already exists", str(exc.exception))
+        self.assertEqual(Accession.objects.count(), 1)
+        media.refresh_from_db()
+        self.assertEqual(media.qc_status, Media.QCStatus.PENDING_INTERN)
+        self.assertEqual(media.qc_logs.filter(description__contains="Approval blocked").count(), 1)
 
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch(
@@ -1696,6 +1718,8 @@ class ProcessPendingScansTests(TestCase):
         file_path.write_bytes(b"data")
         Media.objects.create(media_location=f"uploads/pending/{filename}")
         process_pending_scans()
+        media = Media.objects.get()
+        media.transition_qc(Media.QCStatus.APPROVED, user=self.user)
         accession = Accession.objects.get()
         field_slip = FieldSlip.objects.get()
         link = AccessionFieldSlip.objects.get()
@@ -1747,6 +1771,8 @@ class ProcessPendingScansTests(TestCase):
         file_path.write_bytes(b"data")
         Media.objects.create(media_location=f"uploads/pending/{filename}")
         process_pending_scans()
+        media = Media.objects.get()
+        media.transition_qc(Media.QCStatus.APPROVED, user=self.user)
         self.assertEqual(FieldSlip.objects.count(), 1)
         link = AccessionFieldSlip.objects.get()
         self.assertEqual(link.fieldslip, existing)
@@ -1778,6 +1804,8 @@ class ProcessPendingScansTests(TestCase):
         file_path.write_bytes(b"data")
         Media.objects.create(media_location=f"uploads/pending/{filename}")
         process_pending_scans()
+        media = Media.objects.get()
+        media.transition_qc(Media.QCStatus.APPROVED, user=self.user)
         accession = Accession.objects.get()
         row = AccessionRow.objects.get()
         self.assertEqual(row.accession, accession)
@@ -1817,6 +1845,8 @@ class ProcessPendingScansTests(TestCase):
         file_path.write_bytes(b"data")
         Media.objects.create(media_location=f"uploads/pending/{filename}")
         process_pending_scans()
+        media = Media.objects.get()
+        media.transition_qc(Media.QCStatus.APPROVED, user=self.user)
         self.assertEqual(AccessionRow.objects.count(), 1)
 
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
@@ -1842,6 +1872,8 @@ class ProcessPendingScansTests(TestCase):
         file_path.write_bytes(b"data")
         Media.objects.create(media_location=f"uploads/pending/{filename}")
         process_pending_scans()
+        media = Media.objects.get()
+        media.transition_qc(Media.QCStatus.APPROVED, user=self.user)
         row = AccessionRow.objects.get()
         self.assertEqual(row.specimen_suffix, "-")
 
@@ -1876,6 +1908,8 @@ class ProcessPendingScansTests(TestCase):
         file_path.write_bytes(b"data")
         Media.objects.create(media_location=f"uploads/pending/{filename}")
         process_pending_scans()
+        media = Media.objects.get()
+        media.transition_qc(Media.QCStatus.APPROVED, user=self.user)
         row = AccessionRow.objects.get()
         ident = Identification.objects.get()
         self.assertEqual(ident.accession_row, row)
@@ -1919,6 +1953,8 @@ class ProcessPendingScansTests(TestCase):
         file_path.write_bytes(b"data")
         Media.objects.create(media_location=f"uploads/pending/{filename}")
         process_pending_scans()
+        media = Media.objects.get()
+        media.transition_qc(Media.QCStatus.APPROVED, user=self.user)
         row = AccessionRow.objects.get()
         nature = NatureOfSpecimen.objects.get()
         self.assertEqual(nature.accession_row, row)
@@ -1929,6 +1965,63 @@ class ProcessPendingScansTests(TestCase):
         self.assertEqual(nature.verbatim_element, "Left Femur")
         self.assertEqual(nature.portion, "proximal")
         self.assertEqual(nature.fragments, 1)
+
+
+class MediaTransitionTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username="reviewer", password="pass")
+        patcher = patch("cms.models.get_current_user", return_value=self.user)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def create_media(self, **overrides):
+        data = {
+            "media_location": "uploads/pending/test.png",
+        }
+        data.update(overrides)
+        return Media.objects.create(**data)
+
+    def test_transition_updates_metadata_and_logs(self):
+        media = self.create_media()
+        media.transition_qc(Media.QCStatus.PENDING_EXPERT, user=self.user, note="Ready for expert")
+        media.refresh_from_db()
+        self.assertEqual(media.qc_status, Media.QCStatus.PENDING_EXPERT)
+        self.assertEqual(media.intern_checked_by, self.user)
+        self.assertIsNotNone(media.intern_checked_on)
+        log = media.qc_logs.first()
+        self.assertIn("Ready for expert", log.description)
+        self.assertEqual(log.changed_by, self.user)
+
+    def test_transition_to_approved_creates_accession_and_stamps_expert(self):
+        Collection.objects.create(abbreviation="KNM", description="Kenya")
+        Locality.objects.create(abbreviation="AB", name="Area 1")
+        media = self.create_media(
+            ocr_data={
+                "card_type": "accession_card",
+                "accessions": [
+                    {
+                        "collection_abbreviation": {"interpreted": "KNM"},
+                        "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                        "specimen_no": {"interpreted": 321},
+                    }
+                ],
+            }
+        )
+        result = media.transition_qc(Media.QCStatus.APPROVED, user=self.user, note="Looks good")
+        self.assertEqual(result["conflicts"], [])
+        media.refresh_from_db()
+        self.assertEqual(media.qc_status, Media.QCStatus.APPROVED)
+        self.assertEqual(media.expert_checked_by, self.user)
+        self.assertIsNotNone(media.expert_checked_on)
+        self.assertEqual(Accession.objects.count(), 1)
+        log = media.qc_logs.filter(change_type=MediaQCLog.ChangeType.STATUS).first()
+        self.assertIn("Looks good", log.description)
+
+    def test_invalid_transition_raises_validation_error(self):
+        media = self.create_media(qc_status=Media.QCStatus.APPROVED, ocr_data={"card_type": "other"})
+        with self.assertRaises(ValidationError):
+            media.transition_qc(Media.QCStatus.REJECTED, user=self.user)
 
 
 class UploadProcessingTests(TestCase):

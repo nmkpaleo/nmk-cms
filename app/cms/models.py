@@ -1168,7 +1168,11 @@ class Media(BaseModel):
     history = HistoricalRecords()
 
     def save(self, *args, **kwargs):
-        user = get_current_user()
+        user_override_set = hasattr(self, "_force_qc_user")
+        if user_override_set:
+            user = getattr(self, "_force_qc_user")
+        else:
+            user = get_current_user()
         if isinstance(user, AnonymousUser):
             user = None
 
@@ -1183,6 +1187,8 @@ class Media(BaseModel):
         status_changed = previous and previous.qc_status != self.qc_status
         ocr_changed = previous and previous.ocr_data != self.ocr_data
         rows_rearranged_changed = previous and previous.rows_rearranged != self.rows_rearranged
+
+        note = getattr(self, "_qc_transition_note", None)
 
         if status_changed:
             timestamp = timezone.now()
@@ -1202,17 +1208,20 @@ class Media(BaseModel):
         super().save(*args, **kwargs)
 
         if status_changed:
+            description = (
+                f"Status changed from {previous.get_qc_status_display()} to {self.get_qc_status_display()}"
+                if previous
+                else f"Status set to {self.get_qc_status_display()}"
+            )
+            if note:
+                description = f"{description} — {note}" if description else note
             MediaQCLog.objects.create(
                 media=self,
                 change_type=MediaQCLog.ChangeType.STATUS,
                 field_name="qc_status",
                 old_value={"qc_status": previous.qc_status} if previous else None,
                 new_value={"qc_status": self.qc_status},
-                description=(
-                    f"Status changed from {previous.get_qc_status_display()} to {self.get_qc_status_display()}"
-                    if previous
-                    else f"Status set to {self.get_qc_status_display()}"
-                ),
+                description=description,
                 changed_by=user,
             )
 
@@ -1238,6 +1247,11 @@ class Media(BaseModel):
                 changed_by=user,
             )
 
+        if user_override_set and hasattr(self, "_force_qc_user"):
+            delattr(self, "_force_qc_user")
+        if hasattr(self, "_qc_transition_note"):
+            delattr(self, "_qc_transition_note")
+
     def clean(self):
         super().clean()
         if self.media_location:
@@ -1255,6 +1269,104 @@ class Media(BaseModel):
 
     def __str__(self):
         return f"{self.file_name} ({self.type})"
+
+    QC_ALLOWED_TRANSITIONS = {
+        QCStatus.PENDING_INTERN: {
+            QCStatus.PENDING_EXPERT,
+            QCStatus.APPROVED,
+            QCStatus.REJECTED,
+        },
+        QCStatus.PENDING_EXPERT: {
+            QCStatus.PENDING_INTERN,
+            QCStatus.APPROVED,
+            QCStatus.REJECTED,
+        },
+        QCStatus.APPROVED: {QCStatus.PENDING_INTERN, QCStatus.PENDING_EXPERT},
+        QCStatus.REJECTED: {QCStatus.PENDING_INTERN, QCStatus.PENDING_EXPERT},
+    }
+
+    def transition_qc(self, new_status: str, user=None, note: str | None = None) -> dict:
+        """Transition the media to a new QC status.
+
+        The transition validates that the change is allowed, stamps reviewer
+        metadata, records a :class:`MediaQCLog` entry, and, when moving to
+        ``approved``, attempts to create accessions from the OCR payload. If
+        accession creation detects conflicts, the transition is aborted and a
+        ``ValidationError`` is raised so the QC UI can display the issue.
+        """
+
+        if new_status not in self.QCStatus.values:
+            raise ValidationError({"qc_status": "Unrecognised QC status."})
+
+        old_status = self.qc_status
+        if new_status != old_status:
+            allowed = self.QC_ALLOWED_TRANSITIONS.get(old_status, set())
+            if new_status not in allowed:
+                raise ValidationError(
+                    {
+                        "qc_status": (
+                            f"Cannot transition from {self.get_qc_status_display()} "
+                            f"to {self.QCStatus(new_status).label}."
+                        )
+                    }
+                )
+
+        if user is None:
+            user = get_current_user()
+        if isinstance(user, AnonymousUser):
+            user = None
+
+        created: list[dict] = []
+        conflicts: list[dict] = []
+
+        if new_status == self.QCStatus.APPROVED:
+            from .ocr_processing import create_accessions_from_media
+
+            result = create_accessions_from_media(self)
+            created = result.get("created", [])
+            conflicts = result.get("conflicts", [])
+            if conflicts:
+                summary_parts = []
+                for conflict in conflicts:
+                    key = conflict.get("key")
+                    reason = conflict.get("reason") or "Conflict detected"
+                    if key:
+                        summary_parts.append(f"{key}: {reason}")
+                    else:
+                        summary_parts.append(reason)
+                summary = "; ".join(summary_parts)
+                if note:
+                    summary = f"{summary} — {note}"
+                MediaQCLog.objects.create(
+                    media=self,
+                    change_type=MediaQCLog.ChangeType.STATUS,
+                    field_name="qc_status",
+                    old_value={"qc_status": old_status},
+                    new_value={"qc_status": old_status},
+                    description=f"Approval blocked: {summary}",
+                    changed_by=user,
+                )
+                raise ValidationError({"qc_status": summary})
+
+        if new_status == old_status:
+            if note:
+                MediaQCLog.objects.create(
+                    media=self,
+                    change_type=MediaQCLog.ChangeType.STATUS,
+                    field_name="qc_status",
+                    old_value={"qc_status": old_status},
+                    new_value={"qc_status": new_status},
+                    description=note,
+                    changed_by=user,
+                )
+            return {"created": created, "conflicts": conflicts}
+
+        self.qc_status = new_status
+        self._force_qc_user = user
+        if note:
+            self._qc_transition_note = note
+        self.save()
+        return {"created": created, "conflicts": conflicts}
 
 
 class MediaQCLog(models.Model):

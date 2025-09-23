@@ -301,34 +301,48 @@ class OCRCostEstimator:
         }
 
 
-def create_accessions_from_media(media: Media) -> None:
+def create_accessions_from_media(media: Media) -> dict[str, list[dict[str, object]]]:
     """Create :class:`Accession` objects from a media's OCR data.
 
-    If ``media.ocr_data`` contains accessions and the detected ``card_type``
-    is ``accession_card``, the data is used to create one or more
-    :class:`Accession` records. The first created accession is linked back to
-    the ``media`` instance via ``media.accession``.
-
-    This function is intentionally forgiving—missing or malformed fields in the
-    OCR data simply result in the accession being skipped.
+    The OCR payload is expected to be stored on ``media.ocr_data``. When the
+    detected ``card_type`` is ``accession_card`` the data is used to create one
+    or more :class:`Accession` records. The function is idempotent: accessions
+    that have already been created for this media are remembered inside the OCR
+    JSON (under ``_processed_accessions``) and are not recreated on subsequent
+    calls. If an accession would collide with an existing record, the conflict
+    is reported and the accession is not created.
     """
 
-    data = media.ocr_data or {}
+    data = dict(media.ocr_data or {})
     if data.get("card_type") != "accession_card":
-        return
+        return {"created": [], "conflicts": []}
 
     accessions = data.get("accessions") or []
+    processed_records = data.get("_processed_accessions") or []
+    processed_map = {rec.get("key"): rec for rec in processed_records if rec.get("key")}
+    updated_records = [dict(rec) for rec in processed_records]
+    created_records: list[dict[str, object]] = []
+    conflicts: list[dict[str, object]] = []
     first_accession: Optional[Accession] = None
+
     for entry in accessions:
-        coll_abbr = (entry.get("collection_abbreviation") or {}).get("interpreted") or "KNM"
+        raw_coll_abbr = (entry.get("collection_abbreviation") or {}).get("interpreted")
+        coll_abbr = raw_coll_abbr or "KNM"
         collection = Collection.objects.filter(abbreviation=coll_abbr).first()
-        if not collection:
+        if not collection and coll_abbr != "KNM":
             collection = Collection.objects.filter(abbreviation="KNM").first()
         if not collection:
+            conflicts.append({"key": coll_abbr, "reason": "Collection not found"})
             continue
 
         prefix_abbr = (entry.get("specimen_prefix_abbreviation") or {}).get("interpreted")
         if not prefix_abbr:
+            conflicts.append(
+                {
+                    "key": f"{collection.abbreviation}:<missing>",
+                    "reason": "Specimen prefix missing",
+                }
+            )
             continue
         specimen_prefix = Locality.objects.filter(abbreviation=prefix_abbr).first()
         if not specimen_prefix:
@@ -337,20 +351,61 @@ def create_accessions_from_media(media: Media) -> None:
                 name=f"Temporary Locality {prefix_abbr}",
             )
 
-        specimen_no = (entry.get("specimen_no") or {}).get("interpreted")
-        if specimen_no is None:
+        specimen_no_value = (entry.get("specimen_no") or {}).get("interpreted")
+        if specimen_no_value in (None, ""):
+            conflicts.append(
+                {
+                    "key": f"{collection.abbreviation}:{prefix_abbr}",
+                    "reason": "Specimen number missing",
+                }
+            )
+            continue
+        try:
+            specimen_no = int(specimen_no_value)
+        except (TypeError, ValueError):
+            conflicts.append(
+                {
+                    "key": f"{collection.abbreviation}:{prefix_abbr}",
+                    "reason": f"Invalid specimen number: {specimen_no_value}",
+                }
+            )
             continue
 
-        existing = (
-            Accession.objects.filter(
-                collection=collection,
-                specimen_prefix=specimen_prefix,
-                specimen_no=specimen_no,
+        key = f"{collection.abbreviation}:{specimen_prefix.abbreviation}:{specimen_no}"
+        processed_entry = processed_map.get(key)
+        if processed_entry:
+            accession_id = processed_entry.get("accession_id")
+            accession = Accession.objects.filter(pk=accession_id).first()
+            if accession is None:
+                conflicts.append(
+                    {
+                        "key": key,
+                        "reason": "Previously created accession is missing",
+                        "accession_id": accession_id,
+                    }
+                )
+            else:
+                if first_accession is None:
+                    first_accession = accession
+            continue
+
+        existing_qs = Accession.objects.filter(
+            collection=collection,
+            specimen_prefix=specimen_prefix,
+            specimen_no=specimen_no,
+        ).order_by("instance_number")
+        existing_accession = existing_qs.first()
+        if existing_accession:
+            conflicts.append(
+                {
+                    "key": key,
+                    "reason": "Accession already exists",
+                    "accession_id": existing_accession.pk,
+                    "instance_number": existing_accession.instance_number,
+                    "accession": str(existing_accession),
+                }
             )
-            .order_by("-instance_number")
-            .first()
-        )
-        next_instance = existing.instance_number + 1 if existing else 1
+            continue
 
         type_status = (entry.get("type_status") or {}).get("interpreted")
         published_val = (entry.get("published") or {}).get("interpreted")
@@ -371,7 +426,7 @@ def create_accessions_from_media(media: Media) -> None:
             collection=collection,
             specimen_prefix=specimen_prefix,
             specimen_no=specimen_no,
-            instance_number=next_instance,
+            instance_number=1,
             type_status=type_status,
             is_published=is_published,
             comment=comment,
@@ -517,10 +572,40 @@ def create_accessions_from_media(media: Media) -> None:
                 )
         if first_accession is None:
             first_accession = accession
+        record = {
+            "key": key,
+            "accession_id": accession.pk,
+            "collection": collection.abbreviation,
+            "specimen_prefix": specimen_prefix.abbreviation,
+            "specimen_no": specimen_no,
+            "instance_number": accession.instance_number,
+            "accession": str(accession),
+        }
+        created_records.append(record)
+        processed_map[key] = record
+        updated_records.append(record)
 
-    if first_accession:
+    if first_accession is None:
+        for record in updated_records:
+            accession_id = record.get("accession_id")
+            if accession_id:
+                accession = Accession.objects.filter(pk=accession_id).first()
+                if accession:
+                    first_accession = accession
+                    break
+
+    updates: list[str] = []
+    if first_accession and media.accession_id != first_accession.pk:
         media.accession = first_accession
-        media.save(update_fields=["accession"])
+        updates.append("accession")
+    if updated_records != processed_records:
+        data["_processed_accessions"] = updated_records
+        media.ocr_data = data
+        updates.append("ocr_data")
+    if updates:
+        media.save(update_fields=updates)
+
+    return {"created": created_records, "conflicts": conflicts}
 
 
 def process_pending_scans(limit: int = 100) -> tuple[int, int, int, list[str]]:
@@ -554,14 +639,14 @@ def process_pending_scans(limit: int = 100) -> tuple[int, int, int, list[str]]:
             user_prompt = build_prompt_for_card_type(card_type)
             result = chatgpt_ocr(path, path.name, user_prompt, cost_status)
             result["card_type"] = card_type
-            media.ocr_data = result
             dest = ocr_dir / path.name
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(path, dest)
             media.media_location.name = str(dest.relative_to(settings.MEDIA_ROOT))
+            media.ocr_data = result
             media.ocr_status = Media.OCRStatus.COMPLETED
-            media.save()
-            create_accessions_from_media(media)
+            media.qc_status = Media.QCStatus.PENDING_INTERN
+            media.save(update_fields=["ocr_data", "media_location", "ocr_status", "qc_status"])
             successes += 1
         except Exception as exc:
             failures += 1
