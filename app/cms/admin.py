@@ -17,6 +17,8 @@ from .models import (
     Identification,
     Taxon,
     Media,
+    MediaQCLog,
+    MediaQCComment,
     SpecimenGeology,
     GeologicalContext,
     AccessionReference,
@@ -44,8 +46,8 @@ import logging
 
 from django import forms
 from django.core.exceptions import ValidationError
-from django.utils.html import format_html
-from django.utils.timezone import now
+from django.utils.html import format_html, format_html_join
+from django.utils.timezone import now, localtime
 from django.contrib.auth import get_user_model
 
 # Configure the logger
@@ -57,6 +59,8 @@ from django.db.models import Count, OuterRef, Exists
 from cms.models import Accession
 
 User = get_user_model()
+
+import pprint
 
 
 class HistoricalImportExportAdmin(SimpleHistoryAdmin, ImportExportModelAdmin):
@@ -271,6 +275,67 @@ class PlaceAdmin(HistoricalImportExportAdmin):
     search_fields = ('name', 'locality__name')
 
 # Media
+
+
+class MediaQCLogInline(admin.TabularInline):
+    model = MediaQCLog
+    extra = 0
+    fields = (
+        "created_on",
+        "change_type",
+        "field_name",
+        "old_value_display",
+        "new_value_display",
+        "description",
+        "changed_by",
+        "comments_display",
+    )
+    readonly_fields = fields
+    can_delete = False
+    ordering = ("-created_on",)
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def _format_value(self, value):
+        if value in (None, {}, []):
+            return "-"
+        formatted = pprint.pformat(value, compact=True, width=60)
+        return format_html("<pre style='white-space: pre-wrap;'>{}</pre>", formatted)
+
+    def old_value_display(self, obj):
+        return self._format_value(obj.old_value)
+
+    old_value_display.short_description = "Previous Value"
+
+    def new_value_display(self, obj):
+        return self._format_value(obj.new_value)
+
+    new_value_display.short_description = "New Value"
+
+    def comments_display(self, obj):
+        comments = obj.comments.all()
+        if not comments:
+            return "-"
+        return format_html_join(
+            "<br>",
+            "<strong>{}</strong>: {} <em>({})</em>",
+            [
+                (
+                    comment.created_by.get_full_name()
+                    or comment.created_by.get_username()
+                    if comment.created_by
+                    else "System",
+                    comment.comment,
+                    localtime(comment.created_on).strftime("%Y-%m-%d %H:%M"),
+                )
+                for comment in comments
+            ],
+        )
+
+    comments_display.short_description = "Comments"
+
+
 class MediaAdmin(HistoricalImportExportAdmin):
     list_display = (
         'file_name',
@@ -280,10 +345,21 @@ class MediaAdmin(HistoricalImportExportAdmin):
         'license',
         'rights_holder',
         'scanning',
+        'qc_status',
+        'rows_rearranged',
         "created_by",
         "created_on",
     )
-    readonly_fields = ("created_by", "modified_by", "created_on", "modified_on")
+    readonly_fields = (
+        "created_by",
+        "modified_by",
+        "created_on",
+        "modified_on",
+        "intern_checked_by",
+        "intern_checked_on",
+        "expert_checked_by",
+        "expert_checked_on",
+    )
     search_fields = (
         'file_name',
         'type',
@@ -298,8 +374,102 @@ class MediaAdmin(HistoricalImportExportAdmin):
         'accession_row',
         'scanning',
     ]
-    list_filter = ('type', 'format')
+    list_filter = ('type', 'format', 'qc_status', 'rows_rearranged')
     ordering = ('file_name',)
+    inlines = [MediaQCLogInline]
+    fieldsets = (
+        (
+            None,
+            {
+                'fields': (
+                    'accession',
+                    'accession_row',
+                    'scanning',
+                    'file_name',
+                    'media_location',
+                    'type',
+                    'format',
+                    'license',
+                    'rights_holder',
+                )
+            },
+        ),
+        (
+            'Quality Control',
+            {
+                'fields': (
+                    'qc_status',
+                    'rows_rearranged',
+                    'intern_checked_by',
+                    'intern_checked_on',
+                    'expert_checked_by',
+                    'expert_checked_on',
+                )
+            },
+        ),
+        (
+            'OCR',
+            {
+                'fields': (
+                    'ocr_status',
+                    'ocr_data',
+                )
+            },
+        ),
+        (
+            'Audit',
+            {
+                'fields': (
+                    'created_by',
+                    'created_on',
+                    'modified_by',
+                    'modified_on',
+                ),
+                'classes': ('collapse',),
+            },
+        ),
+    )
+
+
+class MediaQCCommentInline(admin.TabularInline):
+    model = MediaQCComment
+    extra = 0
+    fields = ("comment", "created_by", "created_on")
+    readonly_fields = ("created_on",)
+    ordering = ("created_on",)
+
+
+@admin.register(MediaQCLog)
+class MediaQCLogAdmin(admin.ModelAdmin):
+    list_display = ("media", "change_type", "field_name", "created_on", "changed_by")
+    search_fields = ("media__file_name", "description", "field_name")
+    list_filter = ("change_type", "created_on")
+    readonly_fields = (
+        "media",
+        "change_type",
+        "field_name",
+        "old_value",
+        "new_value",
+        "description",
+        "changed_by",
+        "created_on",
+    )
+    inlines = [MediaQCCommentInline]
+    ordering = ("-created_on",)
+
+    def has_add_permission(self, request):
+        return False
+
+    def save_formset(self, request, form, formset, change):
+        instances = formset.save(commit=False)
+        for instance in instances:
+            if isinstance(instance, MediaQCComment) and not instance.created_by:
+                instance.created_by = request.user
+            instance.save()
+        for obj in formset.deleted_objects:
+            obj.delete()
+        formset.save_m2m()
+
 
 # NatureOfSpecimen Model
 class NatureOfSpecimenAdmin(HistoricalImportExportAdmin):
