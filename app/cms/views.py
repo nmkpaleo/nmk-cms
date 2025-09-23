@@ -1,7 +1,8 @@
+import copy
 import csv
 import json
 import os
-from datetime import timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from dal import autocomplete
 from django import forms
@@ -36,7 +37,7 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.core.exceptions import ValidationError
-from django.forms import modelformset_factory
+from django.forms import formset_factory, modelformset_factory
 from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse_lazy, reverse
@@ -61,6 +62,7 @@ from cms.models import (
     AccessionFieldSlip,
     AccessionReference,
     AccessionRow,
+    Collection,
     Comment,
     FieldSlip,
     Media,
@@ -80,6 +82,9 @@ from cms.models import (
     UnexpectedSpecimen,
     DrawerRegister,
     Scanning,
+    Element,
+    Person,
+    MediaQCLog,
 )
 
 from cms.resources import FieldSlipResource
@@ -139,6 +144,12 @@ def is_collection_manager(user):
     if not getattr(user, "is_authenticated", False):
         return False
     return user.is_superuser or user.groups.filter(name="Collection Managers").exists()
+
+
+def is_intern(user):
+    if not getattr(user, "is_authenticated", False):
+        return False
+    return user.groups.filter(name="Interns").exists()
 
 
 def can_manage_places(user):
@@ -899,6 +910,470 @@ class ReferenceListView(FilterView):
         }
         return context
 
+
+class AccessionRowQCForm(AccessionRowUpdateForm):
+    row_id = forms.CharField(widget=forms.HiddenInput())
+    order = forms.IntegerField(widget=forms.HiddenInput())
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        suffixes = [('-', '-')] + [
+            (suffix, suffix) for suffix in AccessionRow().generate_valid_suffixes()
+        ]
+        self.fields['specimen_suffix'].choices = suffixes
+        self.fields['storage'].required = False
+        self.fields['status'].required = False
+        self.fields['status'].widget = forms.HiddenInput()
+        if not self.initial.get('status'):
+            self.initial['status'] = InventoryStatus.UNKNOWN
+
+
+class AccessionRowIdentificationQCForm(AccessionRowIdentificationForm):
+    row_id = forms.CharField(widget=forms.HiddenInput())
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field_name in (
+            'identified_by',
+            'reference',
+            'taxon',
+            'identification_qualifier',
+            'verbatim_identification',
+            'identification_remarks',
+            'date_identified',
+        ):
+            field = self.fields.get(field_name)
+            if field is not None:
+                field.required = False
+
+
+class AccessionRowSpecimenQCForm(AccessionRowSpecimenForm):
+    row_id = forms.CharField(widget=forms.HiddenInput())
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field_name in (
+            'element',
+            'side',
+            'condition',
+            'verbatim_element',
+            'portion',
+            'fragments',
+        ):
+            field = self.fields.get(field_name)
+            if field is not None:
+                field.required = False
+
+
+AccessionRowFormSet = formset_factory(AccessionRowQCForm, extra=0, can_delete=False)
+IdentificationQCFormSet = formset_factory(AccessionRowIdentificationQCForm, extra=0, can_delete=False)
+SpecimenQCFormSet = formset_factory(AccessionRowSpecimenQCForm, extra=0, can_delete=False)
+
+
+def _form_row_id(form):
+    value = form['row_id'].value()
+    if value in (None, ''):
+        value = form.initial.get('row_id')
+    return str(value or '')
+
+
+def _form_order_value(form):
+    value = form['order'].value()
+    if value in (None, ''):
+        value = form.initial.get('order')
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _set_interpreted(container: dict, key: str, value):
+    existing = container.get(key)
+    if not isinstance(existing, dict):
+        existing = {}
+    new_field = dict(existing)
+    if isinstance(value, str):
+        value = value.strip() or None
+    elif isinstance(value, (date, datetime)):
+        value = value.isoformat()
+    if value in ('', None):
+        new_field['interpreted'] = None
+    else:
+        new_field['interpreted'] = value
+    container[key] = new_field
+    return new_field
+
+
+def _iter_field_diffs(old, new, path=""):
+    if isinstance(new, dict) and not isinstance(old, dict):
+        old = {}
+    if isinstance(new, list) and not isinstance(old, list):
+        old = []
+    if isinstance(old, dict) and isinstance(new, dict):
+        keys = set(old.keys()) | set(new.keys())
+        for key in keys:
+            if key == 'interpreted':
+                old_val = old.get('interpreted')
+                new_val = new.get('interpreted')
+                if old_val != new_val:
+                    yield path, old_val, new_val
+            else:
+                sub_path = f"{path}.{key}" if path else key
+                yield from _iter_field_diffs(old.get(key), new.get(key), sub_path)
+    elif isinstance(old, list) and isinstance(new, list):
+        length = max(len(old), len(new))
+        for index in range(length):
+            old_value = old[index] if index < len(old) else None
+            new_value = new[index] if index < len(new) else None
+            sub_path = f"{path}[{index}]" if path else f"[{index}]"
+            yield from _iter_field_diffs(old_value, new_value, sub_path)
+    else:
+        if old != new:
+            yield path, old, new
+
+
+def _build_row_contexts(row_formset, ident_formset, specimen_formset):
+    ident_map = {_form_row_id(form): form for form in ident_formset.forms}
+    specimen_map: dict[str, list] = {}
+    for form in specimen_formset.forms:
+        row_id = _form_row_id(form)
+        specimen_map.setdefault(row_id, []).append(form)
+    contexts = []
+    for form in row_formset.forms:
+        row_id = _form_row_id(form)
+        contexts.append(
+            {
+                'row_form': form,
+                'ident_form': ident_map.get(row_id),
+                'specimen_forms': specimen_map.get(row_id, []),
+                'row_id': row_id,
+                'order': _form_order_value(form),
+            }
+        )
+    contexts.sort(key=lambda item: item['order'])
+    return contexts
+
+
+@login_required
+def MediaInternQCWizard(request, pk):
+    media = get_object_or_404(Media, uuid=pk)
+
+    if not is_intern(request.user):
+        return HttpResponseForbidden("Intern access required.")
+
+    original_data = copy.deepcopy(media.ocr_data or {})
+    data = copy.deepcopy(media.ocr_data or {})
+    accessions = data.setdefault('accessions', [])
+    if not accessions:
+        accessions.append({})
+    accession_payload = accessions[0]
+
+    rows_payload = list(accession_payload.get('rows') or [])
+    ident_payload = list(accession_payload.get('identifications') or [])
+    if len(ident_payload) < len(rows_payload):
+        ident_payload.extend({} for _ in range(len(rows_payload) - len(ident_payload)))
+
+    row_initial = []
+    ident_initial = []
+    specimen_initial = []
+    row_payload_map = {}
+    ident_payload_map = {}
+    original_row_ids = []
+
+    for index, row_payload in enumerate(rows_payload):
+        row_id = row_payload.get('_row_id') or row_payload.get('row_id') or f'row-{index}'
+        original_row_ids.append(row_id)
+        row_payload_map[row_id] = row_payload
+        ident_payload_map[row_id] = ident_payload[index] if index < len(ident_payload) else {}
+
+        suffix = (row_payload.get('specimen_suffix') or {}).get('interpreted') or '-'
+        storage_name = (row_payload.get('storage_area') or {}).get('interpreted')
+        storage_obj = Storage.objects.filter(area=storage_name).first() if storage_name else None
+        row_initial.append({
+            'row_id': row_id,
+            'order': index,
+            'specimen_suffix': suffix,
+            'storage': storage_obj.pk if storage_obj else None,
+            'status': InventoryStatus.UNKNOWN,
+        })
+
+        ident_data = ident_payload_map[row_id]
+        identified_by_id = (ident_data.get('identified_by') or {}).get('interpreted')
+        identified_by = (
+            Person.objects.filter(pk=identified_by_id).first()
+            if identified_by_id
+            else None
+        )
+        reference_id = (ident_data.get('reference') or {}).get('interpreted')
+        reference_obj = (
+            Reference.objects.filter(pk=reference_id).first()
+            if reference_id
+            else None
+        )
+        ident_initial.append({
+            'row_id': row_id,
+            'taxon': (ident_data.get('taxon') or {}).get('interpreted'),
+            'identification_qualifier': (ident_data.get('identification_qualifier') or {}).get('interpreted'),
+            'verbatim_identification': (ident_data.get('verbatim_identification') or {}).get('interpreted'),
+            'identification_remarks': (ident_data.get('identification_remarks') or {}).get('interpreted'),
+            'identified_by': identified_by.pk if identified_by else None,
+            'reference': reference_obj.pk if reference_obj else None,
+            'date_identified': (ident_data.get('date_identified') or {}).get('interpreted'),
+        })
+
+        for nature in row_payload.get('natures') or []:
+            element_name = (nature.get('element_name') or {}).get('interpreted')
+            element_obj = Element.objects.filter(name=element_name).first() if element_name else None
+            specimen_initial.append({
+                'row_id': row_id,
+                'element': element_obj.pk if element_obj else None,
+                'side': (nature.get('side') or {}).get('interpreted'),
+                'condition': (nature.get('condition') or {}).get('interpreted'),
+                'verbatim_element': (nature.get('verbatim_element') or {}).get('interpreted'),
+                'portion': (nature.get('portion') or {}).get('interpreted'),
+                'fragments': (nature.get('fragments') or {}).get('interpreted'),
+            })
+
+    collection_abbr = (accession_payload.get('collection_abbreviation') or {}).get('interpreted')
+    collection_obj = Collection.objects.filter(abbreviation=collection_abbr).first() if collection_abbr else None
+    prefix_abbr = (accession_payload.get('specimen_prefix_abbreviation') or {}).get('interpreted')
+    prefix_obj = Locality.objects.filter(abbreviation=prefix_abbr).first() if prefix_abbr else None
+    specimen_no_value = (accession_payload.get('specimen_no') or {}).get('interpreted')
+    try:
+        specimen_no_initial = int(specimen_no_value)
+    except (TypeError, ValueError):
+        specimen_no_initial = specimen_no_value
+    type_status_initial = (accession_payload.get('type_status') or {}).get('interpreted')
+    comment_initial = (accession_payload.get('comment') or {}).get('interpreted')
+    accession_instance = getattr(media, 'accession', None) or Accession()
+    accessioned_by_user = (
+        getattr(getattr(media, 'accession', None), 'accessioned_by', None)
+        or request.user
+    )
+
+    acc_initial = {
+        'collection': collection_obj,
+        'specimen_prefix': prefix_obj,
+        'specimen_no': specimen_no_initial,
+        'type_status': type_status_initial,
+        'comment': comment_initial,
+        'accessioned_by': accessioned_by_user,
+    }
+
+    if request.method == 'POST':
+        accession_form = AccessionForm(
+            request.POST,
+            prefix='accession',
+            instance=accession_instance,
+        )
+        row_formset = AccessionRowFormSet(request.POST, prefix='row')
+        ident_formset = IdentificationQCFormSet(request.POST, prefix='ident')
+        specimen_formset = SpecimenQCFormSet(request.POST, prefix='specimen')
+    else:
+        accession_form = AccessionForm(
+            prefix='accession',
+            instance=accession_instance,
+            initial=acc_initial,
+        )
+        row_formset = AccessionRowFormSet(prefix='row', initial=row_initial)
+        ident_formset = IdentificationQCFormSet(prefix='ident', initial=ident_initial)
+        specimen_formset = SpecimenQCFormSet(prefix='specimen', initial=specimen_initial)
+
+    row_contexts = _build_row_contexts(row_formset, ident_formset, specimen_formset)
+
+    if request.method == 'POST':
+        forms_valid = (
+            accession_form.is_valid()
+            and row_formset.is_valid()
+            and ident_formset.is_valid()
+            and specimen_formset.is_valid()
+        )
+        if forms_valid:
+            cleaned_rows = []
+            for form in row_formset:
+                cleaned = form.cleaned_data
+                if not cleaned:
+                    continue
+                row_id = cleaned.get('row_id') or f"row-{len(cleaned_rows)}"
+                try:
+                    order_value = int(cleaned.get('order'))
+                except (TypeError, ValueError):
+                    order_value = len(cleaned_rows)
+                storage_obj = cleaned.get('storage')
+                cleaned_rows.append({
+                    'row_id': row_id,
+                    'order': order_value,
+                    'specimen_suffix': cleaned.get('specimen_suffix') or '-',
+                    'storage': storage_obj,
+                    'status': cleaned.get('status'),
+                })
+
+            ident_clean_map = {}
+            for form in ident_formset:
+                cleaned = form.cleaned_data
+                if not cleaned:
+                    continue
+                row_id = cleaned.get('row_id')
+                if not row_id:
+                    continue
+                ident_clean_map[row_id] = cleaned
+
+            specimen_clean_map = {}
+            for form in specimen_formset:
+                cleaned = form.cleaned_data
+                if not cleaned:
+                    continue
+                row_id = cleaned.get('row_id')
+                if not row_id:
+                    continue
+                element_obj = cleaned.get('element')
+                if not element_obj and not any(
+                    cleaned.get(field)
+                    for field in ('side', 'condition', 'verbatim_element', 'portion', 'fragments')
+                ):
+                    continue
+                specimen_clean_map.setdefault(row_id, []).append(cleaned)
+
+            sorted_rows = sorted(cleaned_rows, key=lambda item: item['order'])
+            existing_new_order = [
+                entry['row_id']
+                for entry in sorted_rows
+                if entry['row_id'] in row_payload_map
+            ]
+            rows_rearranged = existing_new_order != original_row_ids[:len(existing_new_order)]
+
+            cleaned_accession = accession_form.cleaned_data
+            collection_obj = cleaned_accession.get('collection')
+            prefix_obj = cleaned_accession.get('specimen_prefix')
+            specimen_no_cleaned = cleaned_accession.get('specimen_no')
+            type_status_cleaned = cleaned_accession.get('type_status')
+            comment_cleaned = cleaned_accession.get('comment')
+
+            _set_interpreted(
+                accession_payload,
+                'collection_abbreviation',
+                collection_obj.abbreviation if collection_obj else None,
+            )
+            _set_interpreted(
+                accession_payload,
+                'specimen_prefix_abbreviation',
+                prefix_obj.abbreviation if prefix_obj else None,
+            )
+            _set_interpreted(accession_payload, 'specimen_no', specimen_no_cleaned)
+            _set_interpreted(accession_payload, 'type_status', type_status_cleaned)
+            _set_interpreted(accession_payload, 'comment', comment_cleaned)
+
+            updated_rows = []
+            updated_identifications = []
+            for entry in sorted_rows:
+                row_id = entry['row_id']
+                original_row = copy.deepcopy(row_payload_map.get(row_id, {}))
+                _set_interpreted(original_row, 'specimen_suffix', entry['specimen_suffix'])
+                storage_obj = entry['storage']
+                storage_name = storage_obj.area if storage_obj else None
+                _set_interpreted(original_row, 'storage_area', storage_name)
+
+                original_natures = original_row.get('natures') or []
+                new_natures = []
+                specimens = specimen_clean_map.get(row_id, [])
+                for index, specimen_data in enumerate(specimens):
+                    original_nature = copy.deepcopy(original_natures[index]) if index < len(original_natures) else {}
+                    element_obj = specimen_data.get('element')
+                    element_name = element_obj.name if element_obj else None
+                    _set_interpreted(original_nature, 'element_name', element_name)
+                    _set_interpreted(original_nature, 'side', specimen_data.get('side'))
+                    _set_interpreted(original_nature, 'condition', specimen_data.get('condition'))
+                    _set_interpreted(original_nature, 'verbatim_element', specimen_data.get('verbatim_element'))
+                    _set_interpreted(original_nature, 'portion', specimen_data.get('portion'))
+                    _set_interpreted(original_nature, 'fragments', specimen_data.get('fragments'))
+                    new_natures.append(original_nature)
+                original_row['natures'] = new_natures
+                updated_rows.append(original_row)
+
+                ident_cleaned = ident_clean_map.get(row_id, {})
+                original_ident = copy.deepcopy(ident_payload_map.get(row_id, {}))
+                _set_interpreted(original_ident, 'taxon', ident_cleaned.get('taxon'))
+                _set_interpreted(
+                    original_ident,
+                    'identification_qualifier',
+                    ident_cleaned.get('identification_qualifier'),
+                )
+                _set_interpreted(
+                    original_ident,
+                    'verbatim_identification',
+                    ident_cleaned.get('verbatim_identification'),
+                )
+                _set_interpreted(
+                    original_ident,
+                    'identification_remarks',
+                    ident_cleaned.get('identification_remarks'),
+                )
+                identified_by_obj = ident_cleaned.get('identified_by')
+                _set_interpreted(
+                    original_ident,
+                    'identified_by',
+                    identified_by_obj.pk if identified_by_obj else None,
+                )
+                reference_obj = ident_cleaned.get('reference')
+                _set_interpreted(
+                    original_ident,
+                    'reference',
+                    reference_obj.pk if reference_obj else None,
+                )
+                _set_interpreted(
+                    original_ident,
+                    'date_identified',
+                    ident_cleaned.get('date_identified'),
+                )
+                updated_identifications.append(original_ident)
+
+            accession_payload['rows'] = updated_rows
+            accession_payload['identifications'] = updated_identifications
+            data['accessions'][0] = accession_payload
+
+            diffs = list(_iter_field_diffs(original_data, data))
+
+            try:
+                with transaction.atomic():
+                    media.ocr_data = data
+                    media.rows_rearranged = rows_rearranged
+                    media.save(update_fields=['ocr_data', 'rows_rearranged'])
+                    for path, old_val, new_val in diffs:
+                        if not path:
+                            continue
+                        MediaQCLog.objects.create(
+                            media=media,
+                            change_type=MediaQCLog.ChangeType.OCR_DATA,
+                            field_name=path,
+                            old_value={'value': old_val},
+                            new_value={'value': new_val},
+                            changed_by=request.user,
+                        )
+                    media.transition_qc(Media.QCStatus.PENDING_EXPERT, user=request.user)
+            except ValidationError as exc:
+                messages_list = []
+                if hasattr(exc, 'message_dict'):
+                    for errors in exc.message_dict.values():
+                        messages_list.extend(errors)
+                else:
+                    messages_list.extend(exc.messages)
+                for message in messages_list:
+                    accession_form.add_error(None, message)
+                    messages.error(request, message)
+            else:
+                messages.success(request, "Media forwarded for expert review.")
+                return redirect('dashboard')
+
+    context = {
+        'media': media,
+        'accession_form': accession_form,
+        'row_formset': row_formset,
+        'ident_formset': ident_formset,
+        'specimen_formset': specimen_formset,
+        'row_contexts': row_contexts,
+    }
+
+    return render(request, 'cms/qc/intern_wizard.html', context)
 
 
 class LocalityListView(FilterView):
