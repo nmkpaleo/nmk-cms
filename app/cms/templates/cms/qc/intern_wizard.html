@@ -23,6 +23,11 @@
     .qc-media {
       display: flex;
       flex-direction: column;
+      position: sticky;
+      top: 1rem;
+      align-self: flex-start;
+      max-height: calc(100vh - 2rem);
+      overflow: auto;
     }
     .qc-media img {
       width: 100%;
@@ -129,6 +134,12 @@
       .qc-form {
         max-width: 100%;
         flex-basis: 100%;
+      }
+      .qc-media {
+        position: static;
+        top: auto;
+        max-height: none;
+        overflow: visible;
       }
     }
     @media (max-width: 720px) {
