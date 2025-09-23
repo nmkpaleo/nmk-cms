@@ -12,6 +12,7 @@ from simple_history.models import HistoricalRecords
 import os # For file handling in media class
 from django.core.exceptions import ValidationError
 import string # For generating specimen number
+import uuid
 User = get_user_model()
 
 
@@ -1089,6 +1090,13 @@ class Media(BaseModel):
         ('EULA', 'End-User License Agreement (EULA)'),
      ]
     
+    uuid = models.UUIDField(
+        default=uuid.uuid4,
+        editable=False,
+        unique=True,
+        db_index=True,
+        help_text="Stable public identifier for the media entry.",
+    )
     accession = models.ForeignKey('Accession', null=True, blank=True, on_delete=models.CASCADE, related_name='media', help_text="Accession this media belongs to")
     accession_row = models.ForeignKey('AccessionRow', null=True, blank=True, on_delete=models.CASCADE, related_name='media', help_text="Accession row this media belongs to")
     scanning = models.ForeignKey(

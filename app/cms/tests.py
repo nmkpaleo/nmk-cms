@@ -38,6 +38,8 @@ from cms.models import (
     Identification,
     NatureOfSpecimen,
     MediaQCLog,
+    Element,
+    Person,
 )
 from cms.utils import generate_accessions_from_series
 from cms.forms import DrawerRegisterForm, AccessionNumberSeriesAdminForm
@@ -887,6 +889,43 @@ class ScanningTests(TestCase):
         self.assertContains(response, "Drawer")
         self.assertContains(response, "Start scanning task")
         self.assertContains(response, "Stop scanning task")
+
+    def test_dashboard_lists_quality_control_media_for_intern(self):
+        now_time = now()
+        pending_media = []
+        for idx in range(11):
+            media = Media.objects.create(
+                media_location=f"uploads/pending/sample-{idx}.jpg",
+                file_name=f"Pending Sample {idx}",
+                qc_status=Media.QCStatus.PENDING_INTERN,
+            )
+            Media.objects.filter(pk=media.pk).update(
+                modified_on=now_time - timedelta(minutes=idx)
+            )
+            pending_media.append(media)
+
+        latest_pending = pending_media[0]
+        rejected_media = Media.objects.create(
+            media_location="uploads/rejected/sample.jpg",
+            file_name="Rejected Sample",
+            qc_status=Media.QCStatus.REJECTED,
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("dashboard"))
+
+        self.assertContains(response, "Quality Control")
+        self.assertContains(response, "Pending Intern Review")
+        self.assertContains(response, "Rejected")
+        self.assertContains(response, "Pending Sample 0")
+        self.assertContains(response, "Pending Sample 9")
+        self.assertNotContains(response, "Pending Sample 10")
+        self.assertContains(
+            response, reverse("media_intern_qc", args=[latest_pending.uuid])
+        )
+        self.assertContains(
+            response, reverse("media_intern_qc", args=[rejected_media.uuid])
+        )
 
     def test_start_and_stop_scan(self):
         self.client.force_login(self.user)
@@ -2149,6 +2188,285 @@ class MediaFileDeletionTests(TestCase):
         self.assertTrue(file_path.exists())
         media.delete()
         self.assertFalse(file_path.exists())
+
+
+class MediaInternQCWizardTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.intern = User.objects.create_user(username="intern", password="pass")
+        self.other_user = User.objects.create_user(username="user", password="pass")
+        intern_group, _ = Group.objects.get_or_create(name="Interns")
+        intern_group.user_set.add(self.intern)
+        patcher = patch("cms.models.get_current_user", return_value=self.intern)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+        self.collection = Collection.objects.create(abbreviation="KNM", description="Kenya")
+        self.locality = Locality.objects.create(abbreviation="AB", name="Area B")
+        self.storage1 = Storage.objects.create(area="Cabinet 1")
+        self.storage2 = Storage.objects.create(area="Cabinet 2")
+        self.storage3 = Storage.objects.create(area="Cabinet 3")
+        self.element = Element.objects.create(name="Femur")
+
+        self.media = Media.objects.create(
+            media_location="uploads/pending/test.png",
+            ocr_data={
+                "card_type": "accession_card",
+                "accessions": [
+                    {
+                        "collection_abbreviation": {"interpreted": "KNM"},
+                        "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                        "specimen_no": {"interpreted": 100},
+                        "type_status": {"interpreted": "Holotype"},
+                        "comment": {"interpreted": "Initial"},
+                        "rows": [
+                            {
+                                "specimen_suffix": {"interpreted": "A"},
+                                "storage_area": {"interpreted": "Cabinet 1"},
+                                "natures": [
+                                    {
+                                        "element_name": {"interpreted": "Femur"},
+                                        "side": {"interpreted": "Left"},
+                                        "condition": {"interpreted": "Good"},
+                                        "verbatim_element": {"interpreted": "Femur"},
+                                        "portion": {"interpreted": "Proximal"},
+                                        "fragments": {"interpreted": 1},
+                                    }
+                                ],
+                            },
+                            {
+                                "specimen_suffix": {"interpreted": "B"},
+                                "storage_area": {"interpreted": "Cabinet 2"},
+                                "natures": [],
+                            },
+                        ],
+                        "references": [
+                            {
+                                "reference_first_author": {"interpreted": "Harris"},
+                                "reference_title": {"interpreted": "Lothagam"},
+                                "reference_year": {"interpreted": "2003"},
+                                "page": {"interpreted": "485-519"},
+                            }
+                        ],
+                        "field_slips": [
+                            {
+                                "field_number": {"interpreted": "FS-1"},
+                                "verbatim_locality": {"interpreted": "Loc1"},
+                                "verbatim_taxon": {"interpreted": "Homo"},
+                                "verbatim_element": {"interpreted": "Femur"},
+                                "verbatim_horizon": {
+                                    "formation": {"interpreted": "Form"},
+                                    "member": {"interpreted": "Member"},
+                                    "bed_or_horizon": {"interpreted": "Bed"},
+                                    "chronostratigraphy": {"interpreted": "Zone"},
+                                },
+                                "aerial_photo": {"interpreted": "Photo 1"},
+                                "verbatim_latitude": {"interpreted": "Lat"},
+                                "verbatim_longitude": {"interpreted": "Lon"},
+                                "verbatim_elevation": {"interpreted": "100"},
+                            }
+                        ],
+                        "identifications": [
+                            {
+                                "taxon": {"interpreted": "Homo"},
+                                "identification_qualifier": {"interpreted": "cf."},
+                                "verbatim_identification": {"interpreted": "Homo cf. habilis"},
+                                "identification_remarks": {"interpreted": "Remark"},
+                            },
+                            {},
+                        ],
+                    }
+                ],
+            },
+        )
+
+    def get_url(self):
+        return reverse("media_intern_qc", args=[str(self.media.uuid)])
+
+    def build_valid_post_data(self):
+        return {
+            "accession-collection": str(self.collection.pk),
+            "accession-specimen_prefix": str(self.locality.pk),
+            "accession-specimen_no": "101",
+            "accession-type_status": "Holotype",
+            "accession-comment": "Updated",
+            "accession-accessioned_by": str(self.intern.pk),
+            "row-TOTAL_FORMS": "2",
+            "row-INITIAL_FORMS": "2",
+            "row-MIN_NUM_FORMS": "0",
+            "row-MAX_NUM_FORMS": "1000",
+            "row-0-row_id": "row-0",
+            "row-0-order": "1",
+            "row-0-specimen_suffix": "A",
+            "row-0-storage": "Cabinet 3",
+            "row-0-status": InventoryStatus.UNKNOWN,
+            "row-1-row_id": "row-1",
+            "row-1-order": "0",
+            "row-1-specimen_suffix": "B",
+            "row-1-storage": "Cabinet 2",
+            "row-1-status": InventoryStatus.UNKNOWN,
+            "ident-TOTAL_FORMS": "2",
+            "ident-INITIAL_FORMS": "2",
+            "ident-MIN_NUM_FORMS": "0",
+            "ident-MAX_NUM_FORMS": "1000",
+            "ident-0-row_id": "row-0",
+            "ident-0-taxon": "Pan",
+            "ident-0-identification_qualifier": "cf.",
+            "ident-0-identified_by": "",
+            "ident-0-verbatim_identification": "Pan cf. troglodytes",
+            "ident-0-identification_remarks": "Revised",
+            "ident-0-reference": "",
+            "ident-0-date_identified": "",
+            "ident-1-row_id": "row-1",
+            "ident-1-taxon": "",
+            "ident-1-identification_qualifier": "",
+            "ident-1-identified_by": "",
+            "ident-1-verbatim_identification": "",
+            "ident-1-identification_remarks": "",
+            "ident-1-reference": "",
+            "ident-1-date_identified": "",
+            "specimen-TOTAL_FORMS": "1",
+            "specimen-INITIAL_FORMS": "1",
+            "specimen-MIN_NUM_FORMS": "0",
+            "specimen-MAX_NUM_FORMS": "1000",
+            "specimen-0-row_id": "row-0",
+            "specimen-0-element": str(self.element.pk),
+            "specimen-0-side": "Left",
+            "specimen-0-condition": "Excellent",
+            "specimen-0-verbatim_element": "Femur",
+            "specimen-0-portion": "Proximal",
+            "specimen-0-fragments": "3",
+            "reference-TOTAL_FORMS": "1",
+            "reference-INITIAL_FORMS": "1",
+            "reference-MIN_NUM_FORMS": "0",
+            "reference-MAX_NUM_FORMS": "1000",
+            "reference-0-ref_id": "ref-0",
+            "reference-0-order": "0",
+            "reference-0-first_author": "Leakey",
+            "reference-0-title": "Koobi Fora",
+            "reference-0-year": "2004",
+            "reference-0-page": "120-135",
+            "fieldslip-TOTAL_FORMS": "1",
+            "fieldslip-INITIAL_FORMS": "1",
+            "fieldslip-MIN_NUM_FORMS": "0",
+            "fieldslip-MAX_NUM_FORMS": "1000",
+            "fieldslip-0-slip_id": "field-slip-0",
+            "fieldslip-0-order": "0",
+            "fieldslip-0-field_number": "FS-2",
+            "fieldslip-0-verbatim_locality": "Loc2",
+            "fieldslip-0-verbatim_taxon": "Pan",
+            "fieldslip-0-verbatim_element": "Tooth",
+            "fieldslip-0-horizon_formation": "NewForm",
+            "fieldslip-0-horizon_member": "NewMember",
+            "fieldslip-0-horizon_bed": "NewBed",
+            "fieldslip-0-horizon_chronostratigraphy": "NewZone",
+            "fieldslip-0-aerial_photo": "Photo 2",
+            "fieldslip-0-verbatim_latitude": "Lat2",
+            "fieldslip-0-verbatim_longitude": "Lon2",
+            "fieldslip-0-verbatim_elevation": "200",
+        }
+
+    def test_non_intern_forbidden(self):
+        self.client.login(username="user", password="pass")
+        response = self.client.get(self.get_url())
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_prefills_forms(self):
+        self.client.login(username="intern", password="pass")
+        response = self.client.get(self.get_url())
+        self.assertEqual(response.status_code, 200)
+        accession_form = response.context["accession_form"]
+        row_contexts = response.context.get("row_contexts")
+        self.assertEqual(len(row_contexts), 2)
+        self.assertEqual(accession_form["specimen_no"].value(), "100")
+        self.assertNotIn("readonly", accession_form.fields["specimen_no"].widget.attrs)
+        reference_forms = response.context["reference_formset"].forms
+        self.assertEqual(len(reference_forms), 1)
+        self.assertEqual(reference_forms[0]["first_author"].value(), "Harris")
+        fieldslip_forms = response.context["fieldslip_formset"].forms
+        self.assertEqual(len(fieldslip_forms), 1)
+        self.assertEqual(fieldslip_forms[0]["field_number"].value(), "FS-1")
+
+    def test_post_updates_media_and_logs(self):
+        self.client.login(username="intern", password="pass")
+        url = self.get_url()
+        data = self.build_valid_post_data()
+
+        response = self.client.post(url, data, follow=True)
+        self.assertEqual(response.status_code, 200)
+
+        self.media.refresh_from_db()
+        accession_payload = self.media.ocr_data["accessions"][0]
+        self.assertEqual(accession_payload["specimen_no"]["interpreted"], 101)
+        rows = accession_payload["rows"]
+        self.assertEqual(rows[0]["specimen_suffix"]["interpreted"], "B")
+        self.assertEqual(rows[1]["specimen_suffix"]["interpreted"], "A")
+        self.assertEqual(rows[1]["storage_area"]["interpreted"], "Cabinet 3")
+        identifications = accession_payload["identifications"]
+        self.assertEqual(identifications[1]["taxon"]["interpreted"], "Pan")
+        references = accession_payload["references"]
+        self.assertEqual(references[0]["reference_first_author"]["interpreted"], "Leakey")
+        self.assertEqual(references[0]["page"]["interpreted"], "120-135")
+        field_slips = accession_payload["field_slips"]
+        self.assertEqual(field_slips[0]["field_number"]["interpreted"], "FS-2")
+        self.assertEqual(
+            field_slips[0]["verbatim_horizon"]["formation"]["interpreted"],
+            "NewForm",
+        )
+
+        self.assertTrue(self.media.rows_rearranged)
+        self.assertEqual(self.media.qc_status, Media.QCStatus.PENDING_EXPERT)
+        self.assertEqual(self.media.intern_checked_by, self.intern)
+
+        ocr_logs = MediaQCLog.objects.filter(
+            media=self.media, change_type=MediaQCLog.ChangeType.OCR_DATA
+        )
+        self.assertTrue(ocr_logs.exists())
+        self.assertTrue(
+            ocr_logs.filter(field_name="accessions[0].specimen_no").exists()
+        )
+        self.assertTrue(
+            ocr_logs.filter(
+                field_name="accessions[0].references[0].reference_first_author"
+            ).exists()
+        )
+        self.assertTrue(
+            ocr_logs.filter(
+                field_name="accessions[0].field_slips[0].field_number"
+            ).exists()
+        )
+
+    def test_accepts_new_storage_value(self):
+        self.client.login(username="intern", password="pass")
+        url = self.get_url()
+        data = self.build_valid_post_data()
+        data["row-0-storage"] = "Shelf 42"
+
+        response = self.client.post(url, data, follow=True)
+        self.assertEqual(response.status_code, 200)
+
+        self.media.refresh_from_db()
+        rows = self.media.ocr_data["accessions"][0]["rows"]
+        self.assertEqual(rows[1]["storage_area"]["interpreted"], "Shelf 42")
+        self.assertTrue(Storage.objects.filter(area="Shelf 42").exists())
+
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Shelf 42", response.context["storage_suggestions"])
+
+    def test_does_not_create_storage_when_submission_invalid(self):
+        self.client.login(username="intern", password="pass")
+        url = self.get_url()
+        data = self.build_valid_post_data()
+        data["row-0-storage"] = "Drawer 99"
+        data["row-0-specimen_suffix"] = "InvalidSuffix"
+
+        self.assertFalse(Storage.objects.filter(area="Drawer 99").exists())
+
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, 200)
+
+        self.assertFalse(Storage.objects.filter(area="Drawer 99").exists())
 
 
 class AdminAutocompleteTests(TestCase):
