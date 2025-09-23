@@ -8,200 +8,370 @@
   <h2 class="w3-text-indigo">Intern QC for {{ media.file_name|default:media.pk }}</h2>
   <p class="w3-small w3-text-grey">Review the OCR interpretation, adjust as needed, and send the record for expert review.</p>
 
-  <form method="post" class="w3-margin-top" data-controller="qc-rows">
-    {% csrf_token %}
+  <style>
+    .qc-layout {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+    }
+    .qc-media {
+      flex: 1 1 320px;
+      max-width: 420px;
+    }
+    .qc-media img {
+      width: 100%;
+      height: auto;
+      display: block;
+      border-bottom-left-radius: 4px;
+      border-bottom-right-radius: 4px;
+    }
+    .qc-media .qc-media-fallback {
+      min-height: 200px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+    .qc-form {
+      flex: 1 1 540px;
+    }
+    .qc-section + .qc-section {
+      margin-top: 24px;
+    }
+    .qc-field-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .qc-field {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .qc-label {
+      font-weight: 600;
+      margin: 0;
+      min-width: 140px;
+    }
+    .qc-control {
+      flex: 1 1 220px;
+    }
+    .qc-control input,
+    .qc-control select,
+    .qc-control textarea {
+      width: 100%;
+    }
+    .qc-control textarea {
+      min-height: 2.8em;
+      resize: vertical;
+    }
+    .qc-control .errorlist {
+      margin: 4px 0 0;
+      padding-left: 0;
+      list-style: none;
+      color: #b91c1c;
+      font-size: 0.85rem;
+    }
+    .qc-card {
+      border: 1px solid #dcdcdc;
+      border-radius: 4px;
+      padding: 16px;
+      margin-bottom: 16px;
+      background-color: #fff;
+    }
+    .qc-section-heading {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 16px;
+    }
+    .qc-section-heading h3 {
+      margin: 0;
+    }
+    .qc-inline-note {
+      color: #666;
+      font-size: 0.85rem;
+    }
+    .qc-field--full {
+      flex: 1 1 100%;
+    }
+    .qc-row-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.5rem;
+      margin-left: auto;
+      flex-wrap: wrap;
+    }
+    .qc-subsection + .qc-subsection {
+      margin-top: 16px;
+    }
+    .qc-subsection h4 {
+      margin: 0 0 8px;
+      font-size: 0.95rem;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+      color: #555;
+    }
+    .qc-row-block + .qc-row-block {
+      margin-top: 12px;
+    }
+    @media (max-width: 992px) {
+      .qc-layout {
+        flex-direction: column;
+      }
+      .qc-row-actions {
+        justify-content: flex-start;
+      }
+    }
+  </style>
 
-    {% if accession_form.non_field_errors %}
-      <div class="w3-panel w3-pale-red w3-border">{{ accession_form.non_field_errors }}</div>
-    {% endif %}
-    {% if row_formset.non_form_errors %}
-      <div class="w3-panel w3-pale-red w3-border">{{ row_formset.non_form_errors }}</div>
-    {% endif %}
-    {% if ident_formset.non_form_errors %}
-      <div class="w3-panel w3-pale-red w3-border">{{ ident_formset.non_form_errors }}</div>
-    {% endif %}
-    {% if specimen_formset.non_form_errors %}
-      <div class="w3-panel w3-pale-red w3-border">{{ specimen_formset.non_form_errors }}</div>
-    {% endif %}
-
-    <div style="display:none;">
-      {{ row_formset.management_form }}
-      {{ ident_formset.management_form }}
-      {{ specimen_formset.management_form }}
-    </div>
-
-    <section class="w3-card w3-white w3-padding w3-margin-bottom">
-      <h3 class="w3-border-bottom w3-padding-small">Accession Details</h3>
-      <div class="w3-row-padding">
-        <div class="w3-half w3-margin-bottom">
-          {{ accession_form.collection.label_tag }}
-          {{ accession_form.collection }}
-          {% if accession_form.collection.errors %}
-            <div class="w3-text-red">{{ accession_form.collection.errors }}</div>
-          {% endif %}
-        </div>
-        <div class="w3-half w3-margin-bottom">
-          {{ accession_form.specimen_prefix.label_tag }}
-          {{ accession_form.specimen_prefix }}
-          {% if accession_form.specimen_prefix.errors %}
-            <div class="w3-text-red">{{ accession_form.specimen_prefix.errors }}</div>
-          {% endif %}
-        </div>
-        <div class="w3-third w3-margin-bottom">
-          {{ accession_form.specimen_no.label_tag }}
-          {{ accession_form.specimen_no }}
-          {% if accession_form.specimen_no.errors %}
-            <div class="w3-text-red">{{ accession_form.specimen_no.errors }}</div>
-          {% endif %}
-        </div>
-        <div class="w3-third w3-margin-bottom">
-          {{ accession_form.type_status.label_tag }}
-          {{ accession_form.type_status }}
-          {% if accession_form.type_status.errors %}
-            <div class="w3-text-red">{{ accession_form.type_status.errors }}</div>
-          {% endif %}
-        </div>
-        <div class="w3-third w3-margin-bottom">
-          {{ accession_form.comment.label_tag }}
-          {{ accession_form.comment }}
-          {% if accession_form.comment.errors %}
-            <div class="w3-text-red">{{ accession_form.comment.errors }}</div>
-          {% endif %}
-        </div>
+  <div class="qc-layout">
+    <aside class="qc-media w3-card w3-white">
+      <div class="w3-padding">
+        <h3 class="w3-margin-top w3-margin-bottom">Media Preview</h3>
+        <p class="w3-small w3-text-grey">Use the original scan to verify the interpreted data.</p>
+        {% if media.file_name %}
+          <p class="w3-small"><span class="w3-text-grey">File:</span> <strong>{{ media.file_name }}</strong></p>
+        {% endif %}
+        {% if media.media_location %}
+          <p class="w3-small"><a href="{{ media.media_location.url }}" target="_blank" rel="noopener" class="w3-text-indigo">Open full size</a></p>
+        {% endif %}
       </div>
-      {{ accession_form.accessioned_by }}
-    </section>
+      {% if media.media_location %}
+        <img src="{{ media.media_location.url }}" alt="{{ media.file_name|default:'Media preview' }}" />
+      {% else %}
+        <div class="w3-padding qc-media-fallback w3-small w3-text-grey">
+          No media preview is available for this record.
+        </div>
+      {% endif %}
+    </aside>
 
-    <section class="w3-card w3-white w3-padding w3-margin-bottom" data-qc-rows-target="container">
-      <div class="w3-margin-bottom w3-border-bottom w3-padding-small w3-display-container">
-        <h3 class="w3-display-inline-block">Specimen Rows</h3>
-        <span class="w3-small w3-text-grey w3-display-right">Use the move buttons to adjust row order.</span>
+    <form method="post" class="qc-form w3-card w3-white w3-padding" data-controller="qc-rows">
+      {% csrf_token %}
+
+      {% if accession_form.non_field_errors %}
+        <div class="w3-panel w3-pale-red w3-border">{{ accession_form.non_field_errors }}</div>
+      {% endif %}
+      {% if row_formset.non_form_errors %}
+        <div class="w3-panel w3-pale-red w3-border">{{ row_formset.non_form_errors }}</div>
+      {% endif %}
+      {% if ident_formset.non_form_errors %}
+        <div class="w3-panel w3-pale-red w3-border">{{ ident_formset.non_form_errors }}</div>
+      {% endif %}
+      {% if specimen_formset.non_form_errors %}
+        <div class="w3-panel w3-pale-red w3-border">{{ specimen_formset.non_form_errors }}</div>
+      {% endif %}
+
+      <div style="display:none;">
+        {% for hidden in accession_form.hidden_fields %}
+          {{ hidden }}
+        {% endfor %}
+        {{ row_formset.management_form }}
+        {{ ident_formset.management_form }}
+        {{ specimen_formset.management_form }}
       </div>
 
-      {% if row_contexts %}
-        {% for row in row_contexts %}
-          {% with row_form=row.row_form ident_form=row.ident_form specimen_forms=row.specimen_forms %}
-            <div class="w3-border w3-padding w3-margin-bottom" data-qc-row data-qc-row-id="{{ row.row_id }}">
-              {% for hidden in row_form.hidden_fields %}{{ hidden }}{% endfor %}
-              {% if ident_form %}{% for hidden in ident_form.hidden_fields %}{{ hidden }}{% endfor %}{% endif %}
-              {% for spec_form in specimen_forms %}{% for hidden in spec_form.hidden_fields %}{{ hidden }}{% endfor %}{% endfor %}
+      <section class="qc-section">
+        <h3 class="w3-border-bottom w3-padding-small w3-margin-bottom">Accession Details</h3>
+        <div class="qc-field-grid">
+          <div class="qc-field">
+            <label class="qc-label" for="{{ accession_form.collection.id_for_label }}">{{ accession_form.collection.label }}:</label>
+            <div class="qc-control">
+              {{ accession_form.collection }}
+              {{ accession_form.collection.errors }}
+            </div>
+          </div>
+          <div class="qc-field">
+            <label class="qc-label" for="{{ accession_form.specimen_prefix.id_for_label }}">{{ accession_form.specimen_prefix.label }}:</label>
+            <div class="qc-control">
+              {{ accession_form.specimen_prefix }}
+              {{ accession_form.specimen_prefix.errors }}
+            </div>
+          </div>
+          <div class="qc-field">
+            <label class="qc-label" for="{{ accession_form.specimen_no.id_for_label }}">{{ accession_form.specimen_no.label }}:</label>
+            <div class="qc-control">
+              {{ accession_form.specimen_no }}
+              {{ accession_form.specimen_no.errors }}
+            </div>
+          </div>
+          <div class="qc-field">
+            <label class="qc-label" for="{{ accession_form.type_status.id_for_label }}">{{ accession_form.type_status.label }}:</label>
+            <div class="qc-control">
+              {{ accession_form.type_status }}
+              {{ accession_form.type_status.errors }}
+            </div>
+          </div>
+          <div class="qc-field qc-field--full">
+            <label class="qc-label" for="{{ accession_form.comment.id_for_label }}">{{ accession_form.comment.label }}:</label>
+            <div class="qc-control">
+              {{ accession_form.comment }}
+              {{ accession_form.comment.errors }}
+            </div>
+          </div>
+        </div>
+      </section>
 
-              <div class="w3-row-padding">
-                <div class="w3-third w3-margin-bottom">
-                  {{ row_form.specimen_suffix.label_tag }}
-                  {{ row_form.specimen_suffix }}
-                  {% if row_form.specimen_suffix.errors %}
-                    <div class="w3-text-red">{{ row_form.specimen_suffix.errors }}</div>
-                  {% endif %}
-                </div>
-                <div class="w3-third w3-margin-bottom">
-                  {{ row_form.storage.label_tag }}
-                  {{ row_form.storage }}
-                  {% if row_form.storage.errors %}
-                    <div class="w3-text-red">{{ row_form.storage.errors }}</div>
-                  {% endif %}
-                </div>
-                <div class="w3-third w3-margin-bottom w3-right-align">
-                  <button type="button" class="w3-button w3-small w3-light-grey" data-action="qc-rows#moveUp">&#x25B2; Move up</button>
-                  <button type="button" class="w3-button w3-small w3-light-grey" data-action="qc-rows#moveDown">Move down &#x25BC;</button>
-                </div>
-              </div>
+      <section class="qc-section" data-qc-rows-target="container">
+        <div class="qc-section-heading w3-border-bottom w3-padding-small">
+          <h3>Specimen Rows</h3>
+          <span class="qc-inline-note">Use the move buttons to adjust row order.</span>
+        </div>
 
-              <div class="w3-margin-top">
-                <h4 class="w3-small w3-text-grey">Identification</h4>
+        {% if row_contexts %}
+          {% for row in row_contexts %}
+            {% with row_form=row.row_form ident_form=row.ident_form specimen_forms=row.specimen_forms %}
+              <div class="qc-card" data-qc-row data-qc-row-id="{{ row.row_id }}">
+                {% for hidden in row_form.hidden_fields %}
+                  {{ hidden }}
+                {% endfor %}
                 {% if ident_form %}
-                  <div class="w3-row-padding">
-                    <div class="w3-third w3-margin-bottom">
-                      {{ ident_form.taxon.label_tag }}
-                      {{ ident_form.taxon }}
-                      {% if ident_form.taxon.errors %}
-                        <div class="w3-text-red">{{ ident_form.taxon.errors }}</div>
-                      {% endif %}
-                    </div>
-                    <div class="w3-third w3-margin-bottom">
-                      {{ ident_form.identification_qualifier.label_tag }}
-                      {{ ident_form.identification_qualifier }}
-                      {% if ident_form.identification_qualifier.errors %}
-                        <div class="w3-text-red">{{ ident_form.identification_qualifier.errors }}</div>
-                      {% endif %}
-                    </div>
-                    <div class="w3-third w3-margin-bottom">
-                      {{ ident_form.identified_by.label_tag }}
-                      {{ ident_form.identified_by }}
-                      {% if ident_form.identified_by.errors %}
-                        <div class="w3-text-red">{{ ident_form.identified_by.errors }}</div>
-                      {% endif %}
-                    </div>
-                    <div class="w3-half w3-margin-bottom">
-                      {{ ident_form.verbatim_identification.label_tag }}
-                      {{ ident_form.verbatim_identification }}
-                      {% if ident_form.verbatim_identification.errors %}
-                        <div class="w3-text-red">{{ ident_form.verbatim_identification.errors }}</div>
-                      {% endif %}
-                    </div>
-                    <div class="w3-half w3-margin-bottom">
-                      {{ ident_form.identification_remarks.label_tag }}
-                      {{ ident_form.identification_remarks }}
-                      {% if ident_form.identification_remarks.errors %}
-                        <div class="w3-text-red">{{ ident_form.identification_remarks.errors }}</div>
-                      {% endif %}
+                  {% for hidden in ident_form.hidden_fields %}
+                    {{ hidden }}
+                  {% endfor %}
+                {% endif %}
+                {% for spec_form in specimen_forms %}
+                  {% for hidden in spec_form.hidden_fields %}
+                    {{ hidden }}
+                  {% endfor %}
+                {% endfor %}
+
+                <div class="qc-field-grid">
+                  <div class="qc-field">
+                    <label class="qc-label" for="{{ row_form.specimen_suffix.id_for_label }}">{{ row_form.specimen_suffix.label }}:</label>
+                    <div class="qc-control">
+                      {{ row_form.specimen_suffix }}
+                      {{ row_form.specimen_suffix.errors }}
                     </div>
                   </div>
-                {% else %}
-                  <p class="w3-small w3-text-grey">No identification data supplied.</p>
-                {% endif %}
-              </div>
+                  <div class="qc-field">
+                    <label class="qc-label" for="{{ row_form.storage.id_for_label }}">{{ row_form.storage.label }}:</label>
+                    <div class="qc-control">
+                      {{ row_form.storage }}
+                      {{ row_form.storage.errors }}
+                    </div>
+                  </div>
+                  <div class="qc-row-actions">
+                    <button type="button" class="w3-button w3-small w3-light-grey" data-action="qc-rows#moveUp">&#x25B2; Move up</button>
+                    <button type="button" class="w3-button w3-small w3-light-grey" data-action="qc-rows#moveDown">Move down &#x25BC;</button>
+                  </div>
+                </div>
 
-              <div class="w3-margin-top">
-                <h4 class="w3-small w3-text-grey">Specimens</h4>
-                {% if specimen_forms %}
-                  {% for spec_form in specimen_forms %}
-                    <div class="w3-row-padding w3-margin-bottom">
-                      <div class="w3-quarter">
-                        {{ spec_form.element.label_tag }}
-                        {{ spec_form.element }}
-                        {% if spec_form.element.errors %}
-                          <div class="w3-text-red">{{ spec_form.element.errors }}</div>
-                        {% endif %}
+                <div class="qc-subsection">
+                  <h4>Identification</h4>
+                  {% if ident_form %}
+                    <div class="qc-field-grid">
+                      <div class="qc-field">
+                        <label class="qc-label" for="{{ ident_form.taxon.id_for_label }}">{{ ident_form.taxon.label }}:</label>
+                        <div class="qc-control">
+                          {{ ident_form.taxon }}
+                          {{ ident_form.taxon.errors }}
+                        </div>
                       </div>
-                      <div class="w3-quarter">
-                        {{ spec_form.side.label_tag }}
-                        {{ spec_form.side }}
+                      <div class="qc-field">
+                        <label class="qc-label" for="{{ ident_form.identification_qualifier.id_for_label }}">{{ ident_form.identification_qualifier.label }}:</label>
+                        <div class="qc-control">
+                          {{ ident_form.identification_qualifier }}
+                          {{ ident_form.identification_qualifier.errors }}
+                        </div>
                       </div>
-                      <div class="w3-quarter">
-                        {{ spec_form.condition.label_tag }}
-                        {{ spec_form.condition }}
+                      <div class="qc-field">
+                        <label class="qc-label" for="{{ ident_form.identified_by.id_for_label }}">{{ ident_form.identified_by.label }}:</label>
+                        <div class="qc-control">
+                          {{ ident_form.identified_by }}
+                          {{ ident_form.identified_by.errors }}
+                        </div>
                       </div>
-                      <div class="w3-quarter">
-                        {{ spec_form.fragments.label_tag }}
-                        {{ spec_form.fragments }}
+                      <div class="qc-field">
+                        <label class="qc-label" for="{{ ident_form.verbatim_identification.id_for_label }}">{{ ident_form.verbatim_identification.label }}:</label>
+                        <div class="qc-control">
+                          {{ ident_form.verbatim_identification }}
+                          {{ ident_form.verbatim_identification.errors }}
+                        </div>
                       </div>
-                      <div class="w3-half w3-margin-top">
-                        {{ spec_form.verbatim_element.label_tag }}
-                        {{ spec_form.verbatim_element }}
-                      </div>
-                      <div class="w3-half w3-margin-top">
-                        {{ spec_form.portion.label_tag }}
-                        {{ spec_form.portion }}
+                      <div class="qc-field qc-field--full">
+                        <label class="qc-label" for="{{ ident_form.identification_remarks.id_for_label }}">{{ ident_form.identification_remarks.label }}:</label>
+                        <div class="qc-control">
+                          {{ ident_form.identification_remarks }}
+                          {{ ident_form.identification_remarks.errors }}
+                        </div>
                       </div>
                     </div>
-                  {% endfor %}
-                {% else %}
-                  <p class="w3-small w3-text-grey">No specimen records were detected for this row.</p>
-                {% endif %}
-              </div>
-            </div>
-          {% endwith %}
-        {% endfor %}
-      {% else %}
-        <p>No specimen rows were detected in the OCR results.</p>
-      {% endif %}
-    </section>
+                  {% else %}
+                    <p class="qc-inline-note">No identification data supplied.</p>
+                  {% endif %}
+                </div>
 
-    <div class="w3-right">
-      <button type="submit" class="w3-button w3-green w3-margin-top">Submit for Expert Review</button>
-    </div>
-  </form>
+                <div class="qc-subsection">
+                  <h4>Specimens</h4>
+                  {% if specimen_forms %}
+                    {% for spec_form in specimen_forms %}
+                      <div class="qc-row-block qc-field-grid">
+                        <div class="qc-field">
+                          <label class="qc-label" for="{{ spec_form.element.id_for_label }}">{{ spec_form.element.label }}:</label>
+                          <div class="qc-control">
+                            {{ spec_form.element }}
+                            {{ spec_form.element.errors }}
+                          </div>
+                        </div>
+                        <div class="qc-field">
+                          <label class="qc-label" for="{{ spec_form.side.id_for_label }}">{{ spec_form.side.label }}:</label>
+                          <div class="qc-control">
+                            {{ spec_form.side }}
+                            {{ spec_form.side.errors }}
+                          </div>
+                        </div>
+                        <div class="qc-field">
+                          <label class="qc-label" for="{{ spec_form.condition.id_for_label }}">{{ spec_form.condition.label }}:</label>
+                          <div class="qc-control">
+                            {{ spec_form.condition }}
+                            {{ spec_form.condition.errors }}
+                          </div>
+                        </div>
+                        <div class="qc-field">
+                          <label class="qc-label" for="{{ spec_form.fragments.id_for_label }}">{{ spec_form.fragments.label }}:</label>
+                          <div class="qc-control">
+                            {{ spec_form.fragments }}
+                            {{ spec_form.fragments.errors }}
+                          </div>
+                        </div>
+                        <div class="qc-field qc-field--full">
+                          <label class="qc-label" for="{{ spec_form.verbatim_element.id_for_label }}">{{ spec_form.verbatim_element.label }}:</label>
+                          <div class="qc-control">
+                            {{ spec_form.verbatim_element }}
+                            {{ spec_form.verbatim_element.errors }}
+                          </div>
+                        </div>
+                        <div class="qc-field qc-field--full">
+                          <label class="qc-label" for="{{ spec_form.portion.id_for_label }}">{{ spec_form.portion.label }}:</label>
+                          <div class="qc-control">
+                            {{ spec_form.portion }}
+                            {{ spec_form.portion.errors }}
+                          </div>
+                        </div>
+                      </div>
+                    {% endfor %}
+                  {% else %}
+                    <p class="qc-inline-note">No specimen records were detected for this row.</p>
+                  {% endif %}
+                </div>
+              </div>
+            {% endwith %}
+          {% endfor %}
+        {% else %}
+          <p>No specimen rows were detected in the OCR results.</p>
+        {% endif %}
+      </section>
+
+      <div class="w3-right">
+        <button type="submit" class="w3-button w3-green w3-margin-top">Submit for Expert Review</button>
+      </div>
+    </form>
+  </div>
 </div>
 {% endblock %}
 

@@ -1203,6 +1203,15 @@ def MediaInternQCWizard(request, pk):
         ident_formset = IdentificationQCFormSet(prefix='ident', initial=ident_initial)
         specimen_formset = SpecimenQCFormSet(prefix='specimen', initial=specimen_initial)
 
+    comment_field = accession_form.fields.get('comment')
+    if comment_field is not None:
+        comment_field.widget.attrs.setdefault('rows', 2)
+
+    for form in ident_formset:
+        remarks_field = form.fields.get('identification_remarks')
+        if remarks_field is not None:
+            remarks_field.widget.attrs.setdefault('rows', 2)
+
     row_contexts = _build_row_contexts(row_formset, ident_formset, specimen_formset)
 
     if request.method == 'POST':
