@@ -2240,6 +2240,32 @@ class MediaInternQCWizardTests(TestCase):
                                 "natures": [],
                             },
                         ],
+                        "references": [
+                            {
+                                "reference_first_author": {"interpreted": "Harris"},
+                                "reference_title": {"interpreted": "Lothagam"},
+                                "reference_year": {"interpreted": "2003"},
+                                "page": {"interpreted": "485-519"},
+                            }
+                        ],
+                        "field_slips": [
+                            {
+                                "field_number": {"interpreted": "FS-1"},
+                                "verbatim_locality": {"interpreted": "Loc1"},
+                                "verbatim_taxon": {"interpreted": "Homo"},
+                                "verbatim_element": {"interpreted": "Femur"},
+                                "verbatim_horizon": {
+                                    "formation": {"interpreted": "Form"},
+                                    "member": {"interpreted": "Member"},
+                                    "bed_or_horizon": {"interpreted": "Bed"},
+                                    "chronostratigraphy": {"interpreted": "Zone"},
+                                },
+                                "aerial_photo": {"interpreted": "Photo 1"},
+                                "verbatim_latitude": {"interpreted": "Lat"},
+                                "verbatim_longitude": {"interpreted": "Lon"},
+                                "verbatim_elevation": {"interpreted": "100"},
+                            }
+                        ],
                         "identifications": [
                             {
                                 "taxon": {"interpreted": "Homo"},
@@ -2269,6 +2295,12 @@ class MediaInternQCWizardTests(TestCase):
         row_contexts = response.context.get("row_contexts")
         self.assertEqual(len(row_contexts), 2)
         self.assertEqual(response.context["accession_form"]["specimen_no"].value(), "100")
+        reference_forms = response.context["reference_formset"].forms
+        self.assertEqual(len(reference_forms), 1)
+        self.assertEqual(reference_forms[0]["first_author"].value(), "Harris")
+        fieldslip_forms = response.context["fieldslip_formset"].forms
+        self.assertEqual(len(fieldslip_forms), 1)
+        self.assertEqual(fieldslip_forms[0]["field_number"].value(), "FS-1")
 
     def test_post_updates_media_and_logs(self):
         self.client.login(username="intern", password="pass")
@@ -2325,6 +2357,34 @@ class MediaInternQCWizardTests(TestCase):
             "specimen-0-verbatim_element": "Femur",
             "specimen-0-portion": "Proximal",
             "specimen-0-fragments": "3",
+            "reference-TOTAL_FORMS": "1",
+            "reference-INITIAL_FORMS": "1",
+            "reference-MIN_NUM_FORMS": "0",
+            "reference-MAX_NUM_FORMS": "1000",
+            "reference-0-ref_id": "ref-0",
+            "reference-0-order": "0",
+            "reference-0-first_author": "Leakey",
+            "reference-0-title": "Koobi Fora",
+            "reference-0-year": "2004",
+            "reference-0-page": "120-135",
+            "fieldslip-TOTAL_FORMS": "1",
+            "fieldslip-INITIAL_FORMS": "1",
+            "fieldslip-MIN_NUM_FORMS": "0",
+            "fieldslip-MAX_NUM_FORMS": "1000",
+            "fieldslip-0-slip_id": "field-slip-0",
+            "fieldslip-0-order": "0",
+            "fieldslip-0-field_number": "FS-2",
+            "fieldslip-0-verbatim_locality": "Loc2",
+            "fieldslip-0-verbatim_taxon": "Pan",
+            "fieldslip-0-verbatim_element": "Tooth",
+            "fieldslip-0-horizon_formation": "NewForm",
+            "fieldslip-0-horizon_member": "NewMember",
+            "fieldslip-0-horizon_bed": "NewBed",
+            "fieldslip-0-horizon_chronostratigraphy": "NewZone",
+            "fieldslip-0-aerial_photo": "Photo 2",
+            "fieldslip-0-verbatim_latitude": "Lat2",
+            "fieldslip-0-verbatim_longitude": "Lon2",
+            "fieldslip-0-verbatim_elevation": "200",
         }
 
         response = self.client.post(url, data, follow=True)
@@ -2339,6 +2399,15 @@ class MediaInternQCWizardTests(TestCase):
         self.assertEqual(rows[1]["storage_area"]["interpreted"], "Cabinet 3")
         identifications = accession_payload["identifications"]
         self.assertEqual(identifications[1]["taxon"]["interpreted"], "Pan")
+        references = accession_payload["references"]
+        self.assertEqual(references[0]["reference_first_author"]["interpreted"], "Leakey")
+        self.assertEqual(references[0]["page"]["interpreted"], "120-135")
+        field_slips = accession_payload["field_slips"]
+        self.assertEqual(field_slips[0]["field_number"]["interpreted"], "FS-2")
+        self.assertEqual(
+            field_slips[0]["verbatim_horizon"]["formation"]["interpreted"],
+            "NewForm",
+        )
 
         self.assertTrue(self.media.rows_rearranged)
         self.assertEqual(self.media.qc_status, Media.QCStatus.PENDING_EXPERT)
@@ -2350,6 +2419,16 @@ class MediaInternQCWizardTests(TestCase):
         self.assertTrue(ocr_logs.exists())
         self.assertTrue(
             ocr_logs.filter(field_name="accessions[0].specimen_no").exists()
+        )
+        self.assertTrue(
+            ocr_logs.filter(
+                field_name="accessions[0].references[0].reference_first_author"
+            ).exists()
+        )
+        self.assertTrue(
+            ocr_logs.filter(
+                field_name="accessions[0].field_slips[0].field_number"
+            ).exists()
         )
 
 

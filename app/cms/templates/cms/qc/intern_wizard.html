@@ -12,11 +12,17 @@
     .qc-layout {
       display: flex;
       flex-wrap: wrap;
-      gap: 1.5rem;
+      gap: 2rem;
+      align-items: flex-start;
+    }
+    .qc-media,
+    .qc-form {
+      flex: 1 1 calc(50% - 1rem);
+      max-width: calc(50% - 1rem);
     }
     .qc-media {
-      flex: 1 1 320px;
-      max-width: 420px;
+      display: flex;
+      flex-direction: column;
     }
     .qc-media img {
       width: 100%;
@@ -33,30 +39,29 @@
       text-align: center;
     }
     .qc-form {
-      flex: 1 1 540px;
+      padding: 16px;
     }
     .qc-section + .qc-section {
       margin-top: 24px;
     }
     .qc-field-grid {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 0.5rem 1rem;
     }
     .qc-field {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.75rem;
+      display: grid;
+      grid-template-columns: minmax(120px, 180px) 1fr;
       align-items: center;
-      margin-bottom: 8px;
+      gap: 0.75rem;
+      padding: 0.25rem 0;
     }
     .qc-label {
       font-weight: 600;
       margin: 0;
-      min-width: 140px;
     }
     .qc-control {
-      flex: 1 1 220px;
+      width: 100%;
     }
     .qc-control input,
     .qc-control select,
@@ -64,7 +69,7 @@
       width: 100%;
     }
     .qc-control textarea {
-      min-height: 2.8em;
+      min-height: auto;
       resize: vertical;
     }
     .qc-control .errorlist {
@@ -96,15 +101,15 @@
       font-size: 0.85rem;
     }
     .qc-field--full {
-      flex: 1 1 100%;
+      grid-column: 1 / -1;
     }
     .qc-row-actions {
       display: flex;
       align-items: center;
       justify-content: flex-end;
       gap: 0.5rem;
-      margin-left: auto;
       flex-wrap: wrap;
+      grid-column: 1 / -1;
     }
     .qc-subsection + .qc-subsection {
       margin-top: 16px;
@@ -119,9 +124,22 @@
     .qc-row-block + .qc-row-block {
       margin-top: 12px;
     }
-    @media (max-width: 992px) {
-      .qc-layout {
-        flex-direction: column;
+    @media (max-width: 1024px) {
+      .qc-media,
+      .qc-form {
+        max-width: 100%;
+        flex-basis: 100%;
+      }
+    }
+    @media (max-width: 720px) {
+      .qc-field-grid {
+        grid-template-columns: 1fr;
+      }
+      .qc-field {
+        grid-template-columns: 1fr;
+      }
+      .qc-label {
+        margin-bottom: 0.25rem;
       }
       .qc-row-actions {
         justify-content: flex-start;
@@ -173,6 +191,8 @@
         {{ row_formset.management_form }}
         {{ ident_formset.management_form }}
         {{ specimen_formset.management_form }}
+        {{ reference_formset.management_form }}
+        {{ fieldslip_formset.management_form }}
       </div>
 
       <section class="qc-section">
@@ -214,6 +234,169 @@
             </div>
           </div>
         </div>
+      </section>
+
+      <section class="qc-section">
+        <div class="qc-section-heading w3-border-bottom w3-padding-small">
+          <h3>References</h3>
+          <span class="qc-inline-note">Verify bibliographic entries from the card back.</span>
+        </div>
+
+        {% if reference_formset.forms %}
+          {% for ref_form in reference_formset %}
+            <div class="qc-card">
+              {% for hidden in ref_form.hidden_fields %}
+                {{ hidden }}
+              {% endfor %}
+              <div class="qc-field-grid">
+                <div class="qc-field">
+                  <label class="qc-label" for="{{ ref_form.first_author.id_for_label }}">{{ ref_form.first_author.label }}:</label>
+                  <div class="qc-control">
+                    {{ ref_form.first_author }}
+                    {{ ref_form.first_author.errors }}
+                  </div>
+                </div>
+                <div class="qc-field qc-field--full">
+                  <label class="qc-label" for="{{ ref_form.title.id_for_label }}">{{ ref_form.title.label }}:</label>
+                  <div class="qc-control">
+                    {{ ref_form.title }}
+                    {{ ref_form.title.errors }}
+                  </div>
+                </div>
+                <div class="qc-field">
+                  <label class="qc-label" for="{{ ref_form.year.id_for_label }}">{{ ref_form.year.label }}:</label>
+                  <div class="qc-control">
+                    {{ ref_form.year }}
+                    {{ ref_form.year.errors }}
+                  </div>
+                </div>
+                <div class="qc-field">
+                  <label class="qc-label" for="{{ ref_form.page.id_for_label }}">{{ ref_form.page.label }}:</label>
+                  <div class="qc-control">
+                    {{ ref_form.page }}
+                    {{ ref_form.page.errors }}
+                  </div>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <p class="qc-inline-note">No references were interpreted for this accession.</p>
+        {% endif %}
+      </section>
+
+      <section class="qc-section">
+        <div class="qc-section-heading w3-border-bottom w3-padding-small">
+          <h3>Field Slips</h3>
+          <span class="qc-inline-note">Check linked field slip information before forwarding.</span>
+        </div>
+
+        {% if fieldslip_formset.forms %}
+          {% for field_form in fieldslip_formset %}
+            <div class="qc-card">
+              {% for hidden in field_form.hidden_fields %}
+                {{ hidden }}
+              {% endfor %}
+              <div class="qc-field-grid">
+                <div class="qc-field">
+                  <label class="qc-label" for="{{ field_form.field_number.id_for_label }}">{{ field_form.field_number.label }}:</label>
+                  <div class="qc-control">
+                    {{ field_form.field_number }}
+                    {{ field_form.field_number.errors }}
+                  </div>
+                </div>
+                <div class="qc-field qc-field--full">
+                  <label class="qc-label" for="{{ field_form.verbatim_locality.id_for_label }}">{{ field_form.verbatim_locality.label }}:</label>
+                  <div class="qc-control">
+                    {{ field_form.verbatim_locality }}
+                    {{ field_form.verbatim_locality.errors }}
+                  </div>
+                </div>
+                <div class="qc-field qc-field--full">
+                  <label class="qc-label" for="{{ field_form.verbatim_taxon.id_for_label }}">{{ field_form.verbatim_taxon.label }}:</label>
+                  <div class="qc-control">
+                    {{ field_form.verbatim_taxon }}
+                    {{ field_form.verbatim_taxon.errors }}
+                  </div>
+                </div>
+                <div class="qc-field qc-field--full">
+                  <label class="qc-label" for="{{ field_form.verbatim_element.id_for_label }}">{{ field_form.verbatim_element.label }}:</label>
+                  <div class="qc-control">
+                    {{ field_form.verbatim_element }}
+                    {{ field_form.verbatim_element.errors }}
+                  </div>
+                </div>
+              </div>
+
+              <div class="qc-subsection">
+                <h4>Verbatim Horizon</h4>
+                <div class="qc-field-grid">
+                  <div class="qc-field">
+                    <label class="qc-label" for="{{ field_form.horizon_formation.id_for_label }}">{{ field_form.horizon_formation.label }}:</label>
+                    <div class="qc-control">
+                      {{ field_form.horizon_formation }}
+                      {{ field_form.horizon_formation.errors }}
+                    </div>
+                  </div>
+                  <div class="qc-field">
+                    <label class="qc-label" for="{{ field_form.horizon_member.id_for_label }}">{{ field_form.horizon_member.label }}:</label>
+                    <div class="qc-control">
+                      {{ field_form.horizon_member }}
+                      {{ field_form.horizon_member.errors }}
+                    </div>
+                  </div>
+                  <div class="qc-field">
+                    <label class="qc-label" for="{{ field_form.horizon_bed.id_for_label }}">{{ field_form.horizon_bed.label }}:</label>
+                    <div class="qc-control">
+                      {{ field_form.horizon_bed }}
+                      {{ field_form.horizon_bed.errors }}
+                    </div>
+                  </div>
+                  <div class="qc-field">
+                    <label class="qc-label" for="{{ field_form.horizon_chronostratigraphy.id_for_label }}">{{ field_form.horizon_chronostratigraphy.label }}:</label>
+                    <div class="qc-control">
+                      {{ field_form.horizon_chronostratigraphy }}
+                      {{ field_form.horizon_chronostratigraphy.errors }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="qc-field-grid">
+                <div class="qc-field">
+                  <label class="qc-label" for="{{ field_form.aerial_photo.id_for_label }}">{{ field_form.aerial_photo.label }}:</label>
+                  <div class="qc-control">
+                    {{ field_form.aerial_photo }}
+                    {{ field_form.aerial_photo.errors }}
+                  </div>
+                </div>
+                <div class="qc-field">
+                  <label class="qc-label" for="{{ field_form.verbatim_latitude.id_for_label }}">{{ field_form.verbatim_latitude.label }}:</label>
+                  <div class="qc-control">
+                    {{ field_form.verbatim_latitude }}
+                    {{ field_form.verbatim_latitude.errors }}
+                  </div>
+                </div>
+                <div class="qc-field">
+                  <label class="qc-label" for="{{ field_form.verbatim_longitude.id_for_label }}">{{ field_form.verbatim_longitude.label }}:</label>
+                  <div class="qc-control">
+                    {{ field_form.verbatim_longitude }}
+                    {{ field_form.verbatim_longitude.errors }}
+                  </div>
+                </div>
+                <div class="qc-field">
+                  <label class="qc-label" for="{{ field_form.verbatim_elevation.id_for_label }}">{{ field_form.verbatim_elevation.label }}:</label>
+                  <div class="qc-control">
+                    {{ field_form.verbatim_elevation }}
+                    {{ field_form.verbatim_elevation.errors }}
+                  </div>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <p class="qc-inline-note">No field slips were detected for this accession.</p>
+        {% endif %}
       </section>
 
       <section class="qc-section" data-qc-rows-target="container">

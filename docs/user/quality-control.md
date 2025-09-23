@@ -50,6 +50,22 @@ Each OCR-detected row is rendered with:
 Rows without identification or specimen data show guidance text so you know
 which sections are empty.
 
+## Reviewing references
+
+When OCR finds bibliography on the card back, the wizard surfaces each
+reference so you can confirm the interpreted author, title, year, and page
+range. Update the fields inline if the transcription needs correction—the
+cleaned values are saved back to `Media.ocr_data` and inform the expert review
+step.
+
+## Checking field slips
+
+Detected field slip information appears in its own section. Verify the field
+number, verbatim locality, taxon, and specimen description, along with the
+verbatim horizon (formation, member, bed, chronostratigraphy) and any aerial
+photo or coordinate data. Adjusting these fields ensures the downstream field
+slip linkage is accurate when the media advances to expert review.
+
 ## Submitting for expert review
 
 1. Click **Submit for Expert Review** when you are satisfied with the data.

@@ -15,6 +15,10 @@
       return;
     }
 
+    form.querySelectorAll('textarea').forEach(function (textarea) {
+      textarea.setAttribute('rows', '2');
+    });
+
     var container = form.querySelector('[data-qc-rows-target="container"]');
     if (!container) {
       container = form;
