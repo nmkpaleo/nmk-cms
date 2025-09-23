@@ -890,6 +890,43 @@ class ScanningTests(TestCase):
         self.assertContains(response, "Start scanning task")
         self.assertContains(response, "Stop scanning task")
 
+    def test_dashboard_lists_quality_control_media_for_intern(self):
+        now_time = now()
+        pending_media = []
+        for idx in range(11):
+            media = Media.objects.create(
+                media_location=f"uploads/pending/sample-{idx}.jpg",
+                file_name=f"Pending Sample {idx}",
+                qc_status=Media.QCStatus.PENDING_INTERN,
+            )
+            Media.objects.filter(pk=media.pk).update(
+                modified_on=now_time - timedelta(minutes=idx)
+            )
+            pending_media.append(media)
+
+        latest_pending = pending_media[0]
+        rejected_media = Media.objects.create(
+            media_location="uploads/rejected/sample.jpg",
+            file_name="Rejected Sample",
+            qc_status=Media.QCStatus.REJECTED,
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("dashboard"))
+
+        self.assertContains(response, "Quality Control")
+        self.assertContains(response, "Pending Intern Review")
+        self.assertContains(response, "Rejected")
+        self.assertContains(response, "Pending Sample 0")
+        self.assertContains(response, "Pending Sample 9")
+        self.assertNotContains(response, "Pending Sample 10")
+        self.assertContains(
+            response, reverse("media_intern_qc", args=[latest_pending.uuid])
+        )
+        self.assertContains(
+            response, reverse("media_intern_qc", args=[rejected_media.uuid])
+        )
+
     def test_start_and_stop_scan(self):
         self.client.force_login(self.user)
         self.client.post(reverse("drawer_start_scan", args=[self.drawer.id]))

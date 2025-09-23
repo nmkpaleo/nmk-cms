@@ -376,7 +376,31 @@ def dashboard(request):
             .annotate(active_scan_start=Subquery(active_scan_start_subquery))
         )
 
-        context.update({"is_intern": True, "my_drawers": my_drawers})
+        intern_qc_status_lists = []
+        for status_choice in (
+            Media.QCStatus.PENDING_INTERN,
+            Media.QCStatus.REJECTED,
+        ):
+            entries = (
+                Media.objects.filter(qc_status=status_choice)
+                .select_related("accession", "accession_row")
+                .order_by("-modified_on")[:10]
+            )
+            intern_qc_status_lists.append(
+                {
+                    "status": status_choice.value,
+                    "label": status_choice.label,
+                    "entries": entries,
+                }
+            )
+
+        context.update(
+            {
+                "is_intern": True,
+                "my_drawers": my_drawers,
+                "intern_qc_status_lists": intern_qc_status_lists,
+            }
+        )
 
     if not context:
         context["no_role"] = True

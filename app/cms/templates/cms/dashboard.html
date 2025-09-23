@@ -139,72 +139,136 @@
   {% endif %}
 
   {% if is_intern %}
-    <h2>My Drawers</h2>
-    {% if my_drawers %}
-      <table class="w3-table w3-striped">
-        <thead>
-          <tr>
-            <th>Drawer</th>
-            <th>Description</th>
-            <th>Start time</th>
-            <th>Elapsed</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for drawer in my_drawers %}
-            <tr>
-              {% if user.is_superuser or user|has_group:"Collection Managers" %}
-                <td><a href="{% url 'drawerregister_detail' drawer.id %}">{{ drawer.code }}</a></td>
-              {% else %}
-                <td>{{ drawer.code }}</td>
-              {% endif %}
-              <td>{{ drawer.description }}</td>
-              <td>
-                {% if drawer.active_scan_start %}
-                  {{ drawer.active_scan_start|date:"Y-m-d H:i:s" }}
+    <div class="w3-row-padding">
+      <div class="w3-half">
+        <h2>My Drawers</h2>
+        {% if my_drawers %}
+          <div class="w3-responsive">
+            <table class="w3-table w3-striped">
+              <thead>
+                <tr>
+                  <th>Drawer</th>
+                  <th>Description</th>
+                  <th>Start time</th>
+                  <th>Elapsed</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for drawer in my_drawers %}
+                  <tr>
+                    {% if user.is_superuser or user|has_group:"Collection Managers" %}
+                      <td><a href="{% url 'drawerregister_detail' drawer.id %}">{{ drawer.code }}</a></td>
+                    {% else %}
+                      <td>{{ drawer.code }}</td>
+                    {% endif %}
+                    <td>{{ drawer.description }}</td>
+                    <td>
+                      {% if drawer.active_scan_start %}
+                        {{ drawer.active_scan_start|date:"Y-m-d H:i:s" }}
+                      {% else %}
+                        -
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if drawer.active_scan_start %}
+                        <span class="scan-timer" data-start="{{ drawer.active_scan_start|date:'c' }}">00:00:00</span>
+                      {% else %}
+                        -
+                      {% endif %}
+                    </td>
+                    <td>
+                      <form method="post" action="{% url 'drawer_start_scan' drawer.id %}" style="display:inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="w3-button w3-small w3-green" {% if drawer.active_scan_id %}disabled{% endif %}>Start scanning task</button>
+                      </form>
+                      <form method="post" action="{% url 'drawer_stop_scan' drawer.id %}" style="display:inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="w3-button w3-small w3-red" {% if not drawer.active_scan_id %}disabled{% endif %}>Stop scanning task</button>
+                      </form>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <script>
+            function updateTimers() {
+              document.querySelectorAll('.scan-timer').forEach(function(timer) {
+                var start = new Date(timer.dataset.start);
+                var diff = Math.floor((Date.now() - start.getTime()) / 1000);
+                var h = String(Math.floor(diff / 3600)).padStart(2, '0');
+                var m = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
+                var s = String(diff % 60).padStart(2, '0');
+                timer.textContent = h + ':' + m + ':' + s;
+              });
+            }
+            updateTimers();
+            setInterval(updateTimers, 1000);
+          </script>
+        {% else %}
+          <p>No assigned drawer registers.</p>
+        {% endif %}
+      </div>
+      <div class="w3-half">
+        <h2>Quality Control</h2>
+        {% if intern_qc_status_lists %}
+          {% for qc_group in intern_qc_status_lists %}
+            <div class="w3-card w3-margin-bottom">
+              <header class="w3-container w3-light-grey">
+                <h3 class="w3-margin">{{ qc_group.label }}</h3>
+              </header>
+              <div class="w3-container">
+                {% if qc_group.entries %}
+                  <div class="w3-responsive">
+                    <table class="w3-table w3-striped w3-small">
+                      <thead>
+                        <tr>
+                          <th>Media</th>
+                          <th>Accession / Row</th>
+                          <th>Updated</th>
+                          <th>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {% for media in qc_group.entries %}
+                          <tr data-qc-status="{{ qc_group.status }}">
+                            <td>
+                              {% if media.file_name %}
+                                {{ media.file_name }}
+                              {% else %}
+                                {{ media.media_location }}
+                              {% endif %}
+                            </td>
+                            <td>
+                              {% if media.accession_row %}
+                                {{ media.accession_row }}
+                              {% elif media.accession %}
+                                {{ media.accession }}
+                              {% else %}
+                                -
+                              {% endif %}
+                            </td>
+                            <td>{{ media.modified_on|date:"Y-m-d H:i" }}</td>
+                            <td>
+                              <a href="{% url 'media_intern_qc' media.uuid %}" class="w3-button w3-small w3-blue">Review</a>
+                            </td>
+                          </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
                 {% else %}
-                  -
+                  <p class="w3-padding">No media in this status.</p>
                 {% endif %}
-              </td>
-              <td>
-                {% if drawer.active_scan_start %}
-                  <span class="scan-timer" data-start="{{ drawer.active_scan_start|date:'c' }}">00:00:00</span>
-                {% else %}
-                  -
-                {% endif %}
-              </td>
-              <td>
-                <form method="post" action="{% url 'drawer_start_scan' drawer.id %}" style="display:inline;">
-                  {% csrf_token %}
-                  <button type="submit" class="w3-button w3-small w3-green" {% if drawer.active_scan_id %}disabled{% endif %}>Start scanning task</button>
-                </form>
-                <form method="post" action="{% url 'drawer_stop_scan' drawer.id %}" style="display:inline;">
-                  {% csrf_token %}
-                  <button type="submit" class="w3-button w3-small w3-red" {% if not drawer.active_scan_id %}disabled{% endif %}>Stop scanning task</button>
-                </form>
-              </td>
-            </tr>
+              </div>
+            </div>
           {% endfor %}
-        </tbody>
-      </table>
-      <script>
-        function updateTimers() {
-          document.querySelectorAll('.scan-timer').forEach(function(timer) {
-            var start = new Date(timer.dataset.start);
-            var diff = Math.floor((Date.now() - start.getTime()) / 1000);
-            var h = String(Math.floor(diff / 3600)).padStart(2, '0');
-            var m = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
-            var s = String(diff % 60).padStart(2, '0');
-            timer.textContent = h + ':' + m + ':' + s;
-          });
-        }
-        updateTimers();
-        setInterval(updateTimers, 1000);
-      </script>
-    {% else %}
-      <p>No assigned drawer registers.</p>
-    {% endif %}
+        {% else %}
+          <p>No media requiring quality control at this time.</p>
+        {% endif %}
+      </div>
+    </div>
   {% endif %}
 
   {% if no_role %}
