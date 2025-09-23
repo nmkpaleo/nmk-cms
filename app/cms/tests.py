@@ -2283,29 +2283,8 @@ class MediaInternQCWizardTests(TestCase):
     def get_url(self):
         return reverse("media_intern_qc", args=[str(self.media.uuid)])
 
-    def test_non_intern_forbidden(self):
-        self.client.login(username="user", password="pass")
-        response = self.client.get(self.get_url())
-        self.assertEqual(response.status_code, 403)
-
-    def test_get_prefills_forms(self):
-        self.client.login(username="intern", password="pass")
-        response = self.client.get(self.get_url())
-        self.assertEqual(response.status_code, 200)
-        row_contexts = response.context.get("row_contexts")
-        self.assertEqual(len(row_contexts), 2)
-        self.assertEqual(response.context["accession_form"]["specimen_no"].value(), "100")
-        reference_forms = response.context["reference_formset"].forms
-        self.assertEqual(len(reference_forms), 1)
-        self.assertEqual(reference_forms[0]["first_author"].value(), "Harris")
-        fieldslip_forms = response.context["fieldslip_formset"].forms
-        self.assertEqual(len(fieldslip_forms), 1)
-        self.assertEqual(fieldslip_forms[0]["field_number"].value(), "FS-1")
-
-    def test_post_updates_media_and_logs(self):
-        self.client.login(username="intern", password="pass")
-        url = self.get_url()
-        data = {
+    def build_valid_post_data(self):
+        return {
             "accession-collection": str(self.collection.pk),
             "accession-specimen_prefix": str(self.locality.pk),
             "accession-specimen_no": "101",
@@ -2319,12 +2298,12 @@ class MediaInternQCWizardTests(TestCase):
             "row-0-row_id": "row-0",
             "row-0-order": "1",
             "row-0-specimen_suffix": "A",
-            "row-0-storage": str(self.storage3.pk),
+            "row-0-storage": "Cabinet 3",
             "row-0-status": InventoryStatus.UNKNOWN,
             "row-1-row_id": "row-1",
             "row-1-order": "0",
             "row-1-specimen_suffix": "B",
-            "row-1-storage": str(self.storage2.pk),
+            "row-1-storage": "Cabinet 2",
             "row-1-status": InventoryStatus.UNKNOWN,
             "ident-TOTAL_FORMS": "2",
             "ident-INITIAL_FORMS": "2",
@@ -2387,6 +2366,30 @@ class MediaInternQCWizardTests(TestCase):
             "fieldslip-0-verbatim_elevation": "200",
         }
 
+    def test_non_intern_forbidden(self):
+        self.client.login(username="user", password="pass")
+        response = self.client.get(self.get_url())
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_prefills_forms(self):
+        self.client.login(username="intern", password="pass")
+        response = self.client.get(self.get_url())
+        self.assertEqual(response.status_code, 200)
+        row_contexts = response.context.get("row_contexts")
+        self.assertEqual(len(row_contexts), 2)
+        self.assertEqual(response.context["accession_form"]["specimen_no"].value(), "100")
+        reference_forms = response.context["reference_formset"].forms
+        self.assertEqual(len(reference_forms), 1)
+        self.assertEqual(reference_forms[0]["first_author"].value(), "Harris")
+        fieldslip_forms = response.context["fieldslip_formset"].forms
+        self.assertEqual(len(fieldslip_forms), 1)
+        self.assertEqual(fieldslip_forms[0]["field_number"].value(), "FS-1")
+
+    def test_post_updates_media_and_logs(self):
+        self.client.login(username="intern", password="pass")
+        url = self.get_url()
+        data = self.build_valid_post_data()
+
         response = self.client.post(url, data, follow=True)
         self.assertEqual(response.status_code, 200)
 
@@ -2430,6 +2433,23 @@ class MediaInternQCWizardTests(TestCase):
                 field_name="accessions[0].field_slips[0].field_number"
             ).exists()
         )
+
+    def test_accepts_new_storage_value(self):
+        self.client.login(username="intern", password="pass")
+        url = self.get_url()
+        data = self.build_valid_post_data()
+        data["row-0-storage"] = "Shelf 42"
+
+        response = self.client.post(url, data, follow=True)
+        self.assertEqual(response.status_code, 200)
+
+        self.media.refresh_from_db()
+        rows = self.media.ocr_data["accessions"][0]["rows"]
+        self.assertEqual(rows[1]["storage_area"]["interpreted"], "Shelf 42")
+
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Shelf 42", response.context["storage_suggestions"])
 
 
 class AdminAutocompleteTests(TestCase):

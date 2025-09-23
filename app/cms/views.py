@@ -938,14 +938,53 @@ class ReferenceListView(FilterView):
 class AccessionRowQCForm(AccessionRowUpdateForm):
     row_id = forms.CharField(widget=forms.HiddenInput())
     order = forms.IntegerField(widget=forms.HiddenInput())
+    storage_datalist_id = "qc-storage-options"
 
     def __init__(self, *args, **kwargs):
+        initial = kwargs.get('initial') or {}
+        storage_display = initial.get('storage_display')
+
         super().__init__(*args, **kwargs)
+
         suffixes = [('-', '-')] + [
             (suffix, suffix) for suffix in AccessionRow().generate_valid_suffixes()
         ]
         self.fields['specimen_suffix'].choices = suffixes
-        self.fields['storage'].required = False
+
+        original_storage_field = self.fields['storage']
+        original_attrs = dict(original_storage_field.widget.attrs)
+        original_attrs['list'] = self.storage_datalist_id
+        original_attrs.setdefault('autocomplete', 'off')
+
+        storage_initial = storage_display
+        if not storage_initial:
+            storage_pk = self.initial.get('storage')
+            storage_obj = None
+            if storage_pk:
+                try:
+                    storage_obj = Storage.objects.filter(pk=storage_pk).first()
+                except (TypeError, ValueError):
+                    storage_obj = None
+            if storage_obj:
+                storage_initial = storage_obj.area
+            elif isinstance(storage_pk, str):
+                storage_initial = storage_pk
+
+        self.fields['storage'] = forms.CharField(
+            label=original_storage_field.label,
+            required=False,
+            help_text=original_storage_field.help_text,
+            max_length=255,
+            widget=forms.TextInput(attrs=original_attrs),
+        )
+
+        if not self.is_bound:
+            if storage_initial:
+                self.initial['storage'] = storage_initial
+            else:
+                self.initial.pop('storage', None)
+        self.initial.pop('storage_display', None)
+
         self.fields['status'].required = False
         self.fields['status'].widget = forms.HiddenInput()
         if not self.initial.get('status'):
@@ -1135,6 +1174,9 @@ def MediaInternQCWizard(request, pk):
     accession_payload = accessions[0]
 
     rows_payload = list(accession_payload.get('rows') or [])
+    storage_suggestions = list(
+        Storage.objects.order_by('area').values_list('area', flat=True)
+    )
     ident_payload = list(accession_payload.get('identifications') or [])
     if len(ident_payload) < len(rows_payload):
         ident_payload.extend({} for _ in range(len(rows_payload) - len(ident_payload)))
@@ -1158,12 +1200,15 @@ def MediaInternQCWizard(request, pk):
 
         suffix = (row_payload.get('specimen_suffix') or {}).get('interpreted') or '-'
         storage_name = (row_payload.get('storage_area') or {}).get('interpreted')
+        if storage_name:
+            storage_suggestions.append(storage_name)
         storage_obj = Storage.objects.filter(area=storage_name).first() if storage_name else None
         row_initial.append({
             'row_id': row_id,
             'order': index,
             'specimen_suffix': suffix,
             'storage': storage_obj.pk if storage_obj else None,
+            'storage_display': storage_name,
             'status': InventoryStatus.UNKNOWN,
         })
 
@@ -1238,6 +1283,10 @@ def MediaInternQCWizard(request, pk):
             'verbatim_longitude': (field_slip_payload.get('verbatim_longitude') or {}).get('interpreted'),
             'verbatim_elevation': (field_slip_payload.get('verbatim_elevation') or {}).get('interpreted'),
         })
+
+    storage_suggestions = list(
+        dict.fromkeys(value for value in storage_suggestions if value)
+    )
 
     collection_abbr = (accession_payload.get('collection_abbreviation') or {}).get('interpreted')
     collection_obj = Collection.objects.filter(abbreviation=collection_abbr).first() if collection_abbr else None
@@ -1319,12 +1368,16 @@ def MediaInternQCWizard(request, pk):
                     order_value = int(cleaned.get('order'))
                 except (TypeError, ValueError):
                     order_value = len(cleaned_rows)
-                storage_obj = cleaned.get('storage')
+                storage_value = cleaned.get('storage')
+                if isinstance(storage_value, str):
+                    storage_value = storage_value.strip() or None
+                elif storage_value is not None and hasattr(storage_value, 'area'):
+                    storage_value = storage_value.area
                 cleaned_rows.append({
                     'row_id': row_id,
                     'order': order_value,
                     'specimen_suffix': cleaned.get('specimen_suffix') or '-',
-                    'storage': storage_obj,
+                    'storage': storage_value,
                     'status': cleaned.get('status'),
                 })
 
@@ -1442,8 +1495,13 @@ def MediaInternQCWizard(request, pk):
                 row_id = entry['row_id']
                 original_row = copy.deepcopy(row_payload_map.get(row_id, {}))
                 _set_interpreted(original_row, 'specimen_suffix', entry['specimen_suffix'])
-                storage_obj = entry['storage']
-                storage_name = storage_obj.area if storage_obj else None
+                storage_value = entry['storage']
+                if isinstance(storage_value, str):
+                    storage_name = storage_value or None
+                elif storage_value is not None and hasattr(storage_value, 'area'):
+                    storage_name = storage_value.area
+                else:
+                    storage_name = None
                 _set_interpreted(original_row, 'storage_area', storage_name)
 
                 original_natures = original_row.get('natures') or []
@@ -1637,6 +1695,8 @@ def MediaInternQCWizard(request, pk):
         'reference_formset': reference_formset,
         'fieldslip_formset': fieldslip_formset,
         'row_contexts': row_contexts,
+        'storage_suggestions': storage_suggestions,
+        'storage_datalist_id': AccessionRowQCForm.storage_datalist_id,
     }
 
     return render(request, 'cms/qc/intern_wizard.html', context)

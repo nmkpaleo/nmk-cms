@@ -206,6 +206,12 @@
         {{ fieldslip_formset.management_form }}
       </div>
 
+      <datalist id="{{ storage_datalist_id }}">
+        {% for option in storage_suggestions %}
+          <option value="{{ option }}"></option>
+        {% endfor %}
+      </datalist>
+
       <section class="qc-section">
         <h3 class="w3-border-bottom w3-padding-small w3-margin-bottom">Accession Details</h3>
         <div class="qc-field-grid">
@@ -260,7 +266,7 @@
                 {{ hidden }}
               {% endfor %}
               <div class="qc-field-grid">
-                <div class="qc-field">
+                <div class="qc-field qc-field--full">
                   <label class="qc-label" for="{{ ref_form.first_author.id_for_label }}">{{ ref_form.first_author.label }}:</label>
                   <div class="qc-control">
                     {{ ref_form.first_author }}
@@ -309,7 +315,7 @@
                 {{ hidden }}
               {% endfor %}
               <div class="qc-field-grid">
-                <div class="qc-field">
+                <div class="qc-field qc-field--full">
                   <label class="qc-label" for="{{ field_form.field_number.id_for_label }}">{{ field_form.field_number.label }}:</label>
                   <div class="qc-control">
                     {{ field_form.field_number }}
