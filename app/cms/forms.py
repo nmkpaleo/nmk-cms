@@ -365,15 +365,11 @@ class AccessionForm(forms.ModelForm):
         ]
         widgets = {
             'accessioned_by': forms.HiddenInput(),
-#            'specimen_no': forms.TextInput(attrs={'readonly': True, 'disabled': True}),  # still display, not editable
-            'specimen_no': forms.TextInput(attrs={'readonly': True}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        
-        # Make 'specimen_no' disabled (visible but not editable)
-#        self.fields['specimen_no'].disabled = True
+
         # Custom label for Locality field in dropdown
         self.fields['specimen_prefix'].label_from_instance = lambda obj: f"{obj.abbreviation} - {obj.name}"
         

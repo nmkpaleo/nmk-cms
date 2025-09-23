@@ -2375,9 +2375,11 @@ class MediaInternQCWizardTests(TestCase):
         self.client.login(username="intern", password="pass")
         response = self.client.get(self.get_url())
         self.assertEqual(response.status_code, 200)
+        accession_form = response.context["accession_form"]
         row_contexts = response.context.get("row_contexts")
         self.assertEqual(len(row_contexts), 2)
-        self.assertEqual(response.context["accession_form"]["specimen_no"].value(), "100")
+        self.assertEqual(accession_form["specimen_no"].value(), "100")
+        self.assertNotIn("readonly", accession_form.fields["specimen_no"].widget.attrs)
         reference_forms = response.context["reference_formset"].forms
         self.assertEqual(len(reference_forms), 1)
         self.assertEqual(reference_forms[0]["first_author"].value(), "Harris")
