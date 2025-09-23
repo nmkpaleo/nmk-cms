@@ -2446,10 +2446,25 @@ class MediaInternQCWizardTests(TestCase):
         self.media.refresh_from_db()
         rows = self.media.ocr_data["accessions"][0]["rows"]
         self.assertEqual(rows[1]["storage_area"]["interpreted"], "Shelf 42")
+        self.assertTrue(Storage.objects.filter(area="Shelf 42").exists())
 
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertIn("Shelf 42", response.context["storage_suggestions"])
+
+    def test_does_not_create_storage_when_submission_invalid(self):
+        self.client.login(username="intern", password="pass")
+        url = self.get_url()
+        data = self.build_valid_post_data()
+        data["row-0-storage"] = "Drawer 99"
+        data["row-0-specimen_suffix"] = "InvalidSuffix"
+
+        self.assertFalse(Storage.objects.filter(area="Drawer 99").exists())
+
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, 200)
+
+        self.assertFalse(Storage.objects.filter(area="Drawer 99").exists())
 
 
 class AdminAutocompleteTests(TestCase):

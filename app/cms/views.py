@@ -990,6 +990,16 @@ class AccessionRowQCForm(AccessionRowUpdateForm):
         if not self.initial.get('status'):
             self.initial['status'] = InventoryStatus.UNKNOWN
 
+    def clean_storage(self):
+        value = self.cleaned_data.get('storage')
+        if isinstance(value, str):
+            value = value.strip()
+        return value or None
+
+    def _post_clean(self):  # type: ignore[override]
+        """Skip model instance assignment so free-form storage strings validate."""
+        return None
+
 
 class AccessionRowIdentificationQCForm(AccessionRowIdentificationForm):
     row_id = forms.CharField(widget=forms.HiddenInput())
@@ -1370,9 +1380,11 @@ def MediaInternQCWizard(request, pk):
                     order_value = len(cleaned_rows)
                 storage_value = cleaned.get('storage')
                 if isinstance(storage_value, str):
-                    storage_value = storage_value.strip() or None
+                    storage_value = storage_value.strip()
                 elif storage_value is not None and hasattr(storage_value, 'area'):
                     storage_value = storage_value.area
+                if storage_value == "":
+                    storage_value = None
                 cleaned_rows.append({
                     'row_id': row_id,
                     'order': order_value,
@@ -1475,188 +1487,201 @@ def MediaInternQCWizard(request, pk):
             type_status_cleaned = cleaned_accession.get('type_status')
             comment_cleaned = cleaned_accession.get('comment')
 
-            _set_interpreted(
-                accession_payload,
-                'collection_abbreviation',
-                collection_obj.abbreviation if collection_obj else None,
-            )
-            _set_interpreted(
-                accession_payload,
-                'specimen_prefix_abbreviation',
-                prefix_obj.abbreviation if prefix_obj else None,
-            )
-            _set_interpreted(accession_payload, 'specimen_no', specimen_no_cleaned)
-            _set_interpreted(accession_payload, 'type_status', type_status_cleaned)
-            _set_interpreted(accession_payload, 'comment', comment_cleaned)
-
-            updated_rows = []
-            updated_identifications = []
-            for entry in sorted_rows:
-                row_id = entry['row_id']
-                original_row = copy.deepcopy(row_payload_map.get(row_id, {}))
-                _set_interpreted(original_row, 'specimen_suffix', entry['specimen_suffix'])
-                storage_value = entry['storage']
-                if isinstance(storage_value, str):
-                    storage_name = storage_value or None
-                elif storage_value is not None and hasattr(storage_value, 'area'):
-                    storage_name = storage_value.area
-                else:
-                    storage_name = None
-                _set_interpreted(original_row, 'storage_area', storage_name)
-
-                original_natures = original_row.get('natures') or []
-                new_natures = []
-                specimens = specimen_clean_map.get(row_id, [])
-                for index, specimen_data in enumerate(specimens):
-                    original_nature = copy.deepcopy(original_natures[index]) if index < len(original_natures) else {}
-                    element_obj = specimen_data.get('element')
-                    element_name = element_obj.name if element_obj else None
-                    _set_interpreted(original_nature, 'element_name', element_name)
-                    _set_interpreted(original_nature, 'side', specimen_data.get('side'))
-                    _set_interpreted(original_nature, 'condition', specimen_data.get('condition'))
-                    _set_interpreted(original_nature, 'verbatim_element', specimen_data.get('verbatim_element'))
-                    _set_interpreted(original_nature, 'portion', specimen_data.get('portion'))
-                    _set_interpreted(original_nature, 'fragments', specimen_data.get('fragments'))
-                    new_natures.append(original_nature)
-                original_row['natures'] = new_natures
-                updated_rows.append(original_row)
-
-                ident_cleaned = ident_clean_map.get(row_id, {})
-                original_ident = copy.deepcopy(ident_payload_map.get(row_id, {}))
-                _set_interpreted(original_ident, 'taxon', ident_cleaned.get('taxon'))
-                _set_interpreted(
-                    original_ident,
-                    'identification_qualifier',
-                    ident_cleaned.get('identification_qualifier'),
-                )
-                _set_interpreted(
-                    original_ident,
-                    'verbatim_identification',
-                    ident_cleaned.get('verbatim_identification'),
-                )
-                _set_interpreted(
-                    original_ident,
-                    'identification_remarks',
-                    ident_cleaned.get('identification_remarks'),
-                )
-                identified_by_obj = ident_cleaned.get('identified_by')
-                _set_interpreted(
-                    original_ident,
-                    'identified_by',
-                    identified_by_obj.pk if identified_by_obj else None,
-                )
-                reference_obj = ident_cleaned.get('reference')
-                _set_interpreted(
-                    original_ident,
-                    'reference',
-                    reference_obj.pk if reference_obj else None,
-                )
-                _set_interpreted(
-                    original_ident,
-                    'date_identified',
-                    ident_cleaned.get('date_identified'),
-                )
-                updated_identifications.append(original_ident)
-
-            accession_payload['rows'] = updated_rows
-            accession_payload['identifications'] = updated_identifications
-
-            updated_references = []
-            for entry in sorted_references:
-                ref_id = entry['ref_id']
-                original_reference = copy.deepcopy(reference_payload_map.get(ref_id, {}))
-                _set_interpreted(
-                    original_reference,
-                    'reference_first_author',
-                    entry.get('first_author'),
-                )
-                _set_interpreted(
-                    original_reference,
-                    'reference_title',
-                    entry.get('title'),
-                )
-                _set_interpreted(
-                    original_reference,
-                    'reference_year',
-                    entry.get('year'),
-                )
-                _set_interpreted(original_reference, 'page', entry.get('page'))
-                updated_references.append(original_reference)
-
-            accession_payload['references'] = updated_references
-
-            updated_field_slips = []
-            for entry in sorted_fieldslips:
-                slip_id = entry['slip_id']
-                original_field_slip = copy.deepcopy(fieldslip_payload_map.get(slip_id, {}))
-                _set_interpreted(original_field_slip, 'field_number', entry.get('field_number'))
-                _set_interpreted(
-                    original_field_slip,
-                    'verbatim_locality',
-                    entry.get('verbatim_locality'),
-                )
-                _set_interpreted(
-                    original_field_slip,
-                    'verbatim_taxon',
-                    entry.get('verbatim_taxon'),
-                )
-                _set_interpreted(
-                    original_field_slip,
-                    'verbatim_element',
-                    entry.get('verbatim_element'),
-                )
-                horizon_payload = original_field_slip.get('verbatim_horizon') or {}
-                horizon_payload = copy.deepcopy(horizon_payload)
-                _set_interpreted(
-                    horizon_payload,
-                    'formation',
-                    entry.get('horizon_formation'),
-                )
-                _set_interpreted(
-                    horizon_payload,
-                    'member',
-                    entry.get('horizon_member'),
-                )
-                _set_interpreted(
-                    horizon_payload,
-                    'bed_or_horizon',
-                    entry.get('horizon_bed'),
-                )
-                _set_interpreted(
-                    horizon_payload,
-                    'chronostratigraphy',
-                    entry.get('horizon_chronostratigraphy'),
-                )
-                original_field_slip['verbatim_horizon'] = horizon_payload
-                _set_interpreted(
-                    original_field_slip,
-                    'aerial_photo',
-                    entry.get('aerial_photo'),
-                )
-                _set_interpreted(
-                    original_field_slip,
-                    'verbatim_latitude',
-                    entry.get('verbatim_latitude'),
-                )
-                _set_interpreted(
-                    original_field_slip,
-                    'verbatim_longitude',
-                    entry.get('verbatim_longitude'),
-                )
-                _set_interpreted(
-                    original_field_slip,
-                    'verbatim_elevation',
-                    entry.get('verbatim_elevation'),
-                )
-                updated_field_slips.append(original_field_slip)
-
-            accession_payload['field_slips'] = updated_field_slips
-            data['accessions'][0] = accession_payload
-
-            diffs = list(_iter_field_diffs(original_data, data))
-
             try:
                 with transaction.atomic():
+                    _set_interpreted(
+                        accession_payload,
+                        'collection_abbreviation',
+                        collection_obj.abbreviation if collection_obj else None,
+                    )
+                    _set_interpreted(
+                        accession_payload,
+                        'specimen_prefix_abbreviation',
+                        prefix_obj.abbreviation if prefix_obj else None,
+                    )
+                    _set_interpreted(accession_payload, 'specimen_no', specimen_no_cleaned)
+                    _set_interpreted(accession_payload, 'type_status', type_status_cleaned)
+                    _set_interpreted(accession_payload, 'comment', comment_cleaned)
+
+                    storage_cache: dict[str, Storage] = {}
+                    updated_rows = []
+                    updated_identifications = []
+                    for entry in sorted_rows:
+                        row_id = entry['row_id']
+                        original_row = copy.deepcopy(row_payload_map.get(row_id, {}))
+                        _set_interpreted(
+                            original_row,
+                            'specimen_suffix',
+                            entry['specimen_suffix'],
+                        )
+                        storage_value = entry['storage']
+                        storage_name = None
+                        if isinstance(storage_value, str) and storage_value:
+                            cache_key = storage_value.lower()
+                            storage_obj = storage_cache.get(cache_key)
+                            if storage_obj is None:
+                                storage_obj = Storage.objects.filter(
+                                    area__iexact=storage_value
+                                ).first()
+                                if storage_obj is None:
+                                    storage_obj = Storage.objects.create(area=storage_value)
+                                storage_cache[cache_key] = storage_obj
+                            storage_name = storage_obj.area
+                        elif isinstance(storage_value, Storage):
+                            storage_name = storage_value.area
+                        _set_interpreted(original_row, 'storage_area', storage_name)
+
+                        original_natures = original_row.get('natures') or []
+                        new_natures = []
+                        specimens = specimen_clean_map.get(row_id, [])
+                        for index, specimen_data in enumerate(specimens):
+                            original_nature = copy.deepcopy(original_natures[index]) if index < len(original_natures) else {}
+                            element_obj = specimen_data.get('element')
+                            element_name = element_obj.name if element_obj else None
+                            _set_interpreted(original_nature, 'element_name', element_name)
+                            _set_interpreted(original_nature, 'side', specimen_data.get('side'))
+                            _set_interpreted(original_nature, 'condition', specimen_data.get('condition'))
+                            _set_interpreted(original_nature, 'verbatim_element', specimen_data.get('verbatim_element'))
+                            _set_interpreted(original_nature, 'portion', specimen_data.get('portion'))
+                            _set_interpreted(original_nature, 'fragments', specimen_data.get('fragments'))
+                            new_natures.append(original_nature)
+                        original_row['natures'] = new_natures
+                        updated_rows.append(original_row)
+
+                        ident_cleaned = ident_clean_map.get(row_id, {})
+                        original_ident = copy.deepcopy(ident_payload_map.get(row_id, {}))
+                        _set_interpreted(original_ident, 'taxon', ident_cleaned.get('taxon'))
+                        _set_interpreted(
+                            original_ident,
+                            'identification_qualifier',
+                            ident_cleaned.get('identification_qualifier'),
+                        )
+                        _set_interpreted(
+                            original_ident,
+                            'verbatim_identification',
+                            ident_cleaned.get('verbatim_identification'),
+                        )
+                        _set_interpreted(
+                            original_ident,
+                            'identification_remarks',
+                            ident_cleaned.get('identification_remarks'),
+                        )
+                        identified_by_obj = ident_cleaned.get('identified_by')
+                        _set_interpreted(
+                            original_ident,
+                            'identified_by',
+                            identified_by_obj.pk if identified_by_obj else None,
+                        )
+                        reference_obj = ident_cleaned.get('reference')
+                        _set_interpreted(
+                            original_ident,
+                            'reference',
+                            reference_obj.pk if reference_obj else None,
+                        )
+                        _set_interpreted(
+                            original_ident,
+                            'date_identified',
+                            ident_cleaned.get('date_identified'),
+                        )
+                        updated_identifications.append(original_ident)
+
+                    accession_payload['rows'] = updated_rows
+                    accession_payload['identifications'] = updated_identifications
+
+                    updated_references = []
+                    for entry in sorted_references:
+                        ref_id = entry['ref_id']
+                        original_reference = copy.deepcopy(reference_payload_map.get(ref_id, {}))
+                        _set_interpreted(
+                            original_reference,
+                            'reference_first_author',
+                            entry.get('first_author'),
+                        )
+                        _set_interpreted(
+                            original_reference,
+                            'reference_title',
+                            entry.get('title'),
+                        )
+                        _set_interpreted(
+                            original_reference,
+                            'reference_year',
+                            entry.get('year'),
+                        )
+                        _set_interpreted(original_reference, 'page', entry.get('page'))
+                        updated_references.append(original_reference)
+
+                    accession_payload['references'] = updated_references
+
+                    updated_field_slips = []
+                    for entry in sorted_fieldslips:
+                        slip_id = entry['slip_id']
+                        original_field_slip = copy.deepcopy(fieldslip_payload_map.get(slip_id, {}))
+                        _set_interpreted(original_field_slip, 'field_number', entry.get('field_number'))
+                        _set_interpreted(
+                            original_field_slip,
+                            'verbatim_locality',
+                            entry.get('verbatim_locality'),
+                        )
+                        _set_interpreted(
+                            original_field_slip,
+                            'verbatim_taxon',
+                            entry.get('verbatim_taxon'),
+                        )
+                        _set_interpreted(
+                            original_field_slip,
+                            'verbatim_element',
+                            entry.get('verbatim_element'),
+                        )
+                        horizon_payload = original_field_slip.get('verbatim_horizon') or {}
+                        horizon_payload = copy.deepcopy(horizon_payload)
+                        _set_interpreted(
+                            horizon_payload,
+                            'formation',
+                            entry.get('horizon_formation'),
+                        )
+                        _set_interpreted(
+                            horizon_payload,
+                            'member',
+                            entry.get('horizon_member'),
+                        )
+                        _set_interpreted(
+                            horizon_payload,
+                            'bed_or_horizon',
+                            entry.get('horizon_bed'),
+                        )
+                        _set_interpreted(
+                            horizon_payload,
+                            'chronostratigraphy',
+                            entry.get('horizon_chronostratigraphy'),
+                        )
+                        original_field_slip['verbatim_horizon'] = horizon_payload
+                        _set_interpreted(
+                            original_field_slip,
+                            'aerial_photo',
+                            entry.get('aerial_photo'),
+                        )
+                        _set_interpreted(
+                            original_field_slip,
+                            'verbatim_latitude',
+                            entry.get('verbatim_latitude'),
+                        )
+                        _set_interpreted(
+                            original_field_slip,
+                            'verbatim_longitude',
+                            entry.get('verbatim_longitude'),
+                        )
+                        _set_interpreted(
+                            original_field_slip,
+                            'verbatim_elevation',
+                            entry.get('verbatim_elevation'),
+                        )
+                        updated_field_slips.append(original_field_slip)
+
+                    accession_payload['field_slips'] = updated_field_slips
+                    data['accessions'][0] = accession_payload
+
+                    diffs = list(_iter_field_diffs(original_data, data))
+
                     media.ocr_data = data
                     media.rows_rearranged = rows_rearranged
                     media.save(update_fields=['ocr_data', 'rows_rearranged'])
