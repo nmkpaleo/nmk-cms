@@ -1120,19 +1120,123 @@ class Media(BaseModel):
         PENDING = "pending", "Pending"
         COMPLETED = "completed", "Completed"
         FAILED = "failed", "Failed"
+
+    class QCStatus(models.TextChoices):
+        PENDING_INTERN = "pending_intern", "Pending Intern Review"
+        PENDING_EXPERT = "pending_expert", "Pending Expert Review"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
     ocr_data = models.JSONField(null=True, blank=True, help_text="OCR extracted data")
     ocr_status = models.CharField(max_length=20, choices=OCRStatus.choices, default=OCRStatus.PENDING, help_text="Status of OCR processing")
+    qc_status = models.CharField(
+        max_length=20,
+        choices=QCStatus.choices,
+        default=QCStatus.PENDING_INTERN,
+        help_text="Current quality control status for this media entry.",
+    )
+    intern_checked_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        related_name="media_qc_intern_checked",
+        null=True,
+        blank=True,
+        help_text="Intern reviewer who most recently advanced this media for expert review.",
+    )
+    intern_checked_on = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when the intern review was completed.",
+    )
+    expert_checked_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        related_name="media_qc_expert_checked",
+        null=True,
+        blank=True,
+        help_text="Expert reviewer who most recently completed QC on this media.",
+    )
+    expert_checked_on = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when the expert review was completed.",
+    )
+    rows_rearranged = models.BooleanField(
+        default=False,
+        help_text="Indicates if specimen rows were rearranged to match the media content during QC.",
+    )
     history = HistoricalRecords()
 
     def save(self, *args, **kwargs):
-        # If a file is uploaded
+        user = get_current_user()
+        if isinstance(user, AnonymousUser):
+            user = None
+
+        previous = None
+        if self.pk:
+            previous = self.__class__.objects.filter(pk=self.pk).first()
+
         if self.media_location:
-            # Get the file name without the directory
             self.file_name = os.path.basename(self.media_location.name)
-            # Get the file extension
             self.format = os.path.splitext(self.media_location.name)[1].lower().strip('.')
-        # Call the parent save method
+
+        status_changed = previous and previous.qc_status != self.qc_status
+        ocr_changed = previous and previous.ocr_data != self.ocr_data
+        rows_rearranged_changed = previous and previous.rows_rearranged != self.rows_rearranged
+
+        if status_changed:
+            timestamp = timezone.now()
+            if self.qc_status in {
+                self.QCStatus.PENDING_EXPERT,
+                self.QCStatus.APPROVED,
+                self.QCStatus.REJECTED,
+            }:
+                self.intern_checked_on = timestamp
+                if user:
+                    self.intern_checked_by = user
+            if self.qc_status in {self.QCStatus.APPROVED, self.QCStatus.REJECTED}:
+                self.expert_checked_on = timestamp
+                if user:
+                    self.expert_checked_by = user
+
         super().save(*args, **kwargs)
+
+        if status_changed:
+            MediaQCLog.objects.create(
+                media=self,
+                change_type=MediaQCLog.ChangeType.STATUS,
+                field_name="qc_status",
+                old_value={"qc_status": previous.qc_status} if previous else None,
+                new_value={"qc_status": self.qc_status},
+                description=(
+                    f"Status changed from {previous.get_qc_status_display()} to {self.get_qc_status_display()}"
+                    if previous
+                    else f"Status set to {self.get_qc_status_display()}"
+                ),
+                changed_by=user,
+            )
+
+        if ocr_changed:
+            MediaQCLog.objects.create(
+                media=self,
+                change_type=MediaQCLog.ChangeType.OCR_DATA,
+                field_name="ocr_data",
+                old_value=previous.ocr_data if previous else None,
+                new_value=self.ocr_data,
+                description="OCR data updated during QC.",
+                changed_by=user,
+            )
+
+        if rows_rearranged_changed:
+            MediaQCLog.objects.create(
+                media=self,
+                change_type=MediaQCLog.ChangeType.ROWS_REARRANGED,
+                field_name="rows_rearranged",
+                old_value={"rows_rearranged": previous.rows_rearranged},
+                new_value={"rows_rearranged": self.rows_rearranged},
+                description="Rows rearranged flag updated.",
+                changed_by=user,
+            )
 
     def clean(self):
         super().clean()
@@ -1151,6 +1255,59 @@ class Media(BaseModel):
 
     def __str__(self):
         return f"{self.file_name} ({self.type})"
+
+
+class MediaQCLog(models.Model):
+    class ChangeType(models.TextChoices):
+        STATUS = "status", "QC Status"
+        OCR_DATA = "ocr_data", "OCR Data"
+        ROWS_REARRANGED = "rows_rearranged", "Rows Rearranged"
+
+    media = models.ForeignKey('Media', on_delete=models.CASCADE, related_name='qc_logs')
+    change_type = models.CharField(max_length=32, choices=ChangeType.choices)
+    field_name = models.CharField(max_length=100, blank=True)
+    old_value = models.JSONField(null=True, blank=True)
+    new_value = models.JSONField(null=True, blank=True)
+    description = models.TextField(blank=True)
+    changed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='media_qc_logs',
+    )
+    created_on = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_on"]
+        verbose_name = "Media QC Log"
+        verbose_name_plural = "Media QC Logs"
+
+    def __str__(self):
+        return f"QC change on {self.media} at {self.created_on:%Y-%m-%d %H:%M:%S}"
+
+
+class MediaQCComment(models.Model):
+    log = models.ForeignKey(MediaQCLog, on_delete=models.CASCADE, related_name='comments')
+    comment = models.TextField()
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='media_qc_comments',
+    )
+    created_on = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_on"]
+        verbose_name = "Media QC Comment"
+        verbose_name_plural = "Media QC Comments"
+
+    def __str__(self):
+        creator = self.created_by if self.created_by else "System"
+        return f"Comment by {creator} on {self.log}"
+
 
 class SpecimenGeology(BaseModel):
     # ForeignKey relationships to Accession and GeologicalContext
