@@ -38,6 +38,7 @@ from cms.models import (
     Identification,
     NatureOfSpecimen,
     MediaQCLog,
+    MediaQCComment,
     Element,
     Person,
 )
@@ -47,7 +48,7 @@ from cms.filters import DrawerRegisterFilter
 from cms.resources import DrawerRegisterResource, PlaceResource
 from tablib import Dataset
 from cms.upload_processing import process_file
-from cms.ocr_processing import process_pending_scans
+from cms.ocr_processing import process_pending_scans, describe_accession_conflicts
 
 
 class GenerateAccessionsFromSeriesTests(TestCase):
@@ -484,6 +485,30 @@ class DashboardViewCollectionManagerTests(TestCase):
         self.assertNotIn(self.assigned, response.context["unassigned_accessions"])
         self.assertEqual(len(response.context["latest_accessions"]), 10)
         self.assertIn(self.row_accession, response.context["latest_accessions"])
+
+    def test_dashboard_lists_quality_control_media_for_expert(self):
+        now_time = now()
+        media_items = []
+        for idx in range(11):
+            media = Media.objects.create(
+                media_location=f"uploads/expert/sample-{idx}.jpg",
+                file_name=f"Expert Sample {idx}",
+                qc_status=Media.QCStatus.PENDING_EXPERT,
+            )
+            Media.objects.filter(pk=media.pk).update(
+                modified_on=now_time - timedelta(minutes=idx)
+            )
+            media_items.append(media)
+
+        response = self.client.get(reverse("dashboard"))
+
+        self.assertContains(response, "Quality Control")
+        self.assertContains(response, Media.QCStatus.PENDING_EXPERT.label)
+        self.assertContains(response, media_items[0].file_name)
+        self.assertNotContains(response, media_items[10].file_name)
+        self.assertContains(
+            response, reverse("media_expert_qc", args=[media_items[0].uuid])
+        )
 
     def test_collection_manager_without_active_series(self):
         AccessionNumberSeries.objects.filter(user=self.manager).update(is_active=False)
@@ -1711,11 +1736,110 @@ class ProcessPendingScansTests(TestCase):
         media = Media.objects.get()
         with self.assertRaises(ValidationError) as exc:
             media.transition_qc(Media.QCStatus.APPROVED, user=self.user)
-        self.assertIn("Accession already exists", str(exc.exception))
+        self.assertIn("Existing accession detected", str(exc.exception))
         self.assertEqual(Accession.objects.count(), 1)
         media.refresh_from_db()
         self.assertEqual(media.qc_status, Media.QCStatus.PENDING_INTERN)
         self.assertEqual(media.qc_logs.filter(description__contains="Approval blocked").count(), 1)
+
+    def test_transition_with_resolution_creates_new_instance(self):
+        collection = Collection.objects.create(abbreviation="KNM", description="Kenya")
+        locality = Locality.objects.create(abbreviation="AB", name="Area 1")
+        Accession.objects.create(collection=collection, specimen_prefix=locality, specimen_no=123)
+        media = self.create_media(
+            qc_status=Media.QCStatus.PENDING_EXPERT,
+            ocr_data={
+                "card_type": "accession_card",
+                "accessions": [
+                    {
+                        "collection_abbreviation": {"interpreted": "KNM"},
+                        "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                        "specimen_no": {"interpreted": 123},
+                    }
+                ],
+            },
+        )
+        key = f"{collection.abbreviation}:{locality.abbreviation}:123"
+        result = media.transition_qc(
+            Media.QCStatus.APPROVED,
+            user=self.user,
+            resolution={key: {"action": "new_instance"}},
+        )
+
+        accessions = Accession.objects.filter(
+            collection=collection,
+            specimen_prefix=locality,
+            specimen_no=123,
+        ).order_by("instance_number")
+        self.assertEqual(accessions.count(), 2)
+        self.assertEqual(accessions.last().instance_number, accessions.first().instance_number + 1)
+        media.refresh_from_db()
+        self.assertEqual(media.accession, accessions.last())
+        self.assertEqual(len(result["created"]), 1)
+
+    def test_transition_with_resolution_updates_existing(self):
+        collection = Collection.objects.create(abbreviation="KNM", description="Kenya")
+        locality = Locality.objects.create(abbreviation="AB", name="Area 1")
+        accession = Accession.objects.create(
+            collection=collection,
+            specimen_prefix=locality,
+            specimen_no=123,
+            comment="Original",
+        )
+        AccessionRow.objects.create(accession=accession, specimen_suffix="-")
+        media = self.create_media(
+            qc_status=Media.QCStatus.PENDING_EXPERT,
+            ocr_data={
+                "card_type": "accession_card",
+                "accessions": [
+                    {
+                        "collection_abbreviation": {"interpreted": "KNM"},
+                        "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                        "specimen_no": {"interpreted": 123},
+                        "additional_notes": [
+                            {
+                                "heading": {"interpreted": "Note"},
+                                "value": {"interpreted": "Updated guidance"},
+                            }
+                        ],
+                        "rows": [
+                            {
+                                "specimen_suffix": {"interpreted": "-"},
+                                "storage_area": {"interpreted": "Shelf 42"},
+                            }
+                        ],
+                    }
+                ],
+            },
+        )
+
+        key = f"{collection.abbreviation}:{locality.abbreviation}:123"
+        resolution = {
+            key: {
+                "action": "update_existing",
+                "accession_id": accession.pk,
+                "fields": {"comment": "Note: Updated guidance"},
+                "rows": ["-"],
+                "references": [],
+                "field_slips": [],
+            }
+        }
+
+        result = media.transition_qc(
+            Media.QCStatus.APPROVED,
+            user=self.user,
+            resolution=resolution,
+        )
+
+        media.refresh_from_db()
+        accession.refresh_from_db()
+        self.assertEqual(media.accession, accession)
+        self.assertEqual(accession.comment, "Note: Updated guidance")
+        row = accession.accessionrow_set.get(specimen_suffix="-")
+        self.assertEqual(row.storage.area, "Shelf 42")
+        self.assertEqual(result["created"], [])
+        processed = media.ocr_data.get("_processed_accessions") or []
+        self.assertTrue(any(entry.get("accession_id") == accession.pk for entry in processed))
 
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch(
@@ -2061,6 +2185,304 @@ class MediaTransitionTests(TestCase):
         media = self.create_media(qc_status=Media.QCStatus.APPROVED, ocr_data={"card_type": "other"})
         with self.assertRaises(ValidationError):
             media.transition_qc(Media.QCStatus.REJECTED, user=self.user)
+
+
+class MediaExpertQCWizardTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.expert = User.objects.create_user(username="expert", password="pass")
+        self.curators_group = Group.objects.create(name="Curators")
+        self.curators_group.user_set.add(self.expert)
+
+        self.collection = Collection.objects.create(abbreviation="KNM", description="Kenya")
+        self.locality = Locality.objects.create(abbreviation="AB", name="Area 1")
+
+        self.media = Media.objects.create(
+            media_location="uploads/pending/expert.png",
+            qc_status=Media.QCStatus.PENDING_EXPERT,
+            ocr_data={
+                "card_type": "accession_card",
+                "accessions": [
+                    {
+                        "collection_abbreviation": {"interpreted": "KNM"},
+                        "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                        "specimen_no": {"interpreted": 123},
+                        "rows": [
+                            {
+                                "_row_id": "row-0",
+                                "specimen_suffix": {"interpreted": "-"},
+                            }
+                        ],
+                    }
+                ],
+            },
+        )
+
+        patcher = patch("cms.models.get_current_user", return_value=self.expert)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+        self.client.force_login(self.expert)
+
+    def build_post_data(self, **overrides):
+        data = {
+            "accession-collection": str(self.collection.pk),
+            "accession-specimen_prefix": str(self.locality.pk),
+            "accession-specimen_no": "123",
+            "accession-type_status": "",
+            "accession-comment": "",
+            "accession-accessioned_by": str(self.expert.pk),
+            "row-TOTAL_FORMS": "1",
+            "row-INITIAL_FORMS": "1",
+            "row-MIN_NUM_FORMS": "0",
+            "row-MAX_NUM_FORMS": "1000",
+            "row-0-row_id": "row-0",
+            "row-0-order": "0",
+            "row-0-specimen_suffix": "-",
+            "row-0-storage": "",
+            "row-0-status": InventoryStatus.UNKNOWN,
+            "ident-TOTAL_FORMS": "1",
+            "ident-INITIAL_FORMS": "1",
+            "ident-MIN_NUM_FORMS": "0",
+            "ident-MAX_NUM_FORMS": "1000",
+            "ident-0-row_id": "row-0",
+            "ident-0-taxon": "",
+            "ident-0-identification_qualifier": "",
+            "ident-0-identified_by": "",
+            "ident-0-verbatim_identification": "",
+            "ident-0-identification_remarks": "",
+            "ident-0-reference": "",
+            "ident-0-date_identified": "",
+            "specimen-TOTAL_FORMS": "0",
+            "specimen-INITIAL_FORMS": "0",
+            "specimen-MIN_NUM_FORMS": "0",
+            "specimen-MAX_NUM_FORMS": "1000",
+            "reference-TOTAL_FORMS": "0",
+            "reference-INITIAL_FORMS": "0",
+            "reference-MIN_NUM_FORMS": "0",
+            "reference-MAX_NUM_FORMS": "1000",
+            "fieldslip-TOTAL_FORMS": "0",
+            "fieldslip-INITIAL_FORMS": "0",
+            "fieldslip-MIN_NUM_FORMS": "0",
+            "fieldslip-MAX_NUM_FORMS": "1000",
+        }
+        data.update(overrides)
+        return data
+
+    def get_url(self):
+        return reverse("media_expert_qc", args=[self.media.uuid])
+
+    def test_expert_can_approve_media(self):
+        response = self.client.post(
+            self.get_url(),
+            self.build_post_data(action="approve", qc_comment="Looks good"),
+        )
+        self.assertRedirects(response, reverse("dashboard"))
+
+        self.media.refresh_from_db()
+        self.assertEqual(self.media.qc_status, Media.QCStatus.APPROVED)
+        self.assertIsNotNone(self.media.accession)
+        self.assertEqual(Accession.objects.count(), 1)
+        comment = MediaQCComment.objects.get()
+        self.assertIn("Looks good", comment.comment)
+
+    def test_return_to_interns_creates_comment(self):
+        response = self.client.post(
+            self.get_url(),
+            self.build_post_data(action="return_intern", qc_comment="Needs work"),
+        )
+        self.assertRedirects(response, reverse("dashboard"))
+
+        self.media.refresh_from_db()
+        self.assertEqual(self.media.qc_status, Media.QCStatus.PENDING_INTERN)
+        comment = MediaQCComment.objects.get()
+        self.assertIn("Needs work", comment.comment)
+
+    def test_return_to_interns_visible_in_pending_queue(self):
+        intern = get_user_model().objects.create_user(username="intern", password="pass")
+        intern_group, _ = Group.objects.get_or_create(name="Interns")
+        intern_group.user_set.add(intern)
+
+        response = self.client.post(
+            self.get_url(),
+            self.build_post_data(action="return_intern", qc_comment="Needs work"),
+        )
+        self.assertRedirects(response, reverse("dashboard"))
+
+        self.media.refresh_from_db()
+
+        self.client.logout()
+        self.client.force_login(intern)
+        response = self.client.get(reverse("dashboard"))
+
+        self.assertContains(response, "Pending Intern Review")
+        self.assertContains(response, self.media.file_name or self.media.media_location)
+        self.assertContains(response, 'data-qc-status="pending_intern"')
+        self.assertNotIn('data-qc-status="rejected"', response.content.decode())
+        self.assertContains(response, "No media in this status.")
+
+    def test_request_rescan_sets_rejected_status(self):
+        response = self.client.post(
+            self.get_url(),
+            self.build_post_data(action="request_rescan", qc_comment="Blurry"),
+        )
+        self.assertRedirects(response, reverse("dashboard"))
+
+        self.media.refresh_from_db()
+        self.assertEqual(self.media.qc_status, Media.QCStatus.REJECTED)
+        comment = MediaQCComment.objects.get()
+        self.assertIn("Blurry", comment.comment)
+
+    def test_save_and_continue_does_not_change_status(self):
+        response = self.client.post(
+            self.get_url(),
+            self.build_post_data(action="save", qc_comment=""),
+        )
+        self.assertRedirects(response, self.get_url())
+
+        self.media.refresh_from_db()
+        self.assertEqual(self.media.qc_status, Media.QCStatus.PENDING_EXPERT)
+        self.assertEqual(MediaQCComment.objects.count(), 0)
+
+    def test_approval_blocked_when_accession_exists(self):
+        accession = Accession.objects.create(
+            collection=self.collection,
+            specimen_prefix=self.locality,
+            specimen_no=123,
+            instance_number=1,
+        )
+        self.media.accession = accession
+        self.media.save(update_fields=["accession"])
+
+        response = self.client.post(
+            self.get_url(),
+            self.build_post_data(action="approve", qc_comment="Retry"),
+        )
+        self.assertEqual(response.status_code, 200)
+
+        self.media.refresh_from_db()
+        self.assertEqual(self.media.qc_status, Media.QCStatus.PENDING_EXPERT)
+        self.assertEqual(MediaQCComment.objects.count(), 0)
+
+    def test_importer_exception_surfaces_error(self):
+        with patch(
+            "cms.ocr_processing.create_accessions_from_media",
+            side_effect=RuntimeError("Importer failed"),
+        ):
+            response = self.client.post(
+                self.get_url(),
+                self.build_post_data(action="approve", qc_comment="Approve"),
+            )
+        self.assertEqual(response.status_code, 200)
+
+        self.media.refresh_from_db()
+        self.assertEqual(self.media.qc_status, Media.QCStatus.PENDING_EXPERT)
+        self.assertEqual(MediaQCComment.objects.count(), 0)
+
+    def test_duplicate_requires_resolution(self):
+        Accession.objects.create(
+            collection=self.collection,
+            specimen_prefix=self.locality,
+            specimen_no=123,
+        )
+        response = self.client.post(
+            self.get_url(),
+            self.build_post_data(action="approve", qc_comment="Approve"),
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Select how to handle the existing accession")
+        self.media.refresh_from_db()
+        self.assertEqual(self.media.qc_status, Media.QCStatus.PENDING_EXPERT)
+
+    def test_duplicate_create_new_instance(self):
+        Accession.objects.create(
+            collection=self.collection,
+            specimen_prefix=self.locality,
+            specimen_no=123,
+        )
+        conflicts = describe_accession_conflicts(self.media)
+        html_key = conflicts[0]["html_key"]
+        post_data = self.build_post_data(action="approve", qc_comment="Approve")
+        post_data.update({
+            f"resolution_action__{html_key}": "new_instance",
+        })
+        response = self.client.post(self.get_url(), post_data)
+        self.assertRedirects(response, reverse("dashboard"))
+
+        media = Media.objects.get(pk=self.media.pk)
+        self.assertEqual(media.qc_status, Media.QCStatus.APPROVED)
+        accessions = Accession.objects.filter(
+            collection=self.collection,
+            specimen_prefix=self.locality,
+            specimen_no=123,
+        ).order_by("instance_number")
+        self.assertEqual(accessions.count(), 2)
+        self.assertEqual(media.accession, accessions.last())
+
+    def test_duplicate_update_existing(self):
+        accession = Accession.objects.create(
+            collection=self.collection,
+            specimen_prefix=self.locality,
+            specimen_no=123,
+            comment="Original",
+        )
+        AccessionRow.objects.create(accession=accession, specimen_suffix="-")
+        self.media.ocr_data = {
+            "card_type": "accession_card",
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 123},
+                    "additional_notes": [
+                        {
+                            "heading": {"interpreted": "Note"},
+                            "value": {"interpreted": "Updated guidance"},
+                        }
+                    ],
+                    "rows": [
+                        {
+                            "specimen_suffix": {"interpreted": "-"},
+                            "storage_area": {"interpreted": "Shelf 42"},
+                        }
+                    ],
+                }
+            ],
+        }
+        self.media.save(update_fields=["ocr_data"])
+
+        conflicts = describe_accession_conflicts(self.media)
+        html_key = conflicts[0]["html_key"]
+        row_suffix = conflicts[0]["proposed"]["rows"][0]["html_suffix"]
+        post_data = self.build_post_data(action="approve", qc_comment="Approve")
+        post_data.update(
+            {
+                f"resolution_action__{html_key}": "update_existing",
+                f"target_accession__{html_key}": str(accession.pk),
+                f"apply_field__{html_key}__comment": "on",
+                f"replace_row__{html_key}__{row_suffix}": "on",
+            }
+        )
+
+        response = self.client.post(self.get_url(), post_data)
+        self.assertRedirects(response, reverse("dashboard"))
+
+        accession.refresh_from_db()
+        media = Media.objects.get(pk=self.media.pk)
+        self.assertEqual(media.qc_status, Media.QCStatus.APPROVED)
+        self.assertEqual(media.accession, accession)
+        self.assertEqual(accession.comment, "Note: Updated guidance")
+        row = accession.accessionrow_set.get(specimen_suffix="-")
+        self.assertEqual(row.storage.area, "Shelf 42")
+
+    def test_non_expert_forbidden(self):
+        User = get_user_model()
+        other = User.objects.create_user(username="visitor", password="pass")
+        self.client.logout()
+        self.client.force_login(other)
+
+        response = self.client.get(self.get_url())
+        self.assertEqual(response.status_code, 403)
 
 
 class UploadProcessingTests(TestCase):
@@ -2467,6 +2889,47 @@ class MediaInternQCWizardTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
         self.assertFalse(Storage.objects.filter(area="Drawer 99").exists())
+
+    def test_displays_expert_comments_when_present(self):
+        expert = get_user_model().objects.create_user(username="expert", password="pass")
+        old_log = MediaQCLog.objects.create(
+            media=self.media,
+            change_type=MediaQCLog.ChangeType.STATUS,
+            field_name="qc_status",
+            old_value={"qc_status": Media.QCStatus.PENDING_EXPERT},
+            new_value={"qc_status": Media.QCStatus.PENDING_INTERN},
+            description="Initial return",
+            changed_by=expert,
+        )
+        MediaQCComment.objects.create(
+            log=old_log,
+            comment="First round of feedback",
+            created_by=expert,
+        )
+        new_log = MediaQCLog.objects.create(
+            media=self.media,
+            change_type=MediaQCLog.ChangeType.STATUS,
+            field_name="qc_status",
+            old_value={"qc_status": Media.QCStatus.PENDING_EXPERT},
+            new_value={"qc_status": Media.QCStatus.PENDING_INTERN},
+            description="Follow-up",
+            changed_by=expert,
+        )
+        MediaQCComment.objects.create(
+            log=new_log,
+            comment="Please double-check the specimen storage",
+            created_by=expert,
+        )
+
+        self.client.login(username="intern", password="pass")
+        response = self.client.get(self.get_url())
+
+        self.assertContains(response, "Expert Feedback")
+        self.assertContains(response, "Latest reviewer comment")
+        self.assertContains(response, "Please double-check the specimen storage")
+        self.assertContains(response, "Earlier comments")
+        self.assertContains(response, "First round of feedback")
+        self.assertContains(response, expert.username)
 
 
 class AdminAutocompleteTests(TestCase):

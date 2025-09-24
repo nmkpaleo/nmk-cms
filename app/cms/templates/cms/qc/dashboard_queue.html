@@ -1,0 +1,114 @@
+<h2>Quality Control</h2>
+{% with has_intern=intern_qc_status_lists|length has_expert=expert_qc_status_lists|length %}
+  {% if has_intern or has_expert %}
+    {% if has_expert %}
+      {% for qc_group in expert_qc_status_lists %}
+        <div class="w3-card w3-margin-bottom">
+          <header class="w3-container w3-light-grey">
+            <h3 class="w3-margin">{{ qc_group.label }}</h3>
+          </header>
+          <div class="w3-container">
+            {% if qc_group.entries %}
+              <div class="w3-responsive">
+                <table class="w3-table w3-striped w3-small">
+                  <thead>
+                    <tr>
+                      <th>Media</th>
+                      <th>Accession / Row</th>
+                      <th>Updated</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for media in qc_group.entries %}
+                      <tr data-qc-status="{{ qc_group.status }}">
+                        <td>
+                          {% if media.file_name %}
+                            {{ media.file_name }}
+                          {% else %}
+                            {{ media.media_location }}
+                          {% endif %}
+                        </td>
+                        <td>
+                          {% if media.accession_row %}
+                            {{ media.accession_row }}
+                          {% elif media.accession %}
+                            {{ media.accession }}
+                          {% else %}
+                            -
+                          {% endif %}
+                        </td>
+                        <td>{{ media.modified_on|date:"Y-m-d H:i" }}</td>
+                        <td>
+                          <a href="{% url 'media_expert_qc' media.uuid %}" class="w3-button w3-small w3-deep-purple">Open Expert QC</a>
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% else %}
+              <p class="w3-padding">No media awaiting expert review.</p>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    {% if has_intern %}
+      {% for qc_group in intern_qc_status_lists %}
+        <div class="w3-card w3-margin-bottom">
+          <header class="w3-container w3-light-grey">
+            <h3 class="w3-margin">{{ qc_group.label }}</h3>
+          </header>
+          <div class="w3-container">
+            {% if qc_group.entries %}
+              <div class="w3-responsive">
+                <table class="w3-table w3-striped w3-small">
+                  <thead>
+                    <tr>
+                      <th>Media</th>
+                      <th>Accession / Row</th>
+                      <th>Updated</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for media in qc_group.entries %}
+                      <tr data-qc-status="{{ qc_group.status }}">
+                        <td>
+                          {% if media.file_name %}
+                            {{ media.file_name }}
+                          {% else %}
+                            {{ media.media_location }}
+                          {% endif %}
+                        </td>
+                        <td>
+                          {% if media.accession_row %}
+                            {{ media.accession_row }}
+                          {% elif media.accession %}
+                            {{ media.accession }}
+                          {% else %}
+                            -
+                          {% endif %}
+                        </td>
+                        <td>{{ media.modified_on|date:"Y-m-d H:i" }}</td>
+                        <td>
+                          <a href="{% url 'media_intern_qc' media.uuid %}" class="w3-button w3-small w3-blue">Review</a>
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% else %}
+              <p class="w3-padding">No media in this status.</p>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% else %}
+    <p>No media requiring quality control at this time.</p>
+  {% endif %}
+{% endwith %}

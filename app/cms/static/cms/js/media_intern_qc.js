@@ -55,5 +55,29 @@
     });
 
     updateOrder(container);
+
+    function toggleConflict(container) {
+      var selected = container.querySelector('input[name^="resolution_action__"]:checked');
+      var value = selected ? selected.value : null;
+      container.querySelectorAll('[data-conflict-section]').forEach(function (section) {
+        var sectionType = section.getAttribute('data-conflict-section');
+        if (sectionType === 'new_instance') {
+          section.style.display = value === 'new_instance' ? '' : 'none';
+        } else if (sectionType === 'update_existing') {
+          section.style.display = value === 'update_existing' ? '' : 'none';
+        }
+      });
+    }
+
+    form.querySelectorAll('[data-conflict]').forEach(function (conflictCard) {
+      toggleConflict(conflictCard);
+      conflictCard
+        .querySelectorAll('input[name^="resolution_action__"]')
+        .forEach(function (radio) {
+          radio.addEventListener('change', function () {
+            toggleConflict(conflictCard);
+          });
+        });
+    });
   });
 })();

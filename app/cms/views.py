@@ -85,13 +85,14 @@ from cms.models import (
     Element,
     Person,
     MediaQCLog,
+    MediaQCComment,
 )
 
 from cms.resources import FieldSlipResource
 from .utils import build_history_entries
 from cms.utils import generate_accessions_from_series
 from cms.upload_processing import process_file
-from cms.ocr_processing import process_pending_scans
+from cms.ocr_processing import process_pending_scans, describe_accession_conflicts
 from formtools.wizard.views import SessionWizardView
 
 class FieldSlipAutocomplete(autocomplete.Select2QuerySetView):
@@ -360,6 +361,30 @@ def dashboard(request):
             }
         )
 
+    expert_qc_status_lists: list[dict] = []
+    intern_qc_status_lists: list[dict] = []
+    if user.is_superuser or user.groups.filter(
+        name__in=["Curators", "Collection Managers"]
+    ).exists():
+        entries = (
+            Media.objects.filter(qc_status=Media.QCStatus.PENDING_EXPERT)
+            .select_related("accession", "accession_row")
+            .order_by("-modified_on")[:10]
+        )
+        expert_qc_status_lists.append(
+            {
+                "status": Media.QCStatus.PENDING_EXPERT.value,
+                "label": Media.QCStatus.PENDING_EXPERT.label,
+                "entries": entries,
+            }
+        )
+        context.update(
+            {
+                "is_expert": True,
+                "expert_qc_status_lists": expert_qc_status_lists,
+            }
+        )
+
     if user.groups.filter(name="Interns").exists():
         active_scan_id_subquery = Scanning.objects.filter(
             drawer=OuterRef("pk"), user=user, end_time__isnull=True
@@ -376,7 +401,6 @@ def dashboard(request):
             .annotate(active_scan_start=Subquery(active_scan_start_subquery))
         )
 
-        intern_qc_status_lists = []
         for status_choice in (
             Media.QCStatus.PENDING_INTERN,
             Media.QCStatus.REJECTED,
@@ -401,6 +425,9 @@ def dashboard(request):
                 "intern_qc_status_lists": intern_qc_status_lists,
             }
         )
+
+    context.setdefault("expert_qc_status_lists", expert_qc_status_lists)
+    context.setdefault("intern_qc_status_lists", intern_qc_status_lists)
 
     if not context:
         context["no_role"] = True
@@ -1169,6 +1196,752 @@ def _build_row_contexts(row_formset, ident_formset, specimen_formset):
     return contexts
 
 
+def _collect_validation_messages(error: ValidationError) -> list[str]:
+    if hasattr(error, "message_dict"):
+        messages_list: list[str] = []
+        for errors in error.message_dict.values():
+            messages_list.extend(errors)
+        return messages_list
+    return list(getattr(error, "messages", [str(error)]))
+
+
+def _create_qc_comment(media: Media, comment: str | None, user) -> MediaQCComment | None:
+    if not comment:
+        return None
+    log = (
+        MediaQCLog.objects.filter(
+            media=media, change_type=MediaQCLog.ChangeType.STATUS
+        )
+        .order_by("-created_on")
+        .first()
+    )
+    if not log:
+        return None
+    return MediaQCComment.objects.create(log=log, comment=comment, created_by=user)
+
+
+def _get_qc_comments(media: Media) -> list[MediaQCComment]:
+    return list(
+        MediaQCComment.objects.filter(log__media=media)
+        .select_related("created_by", "log")
+        .order_by("created_on")
+    )
+
+
+class MediaQCFormManager:
+    """Prepare and persist media QC forms shared by intern and expert wizards."""
+
+    def __init__(self, request, media: Media):
+        self.request = request
+        self.media = media
+        self.original_data = copy.deepcopy(media.ocr_data or {})
+        self.data = copy.deepcopy(media.ocr_data or {})
+        accessions = self.data.setdefault("accessions", [])
+        if not accessions:
+            accessions.append({})
+        self.accession_payload = accessions[0]
+        self.rows_payload = list(self.accession_payload.get("rows") or [])
+        self.storage_suggestions = list(
+            Storage.objects.order_by("area").values_list("area", flat=True)
+        )
+        ident_payload = list(self.accession_payload.get("identifications") or [])
+        if len(ident_payload) < len(self.rows_payload):
+            ident_payload.extend(
+                {} for _ in range(len(self.rows_payload) - len(ident_payload))
+            )
+        self.ident_payload = ident_payload
+        self.row_initial: list[dict] = []
+        self.ident_initial: list[dict] = []
+        self.specimen_initial: list[dict] = []
+        self.reference_initial: list[dict] = []
+        self.fieldslip_initial: list[dict] = []
+        self.row_payload_map: dict[str, dict] = {}
+        self.ident_payload_map: dict[str, dict] = {}
+        self.reference_payload_map: dict[str, dict] = {}
+        self.fieldslip_payload_map: dict[str, dict] = {}
+        self.original_row_ids: list[str] = []
+
+        for index, row_payload in enumerate(self.rows_payload):
+            row_id = (
+                row_payload.get("_row_id")
+                or row_payload.get("row_id")
+                or f"row-{index}"
+            )
+            self.original_row_ids.append(row_id)
+            self.row_payload_map[row_id] = row_payload
+            self.ident_payload_map[row_id] = (
+                ident_payload[index] if index < len(ident_payload) else {}
+            )
+
+            suffix = (row_payload.get("specimen_suffix") or {}).get("interpreted") or "-"
+            storage_name = (row_payload.get("storage_area") or {}).get("interpreted")
+            if storage_name:
+                self.storage_suggestions.append(storage_name)
+            storage_obj = (
+                Storage.objects.filter(area=storage_name).first()
+                if storage_name
+                else None
+            )
+            self.row_initial.append(
+                {
+                    "row_id": row_id,
+                    "order": index,
+                    "specimen_suffix": suffix,
+                    "storage": storage_obj.pk if storage_obj else None,
+                    "storage_display": storage_name,
+                    "status": InventoryStatus.UNKNOWN,
+                }
+            )
+
+            ident_data = self.ident_payload_map[row_id]
+            identified_by_id = (ident_data.get("identified_by") or {}).get("interpreted")
+            identified_by = (
+                Person.objects.filter(pk=identified_by_id).first()
+                if identified_by_id
+                else None
+            )
+            reference_id = (ident_data.get("reference") or {}).get("interpreted")
+            reference_obj = (
+                Reference.objects.filter(pk=reference_id).first()
+                if reference_id
+                else None
+            )
+            self.ident_initial.append(
+                {
+                    "row_id": row_id,
+                    "taxon": (ident_data.get("taxon") or {}).get("interpreted"),
+                    "identification_qualifier": (
+                        ident_data.get("identification_qualifier") or {}
+                    ).get("interpreted"),
+                    "verbatim_identification": (
+                        ident_data.get("verbatim_identification") or {}
+                    ).get("interpreted"),
+                    "identification_remarks": (
+                        ident_data.get("identification_remarks") or {}
+                    ).get("interpreted"),
+                    "identified_by": identified_by.pk if identified_by else None,
+                    "reference": reference_obj.pk if reference_obj else None,
+                    "date_identified": (
+                        ident_data.get("date_identified") or {}
+                    ).get("interpreted"),
+                }
+            )
+
+            for nature in row_payload.get("natures") or []:
+                element_name = (nature.get("element_name") or {}).get("interpreted")
+                element_obj = (
+                    Element.objects.filter(name=element_name).first()
+                    if element_name
+                    else None
+                )
+                self.specimen_initial.append(
+                    {
+                        "row_id": row_id,
+                        "element": element_obj.pk if element_obj else None,
+                        "side": (nature.get("side") or {}).get("interpreted"),
+                        "condition": (nature.get("condition") or {}).get("interpreted"),
+                        "verbatim_element": (
+                            nature.get("verbatim_element") or {}
+                        ).get("interpreted"),
+                        "portion": (nature.get("portion") or {}).get("interpreted"),
+                        "fragments": (
+                            nature.get("fragments") or {}
+                        ).get("interpreted"),
+                    }
+                )
+
+        references_payload = list(self.accession_payload.get("references") or [])
+        for index, reference_payload in enumerate(references_payload):
+            ref_id = reference_payload.get("_ref_id") or f"ref-{index}"
+            self.reference_payload_map[ref_id] = reference_payload
+            self.reference_initial.append(
+                {
+                    "ref_id": ref_id,
+                    "order": index,
+                    "first_author": (
+                        reference_payload.get("reference_first_author") or {}
+                    ).get("interpreted"),
+                    "title": (reference_payload.get("reference_title") or {}).get(
+                        "interpreted"
+                    ),
+                    "year": (reference_payload.get("reference_year") or {}).get(
+                        "interpreted"
+                    ),
+                    "page": (reference_payload.get("page") or {}).get("interpreted"),
+                }
+            )
+
+        field_slips_payload = list(self.accession_payload.get("field_slips") or [])
+        for index, field_slip_payload in enumerate(field_slips_payload):
+            slip_id = field_slip_payload.get("_field_slip_id") or f"field-slip-{index}"
+            self.fieldslip_payload_map[slip_id] = field_slip_payload
+            horizon_payload = field_slip_payload.get("verbatim_horizon") or {}
+            self.fieldslip_initial.append(
+                {
+                    "slip_id": slip_id,
+                    "order": index,
+                    "field_number": (
+                        field_slip_payload.get("field_number") or {}
+                    ).get("interpreted"),
+                    "verbatim_locality": (
+                        field_slip_payload.get("verbatim_locality") or {}
+                    ).get("interpreted"),
+                    "verbatim_taxon": (
+                        field_slip_payload.get("verbatim_taxon") or {}
+                    ).get("interpreted"),
+                    "verbatim_element": (
+                        field_slip_payload.get("verbatim_element") or {}
+                    ).get("interpreted"),
+                    "horizon_formation": (
+                        horizon_payload.get("formation") or {}
+                    ).get("interpreted"),
+                    "horizon_member": (
+                        horizon_payload.get("member") or {}
+                    ).get("interpreted"),
+                    "horizon_bed": (
+                        horizon_payload.get("bed_or_horizon") or {}
+                    ).get("interpreted"),
+                    "horizon_chronostratigraphy": (
+                        horizon_payload.get("chronostratigraphy") or {}
+                    ).get("interpreted"),
+                    "aerial_photo": (
+                        field_slip_payload.get("aerial_photo") or {}
+                    ).get("interpreted"),
+                    "verbatim_latitude": (
+                        field_slip_payload.get("verbatim_latitude") or {}
+                    ).get("interpreted"),
+                    "verbatim_longitude": (
+                        field_slip_payload.get("verbatim_longitude") or {}
+                    ).get("interpreted"),
+                    "verbatim_elevation": (
+                        field_slip_payload.get("verbatim_elevation") or {}
+                    ).get("interpreted"),
+                }
+            )
+
+        self.storage_suggestions = list(
+            dict.fromkeys(value for value in self.storage_suggestions if value)
+        )
+
+        collection_abbr = (
+            self.accession_payload.get("collection_abbreviation") or {}
+        ).get("interpreted")
+        collection_obj = (
+            Collection.objects.filter(abbreviation=collection_abbr).first()
+            if collection_abbr
+            else None
+        )
+        prefix_abbr = (
+            self.accession_payload.get("specimen_prefix_abbreviation") or {}
+        ).get("interpreted")
+        prefix_obj = (
+            Locality.objects.filter(abbreviation=prefix_abbr).first()
+            if prefix_abbr
+            else None
+        )
+        specimen_no_value = (
+            self.accession_payload.get("specimen_no") or {}
+        ).get("interpreted")
+        try:
+            specimen_no_initial = int(specimen_no_value)
+        except (TypeError, ValueError):
+            specimen_no_initial = specimen_no_value
+        type_status_initial = (
+            self.accession_payload.get("type_status") or {}
+        ).get("interpreted")
+        comment_initial = (
+            self.accession_payload.get("comment") or {}
+        ).get("interpreted")
+        accession_instance = getattr(media, "accession", None) or Accession()
+        accessioned_by_user = (
+            getattr(getattr(media, "accession", None), "accessioned_by", None)
+            or request.user
+        )
+
+        self.acc_initial = {
+            "collection": collection_obj,
+            "specimen_prefix": prefix_obj,
+            "specimen_no": specimen_no_initial,
+            "type_status": type_status_initial,
+            "comment": comment_initial,
+            "accessioned_by": accessioned_by_user,
+        }
+        self.accession_instance = accession_instance
+
+        self.accession_form: AccessionForm | None = None
+        self.row_formset = None
+        self.ident_formset = None
+        self.specimen_formset = None
+        self.reference_formset = None
+        self.fieldslip_formset = None
+        self.row_contexts: list[dict] = []
+
+    def build_forms(self) -> None:
+        if self.request.method == "POST":
+            self.accession_form = AccessionForm(
+                self.request.POST,
+                prefix="accession",
+                instance=self.accession_instance,
+            )
+            self.row_formset = AccessionRowFormSet(self.request.POST, prefix="row")
+            self.ident_formset = IdentificationQCFormSet(
+                self.request.POST, prefix="ident"
+            )
+            self.specimen_formset = SpecimenQCFormSet(
+                self.request.POST, prefix="specimen"
+            )
+            self.reference_formset = ReferenceQCFormSet(
+                self.request.POST, prefix="reference"
+            )
+            self.fieldslip_formset = FieldSlipQCFormSet(
+                self.request.POST, prefix="fieldslip"
+            )
+        else:
+            self.accession_form = AccessionForm(
+                prefix="accession",
+                instance=self.accession_instance,
+                initial=self.acc_initial,
+            )
+            self.row_formset = AccessionRowFormSet(
+                prefix="row", initial=self.row_initial
+            )
+            self.ident_formset = IdentificationQCFormSet(
+                prefix="ident", initial=self.ident_initial
+            )
+            self.specimen_formset = SpecimenQCFormSet(
+                prefix="specimen", initial=self.specimen_initial
+            )
+            self.reference_formset = ReferenceQCFormSet(
+                prefix="reference", initial=self.reference_initial
+            )
+            self.fieldslip_formset = FieldSlipQCFormSet(
+                prefix="fieldslip", initial=self.fieldslip_initial
+            )
+
+        comment_field = self.accession_form.fields.get("comment")
+        if comment_field is not None:
+            comment_field.widget.attrs.setdefault("rows", 2)
+
+        for form in self.ident_formset:
+            remarks_field = form.fields.get("identification_remarks")
+            if remarks_field is not None:
+                remarks_field.widget.attrs.setdefault("rows", 2)
+
+        self.row_contexts = _build_row_contexts(
+            self.row_formset, self.ident_formset, self.specimen_formset
+        )
+
+    def forms_valid(self) -> bool:
+        return (
+            self.accession_form.is_valid()
+            and self.row_formset.is_valid()
+            and self.ident_formset.is_valid()
+            and self.specimen_formset.is_valid()
+            and self.reference_formset.is_valid()
+            and self.fieldslip_formset.is_valid()
+        )
+
+    def save(self) -> dict[str, object]:
+        cleaned_rows = []
+        for form in self.row_formset:
+            cleaned = form.cleaned_data
+            if not cleaned:
+                continue
+            row_id = cleaned.get("row_id") or form.initial.get("row_id")
+            if not row_id:
+                continue
+            try:
+                order_value = int(cleaned.get("order"))
+            except (TypeError, ValueError):
+                order_value = len(cleaned_rows)
+            storage_value = cleaned.get("storage")
+            if isinstance(storage_value, str):
+                storage_value = storage_value.strip()
+            elif storage_value is not None and hasattr(storage_value, "area"):
+                storage_value = storage_value.area
+            if storage_value == "":
+                storage_value = None
+            cleaned_rows.append(
+                {
+                    "row_id": row_id,
+                    "order": order_value,
+                    "specimen_suffix": cleaned.get("specimen_suffix") or "-",
+                    "storage": storage_value,
+                    "status": cleaned.get("status"),
+                }
+            )
+
+        ident_clean_map: dict[str, dict] = {}
+        for form in self.ident_formset:
+            cleaned = form.cleaned_data
+            if not cleaned:
+                continue
+            row_id = cleaned.get("row_id")
+            if not row_id:
+                continue
+            ident_clean_map[row_id] = cleaned
+
+        specimen_clean_map: dict[str, list[dict]] = {}
+        for form in self.specimen_formset:
+            cleaned = form.cleaned_data
+            if not cleaned:
+                continue
+            row_id = cleaned.get("row_id")
+            if not row_id:
+                continue
+            element_obj = cleaned.get("element")
+            if not element_obj and not any(
+                cleaned.get(field)
+                for field in (
+                    "side",
+                    "condition",
+                    "verbatim_element",
+                    "portion",
+                    "fragments",
+                )
+            ):
+                continue
+            specimen_clean_map.setdefault(row_id, []).append(cleaned)
+
+        reference_entries: list[dict] = []
+        for form in self.reference_formset:
+            cleaned = form.cleaned_data
+            if not cleaned:
+                continue
+            ref_id = (
+                cleaned.get("ref_id")
+                or form.initial.get("ref_id")
+                or f"ref-{len(reference_entries)}"
+            )
+            try:
+                order_value = int(cleaned.get("order"))
+            except (TypeError, ValueError):
+                order_value = len(reference_entries)
+            reference_entries.append(
+                {
+                    "ref_id": ref_id,
+                    "order": order_value,
+                    "first_author": cleaned.get("first_author"),
+                    "title": cleaned.get("title"),
+                    "year": cleaned.get("year"),
+                    "page": cleaned.get("page"),
+                }
+            )
+
+        fieldslip_entries: list[dict] = []
+        for form in self.fieldslip_formset:
+            cleaned = form.cleaned_data
+            if not cleaned:
+                continue
+            slip_id = (
+                cleaned.get("slip_id")
+                or form.initial.get("slip_id")
+                or f"field-slip-{len(fieldslip_entries)}"
+            )
+            try:
+                order_value = int(cleaned.get("order"))
+            except (TypeError, ValueError):
+                order_value = len(fieldslip_entries)
+            fieldslip_entries.append(
+                {
+                    "slip_id": slip_id,
+                    "order": order_value,
+                    "field_number": cleaned.get("field_number"),
+                    "verbatim_locality": cleaned.get("verbatim_locality"),
+                    "verbatim_taxon": cleaned.get("verbatim_taxon"),
+                    "verbatim_element": cleaned.get("verbatim_element"),
+                    "horizon_formation": cleaned.get("horizon_formation"),
+                    "horizon_member": cleaned.get("horizon_member"),
+                    "horizon_bed": cleaned.get("horizon_bed"),
+                    "horizon_chronostratigraphy": cleaned.get(
+                        "horizon_chronostratigraphy"
+                    ),
+                    "aerial_photo": cleaned.get("aerial_photo"),
+                    "verbatim_latitude": cleaned.get("verbatim_latitude"),
+                    "verbatim_longitude": cleaned.get("verbatim_longitude"),
+                    "verbatim_elevation": cleaned.get("verbatim_elevation"),
+                }
+            )
+
+        sorted_rows = sorted(cleaned_rows, key=lambda item: item["order"])
+        existing_new_order = [
+            entry["row_id"]
+            for entry in sorted_rows
+            if entry["row_id"] in self.row_payload_map
+        ]
+        rows_rearranged = existing_new_order != self.original_row_ids[: len(existing_new_order)]
+
+        sorted_references = sorted(reference_entries, key=lambda item: item["order"])
+        sorted_fieldslips = sorted(fieldslip_entries, key=lambda item: item["order"])
+
+        cleaned_accession = self.accession_form.cleaned_data
+        collection_obj = cleaned_accession.get("collection")
+        prefix_obj = cleaned_accession.get("specimen_prefix")
+        specimen_no_cleaned = cleaned_accession.get("specimen_no")
+        type_status_cleaned = cleaned_accession.get("type_status")
+        comment_cleaned = cleaned_accession.get("comment")
+
+        storage_cache: dict[str, Storage] = {}
+
+        with transaction.atomic():
+            _set_interpreted(
+                self.accession_payload,
+                "collection_abbreviation",
+                collection_obj.abbreviation if collection_obj else None,
+            )
+            _set_interpreted(
+                self.accession_payload,
+                "specimen_prefix_abbreviation",
+                prefix_obj.abbreviation if prefix_obj else None,
+            )
+            _set_interpreted(
+                self.accession_payload,
+                "specimen_no",
+                specimen_no_cleaned,
+            )
+            _set_interpreted(
+                self.accession_payload,
+                "type_status",
+                type_status_cleaned,
+            )
+            _set_interpreted(
+                self.accession_payload,
+                "comment",
+                comment_cleaned,
+            )
+
+            updated_rows = []
+            updated_identifications = []
+            for entry in sorted_rows:
+                row_id = entry["row_id"]
+                original_row = copy.deepcopy(self.row_payload_map.get(row_id, {}))
+                _set_interpreted(
+                    original_row,
+                    "specimen_suffix",
+                    entry["specimen_suffix"],
+                )
+                storage_value = entry["storage"]
+                storage_name = None
+                if isinstance(storage_value, str) and storage_value:
+                    cache_key = storage_value.lower()
+                    storage_obj = storage_cache.get(cache_key)
+                    if storage_obj is None:
+                        storage_obj = Storage.objects.filter(
+                            area__iexact=storage_value
+                        ).first()
+                        if storage_obj is None:
+                            storage_obj = Storage.objects.create(area=storage_value)
+                        storage_cache[cache_key] = storage_obj
+                    storage_name = storage_obj.area
+                elif isinstance(storage_value, Storage):
+                    storage_name = storage_value.area
+                _set_interpreted(original_row, "storage_area", storage_name)
+
+                original_natures = original_row.get("natures") or []
+                new_natures = []
+                specimens = specimen_clean_map.get(row_id, [])
+                for index, specimen_data in enumerate(specimens):
+                    original_nature = (
+                        copy.deepcopy(original_natures[index])
+                        if index < len(original_natures)
+                        else {}
+                    )
+                    element_obj = specimen_data.get("element")
+                    element_name = element_obj.name if element_obj else None
+                    _set_interpreted(original_nature, "element_name", element_name)
+                    _set_interpreted(
+                        original_nature,
+                        "side",
+                        specimen_data.get("side"),
+                    )
+                    _set_interpreted(
+                        original_nature,
+                        "condition",
+                        specimen_data.get("condition"),
+                    )
+                    _set_interpreted(
+                        original_nature,
+                        "verbatim_element",
+                        specimen_data.get("verbatim_element"),
+                    )
+                    _set_interpreted(
+                        original_nature,
+                        "portion",
+                        specimen_data.get("portion"),
+                    )
+                    _set_interpreted(
+                        original_nature,
+                        "fragments",
+                        specimen_data.get("fragments"),
+                    )
+                    new_natures.append(original_nature)
+                original_row["natures"] = new_natures
+                updated_rows.append(original_row)
+
+                ident_cleaned = ident_clean_map.get(row_id, {})
+                original_ident = copy.deepcopy(
+                    self.ident_payload_map.get(row_id, {})
+                )
+                _set_interpreted(
+                    original_ident, "taxon", ident_cleaned.get("taxon")
+                )
+                _set_interpreted(
+                    original_ident,
+                    "identification_qualifier",
+                    ident_cleaned.get("identification_qualifier"),
+                )
+                _set_interpreted(
+                    original_ident,
+                    "verbatim_identification",
+                    ident_cleaned.get("verbatim_identification"),
+                )
+                _set_interpreted(
+                    original_ident,
+                    "identification_remarks",
+                    ident_cleaned.get("identification_remarks"),
+                )
+                identified_by_obj = ident_cleaned.get("identified_by")
+                _set_interpreted(
+                    original_ident,
+                    "identified_by",
+                    identified_by_obj.pk if identified_by_obj else None,
+                )
+                reference_obj = ident_cleaned.get("reference")
+                _set_interpreted(
+                    original_ident,
+                    "reference",
+                    reference_obj.pk if reference_obj else None,
+                )
+                _set_interpreted(
+                    original_ident,
+                    "date_identified",
+                    ident_cleaned.get("date_identified"),
+                )
+                updated_identifications.append(original_ident)
+
+            self.accession_payload["rows"] = updated_rows
+            self.accession_payload["identifications"] = updated_identifications
+
+            updated_references = []
+            for entry in sorted_references:
+                ref_id = entry["ref_id"]
+                original_reference = copy.deepcopy(
+                    self.reference_payload_map.get(ref_id, {})
+                )
+                _set_interpreted(
+                    original_reference,
+                    "reference_first_author",
+                    entry.get("first_author"),
+                )
+                _set_interpreted(
+                    original_reference,
+                    "reference_title",
+                    entry.get("title"),
+                )
+                _set_interpreted(
+                    original_reference,
+                    "reference_year",
+                    entry.get("year"),
+                )
+                _set_interpreted(original_reference, "page", entry.get("page"))
+                updated_references.append(original_reference)
+
+            self.accession_payload["references"] = updated_references
+
+            updated_field_slips = []
+            for entry in sorted_fieldslips:
+                slip_id = entry["slip_id"]
+                original_field_slip = copy.deepcopy(
+                    self.fieldslip_payload_map.get(slip_id, {})
+                )
+                _set_interpreted(
+                    original_field_slip,
+                    "field_number",
+                    entry.get("field_number"),
+                )
+                _set_interpreted(
+                    original_field_slip,
+                    "verbatim_locality",
+                    entry.get("verbatim_locality"),
+                )
+                _set_interpreted(
+                    original_field_slip,
+                    "verbatim_taxon",
+                    entry.get("verbatim_taxon"),
+                )
+                _set_interpreted(
+                    original_field_slip,
+                    "verbatim_element",
+                    entry.get("verbatim_element"),
+                )
+                horizon_payload = original_field_slip.get("verbatim_horizon") or {}
+                horizon_payload = copy.deepcopy(horizon_payload)
+                _set_interpreted(
+                    horizon_payload,
+                    "formation",
+                    entry.get("horizon_formation"),
+                )
+                _set_interpreted(
+                    horizon_payload,
+                    "member",
+                    entry.get("horizon_member"),
+                )
+                _set_interpreted(
+                    horizon_payload,
+                    "bed_or_horizon",
+                    entry.get("horizon_bed"),
+                )
+                _set_interpreted(
+                    horizon_payload,
+                    "chronostratigraphy",
+                    entry.get("horizon_chronostratigraphy"),
+                )
+                original_field_slip["verbatim_horizon"] = horizon_payload
+                _set_interpreted(
+                    original_field_slip,
+                    "aerial_photo",
+                    entry.get("aerial_photo"),
+                )
+                _set_interpreted(
+                    original_field_slip,
+                    "verbatim_latitude",
+                    entry.get("verbatim_latitude"),
+                )
+                _set_interpreted(
+                    original_field_slip,
+                    "verbatim_longitude",
+                    entry.get("verbatim_longitude"),
+                )
+                _set_interpreted(
+                    original_field_slip,
+                    "verbatim_elevation",
+                    entry.get("verbatim_elevation"),
+                )
+                updated_field_slips.append(original_field_slip)
+
+            self.accession_payload["field_slips"] = updated_field_slips
+            self.data["accessions"][0] = self.accession_payload
+
+            diffs = list(_iter_field_diffs(self.original_data, self.data))
+
+            self.media.ocr_data = self.data
+            self.media.rows_rearranged = rows_rearranged
+            self.media.save(update_fields=["ocr_data", "rows_rearranged"])
+
+        for path, old_val, new_val in diffs:
+            if not path:
+                continue
+            MediaQCLog.objects.create(
+                media=self.media,
+                change_type=MediaQCLog.ChangeType.OCR_DATA,
+                field_name=path,
+                old_value={"value": old_val},
+                new_value={"value": new_val},
+                changed_by=self.request.user,
+            )
+
+        return {"rows_rearranged": rows_rearranged, "diffs": diffs}
+
 @login_required
 def MediaInternQCWizard(request, pk):
     media = get_object_or_404(Media, uuid=pk)
@@ -1176,555 +1949,315 @@ def MediaInternQCWizard(request, pk):
     if not is_intern(request.user):
         return HttpResponseForbidden("Intern access required.")
 
-    original_data = copy.deepcopy(media.ocr_data or {})
-    data = copy.deepcopy(media.ocr_data or {})
-    accessions = data.setdefault('accessions', [])
-    if not accessions:
-        accessions.append({})
-    accession_payload = accessions[0]
+    manager = MediaQCFormManager(request, media)
+    manager.build_forms()
 
-    rows_payload = list(accession_payload.get('rows') or [])
-    storage_suggestions = list(
-        Storage.objects.order_by('area').values_list('area', flat=True)
-    )
-    ident_payload = list(accession_payload.get('identifications') or [])
-    if len(ident_payload) < len(rows_payload):
-        ident_payload.extend({} for _ in range(len(rows_payload) - len(ident_payload)))
+    qc_comments = _get_qc_comments(media)
+    latest_qc_comment = qc_comments[-1] if qc_comments else None
 
-    row_initial = []
-    ident_initial = []
-    specimen_initial = []
-    reference_initial = []
-    fieldslip_initial = []
-    row_payload_map = {}
-    ident_payload_map = {}
-    reference_payload_map = {}
-    fieldslip_payload_map = {}
-    original_row_ids = []
-
-    for index, row_payload in enumerate(rows_payload):
-        row_id = row_payload.get('_row_id') or row_payload.get('row_id') or f'row-{index}'
-        original_row_ids.append(row_id)
-        row_payload_map[row_id] = row_payload
-        ident_payload_map[row_id] = ident_payload[index] if index < len(ident_payload) else {}
-
-        suffix = (row_payload.get('specimen_suffix') or {}).get('interpreted') or '-'
-        storage_name = (row_payload.get('storage_area') or {}).get('interpreted')
-        if storage_name:
-            storage_suggestions.append(storage_name)
-        storage_obj = Storage.objects.filter(area=storage_name).first() if storage_name else None
-        row_initial.append({
-            'row_id': row_id,
-            'order': index,
-            'specimen_suffix': suffix,
-            'storage': storage_obj.pk if storage_obj else None,
-            'storage_display': storage_name,
-            'status': InventoryStatus.UNKNOWN,
-        })
-
-        ident_data = ident_payload_map[row_id]
-        identified_by_id = (ident_data.get('identified_by') or {}).get('interpreted')
-        identified_by = (
-            Person.objects.filter(pk=identified_by_id).first()
-            if identified_by_id
-            else None
-        )
-        reference_id = (ident_data.get('reference') or {}).get('interpreted')
-        reference_obj = (
-            Reference.objects.filter(pk=reference_id).first()
-            if reference_id
-            else None
-        )
-        ident_initial.append({
-            'row_id': row_id,
-            'taxon': (ident_data.get('taxon') or {}).get('interpreted'),
-            'identification_qualifier': (ident_data.get('identification_qualifier') or {}).get('interpreted'),
-            'verbatim_identification': (ident_data.get('verbatim_identification') or {}).get('interpreted'),
-            'identification_remarks': (ident_data.get('identification_remarks') or {}).get('interpreted'),
-            'identified_by': identified_by.pk if identified_by else None,
-            'reference': reference_obj.pk if reference_obj else None,
-            'date_identified': (ident_data.get('date_identified') or {}).get('interpreted'),
-        })
-
-        for nature in row_payload.get('natures') or []:
-            element_name = (nature.get('element_name') or {}).get('interpreted')
-            element_obj = Element.objects.filter(name=element_name).first() if element_name else None
-            specimen_initial.append({
-                'row_id': row_id,
-                'element': element_obj.pk if element_obj else None,
-                'side': (nature.get('side') or {}).get('interpreted'),
-                'condition': (nature.get('condition') or {}).get('interpreted'),
-                'verbatim_element': (nature.get('verbatim_element') or {}).get('interpreted'),
-                'portion': (nature.get('portion') or {}).get('interpreted'),
-                'fragments': (nature.get('fragments') or {}).get('interpreted'),
-            })
-
-    references_payload = list(accession_payload.get('references') or [])
-    for index, reference_payload in enumerate(references_payload):
-        ref_id = reference_payload.get('_ref_id') or f'ref-{index}'
-        reference_payload_map[ref_id] = reference_payload
-        reference_initial.append({
-            'ref_id': ref_id,
-            'order': index,
-            'first_author': (reference_payload.get('reference_first_author') or {}).get('interpreted'),
-            'title': (reference_payload.get('reference_title') or {}).get('interpreted'),
-            'year': (reference_payload.get('reference_year') or {}).get('interpreted'),
-            'page': (reference_payload.get('page') or {}).get('interpreted'),
-        })
-
-    field_slips_payload = list(accession_payload.get('field_slips') or [])
-    for index, field_slip_payload in enumerate(field_slips_payload):
-        slip_id = field_slip_payload.get('_field_slip_id') or f'field-slip-{index}'
-        fieldslip_payload_map[slip_id] = field_slip_payload
-        horizon_payload = field_slip_payload.get('verbatim_horizon') or {}
-        fieldslip_initial.append({
-            'slip_id': slip_id,
-            'order': index,
-            'field_number': (field_slip_payload.get('field_number') or {}).get('interpreted'),
-            'verbatim_locality': (field_slip_payload.get('verbatim_locality') or {}).get('interpreted'),
-            'verbatim_taxon': (field_slip_payload.get('verbatim_taxon') or {}).get('interpreted'),
-            'verbatim_element': (field_slip_payload.get('verbatim_element') or {}).get('interpreted'),
-            'horizon_formation': (horizon_payload.get('formation') or {}).get('interpreted'),
-            'horizon_member': (horizon_payload.get('member') or {}).get('interpreted'),
-            'horizon_bed': (horizon_payload.get('bed_or_horizon') or {}).get('interpreted'),
-            'horizon_chronostratigraphy': (horizon_payload.get('chronostratigraphy') or {}).get('interpreted'),
-            'aerial_photo': (field_slip_payload.get('aerial_photo') or {}).get('interpreted'),
-            'verbatim_latitude': (field_slip_payload.get('verbatim_latitude') or {}).get('interpreted'),
-            'verbatim_longitude': (field_slip_payload.get('verbatim_longitude') or {}).get('interpreted'),
-            'verbatim_elevation': (field_slip_payload.get('verbatim_elevation') or {}).get('interpreted'),
-        })
-
-    storage_suggestions = list(
-        dict.fromkeys(value for value in storage_suggestions if value)
-    )
-
-    collection_abbr = (accession_payload.get('collection_abbreviation') or {}).get('interpreted')
-    collection_obj = Collection.objects.filter(abbreviation=collection_abbr).first() if collection_abbr else None
-    prefix_abbr = (accession_payload.get('specimen_prefix_abbreviation') or {}).get('interpreted')
-    prefix_obj = Locality.objects.filter(abbreviation=prefix_abbr).first() if prefix_abbr else None
-    specimen_no_value = (accession_payload.get('specimen_no') or {}).get('interpreted')
-    try:
-        specimen_no_initial = int(specimen_no_value)
-    except (TypeError, ValueError):
-        specimen_no_initial = specimen_no_value
-    type_status_initial = (accession_payload.get('type_status') or {}).get('interpreted')
-    comment_initial = (accession_payload.get('comment') or {}).get('interpreted')
-    accession_instance = getattr(media, 'accession', None) or Accession()
-    accessioned_by_user = (
-        getattr(getattr(media, 'accession', None), 'accessioned_by', None)
-        or request.user
-    )
-
-    acc_initial = {
-        'collection': collection_obj,
-        'specimen_prefix': prefix_obj,
-        'specimen_no': specimen_no_initial,
-        'type_status': type_status_initial,
-        'comment': comment_initial,
-        'accessioned_by': accessioned_by_user,
-    }
-
-    if request.method == 'POST':
-        accession_form = AccessionForm(
-            request.POST,
-            prefix='accession',
-            instance=accession_instance,
-        )
-        row_formset = AccessionRowFormSet(request.POST, prefix='row')
-        ident_formset = IdentificationQCFormSet(request.POST, prefix='ident')
-        specimen_formset = SpecimenQCFormSet(request.POST, prefix='specimen')
-        reference_formset = ReferenceQCFormSet(request.POST, prefix='reference')
-        fieldslip_formset = FieldSlipQCFormSet(request.POST, prefix='fieldslip')
-    else:
-        accession_form = AccessionForm(
-            prefix='accession',
-            instance=accession_instance,
-            initial=acc_initial,
-        )
-        row_formset = AccessionRowFormSet(prefix='row', initial=row_initial)
-        ident_formset = IdentificationQCFormSet(prefix='ident', initial=ident_initial)
-        specimen_formset = SpecimenQCFormSet(prefix='specimen', initial=specimen_initial)
-        reference_formset = ReferenceQCFormSet(prefix='reference', initial=reference_initial)
-        fieldslip_formset = FieldSlipQCFormSet(prefix='fieldslip', initial=fieldslip_initial)
-
-    comment_field = accession_form.fields.get('comment')
-    if comment_field is not None:
-        comment_field.widget.attrs.setdefault('rows', 2)
-
-    for form in ident_formset:
-        remarks_field = form.fields.get('identification_remarks')
-        if remarks_field is not None:
-            remarks_field.widget.attrs.setdefault('rows', 2)
-
-    row_contexts = _build_row_contexts(row_formset, ident_formset, specimen_formset)
-
-    if request.method == 'POST':
-        forms_valid = (
-            accession_form.is_valid()
-            and row_formset.is_valid()
-            and ident_formset.is_valid()
-            and specimen_formset.is_valid()
-            and reference_formset.is_valid()
-            and fieldslip_formset.is_valid()
-        )
-        if forms_valid:
-            cleaned_rows = []
-            for form in row_formset:
-                cleaned = form.cleaned_data
-                if not cleaned:
-                    continue
-                row_id = cleaned.get('row_id') or f"row-{len(cleaned_rows)}"
-                try:
-                    order_value = int(cleaned.get('order'))
-                except (TypeError, ValueError):
-                    order_value = len(cleaned_rows)
-                storage_value = cleaned.get('storage')
-                if isinstance(storage_value, str):
-                    storage_value = storage_value.strip()
-                elif storage_value is not None and hasattr(storage_value, 'area'):
-                    storage_value = storage_value.area
-                if storage_value == "":
-                    storage_value = None
-                cleaned_rows.append({
-                    'row_id': row_id,
-                    'order': order_value,
-                    'specimen_suffix': cleaned.get('specimen_suffix') or '-',
-                    'storage': storage_value,
-                    'status': cleaned.get('status'),
-                })
-
-            ident_clean_map = {}
-            for form in ident_formset:
-                cleaned = form.cleaned_data
-                if not cleaned:
-                    continue
-                row_id = cleaned.get('row_id')
-                if not row_id:
-                    continue
-                ident_clean_map[row_id] = cleaned
-
-            specimen_clean_map = {}
-            for form in specimen_formset:
-                cleaned = form.cleaned_data
-                if not cleaned:
-                    continue
-                row_id = cleaned.get('row_id')
-                if not row_id:
-                    continue
-                element_obj = cleaned.get('element')
-                if not element_obj and not any(
-                    cleaned.get(field)
-                    for field in ('side', 'condition', 'verbatim_element', 'portion', 'fragments')
-                ):
-                    continue
-                specimen_clean_map.setdefault(row_id, []).append(cleaned)
-
-            reference_entries = []
-            for form in reference_formset:
-                cleaned = form.cleaned_data
-                if not cleaned:
-                    continue
-                ref_id = cleaned.get('ref_id') or form.initial.get('ref_id') or f'ref-{len(reference_entries)}'
-                try:
-                    order_value = int(cleaned.get('order'))
-                except (TypeError, ValueError):
-                    order_value = len(reference_entries)
-                reference_entries.append(
-                    {
-                        'ref_id': ref_id,
-                        'order': order_value,
-                        'first_author': cleaned.get('first_author'),
-                        'title': cleaned.get('title'),
-                        'year': cleaned.get('year'),
-                        'page': cleaned.get('page'),
-                    }
-                )
-
-            fieldslip_entries = []
-            for form in fieldslip_formset:
-                cleaned = form.cleaned_data
-                if not cleaned:
-                    continue
-                slip_id = cleaned.get('slip_id') or form.initial.get('slip_id') or f'field-slip-{len(fieldslip_entries)}'
-                try:
-                    order_value = int(cleaned.get('order'))
-                except (TypeError, ValueError):
-                    order_value = len(fieldslip_entries)
-                fieldslip_entries.append(
-                    {
-                        'slip_id': slip_id,
-                        'order': order_value,
-                        'field_number': cleaned.get('field_number'),
-                        'verbatim_locality': cleaned.get('verbatim_locality'),
-                        'verbatim_taxon': cleaned.get('verbatim_taxon'),
-                        'verbatim_element': cleaned.get('verbatim_element'),
-                        'horizon_formation': cleaned.get('horizon_formation'),
-                        'horizon_member': cleaned.get('horizon_member'),
-                        'horizon_bed': cleaned.get('horizon_bed'),
-                        'horizon_chronostratigraphy': cleaned.get('horizon_chronostratigraphy'),
-                        'aerial_photo': cleaned.get('aerial_photo'),
-                        'verbatim_latitude': cleaned.get('verbatim_latitude'),
-                        'verbatim_longitude': cleaned.get('verbatim_longitude'),
-                        'verbatim_elevation': cleaned.get('verbatim_elevation'),
-                    }
-                )
-
-            sorted_rows = sorted(cleaned_rows, key=lambda item: item['order'])
-            existing_new_order = [
-                entry['row_id']
-                for entry in sorted_rows
-                if entry['row_id'] in row_payload_map
-            ]
-            rows_rearranged = existing_new_order != original_row_ids[:len(existing_new_order)]
-
-            sorted_references = sorted(reference_entries, key=lambda item: item['order'])
-            sorted_fieldslips = sorted(fieldslip_entries, key=lambda item: item['order'])
-
-            cleaned_accession = accession_form.cleaned_data
-            collection_obj = cleaned_accession.get('collection')
-            prefix_obj = cleaned_accession.get('specimen_prefix')
-            specimen_no_cleaned = cleaned_accession.get('specimen_no')
-            type_status_cleaned = cleaned_accession.get('type_status')
-            comment_cleaned = cleaned_accession.get('comment')
-
+    if request.method == "POST":
+        if manager.forms_valid():
             try:
-                with transaction.atomic():
-                    _set_interpreted(
-                        accession_payload,
-                        'collection_abbreviation',
-                        collection_obj.abbreviation if collection_obj else None,
-                    )
-                    _set_interpreted(
-                        accession_payload,
-                        'specimen_prefix_abbreviation',
-                        prefix_obj.abbreviation if prefix_obj else None,
-                    )
-                    _set_interpreted(accession_payload, 'specimen_no', specimen_no_cleaned)
-                    _set_interpreted(accession_payload, 'type_status', type_status_cleaned)
-                    _set_interpreted(accession_payload, 'comment', comment_cleaned)
-
-                    storage_cache: dict[str, Storage] = {}
-                    updated_rows = []
-                    updated_identifications = []
-                    for entry in sorted_rows:
-                        row_id = entry['row_id']
-                        original_row = copy.deepcopy(row_payload_map.get(row_id, {}))
-                        _set_interpreted(
-                            original_row,
-                            'specimen_suffix',
-                            entry['specimen_suffix'],
-                        )
-                        storage_value = entry['storage']
-                        storage_name = None
-                        if isinstance(storage_value, str) and storage_value:
-                            cache_key = storage_value.lower()
-                            storage_obj = storage_cache.get(cache_key)
-                            if storage_obj is None:
-                                storage_obj = Storage.objects.filter(
-                                    area__iexact=storage_value
-                                ).first()
-                                if storage_obj is None:
-                                    storage_obj = Storage.objects.create(area=storage_value)
-                                storage_cache[cache_key] = storage_obj
-                            storage_name = storage_obj.area
-                        elif isinstance(storage_value, Storage):
-                            storage_name = storage_value.area
-                        _set_interpreted(original_row, 'storage_area', storage_name)
-
-                        original_natures = original_row.get('natures') or []
-                        new_natures = []
-                        specimens = specimen_clean_map.get(row_id, [])
-                        for index, specimen_data in enumerate(specimens):
-                            original_nature = copy.deepcopy(original_natures[index]) if index < len(original_natures) else {}
-                            element_obj = specimen_data.get('element')
-                            element_name = element_obj.name if element_obj else None
-                            _set_interpreted(original_nature, 'element_name', element_name)
-                            _set_interpreted(original_nature, 'side', specimen_data.get('side'))
-                            _set_interpreted(original_nature, 'condition', specimen_data.get('condition'))
-                            _set_interpreted(original_nature, 'verbatim_element', specimen_data.get('verbatim_element'))
-                            _set_interpreted(original_nature, 'portion', specimen_data.get('portion'))
-                            _set_interpreted(original_nature, 'fragments', specimen_data.get('fragments'))
-                            new_natures.append(original_nature)
-                        original_row['natures'] = new_natures
-                        updated_rows.append(original_row)
-
-                        ident_cleaned = ident_clean_map.get(row_id, {})
-                        original_ident = copy.deepcopy(ident_payload_map.get(row_id, {}))
-                        _set_interpreted(original_ident, 'taxon', ident_cleaned.get('taxon'))
-                        _set_interpreted(
-                            original_ident,
-                            'identification_qualifier',
-                            ident_cleaned.get('identification_qualifier'),
-                        )
-                        _set_interpreted(
-                            original_ident,
-                            'verbatim_identification',
-                            ident_cleaned.get('verbatim_identification'),
-                        )
-                        _set_interpreted(
-                            original_ident,
-                            'identification_remarks',
-                            ident_cleaned.get('identification_remarks'),
-                        )
-                        identified_by_obj = ident_cleaned.get('identified_by')
-                        _set_interpreted(
-                            original_ident,
-                            'identified_by',
-                            identified_by_obj.pk if identified_by_obj else None,
-                        )
-                        reference_obj = ident_cleaned.get('reference')
-                        _set_interpreted(
-                            original_ident,
-                            'reference',
-                            reference_obj.pk if reference_obj else None,
-                        )
-                        _set_interpreted(
-                            original_ident,
-                            'date_identified',
-                            ident_cleaned.get('date_identified'),
-                        )
-                        updated_identifications.append(original_ident)
-
-                    accession_payload['rows'] = updated_rows
-                    accession_payload['identifications'] = updated_identifications
-
-                    updated_references = []
-                    for entry in sorted_references:
-                        ref_id = entry['ref_id']
-                        original_reference = copy.deepcopy(reference_payload_map.get(ref_id, {}))
-                        _set_interpreted(
-                            original_reference,
-                            'reference_first_author',
-                            entry.get('first_author'),
-                        )
-                        _set_interpreted(
-                            original_reference,
-                            'reference_title',
-                            entry.get('title'),
-                        )
-                        _set_interpreted(
-                            original_reference,
-                            'reference_year',
-                            entry.get('year'),
-                        )
-                        _set_interpreted(original_reference, 'page', entry.get('page'))
-                        updated_references.append(original_reference)
-
-                    accession_payload['references'] = updated_references
-
-                    updated_field_slips = []
-                    for entry in sorted_fieldslips:
-                        slip_id = entry['slip_id']
-                        original_field_slip = copy.deepcopy(fieldslip_payload_map.get(slip_id, {}))
-                        _set_interpreted(original_field_slip, 'field_number', entry.get('field_number'))
-                        _set_interpreted(
-                            original_field_slip,
-                            'verbatim_locality',
-                            entry.get('verbatim_locality'),
-                        )
-                        _set_interpreted(
-                            original_field_slip,
-                            'verbatim_taxon',
-                            entry.get('verbatim_taxon'),
-                        )
-                        _set_interpreted(
-                            original_field_slip,
-                            'verbatim_element',
-                            entry.get('verbatim_element'),
-                        )
-                        horizon_payload = original_field_slip.get('verbatim_horizon') or {}
-                        horizon_payload = copy.deepcopy(horizon_payload)
-                        _set_interpreted(
-                            horizon_payload,
-                            'formation',
-                            entry.get('horizon_formation'),
-                        )
-                        _set_interpreted(
-                            horizon_payload,
-                            'member',
-                            entry.get('horizon_member'),
-                        )
-                        _set_interpreted(
-                            horizon_payload,
-                            'bed_or_horizon',
-                            entry.get('horizon_bed'),
-                        )
-                        _set_interpreted(
-                            horizon_payload,
-                            'chronostratigraphy',
-                            entry.get('horizon_chronostratigraphy'),
-                        )
-                        original_field_slip['verbatim_horizon'] = horizon_payload
-                        _set_interpreted(
-                            original_field_slip,
-                            'aerial_photo',
-                            entry.get('aerial_photo'),
-                        )
-                        _set_interpreted(
-                            original_field_slip,
-                            'verbatim_latitude',
-                            entry.get('verbatim_latitude'),
-                        )
-                        _set_interpreted(
-                            original_field_slip,
-                            'verbatim_longitude',
-                            entry.get('verbatim_longitude'),
-                        )
-                        _set_interpreted(
-                            original_field_slip,
-                            'verbatim_elevation',
-                            entry.get('verbatim_elevation'),
-                        )
-                        updated_field_slips.append(original_field_slip)
-
-                    accession_payload['field_slips'] = updated_field_slips
-                    data['accessions'][0] = accession_payload
-
-                    diffs = list(_iter_field_diffs(original_data, data))
-
-                    media.ocr_data = data
-                    media.rows_rearranged = rows_rearranged
-                    media.save(update_fields=['ocr_data', 'rows_rearranged'])
-                    for path, old_val, new_val in diffs:
-                        if not path:
-                            continue
-                        MediaQCLog.objects.create(
-                            media=media,
-                            change_type=MediaQCLog.ChangeType.OCR_DATA,
-                            field_name=path,
-                            old_value={'value': old_val},
-                            new_value={'value': new_val},
-                            changed_by=request.user,
-                        )
-                    media.transition_qc(Media.QCStatus.PENDING_EXPERT, user=request.user)
+                manager.save()
             except ValidationError as exc:
-                messages_list = []
-                if hasattr(exc, 'message_dict'):
-                    for errors in exc.message_dict.values():
-                        messages_list.extend(errors)
-                else:
-                    messages_list.extend(exc.messages)
-                for message in messages_list:
-                    accession_form.add_error(None, message)
+                for message in _collect_validation_messages(exc):
+                    manager.accession_form.add_error(None, message)
                     messages.error(request, message)
             else:
-                messages.success(request, "Media forwarded for expert review.")
-                return redirect('dashboard')
+                try:
+                    media.transition_qc(
+                        Media.QCStatus.PENDING_EXPERT,
+                        user=request.user,
+                    )
+                except ValidationError as exc:
+                    for message in _collect_validation_messages(exc):
+                        manager.accession_form.add_error(None, message)
+                        messages.error(request, message)
+                else:
+                    messages.success(
+                        request, "Media forwarded for expert review."
+                    )
+                    return redirect("dashboard")
 
     context = {
-        'media': media,
-        'accession_form': accession_form,
-        'row_formset': row_formset,
-        'ident_formset': ident_formset,
-        'specimen_formset': specimen_formset,
-        'reference_formset': reference_formset,
-        'fieldslip_formset': fieldslip_formset,
-        'row_contexts': row_contexts,
-        'storage_suggestions': storage_suggestions,
-        'storage_datalist_id': AccessionRowQCForm.storage_datalist_id,
+        "media": media,
+        "accession_form": manager.accession_form,
+        "row_formset": manager.row_formset,
+        "ident_formset": manager.ident_formset,
+        "specimen_formset": manager.specimen_formset,
+        "reference_formset": manager.reference_formset,
+        "fieldslip_formset": manager.fieldslip_formset,
+        "row_contexts": manager.row_contexts,
+        "storage_suggestions": manager.storage_suggestions,
+        "storage_datalist_id": AccessionRowQCForm.storage_datalist_id,
+        "qc_comments": qc_comments,
+        "latest_qc_comment": latest_qc_comment,
     }
 
-    return render(request, 'cms/qc/intern_wizard.html', context)
+    return render(request, "cms/qc/intern_wizard.html", context)
+
+
+def _parse_conflict_resolution(post_data, conflicts):
+    resolution_map: dict[str, dict[str, object]] = {}
+    missing: list[str] = []
+
+    conflicts_by_html = {
+        conflict.get("html_key"): conflict
+        for conflict in conflicts
+        if conflict.get("html_key") and conflict.get("key")
+    }
+
+    for html_key, conflict in conflicts_by_html.items():
+        key = conflict["key"]
+        action = post_data.get(f"resolution_action__{html_key}")
+        if not action:
+            missing.append(key)
+            continue
+
+        if action == "new_instance":
+            resolution_map[key] = {"action": "new_instance"}
+            continue
+
+        if action != "update_existing":
+            missing.append(key)
+            continue
+
+        entry: dict[str, object] = {"action": "update_existing"}
+
+        target_value = post_data.get(f"target_accession__{html_key}")
+        if target_value and str(target_value).isdigit():
+            entry["accession_id"] = int(target_value)
+
+        fields: dict[str, object] = {}
+        proposed = conflict.get("proposed", {})
+        for field_name in ("type_status", "comment"):
+            if post_data.get(f"apply_field__{html_key}__{field_name}"):
+                fields[field_name] = proposed.get(field_name)
+        entry["fields"] = fields
+
+        references: list[int] = []
+        for ref in proposed.get("references", []):
+            index = ref.get("index")
+            if index is None:
+                continue
+            field_name = f"add_reference__{html_key}__{index}"
+            if post_data.get(field_name):
+                try:
+                    references.append(int(index))
+                except (TypeError, ValueError):
+                    continue
+        entry["references"] = references
+
+        field_slips: list[int] = []
+        for slip in proposed.get("field_slips", []):
+            index = slip.get("index")
+            if index is None:
+                continue
+            field_name = f"add_field_slip__{html_key}__{index}"
+            if post_data.get(field_name):
+                try:
+                    field_slips.append(int(index))
+                except (TypeError, ValueError):
+                    continue
+        entry["field_slips"] = field_slips
+
+        rows: list[str] = []
+        for row in proposed.get("rows", []):
+            html_suffix = row.get("html_suffix")
+            specimen_suffix = row.get("specimen_suffix")
+            if not html_suffix or specimen_suffix in (None, ""):
+                continue
+            if post_data.get(f"replace_row__{html_key}__{html_suffix}"):
+                rows.append(str(specimen_suffix))
+        entry["rows"] = rows
+
+        resolution_map[key] = entry
+
+    return resolution_map, missing
+
+
+def _annotate_conflict_selections(conflicts, resolution_map):
+    for conflict in conflicts:
+        key = conflict.get("key")
+        selection = resolution_map.get(key, {})
+        conflict["selected_action"] = selection.get("action")
+        conflict["selected_accession_id"] = selection.get("accession_id")
+        fields = selection.get("fields") or {}
+        conflict["selected_fields"] = set(fields.keys())
+        rows = selection.get("rows") or []
+        conflict["selected_rows"] = {str(value) for value in rows}
+        references = selection.get("references") or []
+        conflict["selected_references"] = {
+            int(value) for value in references if str(value).isdigit()
+        }
+        field_slips = selection.get("field_slips") or []
+        conflict["selected_field_slips"] = {
+            int(value) for value in field_slips if str(value).isdigit()
+        }
+
+
+@login_required
+def MediaExpertQCWizard(request, pk):
+    media = get_object_or_404(Media, uuid=pk)
+
+    user = request.user
+    if not (
+        user.is_superuser
+        or user.groups.filter(name__in=["Curators", "Collection Managers"]).exists()
+    ):
+        return HttpResponseForbidden("Expert access required.")
+
+    manager = MediaQCFormManager(request, media)
+    manager.build_forms()
+
+    qc_comment = ""
+    action = "save"
+    selected_resolution: dict[str, dict[str, object]] = {}
+    conflict_details = describe_accession_conflicts(media)
+
+    if request.method == "POST":
+        qc_comment = (request.POST.get("qc_comment") or "").strip()
+        action = request.POST.get("action") or "save"
+
+        if manager.forms_valid():
+            try:
+                manager.save()
+            except ValidationError as exc:
+                for message in _collect_validation_messages(exc):
+                    manager.accession_form.add_error(None, message)
+                    messages.error(request, message)
+            else:
+                conflict_details = describe_accession_conflicts(media)
+                resolution_map: dict[str, dict[str, object]] = {}
+                missing_resolutions: list[str] = []
+
+                if action == "approve" and conflict_details:
+                    resolution_map, missing_resolutions = _parse_conflict_resolution(
+                        request.POST, conflict_details
+                    )
+                    selected_resolution = resolution_map
+
+                if action == "approve":
+                    processed = (media.ocr_data or {}).get("_processed_accessions") or []
+                    if media.accession_id or processed:
+                        message = (
+                            "This media already has linked accessions and cannot be "
+                            "approved again."
+                        )
+                        manager.accession_form.add_error(None, message)
+                        messages.error(request, message)
+                    elif missing_resolutions:
+                        for key in missing_resolutions:
+                            message = (
+                                f"Select how to handle the existing accession {key} before approving."
+                            )
+                            manager.accession_form.add_error(None, message)
+                            messages.error(request, message)
+                    else:
+                        try:
+                            with transaction.atomic():
+                                media.transition_qc(
+                                    Media.QCStatus.APPROVED,
+                                    user=user,
+                                    note=qc_comment or None,
+                                    resolution=resolution_map or None,
+                                )
+                        except ValidationError as exc:
+                            for message in _collect_validation_messages(exc):
+                                manager.accession_form.add_error(None, message)
+                                messages.error(request, message)
+                            conflict_details = describe_accession_conflicts(media)
+                            selected_resolution = resolution_map
+                        except Exception as exc:
+                            message = f"Importer error: {exc}"
+                            manager.accession_form.add_error(None, message)
+                            messages.error(request, message)
+                            conflict_details = describe_accession_conflicts(media)
+                            selected_resolution = resolution_map
+                        else:
+                            media.refresh_from_db()
+                            _create_qc_comment(media, qc_comment, user)
+                            messages.success(
+                                request,
+                                "Media approved and accessions created.",
+                            )
+                            return redirect("dashboard")
+                elif action == "return_intern":
+                    try:
+                        media.transition_qc(
+                            Media.QCStatus.PENDING_INTERN,
+                            user=user,
+                            note=qc_comment or None,
+                        )
+                    except ValidationError as exc:
+                        for message in _collect_validation_messages(exc):
+                            manager.accession_form.add_error(None, message)
+                            messages.error(request, message)
+                    else:
+                        media.refresh_from_db()
+                        _create_qc_comment(media, qc_comment, user)
+                        messages.success(
+                            request,
+                            "Media returned to interns for additional edits.",
+                        )
+                        return redirect("dashboard")
+                elif action == "request_rescan":
+                    try:
+                        media.transition_qc(
+                            Media.QCStatus.REJECTED,
+                            user=user,
+                            note=qc_comment or None,
+                        )
+                    except ValidationError as exc:
+                        for message in _collect_validation_messages(exc):
+                            manager.accession_form.add_error(None, message)
+                            messages.error(request, message)
+                    else:
+                        media.refresh_from_db()
+                        _create_qc_comment(media, qc_comment, user)
+                        messages.success(request, "Media flagged for rescan.")
+                        return redirect("dashboard")
+                else:
+                    if qc_comment:
+                        try:
+                            media.transition_qc(
+                                media.qc_status,
+                                user=user,
+                                note=qc_comment,
+                            )
+                        except ValidationError as exc:
+                            for message in _collect_validation_messages(exc):
+                                manager.accession_form.add_error(None, message)
+                                messages.error(request, message)
+                        else:
+                            media.refresh_from_db()
+                            _create_qc_comment(media, qc_comment, user)
+                            messages.success(request, "Changes saved.")
+                            return redirect("media_expert_qc", pk=media.uuid)
+                    else:
+                        messages.success(request, "Changes saved.")
+                        return redirect("media_expert_qc", pk=media.uuid)
+
+    _annotate_conflict_selections(conflict_details, selected_resolution)
+    qc_comments = _get_qc_comments(media)
+
+    context = {
+        "media": media,
+        "accession_form": manager.accession_form,
+        "row_formset": manager.row_formset,
+        "ident_formset": manager.ident_formset,
+        "specimen_formset": manager.specimen_formset,
+        "reference_formset": manager.reference_formset,
+        "fieldslip_formset": manager.fieldslip_formset,
+        "row_contexts": manager.row_contexts,
+        "storage_suggestions": manager.storage_suggestions,
+        "storage_datalist_id": AccessionRowQCForm.storage_datalist_id,
+        "qc_comment": qc_comment,
+        "qc_comments": qc_comments,
+        "qc_conflicts": conflict_details,
+    }
+
+    return render(request, "cms/qc/expert_wizard.html", context)
 
 
 class LocalityListView(FilterView):

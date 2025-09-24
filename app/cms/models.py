@@ -1293,14 +1293,22 @@ class Media(BaseModel):
         QCStatus.REJECTED: {QCStatus.PENDING_INTERN, QCStatus.PENDING_EXPERT},
     }
 
-    def transition_qc(self, new_status: str, user=None, note: str | None = None) -> dict:
+    def transition_qc(
+        self,
+        new_status: str,
+        user=None,
+        note: str | None = None,
+        resolution: dict[str, dict[str, object]] | None = None,
+    ) -> dict:
         """Transition the media to a new QC status.
 
         The transition validates that the change is allowed, stamps reviewer
         metadata, records a :class:`MediaQCLog` entry, and, when moving to
         ``approved``, attempts to create accessions from the OCR payload. If
         accession creation detects conflicts, the transition is aborted and a
-        ``ValidationError`` is raised so the QC UI can display the issue.
+        ``ValidationError`` is raised so the QC UI can display the issue. When
+        ``resolution`` is provided, it is forwarded to the importer so duplicate
+        accession numbers can be resolved.
         """
 
         if new_status not in self.QCStatus.values:
@@ -1330,14 +1338,18 @@ class Media(BaseModel):
         if new_status == self.QCStatus.APPROVED:
             from .ocr_processing import create_accessions_from_media
 
-            result = create_accessions_from_media(self)
+            result = create_accessions_from_media(self, resolution)
             created = result.get("created", [])
             conflicts = result.get("conflicts", [])
             if conflicts:
                 summary_parts = []
                 for conflict in conflicts:
                     key = conflict.get("key")
-                    reason = conflict.get("reason") or "Conflict detected"
+                    reason = (
+                        conflict.get("message")
+                        or conflict.get("reason")
+                        or "Conflict detected"
+                    )
                     if key:
                         summary_parts.append(f"{key}: {reason}")
                     else:
@@ -1354,7 +1366,9 @@ class Media(BaseModel):
                     description=f"Approval blocked: {summary}",
                     changed_by=user,
                 )
-                raise ValidationError({"qc_status": summary})
+                exc = ValidationError({"qc_status": summary})
+                setattr(exc, "conflicts", conflicts)
+                raise exc
 
         if new_status == old_status:
             if note:

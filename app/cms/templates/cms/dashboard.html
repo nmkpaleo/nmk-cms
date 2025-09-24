@@ -87,55 +87,69 @@
       <a href="{% url 'accession_generate_batch' %}" class="w3-button w3-green">Generate Batch</a>
     {% endif %}
 
-    <h2>Unassigned Accessions</h2>
-    {% if unassigned_accessions %}
-      <table class="w3-table w3-striped">
-        <thead>
-          <tr>
-            <th>Accession</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for acc in unassigned_accessions %}
-            <tr>
-              <td>{{ acc }}</td>
-              <td>
-                <a href="{% url 'accession_detail' acc.id %}" class="w3-button w3-small w3-blue">View</a>
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% else %}
-      <p>No unassigned accessions.</p>
-    {% endif %}
+    <div class="w3-row-padding">
+      <div class="w3-col s12 m6 l4 w3-margin-bottom">
+        <h2>Unassigned Accessions</h2>
+        {% if unassigned_accessions %}
+          <div class="w3-responsive">
+            <table class="w3-table w3-striped">
+              <thead>
+                <tr>
+                  <th>Accession</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for acc in unassigned_accessions %}
+                  <tr>
+                    <td>{{ acc }}</td>
+                    <td>
+                      <a href="{% url 'accession_detail' acc.id %}" class="w3-button w3-small w3-blue">View</a>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p>No unassigned accessions.</p>
+        {% endif %}
+      </div>
 
-    <h2>My Latest Accessions</h2>
-    {% if latest_accessions %}
-      <table class="w3-table w3-striped">
-        <thead>
-          <tr>
-            <th>Accession</th>
-            <th>Last Activity</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for acc in latest_accessions %}
-            <tr>
-              <td>{{ acc }}</td>
-              <td>{{ acc.last_activity }}</td>
-              <td>
-                <a href="{% url 'accession_detail' acc.id %}" class="w3-button w3-small w3-blue">View</a>
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% else %}
-      <p>No recent accessions.</p>
-    {% endif %}
+      <div class="w3-col s12 m6 l4 w3-margin-bottom">
+        <h2>My Latest Accessions</h2>
+        {% if latest_accessions %}
+          <div class="w3-responsive">
+            <table class="w3-table w3-striped">
+              <thead>
+                <tr>
+                  <th>Accession</th>
+                  <th>Last Activity</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for acc in latest_accessions %}
+                  <tr>
+                    <td>{{ acc }}</td>
+                    <td>{{ acc.last_activity }}</td>
+                    <td>
+                      <a href="{% url 'accession_detail' acc.id %}" class="w3-button w3-small w3-blue">View</a>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p>No recent accessions.</p>
+        {% endif %}
+      </div>
+
+      <div class="w3-col s12 m6 l4 w3-margin-bottom">
+        {% include "cms/qc/dashboard_queue.html" %}
+      </div>
+    </div>
   {% endif %}
 
   {% if is_intern %}
@@ -211,62 +225,13 @@
         {% endif %}
       </div>
       <div class="w3-half">
-        <h2>Quality Control</h2>
-        {% if intern_qc_status_lists %}
-          {% for qc_group in intern_qc_status_lists %}
-            <div class="w3-card w3-margin-bottom">
-              <header class="w3-container w3-light-grey">
-                <h3 class="w3-margin">{{ qc_group.label }}</h3>
-              </header>
-              <div class="w3-container">
-                {% if qc_group.entries %}
-                  <div class="w3-responsive">
-                    <table class="w3-table w3-striped w3-small">
-                      <thead>
-                        <tr>
-                          <th>Media</th>
-                          <th>Accession / Row</th>
-                          <th>Updated</th>
-                          <th>Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {% for media in qc_group.entries %}
-                          <tr data-qc-status="{{ qc_group.status }}">
-                            <td>
-                              {% if media.file_name %}
-                                {{ media.file_name }}
-                              {% else %}
-                                {{ media.media_location }}
-                              {% endif %}
-                            </td>
-                            <td>
-                              {% if media.accession_row %}
-                                {{ media.accession_row }}
-                              {% elif media.accession %}
-                                {{ media.accession }}
-                              {% else %}
-                                -
-                              {% endif %}
-                            </td>
-                            <td>{{ media.modified_on|date:"Y-m-d H:i" }}</td>
-                            <td>
-                              <a href="{% url 'media_intern_qc' media.uuid %}" class="w3-button w3-small w3-blue">Review</a>
-                            </td>
-                          </tr>
-                        {% endfor %}
-                      </tbody>
-                    </table>
-                  </div>
-                {% else %}
-                  <p class="w3-padding">No media in this status.</p>
-                {% endif %}
-              </div>
-            </div>
-          {% endfor %}
-        {% else %}
-          <p>No media requiring quality control at this time.</p>
-        {% endif %}
+        {% include "cms/qc/dashboard_queue.html" %}
+      </div>
+    </div>
+  {% elif is_expert and not is_collection_manager %}
+    <div class="w3-row-padding">
+      <div class="w3-col s12">
+        {% include "cms/qc/dashboard_queue.html" %}
       </div>
     </div>
   {% endif %}
