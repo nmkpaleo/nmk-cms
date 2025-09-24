@@ -3,6 +3,42 @@
 {% block wizard_title %}Intern Media QC{% endblock %}
 {% block wizard_heading %}Intern QC for {{ media.file_name|default:media.pk }}{% endblock %}
 {% block wizard_subheading %}Review the OCR interpretation, adjust as needed, and send the record for expert review.{% endblock %}
+{% block wizard_extra_fields %}
+  {% if latest_qc_comment %}
+    <section class="qc-section">
+      <h3 class="w3-border-bottom w3-padding-small w3-margin-bottom">Expert Feedback</h3>
+      <p class="w3-small w3-text-grey">Review the expert guidance before resubmitting this record.</p>
+      <div class="w3-panel w3-pale-blue w3-leftbar w3-border-blue">
+        <p class="w3-small w3-text-grey">
+          Latest reviewer comment
+          {% if latest_qc_comment.created_by %}
+            from {{ latest_qc_comment.created_by.get_full_name|default:latest_qc_comment.created_by.username }}
+          {% else %}
+            (system update)
+          {% endif %}
+          on {{ latest_qc_comment.created_on|date:"Y-m-d H:i" }}:
+        </p>
+        <div class="w3-margin-top w3-margin-bottom">{{ latest_qc_comment.comment|linebreaksbr }}</div>
+      </div>
+      {% if qc_comments|length > 1 %}
+        <div class="qc-card">
+          <h4 class="w3-margin-top w3-margin-bottom">Earlier comments</h4>
+          <ul class="w3-ul w3-small">
+            {% for comment in qc_comments|slice:":-1" %}
+              <li>
+                <strong>{{ comment.created_on|date:"Y-m-d H:i" }}</strong>
+                {% if comment.created_by %}
+                  — {{ comment.created_by.get_full_name|default:comment.created_by.username }}
+                {% endif %}
+                <div class="w3-margin-top w3-margin-bottom">{{ comment.comment|linebreaksbr }}</div>
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+    </section>
+  {% endif %}
+{% endblock %}
 {% block wizard_actions %}
   <button type="submit" class="w3-button w3-green w3-margin-top">Submit for Expert Review</button>
 {% endblock %}

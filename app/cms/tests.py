@@ -2199,6 +2199,29 @@ class MediaExpertQCWizardTests(TestCase):
         comment = MediaQCComment.objects.get()
         self.assertIn("Needs work", comment.comment)
 
+    def test_return_to_interns_visible_in_pending_queue(self):
+        intern = get_user_model().objects.create_user(username="intern", password="pass")
+        intern_group, _ = Group.objects.get_or_create(name="Interns")
+        intern_group.user_set.add(intern)
+
+        response = self.client.post(
+            self.get_url(),
+            self.build_post_data(action="return_intern", qc_comment="Needs work"),
+        )
+        self.assertRedirects(response, reverse("dashboard"))
+
+        self.media.refresh_from_db()
+
+        self.client.logout()
+        self.client.force_login(intern)
+        response = self.client.get(reverse("dashboard"))
+
+        self.assertContains(response, "Pending Intern Review")
+        self.assertContains(response, self.media.file_name or self.media.media_location)
+        self.assertContains(response, 'data-qc-status="pending_intern"')
+        self.assertNotIn('data-qc-status="rejected"', response.content.decode())
+        self.assertContains(response, "No media in this status.")
+
     def test_request_rescan_sets_rejected_status(self):
         response = self.client.post(
             self.get_url(),
@@ -2671,6 +2694,47 @@ class MediaInternQCWizardTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
         self.assertFalse(Storage.objects.filter(area="Drawer 99").exists())
+
+    def test_displays_expert_comments_when_present(self):
+        expert = get_user_model().objects.create_user(username="expert", password="pass")
+        old_log = MediaQCLog.objects.create(
+            media=self.media,
+            change_type=MediaQCLog.ChangeType.STATUS,
+            field_name="qc_status",
+            old_value={"qc_status": Media.QCStatus.PENDING_EXPERT},
+            new_value={"qc_status": Media.QCStatus.PENDING_INTERN},
+            description="Initial return",
+            changed_by=expert,
+        )
+        MediaQCComment.objects.create(
+            log=old_log,
+            comment="First round of feedback",
+            created_by=expert,
+        )
+        new_log = MediaQCLog.objects.create(
+            media=self.media,
+            change_type=MediaQCLog.ChangeType.STATUS,
+            field_name="qc_status",
+            old_value={"qc_status": Media.QCStatus.PENDING_EXPERT},
+            new_value={"qc_status": Media.QCStatus.PENDING_INTERN},
+            description="Follow-up",
+            changed_by=expert,
+        )
+        MediaQCComment.objects.create(
+            log=new_log,
+            comment="Please double-check the specimen storage",
+            created_by=expert,
+        )
+
+        self.client.login(username="intern", password="pass")
+        response = self.client.get(self.get_url())
+
+        self.assertContains(response, "Expert Feedback")
+        self.assertContains(response, "Latest reviewer comment")
+        self.assertContains(response, "Please double-check the specimen storage")
+        self.assertContains(response, "Earlier comments")
+        self.assertContains(response, "First round of feedback")
+        self.assertContains(response, expert.username)
 
 
 class AdminAutocompleteTests(TestCase):

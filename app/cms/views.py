@@ -1220,6 +1220,14 @@ def _create_qc_comment(media: Media, comment: str | None, user) -> MediaQCCommen
     return MediaQCComment.objects.create(log=log, comment=comment, created_by=user)
 
 
+def _get_qc_comments(media: Media) -> list[MediaQCComment]:
+    return list(
+        MediaQCComment.objects.filter(log__media=media)
+        .select_related("created_by", "log")
+        .order_by("created_on")
+    )
+
+
 class MediaQCFormManager:
     """Prepare and persist media QC forms shared by intern and expert wizards."""
 
@@ -1944,6 +1952,9 @@ def MediaInternQCWizard(request, pk):
     manager = MediaQCFormManager(request, media)
     manager.build_forms()
 
+    qc_comments = _get_qc_comments(media)
+    latest_qc_comment = qc_comments[-1] if qc_comments else None
+
     if request.method == "POST":
         if manager.forms_valid():
             try:
@@ -1979,6 +1990,8 @@ def MediaInternQCWizard(request, pk):
         "row_contexts": manager.row_contexts,
         "storage_suggestions": manager.storage_suggestions,
         "storage_datalist_id": AccessionRowQCForm.storage_datalist_id,
+        "qc_comments": qc_comments,
+        "latest_qc_comment": latest_qc_comment,
     }
 
     return render(request, "cms/qc/intern_wizard.html", context)
@@ -2104,11 +2117,7 @@ def MediaExpertQCWizard(request, pk):
                         messages.success(request, "Changes saved.")
                         return redirect("media_expert_qc", pk=media.uuid)
 
-    qc_comments = (
-        MediaQCComment.objects.filter(log__media=media)
-        .select_related("created_by", "log")
-        .order_by("created_on")
-    )
+    qc_comments = _get_qc_comments(media)
 
     context = {
         "media": media,
