@@ -131,8 +131,10 @@ highlighted fields before retrying.
 - **Request Rescan** – marks the media **Rejected**, which surfaces it in the
   intern "Rejected" dashboard list. Use this when the scan itself is unusable.
 - **Approve & Accession** – runs the importer inside a transaction, links the
-  resulting accessions back to the media, and marks the record **Approved**. The
-  wizard blocks re-approval once accessions already exist to avoid duplicates.
+  resulting accessions back to the media, and marks the record **Approved**. If
+  a matching accession already exists you'll be prompted to either create a new
+  instance or update the existing record before continuing. The wizard still
+  blocks re-approval once the media already owns accessions to avoid duplicates.
 
 ### Leaving reviewer comments
 
@@ -147,6 +149,17 @@ If the accession importer raises a validation error or exception, the wizard
 surfaces the message at the top of the form and keeps the media in the expert
 queue. No comment is stored in that case, letting you adjust the data and retry
 once the issue is fixed.
+
+### Resolving duplicate accession numbers
+
+When the importer detects that an accession number already exists, the expert
+wizard displays a comparison card before approval. Choose **Yes** to create the
+next available accession instance automatically, or select **No** to update the
+existing record. When updating you can pick which accession fields, specimen
+rows, references, and field slips should be replaced with the newly reviewed
+values. Once you submit the decision the importer applies your choices, links
+the media to the chosen accession, and records the change in the QC history so
+the hand-off with interns remains transparent.
 
 ## Dashboard queues
 

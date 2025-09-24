@@ -92,7 +92,7 @@ from cms.resources import FieldSlipResource
 from .utils import build_history_entries
 from cms.utils import generate_accessions_from_series
 from cms.upload_processing import process_file
-from cms.ocr_processing import process_pending_scans
+from cms.ocr_processing import process_pending_scans, describe_accession_conflicts
 from formtools.wizard.views import SessionWizardView
 
 class FieldSlipAutocomplete(autocomplete.Select2QuerySetView):
@@ -1997,6 +1997,105 @@ def MediaInternQCWizard(request, pk):
     return render(request, "cms/qc/intern_wizard.html", context)
 
 
+def _parse_conflict_resolution(post_data, conflicts):
+    resolution_map: dict[str, dict[str, object]] = {}
+    missing: list[str] = []
+
+    conflicts_by_html = {
+        conflict.get("html_key"): conflict
+        for conflict in conflicts
+        if conflict.get("html_key") and conflict.get("key")
+    }
+
+    for html_key, conflict in conflicts_by_html.items():
+        key = conflict["key"]
+        action = post_data.get(f"resolution_action__{html_key}")
+        if not action:
+            missing.append(key)
+            continue
+
+        if action == "new_instance":
+            resolution_map[key] = {"action": "new_instance"}
+            continue
+
+        if action != "update_existing":
+            missing.append(key)
+            continue
+
+        entry: dict[str, object] = {"action": "update_existing"}
+
+        target_value = post_data.get(f"target_accession__{html_key}")
+        if target_value and str(target_value).isdigit():
+            entry["accession_id"] = int(target_value)
+
+        fields: dict[str, object] = {}
+        proposed = conflict.get("proposed", {})
+        for field_name in ("type_status", "comment"):
+            if post_data.get(f"apply_field__{html_key}__{field_name}"):
+                fields[field_name] = proposed.get(field_name)
+        entry["fields"] = fields
+
+        references: list[int] = []
+        for ref in proposed.get("references", []):
+            index = ref.get("index")
+            if index is None:
+                continue
+            field_name = f"add_reference__{html_key}__{index}"
+            if post_data.get(field_name):
+                try:
+                    references.append(int(index))
+                except (TypeError, ValueError):
+                    continue
+        entry["references"] = references
+
+        field_slips: list[int] = []
+        for slip in proposed.get("field_slips", []):
+            index = slip.get("index")
+            if index is None:
+                continue
+            field_name = f"add_field_slip__{html_key}__{index}"
+            if post_data.get(field_name):
+                try:
+                    field_slips.append(int(index))
+                except (TypeError, ValueError):
+                    continue
+        entry["field_slips"] = field_slips
+
+        rows: list[str] = []
+        for row in proposed.get("rows", []):
+            html_suffix = row.get("html_suffix")
+            specimen_suffix = row.get("specimen_suffix")
+            if not html_suffix or specimen_suffix in (None, ""):
+                continue
+            if post_data.get(f"replace_row__{html_key}__{html_suffix}"):
+                rows.append(str(specimen_suffix))
+        entry["rows"] = rows
+
+        resolution_map[key] = entry
+
+    return resolution_map, missing
+
+
+def _annotate_conflict_selections(conflicts, resolution_map):
+    for conflict in conflicts:
+        key = conflict.get("key")
+        selection = resolution_map.get(key, {})
+        conflict["selected_action"] = selection.get("action")
+        conflict["selected_accession_id"] = selection.get("accession_id")
+        fields = selection.get("fields") or {}
+        conflict["selected_fields"] = set(fields.keys())
+        rows = selection.get("rows") or []
+        conflict["selected_rows"] = {str(value) for value in rows}
+        references = selection.get("references") or []
+        conflict["selected_references"] = {
+            int(value) for value in references if str(value).isdigit()
+        }
+        field_slips = selection.get("field_slips") or []
+        conflict["selected_field_slips"] = {
+            int(value) for value in field_slips if str(value).isdigit()
+        }
+
+
 @login_required
 def MediaExpertQCWizard(request, pk):
     media = get_object_or_404(Media, uuid=pk)
@@ -2013,6 +2112,9 @@ def MediaExpertQCWizard(request, pk):
 
     qc_comment = ""
     action = "save"
+    selected_resolution: dict[str, dict[str, object]] = {}
+    conflict_details = describe_accession_conflicts(media)
+
     if request.method == "POST":
         qc_comment = (request.POST.get("qc_comment") or "").strip()
         action = request.POST.get("action") or "save"
@@ -2025,6 +2127,16 @@ def MediaExpertQCWizard(request, pk):
                     manager.accession_form.add_error(None, message)
                     messages.error(request, message)
             else:
+                conflict_details = describe_accession_conflicts(media)
+                resolution_map: dict[str, dict[str, object]] = {}
+                missing_resolutions: list[str] = []
+
+                if action == "approve" and conflict_details:
+                    resolution_map, missing_resolutions = _parse_conflict_resolution(
+                        request.POST, conflict_details
+                    )
+                    selected_resolution = resolution_map
+
                 if action == "approve":
                     processed = (media.ocr_data or {}).get("_processed_accessions") or []
                     if media.accession_id or processed:
@@ -2034,6 +2146,13 @@ def MediaExpertQCWizard(request, pk):
                         )
                         manager.accession_form.add_error(None, message)
                         messages.error(request, message)
+                    elif missing_resolutions:
+                        for key in missing_resolutions:
+                            message = (
+                                f"Select how to handle the existing accession {key} before approving."
+                            )
+                            manager.accession_form.add_error(None, message)
+                            messages.error(request, message)
                     else:
                         try:
                             with transaction.atomic():
@@ -2041,15 +2160,20 @@ def MediaExpertQCWizard(request, pk):
                                     Media.QCStatus.APPROVED,
                                     user=user,
                                     note=qc_comment or None,
+                                    resolution=resolution_map or None,
                                 )
                         except ValidationError as exc:
                             for message in _collect_validation_messages(exc):
                                 manager.accession_form.add_error(None, message)
                                 messages.error(request, message)
+                            conflict_details = describe_accession_conflicts(media)
+                            selected_resolution = resolution_map
                         except Exception as exc:
                             message = f"Importer error: {exc}"
                             manager.accession_form.add_error(None, message)
                             messages.error(request, message)
+                            conflict_details = describe_accession_conflicts(media)
+                            selected_resolution = resolution_map
                         else:
                             media.refresh_from_db()
                             _create_qc_comment(media, qc_comment, user)
@@ -2091,10 +2215,7 @@ def MediaExpertQCWizard(request, pk):
                     else:
                         media.refresh_from_db()
                         _create_qc_comment(media, qc_comment, user)
-                        messages.success(
-                            request,
-                            "Media flagged for rescan.",
-                        )
+                        messages.success(request, "Media flagged for rescan.")
                         return redirect("dashboard")
                 else:
                     if qc_comment:
@@ -2117,6 +2238,7 @@ def MediaExpertQCWizard(request, pk):
                         messages.success(request, "Changes saved.")
                         return redirect("media_expert_qc", pk=media.uuid)
 
+    _annotate_conflict_selections(conflict_details, selected_resolution)
     qc_comments = _get_qc_comments(media)
 
     context = {
@@ -2132,6 +2254,7 @@ def MediaExpertQCWizard(request, pk):
         "storage_datalist_id": AccessionRowQCForm.storage_datalist_id,
         "qc_comment": qc_comment,
         "qc_comments": qc_comments,
+        "qc_conflicts": conflict_details,
     }
 
     return render(request, "cms/qc/expert_wizard.html", context)

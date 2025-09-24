@@ -2,6 +2,7 @@ import base64
 import json
 import logging
 import os
+import re
 import shutil
 import time
 import textwrap
@@ -29,6 +30,7 @@ except ImportError:  # pragma: no cover
     OpenAI = None
 
 from django.conf import settings
+from django.db.models import Max, Prefetch
 
 from .models import (
     Media,
@@ -301,7 +303,543 @@ class OCRCostEstimator:
         }
 
 
-def create_accessions_from_media(media: Media) -> dict[str, list[dict[str, object]]]:
+def _normalise_boolean(value: object) -> bool:
+    if value in (None, ""):
+        return False
+    return str(value).strip().lower() in {"yes", "true", "1"}
+
+
+def _extract_entry_components(entry: dict) -> dict[str, object]:
+    type_status = (entry.get("type_status") or {}).get("interpreted")
+    published_val = (entry.get("published") or {}).get("interpreted")
+    is_published = _normalise_boolean(published_val)
+
+    notes = entry.get("additional_notes") or []
+    comment_parts: list[str] = []
+    for note in notes:
+        heading = (note.get("heading") or {}).get("interpreted")
+        value = (note.get("value") or {}).get("interpreted")
+        if heading and value:
+            comment_parts.append(f"{heading}: {value}")
+        elif value:
+            comment_parts.append(str(value))
+    comment = "\n".join(comment_parts) if comment_parts else None
+
+    references: list[dict[str, object]] = []
+    for index, ref in enumerate(entry.get("references") or []):
+        first_author = (ref.get("reference_first_author") or {}).get("interpreted")
+        title = (ref.get("reference_title") or {}).get("interpreted")
+        year = (ref.get("reference_year") or {}).get("interpreted")
+        if not (first_author and title and year):
+            continue
+        page_val = (ref.get("page") or {}).get("interpreted")
+        page = str(page_val).strip() if page_val not in (None, "") else None
+        references.append(
+            {
+                "index": index,
+                "first_author": first_author.strip(),
+                "title": title.strip(),
+                "year": str(year).strip(),
+                "page": page,
+            }
+        )
+
+    field_slips: list[dict[str, object]] = []
+    for index, slip in enumerate(entry.get("field_slips") or []):
+        horizon = slip.get("verbatim_horizon") or {}
+        field_slips.append(
+            {
+                "index": index,
+                "field_number": (slip.get("field_number") or {}).get("interpreted"),
+                "verbatim_locality": (slip.get("verbatim_locality") or {}).get("interpreted"),
+                "verbatim_taxon": (slip.get("verbatim_taxon") or {}).get("interpreted"),
+                "verbatim_element": (slip.get("verbatim_element") or {}).get("interpreted"),
+                "horizon_formation": (horizon.get("formation") or {}).get("interpreted"),
+                "horizon_member": (horizon.get("member") or {}).get("interpreted"),
+                "horizon_bed": (horizon.get("bed_or_horizon") or {}).get("interpreted"),
+                "horizon_chronostratigraphy": (horizon.get("chronostratigraphy") or {}).get("interpreted"),
+                "aerial_photo": (slip.get("aerial_photo") or {}).get("interpreted"),
+                "verbatim_latitude": (slip.get("verbatim_latitude") or {}).get("interpreted"),
+                "verbatim_longitude": (slip.get("verbatim_longitude") or {}).get("interpreted"),
+                "verbatim_elevation": (slip.get("verbatim_elevation") or {}).get("interpreted"),
+            }
+        )
+
+    rows: list[dict[str, object]] = []
+    identifications = entry.get("identifications") or []
+    for index, row in enumerate(entry.get("rows") or []):
+        suffix = (row.get("specimen_suffix") or {}).get("interpreted") or "-"
+        storage_name = (row.get("storage_area") or {}).get("interpreted")
+        ident = identifications[index] if index < len(identifications) else {}
+        ident_data = {
+            "taxon": (ident.get("taxon") or {}).get("interpreted"),
+            "identification_qualifier": (ident.get("identification_qualifier") or {}).get("interpreted"),
+            "verbatim_identification": (ident.get("verbatim_identification") or {}).get("interpreted"),
+            "identification_remarks": (ident.get("identification_remarks") or {}).get("interpreted"),
+        }
+        natures: list[dict[str, object]] = []
+        for nature in row.get("natures") or []:
+            element_name = (nature.get("element_name") or {}).get("interpreted")
+            side = (nature.get("side") or {}).get("interpreted")
+            condition = (nature.get("condition") or {}).get("interpreted")
+            verbatim_element = (nature.get("verbatim_element") or {}).get("interpreted")
+            portion = (nature.get("portion") or {}).get("interpreted")
+            fragments_raw = (nature.get("fragments") or {}).get("interpreted")
+            fragments = None
+            if fragments_raw not in (None, ""):
+                try:
+                    fragments = int(fragments_raw)
+                except (TypeError, ValueError):
+                    fragments = None
+            if not (
+                element_name
+                or side
+                or condition
+                or verbatim_element
+                or portion
+                or fragments is not None
+            ):
+                continue
+            natures.append(
+                {
+                    "element_name": element_name,
+                    "side": side,
+                    "condition": condition,
+                    "verbatim_element": verbatim_element,
+                    "portion": portion,
+                    "fragments": fragments,
+                }
+            )
+        rows.append(
+            {
+                "index": index,
+                "specimen_suffix": suffix,
+                "storage": storage_name,
+                "identification": ident_data,
+                "natures": natures,
+            }
+        )
+
+    return {
+        "type_status": type_status,
+        "is_published": is_published,
+        "comment": comment,
+        "references": references,
+        "field_slips": field_slips,
+        "rows": rows,
+    }
+
+
+def _make_html_key(value: str, used: set[str]) -> str:
+    base = re.sub(r"[^a-zA-Z0-9]+", "_", value or "conflict").strip("_") or "conflict"
+    candidate = base
+    counter = 1
+    while candidate in used:
+        counter += 1
+        candidate = f"{base}_{counter}"
+    used.add(candidate)
+    return candidate
+
+
+def _get_or_create_storage(area_name: str | None) -> Storage | None:
+    if not area_name:
+        return None
+    storage = Storage.objects.filter(area__iexact=area_name).first()
+    if storage:
+        return storage
+    parent = Storage.objects.filter(area="-Undefined").first()
+    if not parent:
+        parent = Storage.objects.create(area="-Undefined")
+    return Storage.objects.create(area=area_name, parent_area=parent)
+
+
+def _ensure_reference(first_author: str, title: str, year: str) -> Reference:
+    reference = Reference.objects.filter(
+        first_author__iexact=first_author.strip(),
+        title__iexact=title.strip(),
+        year=str(year).strip(),
+    ).first()
+    if reference:
+        return reference
+    citation = f"{first_author.strip()} ({str(year).strip()}) {title.strip()}"
+    return Reference.objects.create(
+        first_author=first_author.strip(),
+        title=title.strip(),
+        year=str(year).strip(),
+        citation=citation,
+    )
+
+
+def _ensure_field_slip(data: dict[str, object]) -> FieldSlip | None:
+    field_number = data.get("field_number")
+    verb_locality = data.get("verbatim_locality")
+    verb_taxon = data.get("verbatim_taxon")
+    if not (field_number and verb_taxon):
+        return None
+    field_slip = FieldSlip.objects.filter(
+        field_number=field_number,
+        verbatim_locality=verb_locality,
+        verbatim_taxon=verb_taxon,
+    ).first()
+    if field_slip:
+        return field_slip
+    verbatim_element = data.get("verbatim_element")
+    if not verbatim_element:
+        return None
+    horizon_parts: list[str] = []
+    for key in ("horizon_formation", "horizon_member", "horizon_bed", "horizon_chronostratigraphy"):
+        value = data.get(key)
+        if value:
+            horizon_parts.append(str(value))
+    horizon = " | ".join(horizon_parts) if horizon_parts else None
+    return FieldSlip.objects.create(
+        field_number=field_number,
+        verbatim_locality=verb_locality,
+        verbatim_taxon=verb_taxon,
+        verbatim_element=verbatim_element,
+        verbatim_horizon=horizon,
+        aerial_photo=data.get("aerial_photo"),
+        verbatim_latitude=data.get("verbatim_latitude"),
+        verbatim_longitude=data.get("verbatim_longitude"),
+        verbatim_elevation=data.get("verbatim_elevation"),
+    )
+
+
+def _apply_references(
+    accession: Accession,
+    references: list[dict[str, object]],
+    selection: set[int] | None = None,
+) -> None:
+    for reference in references:
+        index = int(reference.get("index", 0))
+        if selection is not None and index not in selection:
+            continue
+        first_author = reference.get("first_author")
+        title = reference.get("title")
+        year = reference.get("year")
+        if not (first_author and title and year):
+            continue
+        reference_obj = _ensure_reference(str(first_author), str(title), str(year))
+        page = reference.get("page")
+        AccessionReference.objects.update_or_create(
+            accession=accession,
+            reference=reference_obj,
+            defaults={"page": page if page not in (None, "") else None},
+        )
+
+
+def _apply_field_slips(
+    accession: Accession,
+    field_slips: list[dict[str, object]],
+    selection: set[int] | None = None,
+) -> None:
+    for entry in field_slips:
+        index = int(entry.get("index", 0))
+        if selection is not None and index not in selection:
+            continue
+        field_slip = _ensure_field_slip(entry)
+        if not field_slip:
+            continue
+        AccessionFieldSlip.objects.get_or_create(accession=accession, fieldslip=field_slip)
+
+
+def _apply_rows(
+    accession: Accession,
+    rows: list[dict[str, object]],
+    selection: set[str] | None = None,
+) -> None:
+    for row in rows:
+        suffix = row.get("specimen_suffix") or "-"
+        if selection is not None and suffix not in selection:
+            continue
+        storage_name = row.get("storage")
+        storage_obj = _get_or_create_storage(str(storage_name)) if storage_name else None
+        defaults = {
+            "storage": storage_obj,
+            "status": InventoryStatus.UNKNOWN,
+        }
+        row_obj, created = AccessionRow.objects.get_or_create(
+            accession=accession,
+            specimen_suffix=suffix,
+            defaults=defaults,
+        )
+        if not created and storage_obj and row_obj.storage != storage_obj:
+            row_obj.storage = storage_obj
+            row_obj.save(update_fields=["storage"])
+
+        row_obj.identification_set.all().delete()
+        row_obj.natureofspecimen_set.all().delete()
+
+        ident = row.get("identification") or {}
+        if any(
+            ident.get(field)
+            for field in (
+                "taxon",
+                "identification_qualifier",
+                "verbatim_identification",
+                "identification_remarks",
+            )
+        ):
+            Identification.objects.create(
+                accession_row=row_obj,
+                taxon=ident.get("taxon"),
+                identification_qualifier=ident.get("identification_qualifier"),
+                verbatim_identification=ident.get("verbatim_identification"),
+                identification_remarks=ident.get("identification_remarks"),
+            )
+
+        for nature in row.get("natures") or []:
+            element_name = nature.get("element_name")
+            if not element_name:
+                continue
+            element = Element.objects.filter(name=element_name).first()
+            if not element:
+                parent = Element.objects.filter(name="-Undefined").first()
+                if not parent:
+                    parent = Element.objects.create(name="-Undefined")
+                element = Element.objects.create(name=element_name, parent_element=parent)
+            fragments = nature.get("fragments")
+            if fragments in (None, ""):
+                fragments_value = 0
+            else:
+                try:
+                    fragments_value = int(fragments)
+                except (TypeError, ValueError):
+                    fragments_value = 0
+            NatureOfSpecimen.objects.create(
+                accession_row=row_obj,
+                element=element,
+                side=nature.get("side"),
+                condition=nature.get("condition"),
+                verbatim_element=nature.get("verbatim_element"),
+                portion=nature.get("portion"),
+                fragments=fragments_value,
+            )
+
+
+def _serialize_accession(accession: Accession) -> dict[str, object]:
+    accession = (
+        Accession.objects.filter(pk=accession.pk)
+        .select_related("collection", "specimen_prefix")
+        .prefetch_related(
+            Prefetch(
+                "accessionrow_set",
+                queryset=AccessionRow.objects.select_related("storage")
+                .prefetch_related(
+                    Prefetch("identification_set", queryset=Identification.objects.select_related("reference")),
+                    Prefetch("natureofspecimen_set", queryset=NatureOfSpecimen.objects.select_related("element")),
+                )
+                .order_by("specimen_suffix"),
+            ),
+            Prefetch(
+                "accessionreference_set",
+                queryset=AccessionReference.objects.select_related("reference"),
+            ),
+            Prefetch(
+                "fieldslip_links",
+                queryset=AccessionFieldSlip.objects.select_related("fieldslip"),
+            ),
+        )
+        .first()
+    )
+    if accession is None:
+        return {}
+
+    rows: list[dict[str, object]] = []
+    for row in accession.accessionrow_set.all():
+        ident = row.identification_set.first()
+        ident_data = {
+            "taxon": getattr(ident, "taxon", None),
+            "identification_qualifier": getattr(ident, "identification_qualifier", None),
+            "verbatim_identification": getattr(ident, "verbatim_identification", None),
+            "identification_remarks": getattr(ident, "identification_remarks", None),
+        }
+        natures: list[dict[str, object]] = []
+        for nature in row.natureofspecimen_set.all():
+            natures.append(
+                {
+                    "element_name": nature.element.name if nature.element else None,
+                    "side": nature.side,
+                    "condition": nature.condition,
+                    "verbatim_element": nature.verbatim_element,
+                    "portion": nature.portion,
+                    "fragments": nature.fragments,
+                }
+            )
+        rows.append(
+            {
+                "specimen_suffix": row.specimen_suffix,
+                "storage": row.storage.area if row.storage else None,
+                "identification": ident_data,
+                "natures": natures,
+            }
+        )
+
+    references: list[dict[str, object]] = []
+    for link in accession.accessionreference_set.all():
+        ref = link.reference
+        references.append(
+            {
+                "first_author": getattr(ref, "first_author", None),
+                "title": getattr(ref, "title", None),
+                "year": getattr(ref, "year", None),
+                "page": link.page,
+            }
+        )
+
+    field_slips: list[dict[str, object]] = []
+    for link in accession.fieldslip_links.all():
+        slip = link.fieldslip
+        field_slips.append(
+            {
+                "field_number": getattr(slip, "field_number", None),
+                "verbatim_locality": getattr(slip, "verbatim_locality", None),
+                "verbatim_taxon": getattr(slip, "verbatim_taxon", None),
+                "verbatim_element": getattr(slip, "verbatim_element", None),
+                "verbatim_horizon": getattr(slip, "verbatim_horizon", None),
+                "aerial_photo": getattr(slip, "aerial_photo", None),
+                "verbatim_latitude": getattr(slip, "verbatim_latitude", None),
+                "verbatim_longitude": getattr(slip, "verbatim_longitude", None),
+                "verbatim_elevation": getattr(slip, "verbatim_elevation", None),
+            }
+        )
+
+    return {
+        "type_status": accession.type_status,
+        "comment": accession.comment,
+        "is_published": accession.is_published,
+        "rows": rows,
+        "references": references,
+        "field_slips": field_slips,
+    }
+
+
+def _build_conflict_detail(
+    key: str,
+    collection: Collection,
+    specimen_prefix: Locality,
+    specimen_no: int,
+    existing_qs,
+    components: dict[str, object],
+) -> dict[str, object]:
+    existing_entries: list[dict[str, object]] = []
+    for accession in existing_qs:
+        existing_entries.append(
+            {
+                "id": accession.pk,
+                "instance_number": accession.instance_number,
+                "label": str(accession),
+                "data": _serialize_accession(accession),
+            }
+        )
+
+    existing_snapshot = existing_entries[0]["data"] if existing_entries else {}
+
+    rows: list[dict[str, object]] = []
+    used_suffixes: set[str] = set()
+    for row in components.get("rows", []):
+        row_copy = {**row}
+        row_copy["identification"] = dict(row.get("identification") or {})
+        row_copy["natures"] = [dict(nature) for nature in row.get("natures") or []]
+        html_suffix = _make_html_key(str(row_copy.get("specimen_suffix") or "row"), used_suffixes)
+        row_copy["html_suffix"] = html_suffix
+        existing_row = None
+        for candidate in existing_snapshot.get("rows", []):
+            if candidate.get("specimen_suffix") == row_copy.get("specimen_suffix"):
+                existing_row = candidate
+                break
+        row_copy["existing"] = existing_row
+        rows.append(row_copy)
+
+    references = [dict(ref) for ref in components.get("references", [])]
+    field_slips = [dict(slip) for slip in components.get("field_slips", [])]
+
+    max_instance = existing_qs.aggregate(Max("instance_number")).get("instance_number__max") or 1
+
+    proposed = dict(components)
+    proposed["rows"] = rows
+    proposed["references"] = references
+    proposed["field_slips"] = field_slips
+
+    return {
+        "key": key,
+        "collection": collection.abbreviation,
+        "specimen_prefix": specimen_prefix.abbreviation,
+        "specimen_no": specimen_no,
+        "reason": "Existing accession detected",
+        "message": "Existing accession detected. Choose whether to create a new instance or update the existing record.",
+        "existing_accessions": existing_entries,
+        "existing_snapshot": existing_snapshot,
+        "proposed": proposed,
+        "next_instance": max_instance + 1,
+    }
+
+
+def describe_accession_conflicts(media: Media) -> list[dict[str, object]]:
+    data = dict(media.ocr_data or {})
+    if data.get("card_type") != "accession_card":
+        return []
+
+    accessions = data.get("accessions") or []
+    processed_records = data.get("_processed_accessions") or []
+    processed_keys = {rec.get("key") for rec in processed_records if rec.get("key")}
+
+    conflicts: list[dict[str, object]] = []
+    used_html_keys: set[str] = set()
+
+    for entry in accessions:
+        raw_coll_abbr = (entry.get("collection_abbreviation") or {}).get("interpreted")
+        coll_abbr = raw_coll_abbr or "KNM"
+        collection = Collection.objects.filter(abbreviation=coll_abbr).first()
+        if not collection and coll_abbr != "KNM":
+            collection = Collection.objects.filter(abbreviation="KNM").first()
+        if not collection:
+            continue
+
+        prefix_abbr = (entry.get("specimen_prefix_abbreviation") or {}).get("interpreted")
+        if not prefix_abbr:
+            continue
+        specimen_prefix = Locality.objects.filter(abbreviation=prefix_abbr).first()
+        if not specimen_prefix:
+            continue
+
+        specimen_no_value = (entry.get("specimen_no") or {}).get("interpreted")
+        try:
+            specimen_no = int(specimen_no_value)
+        except (TypeError, ValueError):
+            continue
+
+        key = f"{collection.abbreviation}:{specimen_prefix.abbreviation}:{specimen_no}"
+        if key in processed_keys:
+            continue
+
+        existing_qs = Accession.objects.filter(
+            collection=collection,
+            specimen_prefix=specimen_prefix,
+            specimen_no=specimen_no,
+        ).order_by("instance_number")
+        if not existing_qs.exists():
+            continue
+
+        components = _extract_entry_components(entry)
+        conflict = _build_conflict_detail(
+            key,
+            collection,
+            specimen_prefix,
+            specimen_no,
+            existing_qs,
+            components,
+        )
+        conflict["html_key"] = _make_html_key(key, used_html_keys)
+        conflicts.append(conflict)
+
+    return conflicts
+
+
+def create_accessions_from_media(
+    media: Media,
+    resolution_map: dict[str, dict[str, object]] | None = None,
+) -> dict[str, list[dict[str, object]]]:
     """Create :class:`Accession` objects from a media's OCR data.
 
     The OCR payload is expected to be stored on ``media.ocr_data``. When the
@@ -310,13 +848,15 @@ def create_accessions_from_media(media: Media) -> dict[str, list[dict[str, objec
     that have already been created for this media are remembered inside the OCR
     JSON (under ``_processed_accessions``) and are not recreated on subsequent
     calls. If an accession would collide with an existing record, the conflict
-    is reported and the accession is not created.
+    is reported and the accession is not created unless a resolution is
+    provided.
     """
 
     data = dict(media.ocr_data or {})
     if data.get("card_type") != "accession_card":
         return {"created": [], "conflicts": []}
 
+    resolution_map = resolution_map or {}
     accessions = data.get("accessions") or []
     processed_records = data.get("_processed_accessions") or []
     processed_map = {rec.get("key"): rec for rec in processed_records if rec.get("key")}
@@ -389,187 +929,129 @@ def create_accessions_from_media(media: Media) -> dict[str, list[dict[str, objec
                     first_accession = accession
             continue
 
+        components = _extract_entry_components(entry)
+
         existing_qs = Accession.objects.filter(
             collection=collection,
             specimen_prefix=specimen_prefix,
             specimen_no=specimen_no,
         ).order_by("instance_number")
-        existing_accession = existing_qs.first()
-        if existing_accession:
-            conflicts.append(
-                {
-                    "key": key,
-                    "reason": "Accession already exists",
-                    "accession_id": existing_accession.pk,
-                    "instance_number": existing_accession.instance_number,
-                    "accession": str(existing_accession),
+
+        resolution_entry = resolution_map.get(key)
+
+        if existing_qs.exists():
+            if not resolution_entry:
+                conflict = _build_conflict_detail(
+                    key,
+                    collection,
+                    specimen_prefix,
+                    specimen_no,
+                    existing_qs,
+                    components,
+                )
+                conflicts.append(conflict)
+                continue
+
+            action = resolution_entry.get("action")
+            if action == "new_instance":
+                max_instance = (
+                    existing_qs.aggregate(Max("instance_number")).get("instance_number__max") or 1
+                )
+                instance_number = resolution_entry.get("instance_number")
+                try:
+                    instance_number_int = int(instance_number) if instance_number is not None else None
+                except (TypeError, ValueError):
+                    instance_number_int = None
+                next_instance = instance_number_int if instance_number_int and instance_number_int > max_instance else max_instance + 1
+                accession = Accession.objects.create(
+                    collection=collection,
+                    specimen_prefix=specimen_prefix,
+                    specimen_no=specimen_no,
+                    instance_number=next_instance,
+                    type_status=components.get("type_status"),
+                    is_published=components.get("is_published", False),
+                    comment=components.get("comment"),
+                )
+                _apply_references(accession, components.get("references", []))
+                _apply_field_slips(accession, components.get("field_slips", []))
+                _apply_rows(accession, components.get("rows", []))
+            elif action == "update_existing":
+                accession = existing_qs.filter(pk=resolution_entry.get("accession_id")).first() or existing_qs.first()
+                fields = resolution_entry.get("fields") or {}
+                update_fields: list[str] = []
+                if "type_status" in fields:
+                    accession.type_status = fields["type_status"]
+                    update_fields.append("type_status")
+                if "comment" in fields:
+                    accession.comment = fields["comment"]
+                    update_fields.append("comment")
+                if update_fields:
+                    accession.save(update_fields=update_fields)
+
+                reference_selection = {
+                    int(idx)
+                    for idx in resolution_entry.get("references", [])
+                    if isinstance(idx, (int, str)) and str(idx).isdigit()
                 }
-            )
-            continue
+                if reference_selection:
+                    _apply_references(accession, components.get("references", []), reference_selection)
 
-        type_status = (entry.get("type_status") or {}).get("interpreted")
-        published_val = (entry.get("published") or {}).get("interpreted")
-        is_published = str(published_val).strip().lower() in {"yes", "true", "1"}
+                field_slip_selection = {
+                    int(idx)
+                    for idx in resolution_entry.get("field_slips", [])
+                    if isinstance(idx, (int, str)) and str(idx).isdigit()
+                }
+                if field_slip_selection:
+                    _apply_field_slips(accession, components.get("field_slips", []), field_slip_selection)
 
-        notes = entry.get("additional_notes") or []
-        comment_parts: list[str] = []
-        for note in notes:
-            heading = (note.get("heading") or {}).get("interpreted")
-            value = (note.get("value") or {}).get("interpreted")
-            if heading and value:
-                comment_parts.append(f"{heading}: {value}")
-            elif value:
-                comment_parts.append(str(value))
-        comment = "\n".join(comment_parts) if comment_parts else None
+                row_selection = {
+                    str(suffix)
+                    for suffix in resolution_entry.get("rows", [])
+                    if suffix not in (None, "")
+                }
+                if row_selection:
+                    _apply_rows(accession, components.get("rows", []), row_selection)
 
-        accession = Accession.objects.create(
-            collection=collection,
-            specimen_prefix=specimen_prefix,
-            specimen_no=specimen_no,
-            instance_number=1,
-            type_status=type_status,
-            is_published=is_published,
-            comment=comment,
-        )
-
-        references = entry.get("references") or []
-        for ref in references:
-            first_author = (ref.get("reference_first_author") or {}).get("interpreted")
-            title = (ref.get("reference_title") or {}).get("interpreted")
-            year = (ref.get("reference_year") or {}).get("interpreted")
-            if not (first_author and title and year):
+                record = {
+                    "key": key,
+                    "accession_id": accession.pk,
+                    "collection": collection.abbreviation,
+                    "specimen_prefix": specimen_prefix.abbreviation,
+                    "specimen_no": specimen_no,
+                    "instance_number": accession.instance_number,
+                    "accession": str(accession),
+                }
+                processed_map[key] = record
+                updated_records.append(record)
+                if first_accession is None:
+                    first_accession = accession
                 continue
-            first_author = first_author.strip()
-            title = title.strip()
-            year_str = str(year).strip()
-            reference_obj = Reference.objects.filter(
-                first_author__iexact=first_author,
-                title__iexact=title,
-                year=year_str,
-            ).first()
-            if not reference_obj:
-                citation = f"{first_author} ({year_str}) {title}"
-                reference_obj = Reference.objects.create(
-                    first_author=first_author,
-                    title=title,
-                    year=year_str,
-                    citation=citation,
+            else:
+                conflict = _build_conflict_detail(
+                    key,
+                    collection,
+                    specimen_prefix,
+                    specimen_no,
+                    existing_qs,
+                    components,
                 )
-            page_val = (ref.get("page") or {}).get("interpreted")
-            page = str(page_val) if page_val is not None else None
-            AccessionReference.objects.update_or_create(
-                accession=accession,
-                reference=reference_obj,
-                defaults={"page": page},
-            )
-
-        field_slips = entry.get("field_slips") or []
-        for slip in field_slips:
-            field_number = (slip.get("field_number") or {}).get("interpreted")
-            verb_locality = (slip.get("verbatim_locality") or {}).get("interpreted")
-            verb_taxon = (slip.get("verbatim_taxon") or {}).get("interpreted")
-            if not (field_number and verb_taxon):
+                conflict["reason"] = "Resolution not recognised"
+                conflicts.append(conflict)
                 continue
-
-            field_slip_obj = FieldSlip.objects.filter(
-                field_number=field_number,
-                verbatim_locality=verb_locality,
-                verbatim_taxon=verb_taxon,
-            ).first()
-
-            if not field_slip_obj:
-                verb_element = (slip.get("verbatim_element") or {}).get("interpreted")
-                if not verb_element:
-                    continue
-
-                horizon_data = slip.get("verbatim_horizon") or {}
-                horizon_parts: list[str] = []
-                for key in (
-                    "formation",
-                    "member",
-                    "bed_or_horizon",
-                    "chronostratigraphy",
-                ):
-                    val = (horizon_data.get(key) or {}).get("interpreted")
-                    if val:
-                        horizon_parts.append(str(val))
-                horizon = " | ".join(horizon_parts) if horizon_parts else None
-
-                field_slip_obj = FieldSlip.objects.create(
-                    field_number=field_number,
-                    verbatim_locality=verb_locality,
-                    verbatim_taxon=verb_taxon,
-                    verbatim_element=verb_element,
-                    verbatim_horizon=horizon,
-                    aerial_photo=(slip.get("aerial_photo") or {}).get("interpreted"),
-                    verbatim_latitude=(slip.get("verbatim_latitude") or {}).get("interpreted"),
-                    verbatim_longitude=(slip.get("verbatim_longitude") or {}).get("interpreted"),
-                    verbatim_elevation=(slip.get("verbatim_elevation") or {}).get("interpreted"),
-                )
-
-            AccessionFieldSlip.objects.get_or_create(
-                accession=accession, fieldslip=field_slip_obj
+        else:
+            accession = Accession.objects.create(
+                collection=collection,
+                specimen_prefix=specimen_prefix,
+                specimen_no=specimen_no,
+                instance_number=1,
+                type_status=components.get("type_status"),
+                is_published=components.get("is_published", False),
+                comment=components.get("comment"),
             )
+            _apply_references(accession, components.get("references", []))
+            _apply_field_slips(accession, components.get("field_slips", []))
+            _apply_rows(accession, components.get("rows", []))
 
-        rows = entry.get("rows") or []
-        identifications = entry.get("identifications") or []
-        for idx, row in enumerate(rows):
-            suffix = (row.get("specimen_suffix") or {}).get("interpreted") or "-"
-            storage_name = (row.get("storage_area") or {}).get("interpreted")
-            storage_obj = None
-            if storage_name:
-                storage_obj = Storage.objects.filter(area=storage_name).first()
-                if not storage_obj:
-                    parent = Storage.objects.filter(area="-Undefined").first()
-                    if not parent:
-                        parent = Storage.objects.create(area="-Undefined")
-                    storage_obj = Storage.objects.create(area=storage_name, parent_area=parent)
-            row_obj, _ = AccessionRow.objects.get_or_create(
-                accession=accession,
-                specimen_suffix=suffix,
-                defaults={
-                    "storage": storage_obj,
-                    "status": InventoryStatus.UNKNOWN,
-                },
-            )
-            if identifications:
-                ident = identifications[idx] if idx < len(identifications) else {}
-                taxon = (ident.get("taxon") or {}).get("interpreted")
-                qualifier = (ident.get("identification_qualifier") or {}).get("interpreted")
-                verbatim_id = (ident.get("verbatim_identification") or {}).get("interpreted")
-                remarks = (ident.get("identification_remarks") or {}).get("interpreted")
-                if taxon or qualifier or verbatim_id or remarks:
-                    Identification.objects.create(
-                        accession_row=row_obj,
-                        taxon=taxon,
-                        identification_qualifier=qualifier,
-                        verbatim_identification=verbatim_id,
-                        identification_remarks=remarks,
-                    )
-            natures = row.get("natures") or []
-            for nature in natures:
-                element_name = (nature.get("element_name") or {}).get("interpreted")
-                if not element_name:
-                    continue
-                element_obj = Element.objects.filter(name=element_name).first()
-                if not element_obj:
-                    parent = Element.objects.filter(name="-Undefined").first()
-                    if not parent:
-                        parent = Element.objects.create(name="-Undefined")
-                    element_obj = Element.objects.create(
-                        name=element_name, parent_element=parent
-                    )
-                fragments_raw = (nature.get("fragments") or {}).get("interpreted")
-                fragments = int(fragments_raw) if fragments_raw not in (None, "") else 0
-                NatureOfSpecimen.objects.create(
-                    accession_row=row_obj,
-                    element=element_obj,
-                    side=(nature.get("side") or {}).get("interpreted"),
-                    condition=(nature.get("condition") or {}).get("interpreted"),
-                    verbatim_element=(nature.get("verbatim_element") or {}).get("interpreted"),
-                    portion=(nature.get("portion") or {}).get("interpreted"),
-                    fragments=fragments,
-                )
         if first_accession is None:
             first_accession = accession
         record = {
