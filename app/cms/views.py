@@ -362,6 +362,7 @@ def dashboard(request):
         )
 
     expert_qc_status_lists: list[dict] = []
+    intern_qc_status_lists: list[dict] = []
     if user.is_superuser or user.groups.filter(
         name__in=["Curators", "Collection Managers"]
     ).exists():
@@ -400,7 +401,6 @@ def dashboard(request):
             .annotate(active_scan_start=Subquery(active_scan_start_subquery))
         )
 
-        intern_qc_status_lists = []
         for status_choice in (
             Media.QCStatus.PENDING_INTERN,
             Media.QCStatus.REJECTED,
@@ -427,6 +427,7 @@ def dashboard(request):
         )
 
     context.setdefault("expert_qc_status_lists", expert_qc_status_lists)
+    context.setdefault("intern_qc_status_lists", intern_qc_status_lists)
 
     if not context:
         context["no_role"] = True

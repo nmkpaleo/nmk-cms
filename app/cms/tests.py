@@ -486,6 +486,30 @@ class DashboardViewCollectionManagerTests(TestCase):
         self.assertEqual(len(response.context["latest_accessions"]), 10)
         self.assertIn(self.row_accession, response.context["latest_accessions"])
 
+    def test_dashboard_lists_quality_control_media_for_expert(self):
+        now_time = now()
+        media_items = []
+        for idx in range(11):
+            media = Media.objects.create(
+                media_location=f"uploads/expert/sample-{idx}.jpg",
+                file_name=f"Expert Sample {idx}",
+                qc_status=Media.QCStatus.PENDING_EXPERT,
+            )
+            Media.objects.filter(pk=media.pk).update(
+                modified_on=now_time - timedelta(minutes=idx)
+            )
+            media_items.append(media)
+
+        response = self.client.get(reverse("dashboard"))
+
+        self.assertContains(response, "Quality Control")
+        self.assertContains(response, Media.QCStatus.PENDING_EXPERT.label)
+        self.assertContains(response, media_items[0].file_name)
+        self.assertNotContains(response, media_items[10].file_name)
+        self.assertContains(
+            response, reverse("media_expert_qc", args=[media_items[0].uuid])
+        )
+
     def test_collection_manager_without_active_series(self):
         AccessionNumberSeries.objects.filter(user=self.manager).update(is_active=False)
         response = self.client.get(reverse("dashboard"))
