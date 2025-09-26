@@ -2876,6 +2876,262 @@ class MediaInternQCWizardTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("Shelf 42", response.context["storage_suggestions"])
 
+    def test_handles_inserted_row_payload(self):
+        self.client.login(username="intern", password="pass")
+        url = self.get_url()
+        data = self.build_valid_post_data()
+        data.update(
+            {
+                "row-TOTAL_FORMS": "3",
+                "row-2-row_id": "row-2",
+                "row-2-order": "2",
+                "row-2-specimen_suffix": "C",
+                "row-2-storage": "Cabinet 4",
+                "row-2-status": InventoryStatus.UNKNOWN,
+                "specimen-TOTAL_FORMS": "2",
+                "specimen-INITIAL_FORMS": "1",
+                "specimen-1-row_id": "row-2",
+                "specimen-1-element": str(self.element.pk),
+                "specimen-1-side": "Right",
+                "specimen-1-condition": "Good",
+                "specimen-1-verbatim_element": "Femur",
+                "specimen-1-portion": "Distal",
+                "specimen-1-fragments": "1",
+            }
+        )
+
+        response = self.client.post(url, data, follow=True)
+        self.assertEqual(response.status_code, 200)
+
+        self.media.refresh_from_db()
+        rows = self.media.ocr_data["accessions"][0]["rows"]
+        self.assertEqual(len(rows), 3)
+        self.assertEqual(rows[2]["specimen_suffix"]["interpreted"], "C")
+        self.assertEqual(rows[2]["storage_area"]["interpreted"], "Cabinet 4")
+        natures = rows[2]["natures"]
+        self.assertEqual(len(natures), 1)
+        self.assertEqual(natures[0]["element_name"]["interpreted"], "Femur")
+        self.assertEqual(natures[0]["portion"]["interpreted"], "Distal")
+
+    def test_handles_added_specimen_payload(self):
+        self.client.login(username="intern", password="pass")
+        url = self.get_url()
+        data = self.build_valid_post_data()
+        data.update(
+            {
+                "specimen-TOTAL_FORMS": "2",
+                "specimen-1-row_id": "row-1",
+                "specimen-1-element": str(self.element.pk),
+                "specimen-1-side": "Right",
+                "specimen-1-condition": "Fair",
+                "specimen-1-verbatim_element": "Mandible fragment",
+                "specimen-1-portion": "Complete",
+                "specimen-1-fragments": "2",
+            }
+        )
+
+        response = self.client.post(url, data, follow=True)
+        self.assertEqual(response.status_code, 200)
+
+        self.media.refresh_from_db()
+        accession_payload = self.media.ocr_data["accessions"][0]
+        rows = accession_payload["rows"]
+        target_row = next(
+            row for row in rows if row["specimen_suffix"]["interpreted"] == "B"
+        )
+        self.assertEqual(len(target_row["natures"]), 1)
+        added_nature = target_row["natures"][0]
+        self.assertEqual(added_nature["element_name"]["interpreted"], "Femur")
+        self.assertEqual(added_nature["side"]["interpreted"], "Right")
+        self.assertEqual(added_nature["portion"]["interpreted"], "Complete")
+
+    def test_handles_ident_update_on_existing_row(self):
+        """Interns can edit the default identification chip on an existing row."""
+
+        self.client.login(username="intern", password="pass")
+        url = self.get_url()
+        data = self.build_valid_post_data()
+        data.update(
+            {
+                "ident-1-taxon": "Homo",
+                "ident-1-identification_qualifier": "cf.",
+                "ident-1-verbatim_identification": "Homo cf.",
+                "ident-1-identification_remarks": "Updated during QC",
+            }
+        )
+
+        response = self.client.post(url, data, follow=True)
+        self.assertEqual(response.status_code, 200)
+
+        self.media.refresh_from_db()
+        accession_payload = self.media.ocr_data["accessions"][0]
+        rows = accession_payload["rows"]
+        identifications = accession_payload["identifications"]
+        suffixes = [row["specimen_suffix"]["interpreted"] for row in rows]
+        updated_index = suffixes.index("B")
+        updated_ident = identifications[updated_index]
+        self.assertEqual(updated_ident["taxon"]["interpreted"], "Homo")
+        self.assertEqual(
+            updated_ident["identification_qualifier"]["interpreted"], "cf."
+        )
+        self.assertEqual(
+            updated_ident["identification_remarks"]["interpreted"],
+            "Updated during QC",
+        )
+
+    def test_handles_new_identification_for_added_row(self):
+        self.client.login(username="intern", password="pass")
+        url = self.get_url()
+        data = self.build_valid_post_data()
+        data.update(
+            {
+                "row-TOTAL_FORMS": "3",
+                "row-2-row_id": "row-2",
+                "row-2-order": "2",
+                "row-2-specimen_suffix": "C",
+                "row-2-storage": "Drawer 15",
+                "row-2-status": InventoryStatus.UNKNOWN,
+                "specimen-TOTAL_FORMS": "2",
+                "specimen-1-row_id": "row-2",
+                "specimen-1-element": str(self.element.pk),
+                "specimen-1-side": "Left",
+                "specimen-1-condition": "Good",
+                "specimen-1-verbatim_element": "Tooth",
+                "specimen-1-portion": "Crown",
+                "specimen-1-fragments": "1",
+                "ident-TOTAL_FORMS": "3",
+                "ident-2-row_id": "row-2",
+                "ident-2-taxon": "Papio",
+                "ident-2-identification_qualifier": "cf.",
+                "ident-2-identified_by": "",
+                "ident-2-verbatim_identification": "Papio cf.",
+                "ident-2-identification_remarks": "Added manually",
+                "ident-2-reference": "",
+                "ident-2-date_identified": "",
+            }
+        )
+
+        response = self.client.post(url, data, follow=True)
+        self.assertEqual(response.status_code, 200)
+
+        self.media.refresh_from_db()
+        accession_payload = self.media.ocr_data["accessions"][0]
+        rows = accession_payload["rows"]
+        identifications = accession_payload["identifications"]
+        suffixes = [row["specimen_suffix"]["interpreted"] for row in rows]
+        self.assertEqual(len(suffixes), len(identifications))
+        new_index = suffixes.index("C")
+        self.assertEqual(
+            identifications[new_index]["taxon"]["interpreted"], "Papio"
+        )
+        self.assertEqual(
+            identifications[new_index]["identification_qualifier"]["interpreted"],
+            "cf.",
+        )
+
+    def test_handles_deleted_identification_payload(self):
+        self.client.login(username="intern", password="pass")
+        url = self.get_url()
+        data = self.build_valid_post_data()
+        data["ident-0-DELETE"] = "on"
+
+        response = self.client.post(url, data, follow=True)
+        self.assertEqual(response.status_code, 200)
+
+        self.media.refresh_from_db()
+        accession_payload = self.media.ocr_data["accessions"][0]
+        rows = accession_payload["rows"]
+        identifications = accession_payload["identifications"]
+        suffixes = [row["specimen_suffix"]["interpreted"] for row in rows]
+        self.assertEqual(len(suffixes), len(identifications))
+        deleted_index = suffixes.index("A")
+        cleared_ident = identifications[deleted_index]
+        self.assertIsNone(cleared_ident["taxon"]["interpreted"])
+        self.assertIsNone(
+            cleared_ident["identification_qualifier"]["interpreted"]
+        )
+        self.assertIsNone(
+            cleared_ident["identification_remarks"]["interpreted"]
+        )
+
+    def test_handles_deleted_specimen_payload(self):
+        """Specimen chips flagged for deletion are removed from the payload."""
+
+        self.client.login(username="intern", password="pass")
+        url = self.get_url()
+        data = self.build_valid_post_data()
+        data["specimen-0-DELETE"] = "on"
+
+        response = self.client.post(url, data, follow=True)
+        self.assertEqual(response.status_code, 200)
+
+        self.media.refresh_from_db()
+        accession_payload = self.media.ocr_data["accessions"][0]
+        rows = accession_payload["rows"]
+        identifications = accession_payload["identifications"]
+        suffixes = [row["specimen_suffix"]["interpreted"] for row in rows]
+        leading_index = suffixes.index("A")
+        leading_row = rows[leading_index]
+        leading_ident = identifications[leading_index]
+        self.assertEqual(leading_row["natures"], [])
+        # Identification remains intact after removing the specimen chip.
+        self.assertEqual(leading_ident["taxon"]["interpreted"], "Pan")
+
+    def test_handles_split_payload_creates_new_row(self):
+        self.client.login(username="intern", password="pass")
+        url = self.get_url()
+        data = self.build_valid_post_data()
+        data.update(
+            {
+                "row-TOTAL_FORMS": "3",
+                "row-2-row_id": "row-2",
+                "row-2-order": "2",
+                "row-2-specimen_suffix": "C",
+                "row-2-storage": "Drawer 10",
+                "row-2-status": InventoryStatus.UNKNOWN,
+            }
+        )
+        data["specimen-0-row_id"] = "row-2"
+
+        response = self.client.post(url, data, follow=True)
+        self.assertEqual(response.status_code, 200)
+
+        self.media.refresh_from_db()
+        accession_payload = self.media.ocr_data["accessions"][0]
+        rows = accession_payload["rows"]
+        self.assertEqual(len(rows), 3)
+        moved_row = rows[2]
+        self.assertEqual(moved_row["storage_area"]["interpreted"], "Drawer 10")
+        self.assertEqual(len(moved_row["natures"]), 1)
+        original_first_row = rows[1]
+        self.assertEqual(original_first_row["natures"], [])
+
+    def test_handles_merged_rows_payload(self):
+        self.client.login(username="intern", password="pass")
+        url = self.get_url()
+        data = self.build_valid_post_data()
+        for key in list(data.keys()):
+            if key.startswith("row-1-"):
+                data.pop(key)
+            if key.startswith("ident-1-"):
+                data.pop(key)
+        data.update(
+            {
+                "row-TOTAL_FORMS": "1",
+                "row-INITIAL_FORMS": "1",
+                "ident-TOTAL_FORMS": "1",
+                "ident-INITIAL_FORMS": "1",
+            }
+        )
+
+        response = self.client.post(url, data, follow=True)
+        self.assertEqual(response.status_code, 200)
+
+        self.media.refresh_from_db()
+        rows = self.media.ocr_data["accessions"][0]["rows"]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["specimen_suffix"]["interpreted"], "A")
+
     def test_does_not_create_storage_when_submission_invalid(self):
         self.client.login(username="intern", password="pass")
         url = self.get_url()

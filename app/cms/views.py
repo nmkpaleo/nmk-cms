@@ -1045,6 +1045,9 @@ class AccessionRowIdentificationQCForm(AccessionRowIdentificationForm):
             field = self.fields.get(field_name)
             if field is not None:
                 field.required = False
+        delete_field = self.fields.get('DELETE')
+        if delete_field is not None:
+            delete_field.widget = forms.HiddenInput()
 
 
 class AccessionRowSpecimenQCForm(AccessionRowSpecimenForm):
@@ -1063,11 +1066,16 @@ class AccessionRowSpecimenQCForm(AccessionRowSpecimenForm):
                 field = self.fields.get(field_name)
                 if field is not None:
                     field.required = False
+        delete_field = self.fields.get('DELETE')
+        if delete_field is not None:
+            delete_field.widget = forms.HiddenInput()
 
 
 AccessionRowFormSet = formset_factory(AccessionRowQCForm, extra=0, can_delete=False)
-IdentificationQCFormSet = formset_factory(AccessionRowIdentificationQCForm, extra=0, can_delete=False)
-SpecimenQCFormSet = formset_factory(AccessionRowSpecimenQCForm, extra=0, can_delete=False)
+IdentificationQCFormSet = formset_factory(
+    AccessionRowIdentificationQCForm, extra=0, can_delete=True
+)
+SpecimenQCFormSet = formset_factory(AccessionRowSpecimenQCForm, extra=0, can_delete=True)
 
 
 class AccessionReferenceQCForm(forms.Form):
@@ -1175,19 +1183,28 @@ def _iter_field_diffs(old, new, path=""):
 
 
 def _build_row_contexts(row_formset, ident_formset, specimen_formset):
-    ident_map = {_form_row_id(form): form for form in ident_formset.forms}
+    ident_map: dict[str, list] = {}
+    for form in ident_formset.forms:
+        row_id = _form_row_id(form)
+        if not row_id:
+            continue
+        ident_map.setdefault(row_id, []).append(form)
     specimen_map: dict[str, list] = {}
     for form in specimen_formset.forms:
         row_id = _form_row_id(form)
+        if not row_id:
+            continue
         specimen_map.setdefault(row_id, []).append(form)
     contexts = []
     for form in row_formset.forms:
         row_id = _form_row_id(form)
+        ident_forms = ident_map.get(row_id, [])
+        specimens = specimen_map.get(row_id, [])
         contexts.append(
             {
                 'row_form': form,
-                'ident_form': ident_map.get(row_id),
-                'specimen_forms': specimen_map.get(row_id, []),
+                'ident_forms': ident_forms,
+                'specimen_forms': specimens,
                 'row_id': row_id,
                 'order': _form_order_value(form),
             }
@@ -1576,6 +1593,8 @@ class MediaQCFormManager:
             cleaned = form.cleaned_data
             if not cleaned:
                 continue
+            if cleaned.get('DELETE'):
+                continue
             row_id = cleaned.get("row_id")
             if not row_id:
                 continue
@@ -1585,6 +1604,8 @@ class MediaQCFormManager:
         for form in self.specimen_formset:
             cleaned = form.cleaned_data
             if not cleaned:
+                continue
+            if cleaned.get('DELETE'):
                 continue
             row_id = cleaned.get("row_id")
             if not row_id:

@@ -9,6 +9,8 @@ media/
 app/media/
 github_kli*
 
+node_modules/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
