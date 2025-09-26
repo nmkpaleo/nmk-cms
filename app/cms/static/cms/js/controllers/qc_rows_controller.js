@@ -621,6 +621,17 @@
       this.updateChipIndexes('specimen');
     }
 
+    deleteRow(event) {
+      if (event) {
+        event.preventDefault();
+      }
+      var row = this.rowFromEvent(event);
+      if (!row) {
+        return;
+      }
+      this.removeRowElement(row, { skipConfirm: false });
+    }
+
     confirmRemoveRow(event) {
       if (event) {
         event.preventDefault();
@@ -650,9 +661,14 @@
       if (!row) {
         return;
       }
-      var skipConfirm = options && options.skipConfirm;
+      var settings = options || {};
+      var skipConfirm = settings.skipConfirm;
       if (!skipConfirm) {
-        var confirmed = window.confirm('Remove this specimen row?');
+        var chipCount = row.querySelectorAll('[data-qc-chip]').length;
+        var message = chipCount > 0
+          ? 'Remove this specimen row and its linked identifications and specimens?'
+          : 'Remove this specimen row?';
+        var confirmed = window.confirm(message);
         if (!confirmed) {
           return;
         }
