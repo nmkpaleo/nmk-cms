@@ -25,14 +25,14 @@
       <div class="qc-field">
         <label class="qc-label" for="{{ row_form.specimen_suffix.id_for_label }}">{{ row_form.specimen_suffix.label }}:</label>
         <div class="qc-control">
-          {{ row_form.specimen_suffix.as_widget(attrs={'data-row-field': '1'}) }}
+          {{ row_form.specimen_suffix }}
           {{ row_form.specimen_suffix.errors }}
         </div>
       </div>
       <div class="qc-field">
         <label class="qc-label" for="{{ row_form.storage.id_for_label }}">{{ row_form.storage.label }}:</label>
         <div class="qc-control">
-          {{ row_form.storage.as_widget(attrs={'data-row-field': '1'}) }}
+          {{ row_form.storage }}
           {{ row_form.storage.errors }}
         </div>
       </div>
