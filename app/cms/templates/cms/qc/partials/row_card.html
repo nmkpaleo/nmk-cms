@@ -45,7 +45,7 @@
       {% endif %}
     </div>
     {% for hidden in row_form.hidden_fields %}
-      {% if hidden.name not in ('row_id', 'order', 'status') %}
+      {% if hidden.name != 'row_id' and hidden.name != 'order' and hidden.name != 'status' %}
         {{ hidden }}
       {% endif %}
     {% endfor %}
