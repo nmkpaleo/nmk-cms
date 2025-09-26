@@ -238,6 +238,10 @@
       background-color: #f8fafc;
     }
     .qc-chip-zone__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
       font-size: 0.85rem;
       font-weight: 600;
       text-transform: uppercase;
@@ -259,7 +263,7 @@
       background-color: #eef2ff;
       border-color: #6366f1;
     }
-    .qc-chip {
+    .qc-chip { 
       display: inline-flex;
       flex-direction: column;
       align-items: stretch;
@@ -269,6 +273,12 @@
       padding: 0.25rem 0.75rem;
       cursor: grab;
       position: relative;
+    }
+    .qc-chip__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
     }
     .qc-chip__pill {
       display: inline-flex;
@@ -294,6 +304,14 @@
     .qc-chip__fields {
       border-top: 1px solid #bae6fd;
       padding-top: 0.5rem;
+    }
+    .qc-chip__errors {
+      color: #b91c1c;
+      font-size: 0.8rem;
+      margin-bottom: 0.5rem;
+    }
+    .qc-chip__delete {
+      flex-shrink: 0;
     }
     .qc-chip--selected {
       box-shadow: 0 0 0 2px #2563eb inset;

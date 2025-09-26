@@ -52,7 +52,10 @@
     {% endfor %}
     <div class="qc-row-card__chips">
       <div class="qc-chip-zone">
-        <div class="qc-chip-zone__header">Identification</div>
+        <div class="qc-chip-zone__header">
+          <span>Identification</span>
+          <button type="button" class="w3-button w3-tiny w3-blue w3-round" data-action="click->qc-rows#addChip" data-chip-type="ident">Add identification</button>
+        </div>
         <div class="qc-chip-zone__list" data-chip-container data-chip-container-type="ident">
           {% if ident_forms %}
             {% for ident_form in ident_forms %}
@@ -63,7 +66,10 @@
         <div class="qc-chip-zone__empty" data-empty-indicator{% if ident_forms %} hidden{% endif %}>Drop identification chips here</div>
       </div>
       <div class="qc-chip-zone">
-        <div class="qc-chip-zone__header">Specimens</div>
+        <div class="qc-chip-zone__header">
+          <span>Specimens</span>
+          <button type="button" class="w3-button w3-tiny w3-amber w3-round" data-action="click->qc-rows#addChip" data-chip-type="specimen">Add specimen</button>
+        </div>
         <div class="qc-chip-zone__list" data-chip-container data-chip-container-type="specimen">
           {% if specimen_forms %}
             {% for spec_form in specimen_forms %}

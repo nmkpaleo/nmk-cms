@@ -219,10 +219,22 @@
       chip.setAttribute("draggable", "true");
       chip.addEventListener("dragstart", this.boundChipDragStart);
       chip.addEventListener("dragend", this.boundChipDragEnd);
-      this.refreshChipSummary(chip);
       var row = chip.closest('[data-qc-row]');
       if (row) {
         this.assignChipToRow(chip, row);
+      }
+      this.refreshChipSummary(chip);
+      if (this.isChipMarkedForDeletion(chip)) {
+        chip.dataset.chipRemoved = 'true';
+        chip.hidden = true;
+      } else {
+        chip.dataset.chipRemoved = 'false';
+        chip.hidden = false;
+      }
+      if (chip.dataset.chipOpen === 'true') {
+        this.openChipFields(chip, { focus: false });
+      } else {
+        this.closeChipFields(chip);
       }
     }
 
@@ -387,6 +399,7 @@
       if (!chip || !container) {
         return;
       }
+      this.clearDeletionState(chip);
       container.appendChild(chip);
       var row = container.closest('[data-qc-row]');
       if (row) {
@@ -418,7 +431,7 @@
       if (!indicator) {
         return;
       }
-      var hasChip = container.querySelector('[data-qc-chip]') !== null;
+      var hasChip = this.activeChips(container).length > 0;
       indicator.hidden = hasChip;
     }
 
@@ -426,7 +439,7 @@
       if (!row) {
         return;
       }
-      var hasChip = row.querySelector('[data-qc-chip]') !== null;
+      var hasChip = this.activeChips(row).length > 0;
       var alert = row.querySelector('[data-row-alert]');
       if (alert) {
         alert.hidden = hasChip;
@@ -455,8 +468,105 @@
       if (!chip || !button) {
         return;
       }
-      var selected = chip.classList.toggle('qc-chip--selected');
-      button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+      var isSelected = chip.classList.contains('qc-chip--selected');
+      if (isSelected) {
+        this.closeChipFields(chip);
+      } else {
+        this.openChipFields(chip, { focus: true });
+      }
+    }
+
+    addChip(event) {
+      if (event) {
+        event.preventDefault();
+      }
+      var trigger = event ? event.currentTarget : null;
+      if (!trigger) {
+        return;
+      }
+      var type = trigger.getAttribute('data-chip-type') || 'ident';
+      var row = this.rowFromEvent(event);
+      if (!row) {
+        return;
+      }
+      var container = row.querySelector('[data-chip-container-type="' + type + '"]');
+      if (!container) {
+        return;
+      }
+      if (type === 'ident') {
+        var existing = this.activeChips(container, type);
+        if (existing.length > 0) {
+          this.openChipFields(existing[0], { focus: true });
+          if (typeof existing[0].scrollIntoView === 'function') {
+            existing[0].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }
+          return;
+        }
+      }
+      var chip = this.createChipFromTemplate(type);
+      if (!chip) {
+        return;
+      }
+      container.appendChild(chip);
+      this.initializeChip(chip);
+      this.clearDeletionState(chip);
+      this.refreshChipSummary(chip);
+      this.updateChipIndexes(type);
+      this.refreshEmptyIndicators(container);
+      this.checkRowEmpty(row);
+      this.openChipFields(chip, { focus: true });
+    }
+
+    removeChip(event) {
+      if (event) {
+        event.preventDefault();
+      }
+      var trigger = event ? event.currentTarget : null;
+      var chip = trigger ? trigger.closest('[data-qc-chip]') : null;
+      if (!chip) {
+        return;
+      }
+      var type = chip.getAttribute('data-chip-type');
+      var container = chip.parentElement;
+      var row = chip.closest('[data-qc-row]');
+      var deleteInput = chip.querySelector('input[name$="-DELETE"]');
+      if (deleteInput) {
+        var promptMessage = type === 'ident'
+          ? 'Remove this identification?'
+          : 'Remove this specimen?';
+        var confirmed = window.confirm(promptMessage);
+        if (!confirmed) {
+          return;
+        }
+        if (deleteInput.type === 'checkbox') {
+          deleteInput.checked = true;
+          deleteInput.value = 'on';
+        } else {
+          deleteInput.value = 'on';
+        }
+        chip.dataset.chipRemoved = 'true';
+        chip.classList.remove('qc-chip--selected');
+        var toggleButton = chip.querySelector('.qc-chip__pill');
+        if (toggleButton) {
+          toggleButton.setAttribute('aria-pressed', 'false');
+        }
+        var fields = chip.querySelector('.qc-chip__fields');
+        if (fields) {
+          fields.hidden = true;
+        }
+        chip.hidden = true;
+      } else {
+        if (chip.parentElement) {
+          chip.parentElement.removeChild(chip);
+        }
+      }
+      this.updateChipIndexes(type);
+      if (container) {
+        this.refreshEmptyIndicators(container);
+      }
+      if (row) {
+        this.checkRowEmpty(row);
+      }
     }
 
     insertRow(event) {
@@ -608,7 +718,7 @@
         if (!sourceContainer || !targetContainer) {
           return;
         }
-        var chips = Array.prototype.slice.call(sourceContainer.querySelectorAll('[data-qc-chip]'));
+        var chips = self.activeChips(sourceContainer, type);
         chips.forEach(function (chip) {
           self.moveChipToContainer(chip, targetContainer);
         });
@@ -664,7 +774,7 @@
       var settings = options || {};
       var skipConfirm = settings.skipConfirm;
       if (!skipConfirm) {
-        var chipCount = row.querySelectorAll('[data-qc-chip]').length;
+        var chipCount = this.activeChips(row).length;
         var message = chipCount > 0
           ? 'Remove this specimen row and its linked identifications and specimens?'
           : 'Remove this specimen row?';
@@ -711,7 +821,7 @@
         if (!sourceContainer || !targetContainer) {
           return;
         }
-        var chips = Array.prototype.slice.call(sourceContainer.querySelectorAll('[data-qc-chip]'));
+        var chips = self.activeChips(sourceContainer, type);
         chips.forEach(function (chip) {
           var clone = self.createChipFromTemplate(type);
           if (!clone) {
@@ -719,6 +829,7 @@
           }
           targetContainer.appendChild(clone);
           self.initializeChip(clone);
+          self.clearDeletionState(clone);
           self.copyChipValues(chip, clone);
           self.assignChipToRow(clone, targetRow);
           self.refreshChipSummary(clone);
@@ -853,6 +964,93 @@
             }
           }
         }
+      }
+    }
+
+    activeChips(root, type) {
+      if (!root) {
+        return [];
+      }
+      var selector = '[data-qc-chip]';
+      if (type) {
+        selector += '[data-chip-type="' + type + '"]';
+      }
+      var chips = Array.prototype.slice.call(root.querySelectorAll(selector));
+      var self = this;
+      return chips.filter(function (chip) {
+        return !self.isChipMarkedForDeletion(chip);
+      });
+    }
+
+    isChipMarkedForDeletion(chip) {
+      if (!chip) {
+        return false;
+      }
+      if (chip.dataset.chipRemoved === 'true') {
+        return true;
+      }
+      var deleteInput = chip.querySelector('input[name$="-DELETE"]');
+      if (!deleteInput) {
+        return false;
+      }
+      if (deleteInput.type === 'checkbox') {
+        return deleteInput.checked;
+      }
+      var value = deleteInput.value;
+      return value === 'on' || value === 'true' || value === '1';
+    }
+
+    clearDeletionState(chip) {
+      if (!chip) {
+        return;
+      }
+      chip.dataset.chipRemoved = 'false';
+      chip.hidden = false;
+      var deleteInput = chip.querySelector('input[name$="-DELETE"]');
+      if (deleteInput) {
+        if (deleteInput.type === 'checkbox') {
+          deleteInput.checked = false;
+          deleteInput.value = 'on';
+        } else {
+          deleteInput.value = '';
+        }
+      }
+    }
+
+    openChipFields(chip, options) {
+      if (!chip) {
+        return;
+      }
+      chip.classList.add('qc-chip--selected');
+      var button = chip.querySelector('.qc-chip__pill');
+      if (button) {
+        button.setAttribute('aria-pressed', 'true');
+      }
+      var fields = chip.querySelector('.qc-chip__fields');
+      if (fields) {
+        fields.hidden = false;
+      }
+      var shouldFocus = !options || options.focus !== false;
+      if (shouldFocus && fields) {
+        var focusTarget = fields.querySelector('input, select, textarea');
+        if (focusTarget && typeof focusTarget.focus === 'function') {
+          focusTarget.focus();
+        }
+      }
+    }
+
+    closeChipFields(chip) {
+      if (!chip) {
+        return;
+      }
+      chip.classList.remove('qc-chip--selected');
+      var button = chip.querySelector('.qc-chip__pill');
+      if (button) {
+        button.setAttribute('aria-pressed', 'false');
+      }
+      var fields = chip.querySelector('.qc-chip__fields');
+      if (fields) {
+        fields.hidden = true;
       }
     }
 
