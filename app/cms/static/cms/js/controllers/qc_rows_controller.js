@@ -6,7 +6,7 @@
     if (!Stimulus) {
       return;
     }
-    var controller = factory(Stimulus);
+    var controller = factory(global.Stimulus);
     if (!controller) {
       return;
     }
