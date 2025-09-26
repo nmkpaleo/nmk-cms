@@ -68,6 +68,15 @@
   }
 
   var QCRowsController = class extends Controller {
+    static get targets() {
+      return [
+        "container",
+        "rowTemplate",
+        "identTemplate",
+        "specimenTemplate",
+      ];
+    }
+
     initialize() {
       this.boundRowDragOver = this.onRowDragOver.bind(this);
       this.boundRowDrop = this.onRowDrop.bind(this);
