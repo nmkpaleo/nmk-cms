@@ -74,6 +74,7 @@
         "rowTemplate",
         "identTemplate",
         "specimenTemplate",
+        "emptyMessage",
       ];
     }
 
@@ -98,11 +99,16 @@
 
     connect() {
       this.formElement = this.element;
-      this.containerElement = this.hasContainerTarget ? this.containerTarget : this.element;
+      if (this.hasContainerTarget) {
+        this.containerElement = this.containerTarget;
+      } else {
+        this.containerElement = this.element.querySelector('[data-qc-row-container]') || this.element;
+      }
       this.setupManagementForms();
       this.handleTextareaSizing();
       this.prepareRows();
       this.setupConflictCards();
+      this.refreshEmptyState();
     }
 
     setupManagementForms() {
@@ -171,6 +177,7 @@
       this.updateRowIndexes();
       this.updateChipIndexes("ident");
       this.updateChipIndexes("specimen");
+      this.refreshEmptyState();
     }
 
     initializeRow(row) {
@@ -297,12 +304,13 @@
       var bounding = targetRow.getBoundingClientRect();
       var offset = event.clientY - bounding.top;
       var shouldInsertBefore = offset < bounding.height / 2;
+      var parent = targetRow.parentNode || this.containerElement;
       if (shouldInsertBefore) {
-        this.containerElement.insertBefore(this.draggedRow, targetRow);
+        parent.insertBefore(this.draggedRow, targetRow);
       } else if (targetRow.nextSibling) {
-        this.containerElement.insertBefore(this.draggedRow, targetRow.nextSibling);
+        parent.insertBefore(this.draggedRow, targetRow.nextSibling);
       } else {
-        this.containerElement.appendChild(this.draggedRow);
+        parent.appendChild(this.draggedRow);
       }
       this.updateRowIndexes();
     }
@@ -430,6 +438,14 @@
       }
     }
 
+    refreshEmptyState() {
+      if (!this.hasEmptyMessageTarget) {
+        return;
+      }
+      var hasRows = this.rows().length > 0;
+      this.emptyMessageTarget.hidden = hasRows;
+    }
+
     toggleChipSelection(event) {
       if (event) {
         event.preventDefault();
@@ -455,19 +471,21 @@
       if (!newRow) {
         return;
       }
+      var parent = this.getRowParent(referenceRow);
       if (referenceRow) {
         if (position === 'before') {
-          this.containerElement.insertBefore(newRow, referenceRow);
+          parent.insertBefore(newRow, referenceRow);
         } else if (referenceRow.nextSibling) {
-          this.containerElement.insertBefore(newRow, referenceRow.nextSibling);
+          parent.insertBefore(newRow, referenceRow.nextSibling);
         } else {
-          this.containerElement.appendChild(newRow);
+          parent.appendChild(newRow);
         }
       } else {
-        this.containerElement.appendChild(newRow);
+        parent.appendChild(newRow);
       }
       this.initializeRow(newRow);
       this.updateRowIndexes();
+      this.refreshEmptyState();
     }
 
     duplicateRow(event) {
@@ -482,10 +500,11 @@
       if (!newRow) {
         return;
       }
+      var parent = this.getRowParent(sourceRow);
       if (sourceRow.nextSibling) {
-        this.containerElement.insertBefore(newRow, sourceRow.nextSibling);
+        parent.insertBefore(newRow, sourceRow.nextSibling);
       } else {
-        this.containerElement.appendChild(newRow);
+        parent.appendChild(newRow);
       }
       this.initializeRow(newRow);
       this.copyRowValues(sourceRow, newRow);
@@ -495,6 +514,7 @@
       this.updateChipIndexes('specimen');
       this.checkRowEmpty(sourceRow);
       this.checkRowEmpty(newRow);
+      this.refreshEmptyState();
     }
 
     splitRow(event) {
@@ -534,10 +554,11 @@
       if (!newRow) {
         return;
       }
+      var parent = this.getRowParent(sourceRow);
       if (sourceRow.nextSibling) {
-        this.containerElement.insertBefore(newRow, sourceRow.nextSibling);
+        parent.insertBefore(newRow, sourceRow.nextSibling);
       } else {
-        this.containerElement.appendChild(newRow);
+        parent.appendChild(newRow);
       }
       this.initializeRow(newRow);
       var self = this;
@@ -558,6 +579,7 @@
       this.updateChipIndexes('specimen');
       this.checkRowEmpty(sourceRow);
       this.checkRowEmpty(newRow);
+      this.refreshEmptyState();
     }
 
     mergeRow(event) {
@@ -641,6 +663,7 @@
       this.updateRowIndexes();
       this.updateChipIndexes('ident');
       this.updateChipIndexes('specimen');
+      this.refreshEmptyState();
     }
 
     copyRowValues(sourceRow, targetRow) {
@@ -745,6 +768,13 @@
       var rowId = 'row-' + this.nextRowSequence;
       this.nextRowSequence += 1;
       return rowId;
+    }
+
+    getRowParent(referenceRow) {
+      if (referenceRow && referenceRow.parentNode) {
+        return referenceRow.parentNode;
+      }
+      return this.containerElement;
     }
 
     updateRowIndexes() {
@@ -873,7 +903,7 @@
     }
   };
 
-  QCRowsController.targets = ["container", "rowTemplate", "identTemplate", "specimenTemplate"];
+  QCRowsController.targets = ["container", "rowTemplate", "identTemplate", "specimenTemplate", "emptyMessage"];
 
   return QCRowsController;
 });
