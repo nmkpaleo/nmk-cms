@@ -1,5 +1,5 @@
 <div class="qc-chip" data-qc-chip data-chip-type="{{ chip_type }}" data-form-prefix="{{ chip_form.prefix }}"{% if not is_template %} draggable="true"{% endif %}>
-  <button type="button" class="qc-chip__pill" data-action="qc-rows#toggleChipSelection" aria-pressed="false">
+  <button type="button" class="qc-chip__pill" data-action="click->qc-rows#toggleChipSelection" aria-pressed="false">
     <span class="qc-chip__title">{% if chip_type == 'ident' %}Identification{% else %}Specimen{% endif %}</span>
     <span class="qc-chip__summary" data-chip-summary>Not set</span>
   </button>

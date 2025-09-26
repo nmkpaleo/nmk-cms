@@ -6,18 +6,18 @@
       <span class="qc-row-card__title">Row <span data-row-index-display>{{ display_index }}</span></span>
     </button>
     <div class="qc-row-card__actions">
-      <button type="button" class="w3-button w3-small w3-light-grey" data-action="qc-rows#insertRow" data-position="before">Insert above</button>
-      <button type="button" class="w3-button w3-small w3-light-grey" data-action="qc-rows#insertRow" data-position="after">Insert below</button>
-      <button type="button" class="w3-button w3-small w3-light-grey" data-action="qc-rows#duplicateRow">Duplicate</button>
-      <button type="button" class="w3-button w3-small w3-light-grey" data-action="qc-rows#splitRow">Split</button>
-      <button type="button" class="w3-button w3-small w3-light-grey" data-action="qc-rows#mergeRow">Merge</button>
+      <button type="button" class="w3-button w3-small w3-light-grey" data-action="click->qc-rows#insertRow" data-position="before">Insert above</button>
+      <button type="button" class="w3-button w3-small w3-light-grey" data-action="click->qc-rows#insertRow" data-position="after">Insert below</button>
+      <button type="button" class="w3-button w3-small w3-light-grey" data-action="click->qc-rows#duplicateRow">Duplicate</button>
+      <button type="button" class="w3-button w3-small w3-light-grey" data-action="click->qc-rows#splitRow">Split</button>
+      <button type="button" class="w3-button w3-small w3-light-grey" data-action="click->qc-rows#mergeRow">Merge</button>
     </div>
   </div>
   <div class="qc-row-card__alert w3-panel w3-pale-yellow w3-border" data-row-alert hidden>
     <p class="w3-small">This row has no linked identifications or specimens. Remove it?</p>
     <div class="qc-row-card__alert-actions">
-      <button type="button" class="w3-button w3-small w3-red" data-action="qc-rows#confirmRemoveRow">Remove row</button>
-      <button type="button" class="w3-button w3-small w3-light-grey" data-action="qc-rows#dismissEmptyRowWarning">Keep row</button>
+      <button type="button" class="w3-button w3-small w3-red" data-action="click->qc-rows#confirmRemoveRow">Remove row</button>
+      <button type="button" class="w3-button w3-small w3-light-grey" data-action="click->qc-rows#dismissEmptyRowWarning">Keep row</button>
     </div>
   </div>
   <div class="qc-row-card__body">
