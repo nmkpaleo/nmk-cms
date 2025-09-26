@@ -1,0 +1,77 @@
+{% load static %}
+<div class="qc-row-card" data-qc-row data-qc-row-id="{{ row_id }}" data-row-prefix="{{ row_form.prefix }}"{% if not is_template %} draggable="true"{% endif %}>
+  <div class="qc-row-card__header">
+    <button type="button" class="qc-row-card__drag" data-row-handle draggable="true">
+      <span class="qc-row-card__drag-icon">&#x2630;</span>
+      <span class="qc-row-card__title">Row <span data-row-index-display>{{ display_index }}</span></span>
+    </button>
+    <div class="qc-row-card__actions">
+      <button type="button" class="w3-button w3-small w3-light-grey" data-action="qc-rows#insertRow" data-position="before">Insert above</button>
+      <button type="button" class="w3-button w3-small w3-light-grey" data-action="qc-rows#insertRow" data-position="after">Insert below</button>
+      <button type="button" class="w3-button w3-small w3-light-grey" data-action="qc-rows#duplicateRow">Duplicate</button>
+      <button type="button" class="w3-button w3-small w3-light-grey" data-action="qc-rows#splitRow">Split</button>
+      <button type="button" class="w3-button w3-small w3-light-grey" data-action="qc-rows#mergeRow">Merge</button>
+    </div>
+  </div>
+  <div class="qc-row-card__alert w3-panel w3-pale-yellow w3-border" data-row-alert hidden>
+    <p class="w3-small">This row has no linked identifications or specimens. Remove it?</p>
+    <div class="qc-row-card__alert-actions">
+      <button type="button" class="w3-button w3-small w3-red" data-action="qc-rows#confirmRemoveRow">Remove row</button>
+      <button type="button" class="w3-button w3-small w3-light-grey" data-action="qc-rows#dismissEmptyRowWarning">Keep row</button>
+    </div>
+  </div>
+  <div class="qc-row-card__body">
+    <div class="qc-row-card__form qc-field-grid">
+      <div class="qc-field">
+        <label class="qc-label" for="{{ row_form.specimen_suffix.id_for_label }}">{{ row_form.specimen_suffix.label }}:</label>
+        <div class="qc-control">
+          {{ row_form.specimen_suffix.as_widget(attrs={'data-row-field': '1'}) }}
+          {{ row_form.specimen_suffix.errors }}
+        </div>
+      </div>
+      <div class="qc-field">
+        <label class="qc-label" for="{{ row_form.storage.id_for_label }}">{{ row_form.storage.label }}:</label>
+        <div class="qc-control">
+          {{ row_form.storage.as_widget(attrs={'data-row-field': '1'}) }}
+          {{ row_form.storage.errors }}
+        </div>
+      </div>
+    </div>
+    <div class="qc-row-card__hidden">
+      <input type="hidden" name="{{ row_form.row_id.html_name }}" id="{{ row_form.row_id.id_for_label }}" value="{{ row_form.row_id.value|default:row_id }}" data-row-id-input />
+      <input type="hidden" name="{{ row_form.order.html_name }}" id="{{ row_form.order.id_for_label }}" value="{{ row_form.order.value }}" data-row-order-input />
+      {% if row_form.status %}
+        {{ row_form.status.as_widget }}
+      {% endif %}
+    </div>
+    {% for hidden in row_form.hidden_fields %}
+      {% if hidden.name not in ('row_id', 'order', 'status') %}
+        {{ hidden }}
+      {% endif %}
+    {% endfor %}
+    <div class="qc-row-card__chips">
+      <div class="qc-chip-zone">
+        <div class="qc-chip-zone__header">Identification</div>
+        <div class="qc-chip-zone__list" data-chip-container data-chip-container-type="ident">
+          {% if ident_forms %}
+            {% for ident_form in ident_forms %}
+              {% include "cms/qc/partials/chip.html" with chip_type="ident" chip_form=ident_form is_template=is_template %}
+            {% endfor %}
+          {% endif %}
+        </div>
+        <div class="qc-chip-zone__empty" data-empty-indicator{% if ident_forms %} hidden{% endif %}>Drop identification chips here</div>
+      </div>
+      <div class="qc-chip-zone">
+        <div class="qc-chip-zone__header">Specimens</div>
+        <div class="qc-chip-zone__list" data-chip-container data-chip-container-type="specimen">
+          {% if specimen_forms %}
+            {% for spec_form in specimen_forms %}
+              {% include "cms/qc/partials/chip.html" with chip_type="specimen" chip_form=spec_form is_template=is_template %}
+            {% endfor %}
+          {% endif %}
+        </div>
+        <div class="qc-chip-zone__empty" data-empty-indicator{% if specimen_forms %} hidden{% endif %}>Drop specimen chips here</div>
+      </div>
+    </div>
+  </div>
+</div>

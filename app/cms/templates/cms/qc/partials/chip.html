@@ -1,0 +1,22 @@
+<div class="qc-chip" data-qc-chip data-chip-type="{{ chip_type }}" data-form-prefix="{{ chip_form.prefix }}"{% if not is_template %} draggable="true"{% endif %}>
+  <button type="button" class="qc-chip__pill" data-action="qc-rows#toggleChipSelection" aria-pressed="false">
+    <span class="qc-chip__title">{% if chip_type == 'ident' %}Identification{% else %}Specimen{% endif %}</span>
+    <span class="qc-chip__summary" data-chip-summary>Not set</span>
+  </button>
+  <div class="qc-chip__fields" hidden>
+    <div class="qc-field-grid qc-field-grid--compact">
+      {% for field in chip_form.visible_fields %}
+        <div class="qc-field">
+          <label class="qc-label" for="{{ field.id_for_label }}">{{ field.label }}:</label>
+          <div class="qc-control">
+            {{ field }}
+            {{ field.errors }}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% for hidden in chip_form.hidden_fields %}
+    {{ hidden }}
+  {% endfor %}
+</div>

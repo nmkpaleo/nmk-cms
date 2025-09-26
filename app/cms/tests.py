@@ -2876,6 +2876,98 @@ class MediaInternQCWizardTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("Shelf 42", response.context["storage_suggestions"])
 
+    def test_handles_inserted_row_payload(self):
+        self.client.login(username="intern", password="pass")
+        url = self.get_url()
+        data = self.build_valid_post_data()
+        data.update(
+            {
+                "row-TOTAL_FORMS": "3",
+                "row-2-row_id": "row-2",
+                "row-2-order": "2",
+                "row-2-specimen_suffix": "C",
+                "row-2-storage": "Cabinet 4",
+                "row-2-status": InventoryStatus.UNKNOWN,
+                "specimen-TOTAL_FORMS": "2",
+                "specimen-INITIAL_FORMS": "1",
+                "specimen-1-row_id": "row-2",
+                "specimen-1-element": str(self.element.pk),
+                "specimen-1-side": "Right",
+                "specimen-1-condition": "Good",
+                "specimen-1-verbatim_element": "Femur",
+                "specimen-1-portion": "Distal",
+                "specimen-1-fragments": "1",
+            }
+        )
+
+        response = self.client.post(url, data, follow=True)
+        self.assertEqual(response.status_code, 200)
+
+        self.media.refresh_from_db()
+        rows = self.media.ocr_data["accessions"][0]["rows"]
+        self.assertEqual(len(rows), 3)
+        self.assertEqual(rows[2]["specimen_suffix"]["interpreted"], "C")
+        self.assertEqual(rows[2]["storage_area"]["interpreted"], "Cabinet 4")
+        natures = rows[2]["natures"]
+        self.assertEqual(len(natures), 1)
+        self.assertEqual(natures[0]["element_name"]["interpreted"], "Femur")
+        self.assertEqual(natures[0]["portion"]["interpreted"], "Distal")
+
+    def test_handles_split_payload_creates_new_row(self):
+        self.client.login(username="intern", password="pass")
+        url = self.get_url()
+        data = self.build_valid_post_data()
+        data.update(
+            {
+                "row-TOTAL_FORMS": "3",
+                "row-2-row_id": "row-2",
+                "row-2-order": "2",
+                "row-2-specimen_suffix": "C",
+                "row-2-storage": "Drawer 10",
+                "row-2-status": InventoryStatus.UNKNOWN,
+            }
+        )
+        data["specimen-0-row_id"] = "row-2"
+
+        response = self.client.post(url, data, follow=True)
+        self.assertEqual(response.status_code, 200)
+
+        self.media.refresh_from_db()
+        accession_payload = self.media.ocr_data["accessions"][0]
+        rows = accession_payload["rows"]
+        self.assertEqual(len(rows), 3)
+        moved_row = rows[2]
+        self.assertEqual(moved_row["storage_area"]["interpreted"], "Drawer 10")
+        self.assertEqual(len(moved_row["natures"]), 1)
+        original_first_row = rows[1]
+        self.assertEqual(original_first_row["natures"], [])
+
+    def test_handles_merged_rows_payload(self):
+        self.client.login(username="intern", password="pass")
+        url = self.get_url()
+        data = self.build_valid_post_data()
+        for key in list(data.keys()):
+            if key.startswith("row-1-"):
+                data.pop(key)
+            if key.startswith("ident-1-"):
+                data.pop(key)
+        data.update(
+            {
+                "row-TOTAL_FORMS": "1",
+                "row-INITIAL_FORMS": "1",
+                "ident-TOTAL_FORMS": "1",
+                "ident-INITIAL_FORMS": "1",
+            }
+        )
+
+        response = self.client.post(url, data, follow=True)
+        self.assertEqual(response.status_code, 200)
+
+        self.media.refresh_from_db()
+        rows = self.media.ocr_data["accessions"][0]["rows"]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["specimen_suffix"]["interpreted"], "A")
+
     def test_does_not_create_storage_when_submission_invalid(self):
         self.client.login(username="intern", password="pass")
         url = self.get_url()

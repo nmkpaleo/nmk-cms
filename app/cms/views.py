@@ -1183,11 +1183,14 @@ def _build_row_contexts(row_formset, ident_formset, specimen_formset):
     contexts = []
     for form in row_formset.forms:
         row_id = _form_row_id(form)
+        ident_form = ident_map.get(row_id)
+        specimens = specimen_map.get(row_id, [])
         contexts.append(
             {
                 'row_form': form,
-                'ident_form': ident_map.get(row_id),
-                'specimen_forms': specimen_map.get(row_id, []),
+                'ident_form': ident_form,
+                'ident_forms': [ident_form] if ident_form else [],
+                'specimen_forms': specimens,
                 'row_id': row_id,
                 'order': _form_order_value(form),
             }

@@ -1,0 +1,24 @@
+<section class="qc-section" data-qc-rows-target="container">
+  <div class="qc-section-heading w3-border-bottom w3-padding-small">
+    <h3>Specimen Rows</h3>
+    <span class="qc-inline-note">Drag cards to reorder and move chips between rows.</span>
+  </div>
+  {% if row_contexts %}
+    <div class="qc-row-grid">
+      {% for row in row_contexts %}
+        {% include "cms/qc/partials/row_card.html" with row_form=row.row_form ident_forms=row.ident_forms specimen_forms=row.specimen_forms row_id=row.row_id display_index=forloop.counter is_template=False %}
+      {% endfor %}
+    </div>
+  {% else %}
+    <p>No specimen rows were detected in the OCR results.</p>
+  {% endif %}
+</section>
+<template data-qc-rows-target="rowTemplate">
+  {% include "cms/qc/partials/row_card.html" with row_form=row_formset.empty_form ident_forms='' specimen_forms='' row_id='' display_index='' is_template=True %}
+</template>
+<template data-qc-rows-target="identTemplate">
+  {% include "cms/qc/partials/chip.html" with chip_type="ident" chip_form=ident_formset.empty_form is_template=True %}
+</template>
+<template data-qc-rows-target="specimenTemplate">
+  {% include "cms/qc/partials/chip.html" with chip_type="specimen" chip_form=specimen_formset.empty_form is_template=True %}
+</template>
