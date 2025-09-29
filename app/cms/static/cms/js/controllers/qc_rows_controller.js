@@ -95,6 +95,7 @@
       this.management = {};
       this.nextRowSequence = null;
       this.initialRowCount = 0;
+      this.removalBinElement = null;
     }
 
     connect() {
@@ -537,13 +538,16 @@
       var container = chip.parentElement;
       var row = chip.closest('[data-qc-row]');
       var deleteInput = chip.querySelector('input[name$="-DELETE"]');
+      var shouldReindex = true;
       if (deleteInput) {
         var promptMessage = type === 'ident'
           ? 'Remove this identification?'
           : 'Remove this specimen?';
-        var confirmed = window.confirm(promptMessage);
-        if (!confirmed) {
-          return;
+        if (typeof window !== 'undefined' && window.confirm) {
+          var confirmed = window.confirm(promptMessage);
+          if (!confirmed) {
+            return;
+          }
         }
         if (deleteInput.type === 'checkbox') {
           deleteInput.checked = true;
@@ -564,18 +568,38 @@
         chip.hidden = true;
         chip.style.display = 'none';
         chip.setAttribute('aria-hidden', 'true');
+        this.ensureRemovalBin().appendChild(chip);
+        shouldReindex = false;
       } else {
         if (chip.parentElement) {
           chip.parentElement.removeChild(chip);
         }
       }
-      this.updateChipIndexes(type);
+      if (shouldReindex) {
+        this.updateChipIndexes(type);
+      }
       if (container) {
         this.refreshEmptyIndicators(container);
       }
       if (row) {
         this.checkRowEmpty(row);
       }
+    }
+
+    ensureRemovalBin() {
+      if (this.removalBinElement && this.removalBinElement.isConnected) {
+        return this.removalBinElement;
+      }
+      var bin = this.formElement.querySelector('[data-qc-rows-removal-bin]');
+      if (!bin) {
+        bin = document.createElement('div');
+        bin.setAttribute('data-qc-rows-removal-bin', '');
+        bin.style.display = 'none';
+        bin.setAttribute('aria-hidden', 'true');
+        this.formElement.appendChild(bin);
+      }
+      this.removalBinElement = bin;
+      return bin;
     }
 
     enhanceDynamicWidgets(root) {
