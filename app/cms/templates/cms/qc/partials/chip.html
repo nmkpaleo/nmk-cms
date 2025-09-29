@@ -12,8 +12,18 @@
     {% endif %}
     <div class="qc-field-grid qc-field-grid--compact">
       {% for field in chip_form.visible_fields %}
-        {% if chip_type == 'ident' and (field.name == 'identified_by' or field.name == 'reference' or field.name == 'date_identified') %}
-          {{ field.as_hidden }}
+        {% if chip_type == 'ident' %}
+          {% if field.name == 'identified_by' or field.name == 'reference' or field.name == 'date_identified' %}
+            {{ field.as_hidden }}
+          {% else %}
+            <div class="qc-field">
+              <label class="qc-label" for="{{ field.id_for_label }}">{{ field.label }}:</label>
+              <div class="qc-control">
+                {{ field }}
+                {{ field.errors }}
+              </div>
+            </div>
+          {% endif %}
         {% else %}
           <div class="qc-field">
             <label class="qc-label" for="{{ field.id_for_label }}">{{ field.label }}:</label>
