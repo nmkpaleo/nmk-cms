@@ -108,6 +108,7 @@
       this.handleTextareaSizing();
       this.prepareRows();
       this.setupConflictCards();
+      this.enhanceDynamicWidgets(this.formElement);
       this.refreshEmptyState();
     }
 
@@ -209,6 +210,7 @@
         self.initializeChip(chip);
       });
 
+      this.enhanceDynamicWidgets(row);
       this.checkRowEmpty(row);
     }
 
@@ -227,15 +229,20 @@
       if (this.isChipMarkedForDeletion(chip)) {
         chip.dataset.chipRemoved = 'true';
         chip.hidden = true;
+        chip.style.display = 'none';
+        chip.setAttribute('aria-hidden', 'true');
       } else {
         chip.dataset.chipRemoved = 'false';
         chip.hidden = false;
+        chip.style.removeProperty('display');
+        chip.removeAttribute('aria-hidden');
       }
       if (chip.dataset.chipOpen === 'true') {
         this.openChipFields(chip, { focus: false });
       } else {
         this.closeChipFields(chip);
       }
+      this.enhanceDynamicWidgets(chip);
     }
 
     setupConflictCards() {
@@ -555,6 +562,8 @@
           fields.hidden = true;
         }
         chip.hidden = true;
+        chip.style.display = 'none';
+        chip.setAttribute('aria-hidden', 'true');
       } else {
         if (chip.parentElement) {
           chip.parentElement.removeChild(chip);
@@ -567,6 +576,35 @@
       if (row) {
         this.checkRowEmpty(row);
       }
+    }
+
+    enhanceDynamicWidgets(root) {
+      if (!root) {
+        return;
+      }
+      var widgets = root.querySelectorAll('.django-select2');
+      if (!widgets.length) {
+        return;
+      }
+      var jq = null;
+      if (window.django && window.django.jQuery) {
+        jq = window.django.jQuery;
+      } else if (window.jQuery) {
+        jq = window.jQuery;
+      }
+      if (!jq) {
+        return;
+      }
+      widgets.forEach(function (element) {
+        var $element = jq(element);
+        if (typeof $element.djangoSelect2 !== 'function') {
+          return;
+        }
+        if ($element.hasClass('select2-hidden-accessible')) {
+          return;
+        }
+        $element.djangoSelect2();
+      });
     }
 
     insertRow(event) {
@@ -1006,6 +1044,8 @@
       }
       chip.dataset.chipRemoved = 'false';
       chip.hidden = false;
+      chip.style.removeProperty('display');
+      chip.removeAttribute('aria-hidden');
       var deleteInput = chip.querySelector('input[name$="-DELETE"]');
       if (deleteInput) {
         if (deleteInput.type === 'checkbox') {
