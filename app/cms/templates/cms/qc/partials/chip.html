@@ -12,25 +12,6 @@
       Remove
     </button>
   </div>
-  <div class="qc-chip__confirm" data-chip-confirm hidden>
-    <p class="qc-chip__confirm-message" data-chip-confirm-message></p>
-    <div class="qc-chip__confirm-actions">
-      <button
-        type="button"
-        class="w3-button w3-tiny w3-red w3-round"
-        data-action="click->qc-rows#confirmChipRemoval"
-      >
-        Remove
-      </button>
-      <button
-        type="button"
-        class="w3-button w3-tiny w3-light-grey w3-round"
-        data-action="click->qc-rows#cancelChipRemoval"
-      >
-        Cancel
-      </button>
-    </div>
-  </div>
   <div class="qc-chip__fields" hidden>
     {% if chip_form.non_field_errors %}
       <div class="qc-chip__errors">{{ chip_form.non_field_errors }}</div>

@@ -88,6 +88,7 @@
       this.boundChipDragOver = this.onChipDragOver.bind(this);
       this.boundChipDrop = this.onChipDrop.bind(this);
       this.boundChipDragLeave = this.onChipDragLeave.bind(this);
+      this.boundRequestChipRemoval = this.requestChipRemoval.bind(this);
       this.draggedRow = null;
       this.draggedChip = null;
       this.chipSourceContainer = null;
@@ -244,6 +245,11 @@
         this.closeChipFields(chip);
       }
       this.enhanceDynamicWidgets(chip);
+      var removeButton = chip.querySelector('[data-action~="qc-rows#requestChipRemoval"]');
+      if (removeButton && !removeButton.hasAttribute('data-qc-chip-remove-bound')) {
+        removeButton.addEventListener('click', this.boundRequestChipRemoval);
+        removeButton.setAttribute('data-qc-chip-remove-bound', 'true');
+      }
     }
 
     setupConflictCards() {
@@ -534,87 +540,12 @@
         return;
       }
       var type = chip.getAttribute('data-chip-type');
-      this.closeOtherChipRemovalPrompts(chip);
-      this.showChipRemovalPrompt(chip, type);
-    }
-
-    confirmChipRemoval(event) {
-      if (event) {
-        event.preventDefault();
-      }
-      var chip = this.chipFromEvent(event);
-      if (!chip) {
-        return;
-      }
-      var type = chip.getAttribute('data-chip-type');
       this.finalizeChipRemoval(chip, type);
-    }
-
-    cancelChipRemoval(event) {
-      if (event) {
-        event.preventDefault();
-      }
-      var chip = this.chipFromEvent(event);
-      if (!chip) {
-        return;
-      }
-      this.resetChipRemovalPrompt(chip);
     }
 
     chipFromEvent(event) {
       var trigger = event ? event.currentTarget : null;
       return trigger ? trigger.closest('[data-qc-chip]') : null;
-    }
-
-    showChipRemovalPrompt(chip, type) {
-      if (!chip) {
-        return;
-      }
-      chip.setAttribute('data-chip-removal-pending', 'true');
-      chip.classList.add('qc-chip--pending-removal');
-      var confirmPanel = chip.querySelector('[data-chip-confirm]');
-      if (confirmPanel) {
-        var message = confirmPanel.querySelector('[data-chip-confirm-message]');
-        if (message) {
-          message.textContent = type === 'ident'
-            ? 'Remove this identification?'
-            : 'Remove this specimen?';
-        }
-        confirmPanel.hidden = false;
-      }
-      var removeButton = chip.querySelector('.qc-chip__delete');
-      if (removeButton) {
-        removeButton.disabled = true;
-      }
-    }
-
-    closeOtherChipRemovalPrompts(activeChip) {
-      if (!this.formElement) {
-        return;
-      }
-      var self = this;
-      var pending = this.formElement.querySelectorAll('[data-qc-chip][data-chip-removal-pending]');
-      pending.forEach(function (chip) {
-        if (chip !== activeChip) {
-          self.resetChipRemovalPrompt(chip);
-        }
-      });
-    }
-
-    resetChipRemovalPrompt(chip) {
-      if (!chip) {
-        return;
-      }
-      chip.removeAttribute('data-chip-removal-pending');
-      chip.classList.remove('qc-chip--pending-removal');
-      var confirmPanel = chip.querySelector('[data-chip-confirm]');
-      if (confirmPanel) {
-        confirmPanel.hidden = true;
-      }
-      var removeButton = chip.querySelector('.qc-chip__delete');
-      if (removeButton) {
-        removeButton.disabled = false;
-      }
     }
 
     finalizeChipRemoval(chip, type) {
@@ -623,7 +554,6 @@
       }
       var container = chip.parentElement;
       var row = chip.closest('[data-qc-row]');
-      this.resetChipRemovalPrompt(chip);
       var deleteInput = chip.querySelector('input[name$="-DELETE"]');
       var shouldReindex = true;
       if (deleteInput) {
