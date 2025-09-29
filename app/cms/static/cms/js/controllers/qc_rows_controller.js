@@ -35,6 +35,7 @@
       }
 
       global.QCRowsController = controllerInstance;
+      global.QcRowsController = controllerInstance;
       controllerRegistered = true;
       return true;
     }
