@@ -1,0 +1,48 @@
+<div class="qc-chip" data-qc-chip data-chip-type="{{ chip_type }}" data-form-prefix="{{ chip_form.prefix }}"{% if chip_form.errors or chip_form.non_field_errors %} data-chip-open="true"{% endif %}{% if not is_template %} draggable="true"{% endif %}>
+  <div class="qc-chip__header">
+    <button type="button" class="qc-chip__pill" data-action="click->qc-rows#toggleChipSelection" aria-pressed="false">
+      <span class="qc-chip__title">{% if chip_type == 'ident' %}Identification{% else %}Specimen{% endif %}</span>
+      <span class="qc-chip__summary" data-chip-summary>Not set</span>
+    </button>
+    <button
+      type="button"
+      class="qc-chip__delete w3-button w3-tiny w3-red w3-round"
+      data-action="click->qc-rows#requestChipRemoval"
+    >
+      Remove
+    </button>
+  </div>
+  <div class="qc-chip__fields" hidden>
+    {% if chip_form.non_field_errors %}
+      <div class="qc-chip__errors">{{ chip_form.non_field_errors }}</div>
+    {% endif %}
+    <div class="qc-field-grid qc-field-grid--compact">
+      {% for field in chip_form.visible_fields %}
+        {% if chip_type == 'ident' %}
+          {% if field.name == 'identified_by' or field.name == 'reference' or field.name == 'date_identified' %}
+            {{ field.as_hidden }}
+          {% else %}
+            <div class="qc-field">
+              <label class="qc-label" for="{{ field.id_for_label }}">{{ field.label }}:</label>
+              <div class="qc-control">
+                {{ field }}
+                {{ field.errors }}
+              </div>
+            </div>
+          {% endif %}
+        {% else %}
+          <div class="qc-field">
+            <label class="qc-label" for="{{ field.id_for_label }}">{{ field.label }}:</label>
+            <div class="qc-control">
+              {{ field }}
+              {{ field.errors }}
+            </div>
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+  {% for hidden in chip_form.hidden_fields %}
+    {{ hidden }}
+  {% endfor %}
+</div>
