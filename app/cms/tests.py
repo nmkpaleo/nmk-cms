@@ -2246,6 +2246,11 @@ class MediaExpertQCWizardTests(TestCase):
     def setUp(self):
         User = get_user_model()
         self.expert = User.objects.create_user(username="expert", password="pass")
+
+        patcher = patch("cms.models.get_current_user", return_value=self.expert)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
         self.curators_group = Group.objects.create(name="Curators")
         self.curators_group.user_set.add(self.expert)
 
@@ -2272,10 +2277,6 @@ class MediaExpertQCWizardTests(TestCase):
                 ],
             },
         )
-
-        patcher = patch("cms.models.get_current_user", return_value=self.expert)
-        patcher.start()
-        self.addCleanup(patcher.stop)
 
         self.client.force_login(self.expert)
 
@@ -2323,6 +2324,29 @@ class MediaExpertQCWizardTests(TestCase):
         }
         data.update(overrides)
         return data
+
+    def build_specimen_post_data(self, element=None, **overrides):
+        base = self.build_post_data(
+            **{
+                "row-TOTAL_FORMS": "1",
+                "row-INITIAL_FORMS": "1",
+                "ident-TOTAL_FORMS": "1",
+                "ident-INITIAL_FORMS": "1",
+                "specimen-TOTAL_FORMS": "1",
+                "specimen-INITIAL_FORMS": "1",
+                "specimen-MIN_NUM_FORMS": "0",
+                "specimen-MAX_NUM_FORMS": "1000",
+                "specimen-0-row_id": "row-0",
+                "specimen-0-side": "Left",
+                "specimen-0-condition": "Excellent",
+                "specimen-0-verbatim_element": "Left Femur",
+                "specimen-0-portion": "Proximal",
+                "specimen-0-fragments": "1",
+            }
+        )
+        base["specimen-0-element"] = str(element.pk) if element else ""
+        base.update(overrides)
+        return base
 
     def get_url(self):
         return reverse("media_expert_qc", args=[self.media.uuid])
@@ -2375,6 +2399,146 @@ class MediaExpertQCWizardTests(TestCase):
         self.assertContains(response, 'data-qc-status="pending_intern"')
         self.assertNotIn('data-qc-status="rejected"', response.content.decode())
         self.assertContains(response, "No media in this status.")
+
+    def test_approve_creates_specimen_elements(self):
+        element_parent = Element.objects.create(name="-Undefined")
+        element = Element.objects.create(name="Femur", parent_element=element_parent)
+
+        self.media.ocr_data = {
+            "card_type": "accession_card",
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 123},
+                    "rows": [
+                        {
+                            "_row_id": "row-0",
+                            "specimen_suffix": {"interpreted": "A"},
+                            "natures": [
+                                {
+                                    "element_name": {"interpreted": "Femur"},
+                                    "side": {"interpreted": "Left"},
+                                    "condition": {"interpreted": "Excellent"},
+                                    "verbatim_element": {"interpreted": "Left Femur"},
+                                    "portion": {"interpreted": "Proximal"},
+                                    "fragments": {"interpreted": 1},
+                                }
+                            ],
+                        }
+                    ],
+                    "identifications": [
+                        {
+                            "taxon": {"interpreted": "Homo"},
+                            "verbatim_identification": {"interpreted": "Homo sp."},
+                        }
+                    ],
+                }
+            ],
+        }
+        self.media.save(update_fields=["ocr_data"])
+
+        response = self.client.post(
+            self.get_url(),
+            self.build_specimen_post_data(
+                element,
+                action="approve",
+                qc_comment="",
+                **{
+                    "row-0-row_id": "row-0",
+                    "row-0-order": "0",
+                    "row-0-specimen_suffix": "A",
+                    "row-0-storage": "",
+                    "row-0-status": InventoryStatus.UNKNOWN,
+                    "ident-0-row_id": "row-0",
+                    "ident-0-taxon": "Homo",
+                    "ident-0-verbatim_identification": "Homo sp.",
+                },
+            ),
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        accession = Accession.objects.get()
+        row = accession.accessionrow_set.get()
+        nature = row.natureofspecimen_set.get()
+        self.assertEqual(nature.element, element)
+        self.assertEqual(nature.side, "Left")
+        self.assertEqual(nature.condition, "Excellent")
+        self.assertEqual(nature.verbatim_element, "Left Femur")
+        self.assertEqual(nature.portion, "Proximal")
+        self.assertEqual(nature.fragments, 1)
+
+    def test_approve_with_verbatim_only_creates_specimen_element(self):
+        parent = Element.objects.create(name="-Undefined")
+
+        self.media.ocr_data = {
+            "card_type": "accession_card",
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 123},
+                    "rows": [
+                        {
+                            "_row_id": "row-0",
+                            "specimen_suffix": {"interpreted": "A"},
+                            "natures": [
+                                {
+                                    "element_name": {"interpreted": None},
+                                    "side": {"interpreted": "Left"},
+                                    "condition": {"interpreted": "Excellent"},
+                                    "verbatim_element": {"interpreted": "Partial Femur"},
+                                    "portion": {"interpreted": "Proximal"},
+                                    "fragments": {"interpreted": 2},
+                                }
+                            ],
+                        }
+                    ],
+                    "identifications": [
+                        {
+                            "taxon": {"interpreted": "Homo"},
+                            "verbatim_identification": {"interpreted": "Homo sp."},
+                        }
+                    ],
+                }
+            ],
+        }
+        self.media.save(update_fields=["ocr_data"])
+
+        response = self.client.post(
+            self.get_url(),
+            self.build_specimen_post_data(
+                element=None,
+                action="approve",
+                qc_comment="",
+                **{
+                    "row-0-row_id": "row-0",
+                    "row-0-order": "0",
+                    "row-0-specimen_suffix": "A",
+                    "row-0-storage": "",
+                    "row-0-status": InventoryStatus.UNKNOWN,
+                    "ident-0-row_id": "row-0",
+                    "ident-0-taxon": "Homo",
+                    "ident-0-verbatim_identification": "Homo sp.",
+                    "specimen-0-verbatim_element": "Partial Femur",
+                    "specimen-0-portion": "Proximal",
+                    "specimen-0-fragments": "2",
+                },
+            ),
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        accession = Accession.objects.get()
+        row = accession.accessionrow_set.get()
+        nature = row.natureofspecimen_set.get()
+        self.assertEqual(nature.element.name, "Partial Femur")
+        self.assertEqual(nature.element.parent_element, parent)
+        self.assertEqual(nature.verbatim_element, "Partial Femur")
+        self.assertEqual(nature.fragments, 2)
 
     def test_request_rescan_sets_rejected_status(self):
         response = self.client.post(

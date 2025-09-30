@@ -690,15 +690,25 @@ def _apply_rows(
             natures_to_apply = []
 
         for nature in natures_to_apply:
-            element_name = nature.get("element_name")
-            if not element_name:
-                continue
-            element = Element.objects.filter(name=element_name).first()
-            if not element:
-                parent = Element.objects.filter(name="-Undefined").first()
-                if not parent:
+            element_name = _clean_string(nature.get("element_name"))
+            verbatim_element = _clean_string(nature.get("verbatim_element"))
+            resolved_name = element_name or verbatim_element
+            element = None
+            if resolved_name:
+                element = Element.objects.filter(name=resolved_name).first()
+            parent = Element.objects.filter(name="-Undefined").first()
+            if element is None:
+                if parent is None:
                     parent = Element.objects.create(name="-Undefined")
-                element = Element.objects.create(name=element_name, parent_element=parent)
+                if not resolved_name or resolved_name == parent.name:
+                    element = parent
+                    resolved_name = parent.name
+                else:
+                    element = Element.objects.create(
+                        name=resolved_name,
+                        parent_element=parent,
+                    )
+            nature["element_name"] = resolved_name
             fragments = nature.get("fragments")
             if fragments in (None, ""):
                 fragments_value = 0
