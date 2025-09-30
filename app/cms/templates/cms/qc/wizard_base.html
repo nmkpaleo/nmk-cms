@@ -642,4 +642,70 @@
   <script src="https://unpkg.com/@hotwired/stimulus/dist/stimulus.umd.js"></script>
   <script src="{% static 'cms/js/controllers/qc_rows_controller.js' %}"></script>
   <script src="{% static 'cms/js/media_intern_qc.js' %}"></script>
+  <script>
+    (function () {
+      if (!window.Stimulus || !window.Stimulus.Application) {
+        console.error('Stimulus failed to load');
+        return;
+      }
+
+      var app = window.StimulusApp;
+      if (!app && typeof window.Stimulus.Application.start === 'function') {
+        app = window.Stimulus.Application.start();
+        window.StimulusApp = app;
+      }
+
+      if (!app) {
+        console.error('Stimulus application could not be started.');
+        return;
+      }
+
+      if (window.QcRowsController) {
+        app.register('qc-rows', window.QcRowsController);
+      } else {
+        console.error(
+          'QcRowsController not found on window (UMD/global). If this file switches to ES modules, use an ES module setup.'
+        );
+      }
+    })();
+  </script>
+  <script>
+    document.addEventListener('click', function (event) {
+      var trigger = event.target.closest('.qc-chip__delete');
+      if (!trigger) {
+        return;
+      }
+
+      event.preventDefault();
+
+      var chip = trigger.closest('[data-qc-chip]');
+      if (!chip) {
+        return;
+      }
+
+      if (chip.dataset.chipRemoved === 'true') {
+        return;
+      }
+
+      var deleteInput = chip.querySelector('input[name$="-DELETE"]');
+      if (deleteInput) {
+        deleteInput.checked = true;
+      }
+
+      chip.dataset.chipRemoved = 'true';
+      chip.classList.remove('qc-chip--selected');
+      var toggle = chip.querySelector('.qc-chip__pill');
+      if (toggle) {
+        toggle.setAttribute('aria-pressed', 'false');
+      }
+      var fields = chip.querySelector('.qc-chip__fields');
+      if (fields) {
+        fields.hidden = true;
+        fields.style.display = 'none';
+      }
+      chip.hidden = true;
+      chip.setAttribute('aria-hidden', 'true');
+      chip.style.display = 'none';
+    });
+  </script>
 {% endblock %}

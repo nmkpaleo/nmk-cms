@@ -50,6 +50,9 @@ from .models import (
 )
 
 
+UNKNOWN_FIELD_NUMBER_PREFIX = "UNKNOWN FIELD NUMBER #"
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -470,38 +473,80 @@ def _ensure_reference(first_author: str, title: str, year: str) -> Reference:
     )
 
 
-def _ensure_field_slip(data: dict[str, object]) -> FieldSlip | None:
-    field_number = data.get("field_number")
-    verb_locality = data.get("verbatim_locality")
-    verb_taxon = data.get("verbatim_taxon")
-    if not (field_number and verb_taxon):
+def _clean_string(value: object) -> str | None:
+    if value in (None, ""):
         return None
-    field_slip = FieldSlip.objects.filter(
-        field_number=field_number,
-        verbatim_locality=verb_locality,
-        verbatim_taxon=verb_taxon,
-    ).first()
-    if field_slip:
-        return field_slip
-    verbatim_element = data.get("verbatim_element")
+    cleaned = str(value).strip()
+    return cleaned or None
+
+
+def _generate_unknown_field_number() -> str:
+    count = FieldSlip.objects.filter(
+        field_number__startswith=UNKNOWN_FIELD_NUMBER_PREFIX
+    ).count()
+    next_number = count + 1
+    candidate = f"{UNKNOWN_FIELD_NUMBER_PREFIX}{next_number}"
+    while FieldSlip.objects.filter(field_number=candidate).exists():
+        next_number += 1
+        candidate = f"{UNKNOWN_FIELD_NUMBER_PREFIX}{next_number}"
+    return candidate
+
+
+def _ensure_field_slip(data: dict[str, object]) -> FieldSlip | None:
+    field_number = _clean_string(data.get("field_number"))
+    verb_locality = _clean_string(data.get("verbatim_locality"))
+    verb_taxon = _clean_string(data.get("verbatim_taxon"))
+    if not verb_taxon:
+        return None
+
+    verbatim_element = _clean_string(data.get("verbatim_element"))
     if not verbatim_element:
         return None
+
+    aerial_photo = _clean_string(data.get("aerial_photo"))
+    verbatim_latitude = _clean_string(data.get("verbatim_latitude"))
+    verbatim_longitude = _clean_string(data.get("verbatim_longitude"))
+    verbatim_elevation = _clean_string(data.get("verbatim_elevation"))
+
+    base_queryset = FieldSlip.objects.filter(
+        verbatim_locality=verb_locality,
+        verbatim_taxon=verb_taxon,
+        verbatim_element=verbatim_element,
+    )
+    if field_number:
+        field_slip = base_queryset.filter(field_number=field_number).first()
+        if field_slip:
+            return field_slip
+    else:
+        field_slip = base_queryset.filter(
+            field_number__startswith=UNKNOWN_FIELD_NUMBER_PREFIX
+        ).first()
+        if field_slip:
+            return field_slip
+        field_number = _generate_unknown_field_number()
+
     horizon_parts: list[str] = []
-    for key in ("horizon_formation", "horizon_member", "horizon_bed", "horizon_chronostratigraphy"):
-        value = data.get(key)
+    for key in (
+        "horizon_formation",
+        "horizon_member",
+        "horizon_bed",
+        "horizon_chronostratigraphy",
+    ):
+        value = _clean_string(data.get(key))
         if value:
             horizon_parts.append(str(value))
     horizon = " | ".join(horizon_parts) if horizon_parts else None
+
     return FieldSlip.objects.create(
         field_number=field_number,
         verbatim_locality=verb_locality,
         verbatim_taxon=verb_taxon,
         verbatim_element=verbatim_element,
         verbatim_horizon=horizon,
-        aerial_photo=data.get("aerial_photo"),
-        verbatim_latitude=data.get("verbatim_latitude"),
-        verbatim_longitude=data.get("verbatim_longitude"),
-        verbatim_elevation=data.get("verbatim_elevation"),
+        aerial_photo=aerial_photo,
+        verbatim_latitude=verbatim_latitude,
+        verbatim_longitude=verbatim_longitude,
+        verbatim_elevation=verbatim_elevation,
     )
 
 

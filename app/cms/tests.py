@@ -48,7 +48,11 @@ from cms.filters import DrawerRegisterFilter
 from cms.resources import DrawerRegisterResource, PlaceResource
 from tablib import Dataset
 from cms.upload_processing import process_file
-from cms.ocr_processing import process_pending_scans, describe_accession_conflicts
+from cms.ocr_processing import (
+    process_pending_scans,
+    describe_accession_conflicts,
+    UNKNOWN_FIELD_NUMBER_PREFIX,
+)
 
 
 class GenerateAccessionsFromSeriesTests(TestCase):
@@ -1939,6 +1943,56 @@ class ProcessPendingScansTests(TestCase):
         self.assertEqual(FieldSlip.objects.count(), 1)
         link = AccessionFieldSlip.objects.get()
         self.assertEqual(link.fieldslip, existing)
+
+    @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
+    @patch(
+        "cms.ocr_processing.chatgpt_ocr",
+        return_value={
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 123},
+                    "type_status": {"interpreted": "Holotype"},
+                    "published": {"interpreted": "Yes"},
+                    "field_slips": [
+                        {
+                            "field_number": {"interpreted": None},
+                            "verbatim_locality": {"interpreted": "Loc1"},
+                            "verbatim_taxon": {"interpreted": "Homo"},
+                            "verbatim_element": {"interpreted": "Femur"},
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+    def test_creates_field_slip_when_field_number_missing(
+        self, mock_ocr, mock_detect
+    ):
+        Collection.objects.create(abbreviation="KNM", description="Kenya")
+        filename = "acc_fs_unknown.png"
+        file_path = self.pending / filename
+        file_path.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename}")
+        process_pending_scans()
+        media = Media.objects.get()
+        media.transition_qc(Media.QCStatus.APPROVED, user=self.user)
+
+        self.assertEqual(FieldSlip.objects.count(), 1)
+        field_slip = FieldSlip.objects.get()
+        self.assertTrue(
+            field_slip.field_number.startswith(UNKNOWN_FIELD_NUMBER_PREFIX)
+        )
+        self.assertEqual(field_slip.verbatim_locality, "Loc1")
+        self.assertEqual(field_slip.verbatim_taxon, "Homo")
+        self.assertEqual(field_slip.verbatim_element, "Femur")
+
+        self.assertEqual(AccessionFieldSlip.objects.count(), 1)
+        link = AccessionFieldSlip.objects.get()
+        accession = Accession.objects.get()
+        self.assertEqual(link.accession, accession)
+        self.assertEqual(link.fieldslip, field_slip)
 
 
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
