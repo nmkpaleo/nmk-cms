@@ -480,6 +480,50 @@ def _clean_string(value: object) -> str | None:
     return cleaned or None
 
 
+def _has_identification_data(data: dict[str, object]) -> bool:
+    if not isinstance(data, dict):
+        return False
+    for key in (
+        "taxon",
+        "identification_qualifier",
+        "verbatim_identification",
+        "identification_remarks",
+        "identified_by",
+        "reference",
+        "date_identified",
+    ):
+        value = data.get(key)
+        if value not in (None, ""):
+            return True
+    return False
+
+
+def _has_nature_data(entry: dict[str, object]) -> bool:
+    if not isinstance(entry, dict):
+        return False
+    for key in (
+        "element_name",
+        "side",
+        "condition",
+        "verbatim_element",
+        "portion",
+        "fragments",
+    ):
+        value = entry.get(key)
+        if value not in (None, ""):
+            return True
+        if key == "fragments" and value in (0, "0"):
+            return True
+    return False
+
+
+def _has_any_nature_data(entries: list[dict[str, object]]) -> bool:
+    for entry in entries or []:
+        if _has_nature_data(entry):
+            return True
+    return False
+
+
 def _generate_unknown_field_number() -> str:
     count = FieldSlip.objects.filter(
         field_number__startswith=UNKNOWN_FIELD_NUMBER_PREFIX
@@ -593,6 +637,9 @@ def _apply_rows(
     rows: list[dict[str, object]],
     selection: set[str] | None = None,
 ) -> None:
+    last_ident_data: dict[str, object] | None = None
+    last_natures_data: list[dict[str, object]] = []
+
     for row in rows:
         suffix = row.get("specimen_suffix") or "-"
         if selection is not None and suffix not in selection:
@@ -616,24 +663,33 @@ def _apply_rows(
         row_obj.natureofspecimen_set.all().delete()
 
         ident = row.get("identification") or {}
-        if any(
-            ident.get(field)
-            for field in (
-                "taxon",
-                "identification_qualifier",
-                "verbatim_identification",
-                "identification_remarks",
-            )
-        ):
+        if _has_identification_data(ident):
+            last_ident_data = ident
+            ident_to_apply = ident
+        elif last_ident_data:
+            ident_to_apply = last_ident_data
+        else:
+            ident_to_apply = {}
+
+        if _has_identification_data(ident_to_apply):
             Identification.objects.create(
                 accession_row=row_obj,
-                taxon=ident.get("taxon"),
-                identification_qualifier=ident.get("identification_qualifier"),
-                verbatim_identification=ident.get("verbatim_identification"),
-                identification_remarks=ident.get("identification_remarks"),
+                taxon=ident_to_apply.get("taxon"),
+                identification_qualifier=ident_to_apply.get("identification_qualifier"),
+                verbatim_identification=ident_to_apply.get("verbatim_identification"),
+                identification_remarks=ident_to_apply.get("identification_remarks"),
             )
 
-        for nature in row.get("natures") or []:
+        natures = row.get("natures") or []
+        if _has_any_nature_data(natures):
+            last_natures_data = natures
+            natures_to_apply = natures
+        elif last_natures_data:
+            natures_to_apply = last_natures_data
+        else:
+            natures_to_apply = []
+
+        for nature in natures_to_apply:
             element_name = nature.get("element_name")
             if not element_name:
                 continue

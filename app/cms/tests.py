@@ -52,6 +52,7 @@ from cms.ocr_processing import (
     process_pending_scans,
     describe_accession_conflicts,
     UNKNOWN_FIELD_NUMBER_PREFIX,
+    _apply_rows,
 )
 
 
@@ -2529,6 +2530,61 @@ class MediaExpertQCWizardTests(TestCase):
         row = accession.accessionrow_set.get(specimen_suffix="-")
         self.assertEqual(row.storage.area, "Shelf 42")
 
+    def test_initial_rows_copy_missing_identifications_and_specimens(self):
+        Element.objects.create(name="Femur")
+        self.media.ocr_data = {
+            "card_type": "accession_card",
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 123},
+                    "rows": [
+                        {
+                            "_row_id": "row-0",
+                            "specimen_suffix": {"interpreted": "A"},
+                            "natures": [
+                                {
+                                    "element_name": {"interpreted": "Femur"},
+                                    "verbatim_element": {"interpreted": "Femur"},
+                                    "portion": {"interpreted": "Proximal"},
+                                }
+                            ],
+                        },
+                        {
+                            "_row_id": "row-1",
+                            "specimen_suffix": {"interpreted": "B"},
+                            "natures": [],
+                        },
+                        {
+                            "_row_id": "row-2",
+                            "specimen_suffix": {"interpreted": "C"},
+                            "natures": [],
+                        },
+                    ],
+                    "identifications": [
+                        {
+                            "taxon": {"interpreted": "Homo"},
+                            "verbatim_identification": {"interpreted": "Homo sp."},
+                        }
+                    ],
+                }
+            ],
+        }
+        self.media.save(update_fields=["ocr_data"])
+
+        response = self.client.get(self.get_url())
+        self.assertEqual(response.status_code, 200)
+        row_contexts = response.context["row_contexts"]
+        self.assertEqual(len(row_contexts), 3)
+        for context in row_contexts:
+            ident_forms = context["ident_forms"]
+            self.assertEqual(len(ident_forms), 1)
+            self.assertEqual(ident_forms[0]["taxon"].value(), "Homo")
+            specimen_forms = context["specimen_forms"]
+            self.assertEqual(len(specimen_forms), 1)
+            self.assertEqual(specimen_forms[0]["verbatim_element"].value(), "Femur")
+
     def test_non_expert_forbidden(self):
         User = get_user_model()
         other = User.objects.create_user(username="visitor", password="pass")
@@ -2666,6 +2722,62 @@ class MediaFileDeletionTests(TestCase):
         self.assertFalse(file_path.exists())
 
 
+class ApplyRowsFallbackTests(TestCase):
+    def setUp(self):
+        self.collection = Collection.objects.create(
+            abbreviation="KNM", description="Kenya"
+        )
+        self.locality = Locality.objects.create(abbreviation="AB", name="Area")
+        self.accession = Accession.objects.create(
+            collection=self.collection,
+            specimen_prefix=self.locality,
+            specimen_no=100,
+            instance_number=1,
+        )
+
+    def test_reuses_last_identification_and_specimens_for_missing_rows(self):
+        rows = [
+            {
+                "specimen_suffix": "-",
+                "storage": None,
+                "identification": {
+                    "taxon": "Homo sp.",
+                    "verbatim_identification": "Homo sp.",
+                },
+                "natures": [
+                    {
+                        "element_name": "Femur",
+                        "verbatim_element": "Femur",
+                        "portion": "Proximal",
+                        "fragments": 1,
+                    }
+                ],
+            },
+            {
+                "specimen_suffix": "A",
+                "storage": None,
+                "identification": {},
+                "natures": [],
+            },
+            {
+                "specimen_suffix": "B",
+                "storage": None,
+                "identification": {},
+                "natures": [],
+            },
+        ]
+
+        _apply_rows(self.accession, rows)
+
+        for suffix in ("-", "A", "B"):
+            row = self.accession.accessionrow_set.get(specimen_suffix=suffix)
+            ident = row.identification_set.get()
+            self.assertEqual(ident.taxon, "Homo sp.")
+            specimen = row.natureofspecimen_set.get()
+            self.assertEqual(specimen.element.name, "Femur")
+            self.assertEqual(specimen.portion, "Proximal")
+
+
 class MediaInternQCWizardTests(TestCase):
     def setUp(self):
         User = get_user_model()
@@ -2801,8 +2913,8 @@ class MediaInternQCWizardTests(TestCase):
             "ident-1-identification_remarks": "",
             "ident-1-reference": "",
             "ident-1-date_identified": "",
-            "specimen-TOTAL_FORMS": "1",
-            "specimen-INITIAL_FORMS": "1",
+            "specimen-TOTAL_FORMS": "2",
+            "specimen-INITIAL_FORMS": "2",
             "specimen-MIN_NUM_FORMS": "0",
             "specimen-MAX_NUM_FORMS": "1000",
             "specimen-0-row_id": "row-0",
@@ -2812,6 +2924,13 @@ class MediaInternQCWizardTests(TestCase):
             "specimen-0-verbatim_element": "Femur",
             "specimen-0-portion": "Proximal",
             "specimen-0-fragments": "3",
+            "specimen-1-row_id": "row-1",
+            "specimen-1-element": str(self.element.pk),
+            "specimen-1-side": "Left",
+            "specimen-1-condition": "Excellent",
+            "specimen-1-verbatim_element": "Femur",
+            "specimen-1-portion": "Proximal",
+            "specimen-1-fragments": "3",
             "reference-TOTAL_FORMS": "1",
             "reference-INITIAL_FORMS": "1",
             "reference-MIN_NUM_FORMS": "0",
