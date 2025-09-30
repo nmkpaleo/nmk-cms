@@ -1137,6 +1137,61 @@ def _form_order_value(form):
         return 0
 
 
+def _interpreted_value(value):
+    if isinstance(value, dict):
+        if 'interpreted' in value:
+            return value.get('interpreted')
+        return None
+    return value
+
+
+def _ident_payload_has_meaningful_data(entry: dict) -> bool:
+    if not isinstance(entry, dict):
+        return False
+    for key in (
+        'taxon',
+        'identification_qualifier',
+        'verbatim_identification',
+        'identification_remarks',
+        'identified_by',
+        'reference',
+        'date_identified',
+    ):
+        interpreted = _interpreted_value(entry.get(key))
+        if interpreted not in (None, ''):
+            return True
+    return False
+
+
+def _ident_payload_has_explicit_fields(entry: dict) -> bool:
+    if not isinstance(entry, dict):
+        return False
+    for value in entry.values():
+        if isinstance(value, dict) and 'interpreted' in value:
+            return True
+    return bool(entry)
+
+
+def _natures_payload_has_meaningful_data(natures: list[dict]) -> bool:
+    for nature in natures or []:
+        if not isinstance(nature, dict):
+            continue
+        for key in (
+            'element_name',
+            'side',
+            'condition',
+            'verbatim_element',
+            'portion',
+            'fragments',
+        ):
+            interpreted = _interpreted_value(nature.get(key))
+            if interpreted not in (None, ''):
+                return True
+            if key == 'fragments' and interpreted == 0:
+                return True
+    return False
+
+
 def _set_interpreted(container: dict, key: str, value):
     existing = container.get(key)
     if not isinstance(existing, dict):
@@ -1266,6 +1321,18 @@ class MediaQCFormManager:
             ident_payload.extend(
                 {} for _ in range(len(self.rows_payload) - len(ident_payload))
             )
+        propagated_ident_payload: list[dict] = []
+        last_ident_snapshot: dict | None = None
+        for entry in ident_payload:
+            entry = entry or {}
+            if _ident_payload_has_meaningful_data(entry):
+                last_ident_snapshot = copy.deepcopy(entry)
+                propagated_ident_payload.append(entry)
+            elif last_ident_snapshot and not _ident_payload_has_explicit_fields(entry):
+                propagated_ident_payload.append(copy.deepcopy(last_ident_snapshot))
+            else:
+                propagated_ident_payload.append(entry)
+        ident_payload = propagated_ident_payload
         self.ident_payload = ident_payload
         self.row_initial: list[dict] = []
         self.ident_initial: list[dict] = []
@@ -1278,6 +1345,8 @@ class MediaQCFormManager:
         self.fieldslip_payload_map: dict[str, dict] = {}
         self.original_row_ids: list[str] = []
 
+        last_natures_snapshot: list[dict] = []
+
         for index, row_payload in enumerate(self.rows_payload):
             row_id = (
                 row_payload.get("_row_id")
@@ -1286,9 +1355,8 @@ class MediaQCFormManager:
             )
             self.original_row_ids.append(row_id)
             self.row_payload_map[row_id] = row_payload
-            self.ident_payload_map[row_id] = (
-                ident_payload[index] if index < len(ident_payload) else {}
-            )
+            ident_entry = ident_payload[index] if index < len(ident_payload) else {}
+            self.ident_payload_map[row_id] = ident_entry
 
             suffix = (row_payload.get("specimen_suffix") or {}).get("interpreted") or "-"
             storage_name = (row_payload.get("storage_area") or {}).get("interpreted")
@@ -1344,7 +1412,16 @@ class MediaQCFormManager:
                 }
             )
 
-            for nature in row_payload.get("natures") or []:
+            natures_payload = row_payload.get("natures")
+            if not isinstance(natures_payload, list):
+                natures_payload = []
+            if _natures_payload_has_meaningful_data(natures_payload):
+                last_natures_snapshot = copy.deepcopy(natures_payload)
+            elif last_natures_snapshot:
+                natures_payload = copy.deepcopy(last_natures_snapshot)
+                row_payload["natures"] = natures_payload
+
+            for nature in natures_payload or []:
                 element_name = (nature.get("element_name") or {}).get("interpreted")
                 element_obj = (
                     Element.objects.filter(name=element_name).first()

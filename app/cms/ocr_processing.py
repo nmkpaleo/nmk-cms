@@ -50,6 +50,9 @@ from .models import (
 )
 
 
+UNKNOWN_FIELD_NUMBER_PREFIX = "UNKNOWN FIELD NUMBER #"
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -470,38 +473,124 @@ def _ensure_reference(first_author: str, title: str, year: str) -> Reference:
     )
 
 
-def _ensure_field_slip(data: dict[str, object]) -> FieldSlip | None:
-    field_number = data.get("field_number")
-    verb_locality = data.get("verbatim_locality")
-    verb_taxon = data.get("verbatim_taxon")
-    if not (field_number and verb_taxon):
+def _clean_string(value: object) -> str | None:
+    if value in (None, ""):
         return None
-    field_slip = FieldSlip.objects.filter(
-        field_number=field_number,
-        verbatim_locality=verb_locality,
-        verbatim_taxon=verb_taxon,
-    ).first()
-    if field_slip:
-        return field_slip
-    verbatim_element = data.get("verbatim_element")
+    cleaned = str(value).strip()
+    return cleaned or None
+
+
+def _has_identification_data(data: dict[str, object]) -> bool:
+    if not isinstance(data, dict):
+        return False
+    for key in (
+        "taxon",
+        "identification_qualifier",
+        "verbatim_identification",
+        "identification_remarks",
+        "identified_by",
+        "reference",
+        "date_identified",
+    ):
+        value = data.get(key)
+        if value not in (None, ""):
+            return True
+    return False
+
+
+def _has_nature_data(entry: dict[str, object]) -> bool:
+    if not isinstance(entry, dict):
+        return False
+    for key in (
+        "element_name",
+        "side",
+        "condition",
+        "verbatim_element",
+        "portion",
+        "fragments",
+    ):
+        value = entry.get(key)
+        if value not in (None, ""):
+            return True
+        if key == "fragments" and value in (0, "0"):
+            return True
+    return False
+
+
+def _has_any_nature_data(entries: list[dict[str, object]]) -> bool:
+    for entry in entries or []:
+        if _has_nature_data(entry):
+            return True
+    return False
+
+
+def _generate_unknown_field_number() -> str:
+    count = FieldSlip.objects.filter(
+        field_number__startswith=UNKNOWN_FIELD_NUMBER_PREFIX
+    ).count()
+    next_number = count + 1
+    candidate = f"{UNKNOWN_FIELD_NUMBER_PREFIX}{next_number}"
+    while FieldSlip.objects.filter(field_number=candidate).exists():
+        next_number += 1
+        candidate = f"{UNKNOWN_FIELD_NUMBER_PREFIX}{next_number}"
+    return candidate
+
+
+def _ensure_field_slip(data: dict[str, object]) -> FieldSlip | None:
+    field_number = _clean_string(data.get("field_number"))
+    verb_locality = _clean_string(data.get("verbatim_locality"))
+    verb_taxon = _clean_string(data.get("verbatim_taxon"))
+    if not verb_taxon:
+        return None
+
+    verbatim_element = _clean_string(data.get("verbatim_element"))
     if not verbatim_element:
         return None
+
+    aerial_photo = _clean_string(data.get("aerial_photo"))
+    verbatim_latitude = _clean_string(data.get("verbatim_latitude"))
+    verbatim_longitude = _clean_string(data.get("verbatim_longitude"))
+    verbatim_elevation = _clean_string(data.get("verbatim_elevation"))
+
+    base_queryset = FieldSlip.objects.filter(
+        verbatim_locality=verb_locality,
+        verbatim_taxon=verb_taxon,
+        verbatim_element=verbatim_element,
+    )
+    if field_number:
+        field_slip = base_queryset.filter(field_number=field_number).first()
+        if field_slip:
+            return field_slip
+    else:
+        field_slip = base_queryset.filter(
+            field_number__startswith=UNKNOWN_FIELD_NUMBER_PREFIX
+        ).first()
+        if field_slip:
+            return field_slip
+        field_number = _generate_unknown_field_number()
+
     horizon_parts: list[str] = []
-    for key in ("horizon_formation", "horizon_member", "horizon_bed", "horizon_chronostratigraphy"):
-        value = data.get(key)
+    for key in (
+        "horizon_formation",
+        "horizon_member",
+        "horizon_bed",
+        "horizon_chronostratigraphy",
+    ):
+        value = _clean_string(data.get(key))
         if value:
             horizon_parts.append(str(value))
     horizon = " | ".join(horizon_parts) if horizon_parts else None
+
     return FieldSlip.objects.create(
         field_number=field_number,
         verbatim_locality=verb_locality,
         verbatim_taxon=verb_taxon,
         verbatim_element=verbatim_element,
         verbatim_horizon=horizon,
-        aerial_photo=data.get("aerial_photo"),
-        verbatim_latitude=data.get("verbatim_latitude"),
-        verbatim_longitude=data.get("verbatim_longitude"),
-        verbatim_elevation=data.get("verbatim_elevation"),
+        aerial_photo=aerial_photo,
+        verbatim_latitude=verbatim_latitude,
+        verbatim_longitude=verbatim_longitude,
+        verbatim_elevation=verbatim_elevation,
     )
 
 
@@ -548,6 +637,9 @@ def _apply_rows(
     rows: list[dict[str, object]],
     selection: set[str] | None = None,
 ) -> None:
+    last_ident_data: dict[str, object] | None = None
+    last_natures_data: list[dict[str, object]] = []
+
     for row in rows:
         suffix = row.get("specimen_suffix") or "-"
         if selection is not None and suffix not in selection:
@@ -571,33 +663,52 @@ def _apply_rows(
         row_obj.natureofspecimen_set.all().delete()
 
         ident = row.get("identification") or {}
-        if any(
-            ident.get(field)
-            for field in (
-                "taxon",
-                "identification_qualifier",
-                "verbatim_identification",
-                "identification_remarks",
-            )
-        ):
+        if _has_identification_data(ident):
+            last_ident_data = ident
+            ident_to_apply = ident
+        elif last_ident_data:
+            ident_to_apply = last_ident_data
+        else:
+            ident_to_apply = {}
+
+        if _has_identification_data(ident_to_apply):
             Identification.objects.create(
                 accession_row=row_obj,
-                taxon=ident.get("taxon"),
-                identification_qualifier=ident.get("identification_qualifier"),
-                verbatim_identification=ident.get("verbatim_identification"),
-                identification_remarks=ident.get("identification_remarks"),
+                taxon=ident_to_apply.get("taxon"),
+                identification_qualifier=ident_to_apply.get("identification_qualifier"),
+                verbatim_identification=ident_to_apply.get("verbatim_identification"),
+                identification_remarks=ident_to_apply.get("identification_remarks"),
             )
 
-        for nature in row.get("natures") or []:
-            element_name = nature.get("element_name")
-            if not element_name:
-                continue
-            element = Element.objects.filter(name=element_name).first()
-            if not element:
-                parent = Element.objects.filter(name="-Undefined").first()
-                if not parent:
+        natures = row.get("natures") or []
+        if _has_any_nature_data(natures):
+            last_natures_data = natures
+            natures_to_apply = natures
+        elif last_natures_data:
+            natures_to_apply = last_natures_data
+        else:
+            natures_to_apply = []
+
+        for nature in natures_to_apply:
+            element_name = _clean_string(nature.get("element_name"))
+            verbatim_element = _clean_string(nature.get("verbatim_element"))
+            resolved_name = element_name or verbatim_element
+            element = None
+            if resolved_name:
+                element = Element.objects.filter(name=resolved_name).first()
+            parent = Element.objects.filter(name="-Undefined").first()
+            if element is None:
+                if parent is None:
                     parent = Element.objects.create(name="-Undefined")
-                element = Element.objects.create(name=element_name, parent_element=parent)
+                if not resolved_name or resolved_name == parent.name:
+                    element = parent
+                    resolved_name = parent.name
+                else:
+                    element = Element.objects.create(
+                        name=resolved_name,
+                        parent_element=parent,
+                    )
+            nature["element_name"] = resolved_name
             fragments = nature.get("fragments")
             if fragments in (None, ""):
                 fragments_value = 0

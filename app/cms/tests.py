@@ -48,7 +48,12 @@ from cms.filters import DrawerRegisterFilter
 from cms.resources import DrawerRegisterResource, PlaceResource
 from tablib import Dataset
 from cms.upload_processing import process_file
-from cms.ocr_processing import process_pending_scans, describe_accession_conflicts
+from cms.ocr_processing import (
+    process_pending_scans,
+    describe_accession_conflicts,
+    UNKNOWN_FIELD_NUMBER_PREFIX,
+    _apply_rows,
+)
 
 
 class GenerateAccessionsFromSeriesTests(TestCase):
@@ -1940,6 +1945,56 @@ class ProcessPendingScansTests(TestCase):
         link = AccessionFieldSlip.objects.get()
         self.assertEqual(link.fieldslip, existing)
 
+    @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
+    @patch(
+        "cms.ocr_processing.chatgpt_ocr",
+        return_value={
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 123},
+                    "type_status": {"interpreted": "Holotype"},
+                    "published": {"interpreted": "Yes"},
+                    "field_slips": [
+                        {
+                            "field_number": {"interpreted": None},
+                            "verbatim_locality": {"interpreted": "Loc1"},
+                            "verbatim_taxon": {"interpreted": "Homo"},
+                            "verbatim_element": {"interpreted": "Femur"},
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+    def test_creates_field_slip_when_field_number_missing(
+        self, mock_ocr, mock_detect
+    ):
+        Collection.objects.create(abbreviation="KNM", description="Kenya")
+        filename = "acc_fs_unknown.png"
+        file_path = self.pending / filename
+        file_path.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename}")
+        process_pending_scans()
+        media = Media.objects.get()
+        media.transition_qc(Media.QCStatus.APPROVED, user=self.user)
+
+        self.assertEqual(FieldSlip.objects.count(), 1)
+        field_slip = FieldSlip.objects.get()
+        self.assertTrue(
+            field_slip.field_number.startswith(UNKNOWN_FIELD_NUMBER_PREFIX)
+        )
+        self.assertEqual(field_slip.verbatim_locality, "Loc1")
+        self.assertEqual(field_slip.verbatim_taxon, "Homo")
+        self.assertEqual(field_slip.verbatim_element, "Femur")
+
+        self.assertEqual(AccessionFieldSlip.objects.count(), 1)
+        link = AccessionFieldSlip.objects.get()
+        accession = Accession.objects.get()
+        self.assertEqual(link.accession, accession)
+        self.assertEqual(link.fieldslip, field_slip)
+
 
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch(
@@ -2191,6 +2246,11 @@ class MediaExpertQCWizardTests(TestCase):
     def setUp(self):
         User = get_user_model()
         self.expert = User.objects.create_user(username="expert", password="pass")
+
+        patcher = patch("cms.models.get_current_user", return_value=self.expert)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
         self.curators_group = Group.objects.create(name="Curators")
         self.curators_group.user_set.add(self.expert)
 
@@ -2217,10 +2277,6 @@ class MediaExpertQCWizardTests(TestCase):
                 ],
             },
         )
-
-        patcher = patch("cms.models.get_current_user", return_value=self.expert)
-        patcher.start()
-        self.addCleanup(patcher.stop)
 
         self.client.force_login(self.expert)
 
@@ -2268,6 +2324,29 @@ class MediaExpertQCWizardTests(TestCase):
         }
         data.update(overrides)
         return data
+
+    def build_specimen_post_data(self, element=None, **overrides):
+        base = self.build_post_data(
+            **{
+                "row-TOTAL_FORMS": "1",
+                "row-INITIAL_FORMS": "1",
+                "ident-TOTAL_FORMS": "1",
+                "ident-INITIAL_FORMS": "1",
+                "specimen-TOTAL_FORMS": "1",
+                "specimen-INITIAL_FORMS": "1",
+                "specimen-MIN_NUM_FORMS": "0",
+                "specimen-MAX_NUM_FORMS": "1000",
+                "specimen-0-row_id": "row-0",
+                "specimen-0-side": "Left",
+                "specimen-0-condition": "Excellent",
+                "specimen-0-verbatim_element": "Left Femur",
+                "specimen-0-portion": "Proximal",
+                "specimen-0-fragments": "1",
+            }
+        )
+        base["specimen-0-element"] = str(element.pk) if element else ""
+        base.update(overrides)
+        return base
 
     def get_url(self):
         return reverse("media_expert_qc", args=[self.media.uuid])
@@ -2320,6 +2399,146 @@ class MediaExpertQCWizardTests(TestCase):
         self.assertContains(response, 'data-qc-status="pending_intern"')
         self.assertNotIn('data-qc-status="rejected"', response.content.decode())
         self.assertContains(response, "No media in this status.")
+
+    def test_approve_creates_specimen_elements(self):
+        element_parent = Element.objects.create(name="-Undefined")
+        element = Element.objects.create(name="Femur", parent_element=element_parent)
+
+        self.media.ocr_data = {
+            "card_type": "accession_card",
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 123},
+                    "rows": [
+                        {
+                            "_row_id": "row-0",
+                            "specimen_suffix": {"interpreted": "A"},
+                            "natures": [
+                                {
+                                    "element_name": {"interpreted": "Femur"},
+                                    "side": {"interpreted": "Left"},
+                                    "condition": {"interpreted": "Excellent"},
+                                    "verbatim_element": {"interpreted": "Left Femur"},
+                                    "portion": {"interpreted": "Proximal"},
+                                    "fragments": {"interpreted": 1},
+                                }
+                            ],
+                        }
+                    ],
+                    "identifications": [
+                        {
+                            "taxon": {"interpreted": "Homo"},
+                            "verbatim_identification": {"interpreted": "Homo sp."},
+                        }
+                    ],
+                }
+            ],
+        }
+        self.media.save(update_fields=["ocr_data"])
+
+        response = self.client.post(
+            self.get_url(),
+            self.build_specimen_post_data(
+                element,
+                action="approve",
+                qc_comment="",
+                **{
+                    "row-0-row_id": "row-0",
+                    "row-0-order": "0",
+                    "row-0-specimen_suffix": "A",
+                    "row-0-storage": "",
+                    "row-0-status": InventoryStatus.UNKNOWN,
+                    "ident-0-row_id": "row-0",
+                    "ident-0-taxon": "Homo",
+                    "ident-0-verbatim_identification": "Homo sp.",
+                },
+            ),
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        accession = Accession.objects.get()
+        row = accession.accessionrow_set.get()
+        nature = row.natureofspecimen_set.get()
+        self.assertEqual(nature.element, element)
+        self.assertEqual(nature.side, "Left")
+        self.assertEqual(nature.condition, "Excellent")
+        self.assertEqual(nature.verbatim_element, "Left Femur")
+        self.assertEqual(nature.portion, "Proximal")
+        self.assertEqual(nature.fragments, 1)
+
+    def test_approve_with_verbatim_only_creates_specimen_element(self):
+        parent = Element.objects.create(name="-Undefined")
+
+        self.media.ocr_data = {
+            "card_type": "accession_card",
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 123},
+                    "rows": [
+                        {
+                            "_row_id": "row-0",
+                            "specimen_suffix": {"interpreted": "A"},
+                            "natures": [
+                                {
+                                    "element_name": {"interpreted": None},
+                                    "side": {"interpreted": "Left"},
+                                    "condition": {"interpreted": "Excellent"},
+                                    "verbatim_element": {"interpreted": "Partial Femur"},
+                                    "portion": {"interpreted": "Proximal"},
+                                    "fragments": {"interpreted": 2},
+                                }
+                            ],
+                        }
+                    ],
+                    "identifications": [
+                        {
+                            "taxon": {"interpreted": "Homo"},
+                            "verbatim_identification": {"interpreted": "Homo sp."},
+                        }
+                    ],
+                }
+            ],
+        }
+        self.media.save(update_fields=["ocr_data"])
+
+        response = self.client.post(
+            self.get_url(),
+            self.build_specimen_post_data(
+                element=None,
+                action="approve",
+                qc_comment="",
+                **{
+                    "row-0-row_id": "row-0",
+                    "row-0-order": "0",
+                    "row-0-specimen_suffix": "A",
+                    "row-0-storage": "",
+                    "row-0-status": InventoryStatus.UNKNOWN,
+                    "ident-0-row_id": "row-0",
+                    "ident-0-taxon": "Homo",
+                    "ident-0-verbatim_identification": "Homo sp.",
+                    "specimen-0-verbatim_element": "Partial Femur",
+                    "specimen-0-portion": "Proximal",
+                    "specimen-0-fragments": "2",
+                },
+            ),
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        accession = Accession.objects.get()
+        row = accession.accessionrow_set.get()
+        nature = row.natureofspecimen_set.get()
+        self.assertEqual(nature.element.name, "Partial Femur")
+        self.assertEqual(nature.element.parent_element, parent)
+        self.assertEqual(nature.verbatim_element, "Partial Femur")
+        self.assertEqual(nature.fragments, 2)
 
     def test_request_rescan_sets_rejected_status(self):
         response = self.client.post(
@@ -2475,6 +2694,61 @@ class MediaExpertQCWizardTests(TestCase):
         row = accession.accessionrow_set.get(specimen_suffix="-")
         self.assertEqual(row.storage.area, "Shelf 42")
 
+    def test_initial_rows_copy_missing_identifications_and_specimens(self):
+        Element.objects.create(name="Femur")
+        self.media.ocr_data = {
+            "card_type": "accession_card",
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 123},
+                    "rows": [
+                        {
+                            "_row_id": "row-0",
+                            "specimen_suffix": {"interpreted": "A"},
+                            "natures": [
+                                {
+                                    "element_name": {"interpreted": "Femur"},
+                                    "verbatim_element": {"interpreted": "Femur"},
+                                    "portion": {"interpreted": "Proximal"},
+                                }
+                            ],
+                        },
+                        {
+                            "_row_id": "row-1",
+                            "specimen_suffix": {"interpreted": "B"},
+                            "natures": [],
+                        },
+                        {
+                            "_row_id": "row-2",
+                            "specimen_suffix": {"interpreted": "C"},
+                            "natures": [],
+                        },
+                    ],
+                    "identifications": [
+                        {
+                            "taxon": {"interpreted": "Homo"},
+                            "verbatim_identification": {"interpreted": "Homo sp."},
+                        }
+                    ],
+                }
+            ],
+        }
+        self.media.save(update_fields=["ocr_data"])
+
+        response = self.client.get(self.get_url())
+        self.assertEqual(response.status_code, 200)
+        row_contexts = response.context["row_contexts"]
+        self.assertEqual(len(row_contexts), 3)
+        for context in row_contexts:
+            ident_forms = context["ident_forms"]
+            self.assertEqual(len(ident_forms), 1)
+            self.assertEqual(ident_forms[0]["taxon"].value(), "Homo")
+            specimen_forms = context["specimen_forms"]
+            self.assertEqual(len(specimen_forms), 1)
+            self.assertEqual(specimen_forms[0]["verbatim_element"].value(), "Femur")
+
     def test_non_expert_forbidden(self):
         User = get_user_model()
         other = User.objects.create_user(username="visitor", password="pass")
@@ -2612,6 +2886,62 @@ class MediaFileDeletionTests(TestCase):
         self.assertFalse(file_path.exists())
 
 
+class ApplyRowsFallbackTests(TestCase):
+    def setUp(self):
+        self.collection = Collection.objects.create(
+            abbreviation="KNM", description="Kenya"
+        )
+        self.locality = Locality.objects.create(abbreviation="AB", name="Area")
+        self.accession = Accession.objects.create(
+            collection=self.collection,
+            specimen_prefix=self.locality,
+            specimen_no=100,
+            instance_number=1,
+        )
+
+    def test_reuses_last_identification_and_specimens_for_missing_rows(self):
+        rows = [
+            {
+                "specimen_suffix": "-",
+                "storage": None,
+                "identification": {
+                    "taxon": "Homo sp.",
+                    "verbatim_identification": "Homo sp.",
+                },
+                "natures": [
+                    {
+                        "element_name": "Femur",
+                        "verbatim_element": "Femur",
+                        "portion": "Proximal",
+                        "fragments": 1,
+                    }
+                ],
+            },
+            {
+                "specimen_suffix": "A",
+                "storage": None,
+                "identification": {},
+                "natures": [],
+            },
+            {
+                "specimen_suffix": "B",
+                "storage": None,
+                "identification": {},
+                "natures": [],
+            },
+        ]
+
+        _apply_rows(self.accession, rows)
+
+        for suffix in ("-", "A", "B"):
+            row = self.accession.accessionrow_set.get(specimen_suffix=suffix)
+            ident = row.identification_set.get()
+            self.assertEqual(ident.taxon, "Homo sp.")
+            specimen = row.natureofspecimen_set.get()
+            self.assertEqual(specimen.element.name, "Femur")
+            self.assertEqual(specimen.portion, "Proximal")
+
+
 class MediaInternQCWizardTests(TestCase):
     def setUp(self):
         User = get_user_model()
@@ -2747,8 +3077,8 @@ class MediaInternQCWizardTests(TestCase):
             "ident-1-identification_remarks": "",
             "ident-1-reference": "",
             "ident-1-date_identified": "",
-            "specimen-TOTAL_FORMS": "1",
-            "specimen-INITIAL_FORMS": "1",
+            "specimen-TOTAL_FORMS": "2",
+            "specimen-INITIAL_FORMS": "2",
             "specimen-MIN_NUM_FORMS": "0",
             "specimen-MAX_NUM_FORMS": "1000",
             "specimen-0-row_id": "row-0",
@@ -2758,6 +3088,13 @@ class MediaInternQCWizardTests(TestCase):
             "specimen-0-verbatim_element": "Femur",
             "specimen-0-portion": "Proximal",
             "specimen-0-fragments": "3",
+            "specimen-1-row_id": "row-1",
+            "specimen-1-element": str(self.element.pk),
+            "specimen-1-side": "Left",
+            "specimen-1-condition": "Excellent",
+            "specimen-1-verbatim_element": "Femur",
+            "specimen-1-portion": "Proximal",
+            "specimen-1-fragments": "3",
             "reference-TOTAL_FORMS": "1",
             "reference-INITIAL_FORMS": "1",
             "reference-MIN_NUM_FORMS": "0",
