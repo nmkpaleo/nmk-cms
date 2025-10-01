@@ -2840,6 +2840,7 @@ class UploadProcessingTests(TestCase):
 
         def fake_fromtimestamp(timestamp, tz=None):
             self.assertEqual(tz, timezone.utc)
+            self.assertEqual(timestamp, stat_result.st_ctime)
             return datetime.fromtimestamp(timestamp, tz=timezone.utc).replace(tzinfo=None)
 
         original_to_nairobi = scanning_utils.to_nairobi

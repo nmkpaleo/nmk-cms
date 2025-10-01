@@ -19,10 +19,12 @@ REJECTED = Path(settings.MEDIA_ROOT) / "uploads" / "rejected"
 NAME_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}\(\d+\)\.png$")
 
 
-def create_media(path: Path) -> None:
+def create_media(path: Path, *, filesystem_ctime: float | None = None) -> None:
     """Create a Media record for a newly accepted scan."""
+    if filesystem_ctime is None:
+        filesystem_ctime = path.stat().st_ctime
     filesystem_created = datetime.fromtimestamp(
-        path.stat().st_ctime, tz=timezone.utc
+        filesystem_ctime, tz=timezone.utc
     )
     if django_timezone.is_naive(filesystem_created):
         filesystem_created = django_timezone.make_aware(
@@ -70,8 +72,9 @@ def process_file(src: Path) -> Path:
     if NAME_PATTERN.match(src.name):
         dest = PENDING / src.name
         dest.parent.mkdir(parents=True, exist_ok=True)
+        stat_result = src.stat()
         shutil.move(src, dest)
-        create_media(dest)
+        create_media(dest, filesystem_ctime=stat_result.st_ctime)
     else:
         dest = REJECTED / src.name
         dest.parent.mkdir(parents=True, exist_ok=True)
