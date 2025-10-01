@@ -1,0 +1,35 @@
+<div class="qc-card" data-qc-reference>
+  {% for hidden in ref_form.hidden_fields %}
+    {{ hidden }}
+  {% endfor %}
+  <div class="qc-field-grid">
+    <div class="qc-field qc-field--full">
+      <label class="qc-label" for="{{ ref_form.first_author.id_for_label }}">{{ ref_form.first_author.label }}:</label>
+      <div class="qc-control">
+        {{ ref_form.first_author }}
+        {{ ref_form.first_author.errors }}
+      </div>
+    </div>
+    <div class="qc-field qc-field--full">
+      <label class="qc-label" for="{{ ref_form.title.id_for_label }}">{{ ref_form.title.label }}:</label>
+      <div class="qc-control">
+        {{ ref_form.title }}
+        {{ ref_form.title.errors }}
+      </div>
+    </div>
+    <div class="qc-field">
+      <label class="qc-label" for="{{ ref_form.year.id_for_label }}">{{ ref_form.year.label }}:</label>
+      <div class="qc-control">
+        {{ ref_form.year }}
+        {{ ref_form.year.errors }}
+      </div>
+    </div>
+    <div class="qc-field">
+      <label class="qc-label" for="{{ ref_form.page.id_for_label }}">{{ ref_form.page.label }}:</label>
+      <div class="qc-control">
+        {{ ref_form.page }}
+        {{ ref_form.page.errors }}
+      </div>
+    </div>
+  </div>
+</div>

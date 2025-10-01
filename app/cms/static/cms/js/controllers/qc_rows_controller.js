@@ -270,6 +270,7 @@
         this.assignChipToRow(chip, row);
       }
       this.refreshChipSummary(chip);
+      this.bindChipSummaryEvents(chip);
       if (this.isChipMarkedForDeletion(chip)) {
         chip.dataset.chipRemoved = 'true';
         chip.hidden = true;
@@ -292,6 +293,42 @@
         removeButton.addEventListener('click', this.boundRequestChipRemoval);
         removeButton.setAttribute('data-qc-chip-remove-bound', 'true');
       }
+    }
+
+    bindChipSummaryEvents(chip) {
+      if (!chip) {
+        return;
+      }
+      var self = this;
+      var handler = function () {
+        self.refreshChipSummary(chip);
+      };
+      var type = chip.getAttribute('data-chip-type');
+      var selectors;
+      if (type === 'ident') {
+        selectors = [
+          'textarea[name$="-verbatim_identification"]',
+          'input[name$="-verbatim_identification"]',
+        ];
+      } else {
+        selectors = [
+          'select[name$="-element"]',
+          'textarea[name$="-verbatim_element"]',
+          'input[name$="-verbatim_element"]',
+          'input[name$="-portion"]',
+        ];
+      }
+      selectors.forEach(function (selector) {
+        var fields = chip.querySelectorAll(selector);
+        fields.forEach(function (field) {
+          if (!field || field.dataset.qcSummaryBound === 'true') {
+            return;
+          }
+          field.addEventListener('input', handler);
+          field.addEventListener('change', handler);
+          field.dataset.qcSummaryBound = 'true';
+        });
+      });
     }
 
     setupConflictCards() {
@@ -1177,16 +1214,9 @@
       var type = chip.getAttribute('data-chip-type');
       var summary = '';
       if (type === 'ident') {
-        var taxonField = chip.querySelector('select[name$="-taxon"]');
-        summary = optionText(taxonField);
         var verbatim = chip.querySelector('textarea[name$="-verbatim_identification"], input[name$="-verbatim_identification"]');
-        if (!summary && verbatim && verbatim.value) {
-          summary = verbatim.value;
-        }
-        var qualifier = chip.querySelector('input[name$="-identification_qualifier"], select[name$="-identification_qualifier"]');
-        if (qualifier && qualifier.value) {
-          var qualifierText = optionText(qualifier);
-          summary = summary ? qualifierText + ' ' + summary : qualifierText;
+        if (verbatim && verbatim.value) {
+          summary = verbatim.value.trim();
         }
       } else {
         var elementField = chip.querySelector('select[name$="-element"]');

@@ -3484,6 +3484,39 @@ class MediaInternQCWizardTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("Shelf 42", response.context["storage_suggestions"])
 
+    def test_can_add_reference_entry(self):
+        self.client.login(username="intern", password="pass")
+        url = self.get_url()
+        data = self.build_valid_post_data()
+        data.update(
+            {
+                "reference-TOTAL_FORMS": "3",
+                "reference-1-ref_id": "",
+                "reference-1-order": "1",
+                "reference-1-first_author": "New Author",
+                "reference-1-title": "New Insights",
+                "reference-1-year": "2020",
+                "reference-1-page": "10-12",
+                "reference-2-ref_id": "",
+                "reference-2-order": "2",
+                "reference-2-first_author": "  ",
+                "reference-2-title": "",
+                "reference-2-year": "",
+                "reference-2-page": "",
+            }
+        )
+
+        response = self.client.post(url, data, follow=True)
+        self.assertEqual(response.status_code, 200)
+
+        self.media.refresh_from_db()
+        references = self.media.ocr_data["accessions"][0]["references"]
+        self.assertEqual(len(references), 2)
+        self.assertEqual(
+            references[1]["reference_first_author"]["interpreted"], "New Author"
+        )
+        self.assertEqual(references[1]["page"]["interpreted"], "10-12")
+
     def test_handles_inserted_row_payload(self):
         self.client.login(username="intern", password="pass")
         url = self.get_url()
