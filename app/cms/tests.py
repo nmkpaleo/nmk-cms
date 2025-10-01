@@ -1,7 +1,8 @@
 from unittest.mock import patch
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 import json
+import shutil
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -12,6 +13,7 @@ from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.conf import settings
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from cms.models import (
     Accession,
@@ -2789,8 +2791,34 @@ class UploadProcessingTests(TestCase):
             process_file(src)
         media = Media.objects.get(media_location=f"uploads/pending/{filename}")
         self.assertEqual(media.scanning, self.scanning)
-        import shutil
         shutil.rmtree(incoming.parent)
+
+    def test_scanning_lookup_handles_utc_host_timestamps(self):
+        incoming = Path(settings.MEDIA_ROOT) / "uploads" / "incoming"
+        incoming.mkdir(parents=True, exist_ok=True)
+        self.addCleanup(shutil.rmtree, incoming.parent, ignore_errors=True)
+
+        filename = "2024-01-01(1).png"
+        src = incoming / filename
+        src.write_bytes(b"data")
+
+        self.scanning.delete()
+        nairobi_tz = ZoneInfo("Africa/Nairobi")
+        scanning = Scanning.objects.create(
+            drawer=self.drawer,
+            user=self.user,
+            start_time=datetime(2024, 1, 1, 10, 0, tzinfo=nairobi_tz),
+            end_time=datetime(2024, 1, 1, 11, 0, tzinfo=nairobi_tz),
+        )
+
+        created_utc = datetime(2024, 1, 1, 7, 30, tzinfo=timezone.utc)
+        stat_result = SimpleNamespace(st_ctime=created_utc.timestamp(), st_mode=0)
+
+        with patch("pathlib.Path.stat", return_value=stat_result):
+            process_file(src)
+
+        media = Media.objects.get(media_location=f"uploads/pending/{filename}")
+        self.assertEqual(media.scanning, scanning)
 
 
 class StorageViewTests(TestCase):
