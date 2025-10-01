@@ -1,0 +1,44 @@
+{% if qc_diff %}
+<section class="qc-section qc-summary">
+  <div class="qc-section-heading w3-border-bottom w3-padding-small">
+    <h3>Summary</h3>
+    <span class="qc-inline-note">Compare your edits against the original OCR snapshot.</span>
+  </div>
+  <div class="qc-summary-grid">
+    {% for diff in qc_diff.count_diffs %}
+      <div class="qc-summary-card{% if diff.changed %} qc-summary-card--changed{% endif %}">
+        <span class="qc-summary-label">{{ diff.label }}</span>
+        <span class="qc-summary-value">{{ diff.current }}</span>
+        {% if diff.changed %}
+          <span class="qc-summary-delta">Original: {{ diff.original }}</span>
+        {% endif %}
+      </div>
+    {% empty %}
+      <p class="qc-inline-note">No totals were detected for this accession.</p>
+    {% endfor %}
+  </div>
+  {% if qc_diff.rows_reordered %}
+    <div class="w3-panel w3-pale-yellow w3-border">
+      Specimen rows were reordered. Confirm the new ordering matches the accession card before approving.
+    </div>
+  {% endif %}
+  {% if qc_diff.warnings %}
+    <div class="w3-panel w3-pale-red w3-border">
+      <h4 class="w3-margin-top w3-margin-bottom">Warnings</h4>
+      <ul class="qc-warning-list">
+        {% for warning in qc_diff.warnings %}
+          <li>{{ warning.message }}</li>
+        {% endfor %}
+      </ul>
+      <div class="qc-warning-ack-container">
+        {% for warning in qc_diff.warnings %}
+          <label class="qc-warning-ack">
+            <input type="checkbox" name="acknowledge_warnings" value="{{ warning.code }}"{% if warning.code in qc_acknowledged_warnings %} checked{% endif %}>
+            I have reviewed the {{ warning.label|lower }}.
+          </label>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+</section>
+{% endif %}
