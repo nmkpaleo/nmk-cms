@@ -1,6 +1,5 @@
 from unittest.mock import patch
-from datetime import datetime, timedelta, timezone
-from types import SimpleNamespace
+from datetime import datetime, timedelta
 import json
 from zoneinfo import ZoneInfo
 
@@ -49,7 +48,7 @@ from cms.forms import DrawerRegisterForm, AccessionNumberSeriesAdminForm
 from cms.filters import DrawerRegisterFilter
 from cms.resources import DrawerRegisterResource, PlaceResource
 from tablib import Dataset
-from cms.upload_processing import process_file
+from cms.upload_processing import TIMESTAMP_FORMAT, process_file
 from cms import scanning_utils
 from cms.ocr_processing import (
     process_pending_scans,
@@ -60,7 +59,7 @@ from cms.ocr_processing import (
 
 
 class UploadProcessingTests(TestCase):
-    """Tests for handling filesystem timestamps during upload processing."""
+    """Tests for handling scan uploads using filename timestamps."""
 
     def setUp(self):
         User = get_user_model()
@@ -84,36 +83,17 @@ class UploadProcessingTests(TestCase):
 
             shutil.rmtree(incoming_root)
 
-    def test_scanning_lookup_uses_pre_move_ctime(self):
+    def _filename_for(self, dt: datetime) -> str:
+        return dt.astimezone(scanning_utils.NAIROBI_TZ).strftime(
+            f"{TIMESTAMP_FORMAT}.png"
+        )
+
+    def test_scanning_lookup_uses_filename_timestamp(self):
         incoming = Path(settings.MEDIA_ROOT) / "uploads" / "incoming"
         incoming.mkdir(parents=True, exist_ok=True)
-        filename = "2025-09-09(1).png"
+        filename = self._filename_for(self.scanning.start_time + timedelta(minutes=1))
         src = incoming / filename
         src.write_bytes(b"data")
-
-        created = (self.scanning.start_time + timedelta(minutes=1)).astimezone(
-            timezone.utc
-        )
-        stat_result = SimpleNamespace(
-            st_ctime=created.timestamp(),
-            st_mode=0,
-        )
-
-        call_counter = {"count": 0}
-
-        def fake_fromtimestamp(timestamp, tz):
-            call_counter["count"] += 1
-            self.assertEqual(timestamp, stat_result.st_ctime)
-            self.assertEqual(tz, timezone.utc)
-            naive = datetime.utcfromtimestamp(timestamp)
-            return naive.replace(tzinfo=None)
-
-        original_stat = Path.stat
-
-        def fake_stat(path_self):
-            if path_self == src:
-                return stat_result
-            return original_stat(path_self)
 
         original_to_nairobi = scanning_utils.to_nairobi
         to_nairobi_calls = []
@@ -122,20 +102,14 @@ class UploadProcessingTests(TestCase):
             to_nairobi_calls.append(dt)
             if len(to_nairobi_calls) == 1:
                 self.assertFalse(django_timezone.is_naive(dt))
-                self.assertEqual(dt.tzinfo, timezone.utc)
+                self.assertEqual(dt.tzinfo, scanning_utils.NAIROBI_TZ)
             return original_to_nairobi(dt)
 
-        with patch("pathlib.Path.stat", new=fake_stat):
-            with patch(
-                "cms.upload_processing.datetime",
-                new=SimpleNamespace(fromtimestamp=fake_fromtimestamp),
-            ):
-                with patch(
-                    "cms.scanning_utils.to_nairobi", side_effect=wrapped_to_nairobi
-                ):
-                    process_file(src)
+        with patch(
+            "cms.scanning_utils.to_nairobi", side_effect=wrapped_to_nairobi
+        ):
+            process_file(src)
 
-        self.assertEqual(call_counter["count"], 1)
         self.assertGreaterEqual(len(to_nairobi_calls), 1)
         media = Media.objects.get(media_location=f"uploads/pending/{filename}")
         self.assertEqual(media.scanning, self.scanning)
@@ -143,7 +117,7 @@ class UploadProcessingTests(TestCase):
     def test_upload_scan_restores_original_name_after_storage_collision(self):
         incoming = Path(settings.MEDIA_ROOT) / "uploads" / "incoming"
         incoming.mkdir(parents=True, exist_ok=True)
-        filename = "2025-09-09(2).png"
+        filename = self._filename_for(self.scanning.start_time + timedelta(minutes=2))
         original = incoming / filename
         original.write_bytes(b"original")
 
@@ -1590,12 +1564,12 @@ class UploadScanViewTests(TestCase):
 
     def test_upload_saves_file(self):
         self.client.login(username="cm", password="pass")
-        upload = SimpleUploadedFile("2025-01-01(1).png", b"data", content_type="image/png")
+        upload = SimpleUploadedFile("2025-01-01T010203.png", b"data", content_type="image/png")
         response = self.client.post(self.url, {"files": upload})
         self.assertEqual(response.status_code, 302)
-        pending = Path(settings.MEDIA_ROOT) / "uploads" / "pending" / "2025-01-01(1).png"
+        pending = Path(settings.MEDIA_ROOT) / "uploads" / "pending" / "2025-01-01T010203.png"
         self.assertTrue(pending.exists())
-        self.assertTrue(Media.objects.filter(media_location=f"uploads/pending/2025-01-01(1).png").exists())
+        self.assertTrue(Media.objects.filter(media_location=f"uploads/pending/2025-01-01T010203.png").exists())
         pending.unlink()
         import shutil
         shutil.rmtree(pending.parent.parent)
@@ -1640,7 +1614,7 @@ class OcrViewTests(TestCase):
         self.client.login(username="cm", password="pass")
         pending = Path(settings.MEDIA_ROOT) / "uploads" / "pending"
         pending.mkdir(parents=True, exist_ok=True)
-        filename = "2025-01-01(1).png"
+        filename = "2025-01-01T010203.png"
         file_path = pending / filename
         file_path.write_bytes(b"data")
         Media.objects.create(media_location=f"uploads/pending/{filename}")

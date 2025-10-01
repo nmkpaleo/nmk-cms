@@ -1,11 +1,10 @@
 import logging
 import re
 import shutil
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 
 from django.conf import settings
-from django.utils import timezone as django_timezone
 
 from .models import Media
 from . import scanning_utils
@@ -16,28 +15,20 @@ INCOMING = Path(settings.MEDIA_ROOT) / "uploads" / "incoming"
 PENDING = Path(settings.MEDIA_ROOT) / "uploads" / "pending"
 REJECTED = Path(settings.MEDIA_ROOT) / "uploads" / "rejected"
 
-NAME_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}\(\d+\)\.png$")
+TIMESTAMP_FORMAT = "%Y-%m-%dT%H%M%S"
+NAME_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{6}\.png$")
 
 
 def create_media(
-    path: Path, *, filesystem_timestamp: float | None = None
+    path: Path, *, scan_timestamp: datetime
 ) -> None:
     """Create a Media record for a newly accepted scan."""
-    if filesystem_timestamp is None:
-        filesystem_timestamp = path.stat().st_ctime
-    filesystem_created = datetime.fromtimestamp(
-        filesystem_timestamp, tz=timezone.utc
-    )
-    if django_timezone.is_naive(filesystem_created):
-        filesystem_created = django_timezone.make_aware(
-            filesystem_created, timezone.utc
-        )
     logger.info(
-        "Processing uploaded media %s with filesystem creation time %s (UTC)",
+        "Processing uploaded media %s with filename timestamp %s",
         path,
-        filesystem_created.isoformat(),
+        scan_timestamp.isoformat(),
     )
-    created = scanning_utils.to_nairobi(filesystem_created)
+    created = scanning_utils.to_nairobi(scan_timestamp)
     scanning_utils.auto_complete_scans()
     scan = scanning_utils.find_scan_for_timestamp(created)
     if scan:
@@ -74,10 +65,10 @@ def process_file(src: Path) -> Path:
     if NAME_PATTERN.match(src.name):
         dest = PENDING / src.name
         dest.parent.mkdir(parents=True, exist_ok=True)
-        stat_result = src.stat()
-        filesystem_timestamp = stat_result.st_ctime
+        timestamp = datetime.strptime(src.stem, TIMESTAMP_FORMAT)
+        timestamp = timestamp.replace(tzinfo=scanning_utils.NAIROBI_TZ)
         shutil.move(src, dest)
-        create_media(dest, filesystem_timestamp=filesystem_timestamp)
+        create_media(dest, scan_timestamp=timestamp)
     else:
         dest = REJECTED / src.name
         dest.parent.mkdir(parents=True, exist_ok=True)
