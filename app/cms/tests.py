@@ -1,7 +1,8 @@
 from unittest.mock import patch
-from datetime import timedelta
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 import json
+from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -48,6 +49,7 @@ from cms.filters import DrawerRegisterFilter
 from cms.resources import DrawerRegisterResource, PlaceResource
 from tablib import Dataset
 from cms.upload_processing import process_file
+from cms import scanning_utils
 from cms.ocr_processing import (
     process_pending_scans,
     describe_accession_conflicts,
@@ -969,6 +971,55 @@ class ScanningTests(TestCase):
         self.client.post(reverse("drawer_stop_scan", args=[self.drawer.id]))
         scan.refresh_from_db()
         self.assertIsNotNone(scan.end_time)
+
+    def test_scan_auto_completes_after_eight_hours(self):
+        start = datetime(2024, 1, 1, 8, 0, tzinfo=ZoneInfo("Africa/Nairobi"))
+        scan = Scanning.objects.create(
+            drawer=self.drawer,
+            user=self.user,
+            start_time=start,
+        )
+        self.client.force_login(self.user)
+        with patch("cms.scanning_utils.nairobi_now", return_value=start + timedelta(hours=9)):
+            self.client.get(reverse("dashboard"))
+        scan.refresh_from_db()
+        expected_end = scanning_utils.calculate_scan_auto_end(start)
+        self.assertEqual(
+            scanning_utils.to_nairobi(scan.end_time),
+            expected_end,
+        )
+
+    def test_scan_auto_completes_at_midnight(self):
+        start = datetime(2024, 1, 1, 21, 0, tzinfo=ZoneInfo("Africa/Nairobi"))
+        scan = Scanning.objects.create(
+            drawer=self.drawer,
+            user=self.user,
+            start_time=start,
+        )
+        self.client.force_login(self.user)
+        with patch("cms.scanning_utils.nairobi_now", return_value=start + timedelta(hours=5)):
+            self.client.get(reverse("dashboard"))
+        scan.refresh_from_db()
+        expected_end = scanning_utils.calculate_scan_auto_end(start)
+        self.assertEqual(
+            scanning_utils.to_nairobi(scan.end_time),
+            expected_end,
+        )
+
+    def test_dashboard_limits_my_drawers_to_one(self):
+        other_drawer = DrawerRegister.objects.create(
+            code="XYZ",
+            description="Other",
+            estimated_documents=1,
+            scanning_status=DrawerRegister.ScanningStatus.IN_PROGRESS,
+            priority=10,
+        )
+        other_drawer.scanning_users.add(self.user)
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("dashboard"))
+        drawers = response.context["my_drawers"]
+        self.assertEqual(len(drawers), 1)
+        self.assertEqual(drawers[0].code, "XYZ")
 
     def test_drawer_detail_shows_scans(self):
         Scanning.objects.create(
@@ -2771,8 +2822,8 @@ class UploadProcessingTests(TestCase):
         self.drawer = DrawerRegister.objects.create(
             code="DRW", description="Drawer", estimated_documents=1
         )
-        start = now() - timedelta(minutes=5)
-        end = now() + timedelta(minutes=5)
+        start = scanning_utils.nairobi_now() - timedelta(minutes=5)
+        end = start + timedelta(minutes=10)
         self.scanning = Scanning.objects.create(
             drawer=self.drawer, user=self.user, start_time=start, end_time=end
         )
@@ -2783,7 +2834,7 @@ class UploadProcessingTests(TestCase):
         filename = "2025-09-09(1).png"
         src = incoming / filename
         src.write_bytes(b"data")
-        created = self.scanning.start_time + timedelta(minutes=1)
+        created = scanning_utils.to_nairobi(self.scanning.start_time) + timedelta(minutes=1)
         stat_result = SimpleNamespace(st_ctime=created.timestamp(), st_mode=0)
         with patch("pathlib.Path.stat", return_value=stat_result):
             process_file(src)

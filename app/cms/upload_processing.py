@@ -4,9 +4,9 @@ from pathlib import Path
 from datetime import datetime
 
 from django.conf import settings
-from django.utils import timezone
 
-from .models import Media, Scanning
+from .models import Media
+from . import scanning_utils
 
 INCOMING = Path(settings.MEDIA_ROOT) / "uploads" / "incoming"
 PENDING = Path(settings.MEDIA_ROOT) / "uploads" / "pending"
@@ -18,14 +18,9 @@ NAME_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}\(\d+\)\.png$")
 def create_media(path: Path) -> None:
     """Create a Media record for a newly accepted scan."""
     created = datetime.fromtimestamp(path.stat().st_ctime)
-    if timezone.is_naive(created):
-        created = timezone.make_aware(created)
-    scan = (
-        Scanning.objects.filter(
-            start_time__lte=created,
-            end_time__gte=created,
-        ).first()
-    )
+    created = scanning_utils.to_nairobi(created)
+    scanning_utils.auto_complete_scans()
+    scan = scanning_utils.find_scan_for_timestamp(created)
     media = Media(
         type="photo",
         license="CC0",

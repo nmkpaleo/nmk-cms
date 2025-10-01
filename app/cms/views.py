@@ -93,6 +93,7 @@ from .utils import build_history_entries
 from cms.utils import generate_accessions_from_series
 from cms.upload_processing import process_file
 from cms.ocr_processing import process_pending_scans, describe_accession_conflicts
+from cms import scanning_utils
 from formtools.wizard.views import SessionWizardView
 
 class FieldSlipAutocomplete(autocomplete.Select2QuerySetView):
@@ -386,20 +387,30 @@ def dashboard(request):
         )
 
     if user.groups.filter(name="Interns").exists():
+        scanning_utils.auto_complete_scans(
+            Scanning.objects.filter(user=user, end_time__isnull=True)
+        )
         active_scan_id_subquery = Scanning.objects.filter(
             drawer=OuterRef("pk"), user=user, end_time__isnull=True
         ).values("id")[:1]
         active_scan_start_subquery = Scanning.objects.filter(
             drawer=OuterRef("pk"), user=user, end_time__isnull=True
         ).values("start_time")[:1]
-        my_drawers = (
+        my_drawers_qs = (
             DrawerRegister.objects.filter(
                 scanning_status=DrawerRegister.ScanningStatus.IN_PROGRESS,
                 scanning_users=user,
             )
             .annotate(active_scan_id=Subquery(active_scan_id_subquery))
             .annotate(active_scan_start=Subquery(active_scan_start_subquery))
+            .order_by("-priority", "code")
         )
+        my_drawers = list(my_drawers_qs[:1])
+
+        for drawer in my_drawers:
+            drawer.active_scan_start = scanning_utils.to_nairobi(
+                getattr(drawer, "active_scan_start", None)
+            )
 
         for status_choice in (
             Media.QCStatus.PENDING_INTERN,
@@ -3128,8 +3139,11 @@ class DrawerRegisterUpdateView(LoginRequiredMixin, DrawerRegisterAccessMixin, Up
 @login_required
 def start_scan(request, pk):
     drawer = get_object_or_404(DrawerRegister, pk=pk)
+    scanning_utils.auto_complete_scans(
+        Scanning.objects.filter(user=request.user, end_time__isnull=True)
+    )
     Scanning.objects.create(
-        drawer=drawer, user=request.user, start_time=now()
+        drawer=drawer, user=request.user, start_time=scanning_utils.nairobi_now()
     )
     return redirect("dashboard")
 
@@ -3143,7 +3157,8 @@ def stop_scan(request, pk):
         .first()
     )
     if scan:
-        scan.end_time = now()
+        auto_end = scanning_utils.calculate_scan_auto_end(scan.start_time)
+        scan.end_time = min(scanning_utils.nairobi_now(), auto_end)
         scan.save()
     return redirect("dashboard")
     
