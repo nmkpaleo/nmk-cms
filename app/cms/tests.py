@@ -1,3 +1,4 @@
+import copy
 from unittest.mock import patch
 from datetime import datetime, timedelta
 import json
@@ -56,7 +57,105 @@ from cms.ocr_processing import (
     UNKNOWN_FIELD_NUMBER_PREFIX,
     _apply_rows,
 )
+from cms.qc import diff_media_payload
 
+
+class MediaQCDiffTests(TestCase):
+    def test_diff_detects_reordered_rows_and_totals(self):
+        original = {
+            "accessions": [
+                {
+                    "rows": [
+                        {
+                            "_row_id": "row-0",
+                            "specimen_suffix": {"interpreted": "A"},
+                            "natures": [],
+                        }
+                    ],
+                    "identifications": [
+                        {"taxon": {"interpreted": "Pan"}},
+                    ],
+                    "references": [],
+                    "field_slips": [],
+                }
+            ]
+        }
+        updated = {
+            "accessions": [
+                {
+                    "rows": [
+                        {
+                            "_row_id": "row-1",
+                            "specimen_suffix": {"interpreted": "B"},
+                            "natures": [],
+                        },
+                        {
+                            "_row_id": "row-0",
+                            "specimen_suffix": {"interpreted": "A"},
+                            "natures": [],
+                        },
+                    ],
+                    "identifications": [
+                        {"taxon": {"interpreted": "Pan"}},
+                        {"taxon": {"interpreted": "Homo"}},
+                    ],
+                    "references": [
+                        {
+                            "reference_first_author": {"interpreted": "Doe"},
+                            "reference_title": {"interpreted": "Sample"},
+                            "reference_year": {"interpreted": 1999},
+                            "page": {"interpreted": "10"},
+                        }
+                    ],
+                    "field_slips": [],
+                }
+            ]
+        }
+
+        diff = diff_media_payload(original, updated)
+
+        self.assertTrue(diff["rows_reordered"])
+        totals = {entry["key"]: entry for entry in diff["count_diffs"]}
+        self.assertEqual(totals["rows"]["original"], 1)
+        self.assertEqual(totals["rows"]["current"], 2)
+        self.assertEqual(totals["identifications"]["current"], 2)
+        self.assertEqual(totals["references"]["current"], 1)
+
+    def test_diff_warns_on_unlinked_identifications(self):
+        original = {
+            "accessions": [
+                {
+                    "rows": [
+                        {"_row_id": "row-0", "specimen_suffix": {"interpreted": "A"}},
+                        {"_row_id": "row-1", "specimen_suffix": {"interpreted": "B"}},
+                    ],
+                    "identifications": [
+                        {"taxon": {"interpreted": "Pan"}},
+                        {"taxon": {"interpreted": "Homo"}},
+                    ],
+                    "references": [],
+                    "field_slips": [],
+                }
+            ]
+        }
+        updated = {
+            "accessions": [
+                {
+                    "rows": [
+                        {"_row_id": "row-0", "specimen_suffix": {"interpreted": "A"}},
+                    ],
+                    "identifications": [
+                        {"taxon": {"interpreted": "Pan"}},
+                    ],
+                    "references": [],
+                    "field_slips": [],
+                }
+            ]
+        }
+
+        diff = diff_media_payload(original, updated)
+        warnings = {warning["code"] for warning in diff["warnings"]}
+        self.assertIn("unlinked_identifications", warnings)
 
 class UploadProcessingTests(TestCase):
     """Tests for handling scan uploads using filename timestamps."""
@@ -2426,6 +2525,20 @@ class MediaExpertQCWizardTests(TestCase):
 
         self.client.force_login(self.expert)
 
+    def add_unlinked_identification_warning(self):
+        data = copy.deepcopy(self.media.ocr_data)
+        accessions = data.setdefault("accessions", [])
+        if not accessions:
+            accessions.append({})
+        accession = accessions[0]
+        accession.setdefault("identifications", [])
+        accession["identifications"] = [
+            {"taxon": {"interpreted": "Pan"}},
+            {"taxon": {"interpreted": "Gorilla"}},
+        ]
+        self.media.ocr_data = data
+        self.media.save(update_fields=["ocr_data"])
+
     def build_post_data(self, **overrides):
         data = {
             "accession-collection": str(self.collection.pk),
@@ -2708,6 +2821,52 @@ class MediaExpertQCWizardTests(TestCase):
         self.media.refresh_from_db()
         self.assertEqual(self.media.qc_status, Media.QCStatus.PENDING_EXPERT)
         self.assertEqual(MediaQCComment.objects.count(), 0)
+
+    def test_approval_blocked_when_warnings_unacknowledged(self):
+        self.add_unlinked_identification_warning()
+
+        response = self.client.post(
+            self.get_url(),
+            self.build_post_data(action="approve", qc_comment="Review"),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "identification record",
+        )
+
+        self.media.refresh_from_db()
+        self.assertEqual(self.media.qc_status, Media.QCStatus.PENDING_EXPERT)
+        self.assertFalse(
+            MediaQCLog.objects.filter(
+                media=self.media, field_name="warning_acknowledged"
+            ).exists()
+        )
+
+    def test_acknowledged_warning_is_logged_on_approval(self):
+        self.add_unlinked_identification_warning()
+
+        post_data = self.build_post_data(
+            action="approve", qc_comment="Warnings reviewed"
+        )
+        post_data.setdefault("acknowledge_warnings", [])
+        post_data["acknowledge_warnings"].append("unlinked_identifications")
+
+        response = self.client.post(self.get_url(), post_data)
+
+        self.assertRedirects(response, reverse("dashboard"))
+
+        self.media.refresh_from_db()
+        self.assertEqual(self.media.qc_status, Media.QCStatus.APPROVED)
+
+        log_entry = MediaQCLog.objects.filter(
+            media=self.media, field_name="warning_acknowledged"
+        ).get()
+        self.assertEqual(log_entry.change_type, MediaQCLog.ChangeType.OCR_DATA)
+        self.assertEqual(log_entry.old_value.get("code"), "unlinked_identifications")
+        self.assertTrue(log_entry.new_value.get("acknowledged"))
+        self.assertEqual(log_entry.new_value.get("count"), 1)
 
     def test_approval_blocked_when_accession_exists(self):
         accession = Accession.objects.create(

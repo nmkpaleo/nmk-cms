@@ -93,8 +93,17 @@ from .utils import build_history_entries
 from cms.utils import generate_accessions_from_series
 from cms.upload_processing import process_file
 from cms.ocr_processing import process_pending_scans, describe_accession_conflicts
+from cms.qc import (
+    build_preview_accession,
+    diff_media_payload,
+    ident_payload_has_meaningful_data as qc_ident_payload_has_meaningful_data,
+    interpreted_value as qc_interpreted_value,
+)
 from cms import scanning_utils
 from formtools.wizard.views import SessionWizardView
+
+_ident_payload_has_meaningful_data = qc_ident_payload_has_meaningful_data
+_interpreted_value = qc_interpreted_value
 
 class FieldSlipAutocomplete(autocomplete.Select2QuerySetView):
     def get_queryset(self):
@@ -1148,32 +1157,6 @@ def _form_order_value(form):
         return 0
 
 
-def _interpreted_value(value):
-    if isinstance(value, dict):
-        if 'interpreted' in value:
-            return value.get('interpreted')
-        return None
-    return value
-
-
-def _ident_payload_has_meaningful_data(entry: dict) -> bool:
-    if not isinstance(entry, dict):
-        return False
-    for key in (
-        'taxon',
-        'identification_qualifier',
-        'verbatim_identification',
-        'identification_remarks',
-        'identified_by',
-        'reference',
-        'date_identified',
-    ):
-        interpreted = _interpreted_value(entry.get(key))
-        if interpreted not in (None, ''):
-            return True
-    return False
-
-
 def _ident_payload_has_explicit_fields(entry: dict) -> bool:
     if not isinstance(entry, dict):
         return False
@@ -1218,34 +1201,6 @@ def _set_interpreted(container: dict, key: str, value):
         new_field['interpreted'] = value
     container[key] = new_field
     return new_field
-
-
-def _iter_field_diffs(old, new, path=""):
-    if isinstance(new, dict) and not isinstance(old, dict):
-        old = {}
-    if isinstance(new, list) and not isinstance(old, list):
-        old = []
-    if isinstance(old, dict) and isinstance(new, dict):
-        keys = set(old.keys()) | set(new.keys())
-        for key in keys:
-            if key == 'interpreted':
-                old_val = old.get('interpreted')
-                new_val = new.get('interpreted')
-                if old_val != new_val:
-                    yield path, old_val, new_val
-            else:
-                sub_path = f"{path}.{key}" if path else key
-                yield from _iter_field_diffs(old.get(key), new.get(key), sub_path)
-    elif isinstance(old, list) and isinstance(new, list):
-        length = max(len(old), len(new))
-        for index in range(length):
-            old_value = old[index] if index < len(old) else None
-            new_value = new[index] if index < len(new) else None
-            sub_path = f"{path}[{index}]" if path else f"[{index}]"
-            yield from _iter_field_diffs(old_value, new_value, sub_path)
-    else:
-        if old != new:
-            yield path, old, new
 
 
 def _build_row_contexts(row_formset, ident_formset, specimen_formset):
@@ -1317,8 +1272,16 @@ class MediaQCFormManager:
     def __init__(self, request, media: Media):
         self.request = request
         self.media = media
-        self.original_data = copy.deepcopy(media.ocr_data or {})
-        self.data = copy.deepcopy(media.ocr_data or {})
+
+        stored_data = copy.deepcopy(media.ocr_data or {})
+        snapshot_source = stored_data.get("_original_snapshot")
+        if snapshot_source is None:
+            snapshot_source = copy.deepcopy(stored_data)
+            stored_data["_original_snapshot"] = copy.deepcopy(snapshot_source)
+            media.ocr_data = stored_data
+            media.save(update_fields=["ocr_data"])
+        self.original_data = copy.deepcopy(snapshot_source)
+        self.data = copy.deepcopy(media.ocr_data or stored_data)
         accessions = self.data.setdefault("accessions", [])
         if not accessions:
             accessions.append({})
@@ -1580,6 +1543,7 @@ class MediaQCFormManager:
         self.reference_formset = None
         self.fieldslip_formset = None
         self.row_contexts: list[dict] = []
+        self.last_diff_result: dict[str, object] | None = None
 
     def build_forms(self) -> None:
         if self.request.method == "POST":
@@ -1791,6 +1755,13 @@ class MediaQCFormManager:
         comment_cleaned = cleaned_accession.get("comment")
 
         storage_cache: dict[str, Storage] = {}
+
+        diff_result: dict[str, object] = {
+            "field_diffs": [],
+            "rows_reordered": rows_rearranged,
+            "count_diffs": [],
+            "warnings": [],
+        }
 
         with transaction.atomic():
             _set_interpreted(
@@ -2031,13 +2002,18 @@ class MediaQCFormManager:
             self.accession_payload["field_slips"] = updated_field_slips
             self.data["accessions"][0] = self.accession_payload
 
-            diffs = list(_iter_field_diffs(self.original_data, self.data))
+            diff_result = diff_media_payload(
+                self.original_data,
+                self.data,
+                rows_reordered=rows_rearranged,
+            )
 
             self.media.ocr_data = self.data
             self.media.rows_rearranged = rows_rearranged
             self.media.save(update_fields=["ocr_data", "rows_rearranged"])
 
-        for path, old_val, new_val in diffs:
+        field_diffs = diff_result.get("field_diffs", [])
+        for path, old_val, new_val in field_diffs:
             if not path:
                 continue
             MediaQCLog.objects.create(
@@ -2049,7 +2025,8 @@ class MediaQCFormManager:
                 changed_by=self.request.user,
             )
 
-        return {"rows_rearranged": rows_rearranged, "diffs": diffs}
+        self.last_diff_result = diff_result
+        return diff_result
 
 @login_required
 def MediaInternQCWizard(request, pk):
@@ -2088,6 +2065,17 @@ def MediaInternQCWizard(request, pk):
                     )
                     return redirect("dashboard")
 
+    qc_diff = manager.last_diff_result or diff_media_payload(
+        manager.original_data,
+        manager.data,
+        rows_reordered=media.rows_rearranged,
+    )
+    qc_preview = build_preview_accession(
+        manager.data,
+        manager.accession_form,
+        request_user=request.user,
+    )
+
     context = {
         "media": media,
         "accession_form": manager.accession_form,
@@ -2101,6 +2089,9 @@ def MediaInternQCWizard(request, pk):
         "storage_datalist_id": AccessionRowQCForm.storage_datalist_id,
         "qc_comments": qc_comments,
         "latest_qc_comment": latest_qc_comment,
+        "qc_diff": qc_diff,
+        "qc_preview": qc_preview,
+        "qc_acknowledged_warnings": set(),
     }
 
     return render(request, "cms/qc/intern_wizard.html", context)
@@ -2223,14 +2214,20 @@ def MediaExpertQCWizard(request, pk):
     action = "save"
     selected_resolution: dict[str, dict[str, object]] = {}
     conflict_details = describe_accession_conflicts(media)
+    acknowledged_warnings: set[str] = set()
+    diff_result: dict[str, object] | None = None
+    warnings_map: dict[str, dict[str, object]] = {}
 
     if request.method == "POST":
         qc_comment = (request.POST.get("qc_comment") or "").strip()
         action = request.POST.get("action") or "save"
+        acknowledged_warnings = {
+            value for value in request.POST.getlist("acknowledge_warnings") if value
+        }
 
         if manager.forms_valid():
             try:
-                manager.save()
+                diff_result = manager.save()
             except ValidationError as exc:
                 for message in _collect_validation_messages(exc):
                     manager.accession_form.add_error(None, message)
@@ -2245,6 +2242,15 @@ def MediaExpertQCWizard(request, pk):
                         request.POST, conflict_details
                     )
                     selected_resolution = resolution_map
+
+                if diff_result:
+                    warnings_map = {
+                        warning.get("code"): warning
+                        for warning in diff_result.get("warnings", [])
+                        if warning.get("code")
+                    }
+                else:
+                    warnings_map = {}
 
                 if action == "approve":
                     processed = (media.ocr_data or {}).get("_processed_accessions") or []
@@ -2263,34 +2269,65 @@ def MediaExpertQCWizard(request, pk):
                             manager.accession_form.add_error(None, message)
                             messages.error(request, message)
                     else:
-                        try:
-                            with transaction.atomic():
-                                media.transition_qc(
-                                    Media.QCStatus.APPROVED,
-                                    user=user,
-                                    note=qc_comment or None,
-                                    resolution=resolution_map or None,
+                        unresolved_warnings = [
+                            warning
+                            for code, warning in warnings_map.items()
+                            if code not in acknowledged_warnings
+                        ]
+                        if unresolved_warnings:
+                            for warning in unresolved_warnings:
+                                message = warning.get("message") or (
+                                    "Review and acknowledge outstanding QC warnings before approving."
                                 )
-                        except ValidationError as exc:
-                            for message in _collect_validation_messages(exc):
                                 manager.accession_form.add_error(None, message)
                                 messages.error(request, message)
-                            conflict_details = describe_accession_conflicts(media)
-                            selected_resolution = resolution_map
-                        except Exception as exc:
-                            message = f"Importer error: {exc}"
-                            manager.accession_form.add_error(None, message)
-                            messages.error(request, message)
-                            conflict_details = describe_accession_conflicts(media)
-                            selected_resolution = resolution_map
                         else:
-                            media.refresh_from_db()
-                            _create_qc_comment(media, qc_comment, user)
-                            messages.success(
-                                request,
-                                "Media approved and accessions created.",
-                            )
-                            return redirect("dashboard")
+                            try:
+                                with transaction.atomic():
+                                    media.transition_qc(
+                                        Media.QCStatus.APPROVED,
+                                        user=user,
+                                        note=qc_comment or None,
+                                        resolution=resolution_map or None,
+                                    )
+                            except ValidationError as exc:
+                                for message in _collect_validation_messages(exc):
+                                    manager.accession_form.add_error(None, message)
+                                    messages.error(request, message)
+                                conflict_details = describe_accession_conflicts(media)
+                                selected_resolution = resolution_map
+                            except Exception as exc:
+                                message = f"Importer error: {exc}"
+                                manager.accession_form.add_error(None, message)
+                                messages.error(request, message)
+                                conflict_details = describe_accession_conflicts(media)
+                                selected_resolution = resolution_map
+                            else:
+                                media.refresh_from_db()
+                                for code in acknowledged_warnings:
+                                    warning = warnings_map.get(code)
+                                    if not warning:
+                                        continue
+                                    MediaQCLog.objects.create(
+                                        media=media,
+                                        change_type=MediaQCLog.ChangeType.OCR_DATA,
+                                        field_name="warning_acknowledged",
+                                        old_value={"code": code},
+                                        new_value={
+                                            "acknowledged": True,
+                                            "count": warning.get("count"),
+                                        },
+                                        description=(
+                                            f"QC warning acknowledged: {warning.get('label')}"
+                                        ),
+                                        changed_by=user,
+                                    )
+                                _create_qc_comment(media, qc_comment, user)
+                                messages.success(
+                                    request,
+                                    "Media approved and accessions created.",
+                                )
+                                return redirect("dashboard")
                 elif action == "return_intern":
                     try:
                         media.transition_qc(
@@ -2350,6 +2387,17 @@ def MediaExpertQCWizard(request, pk):
     _annotate_conflict_selections(conflict_details, selected_resolution)
     qc_comments = _get_qc_comments(media)
 
+    qc_diff = diff_result or manager.last_diff_result or diff_media_payload(
+        manager.original_data,
+        manager.data,
+        rows_reordered=media.rows_rearranged,
+    )
+    qc_preview = build_preview_accession(
+        manager.data,
+        manager.accession_form,
+        request_user=request.user,
+    )
+
     context = {
         "media": media,
         "accession_form": manager.accession_form,
@@ -2364,6 +2412,9 @@ def MediaExpertQCWizard(request, pk):
         "qc_comment": qc_comment,
         "qc_comments": qc_comments,
         "qc_conflicts": conflict_details,
+        "qc_diff": qc_diff,
+        "qc_preview": qc_preview,
+        "qc_acknowledged_warnings": acknowledged_warnings,
     }
 
     return render(request, "cms/qc/expert_wizard.html", context)
