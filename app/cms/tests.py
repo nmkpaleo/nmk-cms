@@ -9,6 +9,7 @@ from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.timezone import now
+from django.utils import timezone as django_timezone
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.conf import settings
@@ -2836,13 +2837,22 @@ class UploadProcessingTests(TestCase):
         src.write_bytes(b"data")
         created = scanning_utils.to_nairobi(self.scanning.start_time) + timedelta(minutes=1)
         stat_result = SimpleNamespace(st_ctime=created.timestamp(), st_mode=0)
+
         def fake_fromtimestamp(timestamp, tz=None):
             self.assertEqual(tz, timezone.utc)
             return datetime.fromtimestamp(timestamp, tz=timezone.utc).replace(tzinfo=None)
 
+        original_to_nairobi = scanning_utils.to_nairobi
+
+        def wrapped_to_nairobi(dt):
+            self.assertFalse(django_timezone.is_naive(dt))
+            self.assertEqual(dt.tzinfo, timezone.utc)
+            return original_to_nairobi(dt)
+
         with patch("cms.upload_processing.datetime.fromtimestamp", side_effect=fake_fromtimestamp):
-            with patch("pathlib.Path.stat", return_value=stat_result):
-                process_file(src)
+            with patch("cms.scanning_utils.to_nairobi", side_effect=wrapped_to_nairobi):
+                with patch("pathlib.Path.stat", return_value=stat_result):
+                    process_file(src)
         media = Media.objects.get(media_location=f"uploads/pending/{filename}")
         self.assertEqual(media.scanning, self.scanning)
         import shutil

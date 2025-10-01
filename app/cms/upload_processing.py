@@ -21,15 +21,19 @@ NAME_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}\(\d+\)\.png$")
 
 def create_media(path: Path) -> None:
     """Create a Media record for a newly accepted scan."""
-    created = datetime.fromtimestamp(path.stat().st_ctime, tz=timezone.utc)
-    if django_timezone.is_naive(created):
-        created = django_timezone.make_aware(created, timezone.utc)
+    filesystem_created = datetime.fromtimestamp(
+        path.stat().st_ctime, tz=timezone.utc
+    )
+    if django_timezone.is_naive(filesystem_created):
+        filesystem_created = django_timezone.make_aware(
+            filesystem_created, timezone.utc
+        )
     logger.info(
         "Processing uploaded media %s with filesystem ctime %s (UTC)",
         path,
-        created.isoformat(),
+        filesystem_created.isoformat(),
     )
-    created = scanning_utils.to_nairobi(created)
+    created = scanning_utils.to_nairobi(filesystem_created)
     scanning_utils.auto_complete_scans()
     scan = scanning_utils.find_scan_for_timestamp(created)
     if scan:
