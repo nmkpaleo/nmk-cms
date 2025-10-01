@@ -2471,7 +2471,15 @@ def upload_scan(request):
             fs = FileSystemStorage(location=incoming_dir)
             for file in files:
                 saved_name = fs.save(file.name, file)
-                process_file(incoming_dir / saved_name)
+                saved_path = incoming_dir / saved_name
+                if saved_name != file.name:
+                    desired_path = incoming_dir / file.name
+                    if desired_path.exists():
+                        desired_path.unlink()
+                    saved_path.rename(desired_path)
+                    saved_name = file.name
+                    saved_path = desired_path
+                process_file(saved_path)
                 messages.success(request, f'Uploaded {file.name}')
             return redirect('admin-upload-scan')
         else:

@@ -140,6 +140,44 @@ class UploadProcessingTests(TestCase):
         media = Media.objects.get(media_location=f"uploads/pending/{filename}")
         self.assertEqual(media.scanning, self.scanning)
 
+    def test_upload_scan_restores_original_name_after_storage_collision(self):
+        incoming = Path(settings.MEDIA_ROOT) / "uploads" / "incoming"
+        incoming.mkdir(parents=True, exist_ok=True)
+        filename = "2025-09-09(2).png"
+        original = incoming / filename
+        original.write_bytes(b"original")
+
+        self.user.is_staff = True
+        self.user.save()
+
+        upload = SimpleUploadedFile(filename, b"new-data", content_type="image/png")
+        collision_name = f"{Path(filename).stem}_pNGQW5u.png"
+
+        def fake_save(storage_self, name, content, max_length=None):
+            saved_path = incoming / collision_name
+            saved_path.write_bytes(b"uploaded")
+            return collision_name
+
+        processed_paths = []
+
+        def fake_process(path):
+            processed_paths.append(path)
+            self.assertEqual(path.name, filename)
+            self.assertTrue(path.exists())
+            return path
+
+        url = reverse("admin-upload-scan")
+        self.client.force_login(self.user)
+
+        with patch("cms.views.FileSystemStorage.save", new=fake_save):
+            with patch("cms.views.process_file", side_effect=fake_process):
+                response = self.client.post(url, {"files": [upload]}, follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(processed_paths), 1)
+        self.assertTrue((incoming / filename).exists())
+        self.assertFalse((incoming / collision_name).exists())
+
 
 class GenerateAccessionsFromSeriesTests(TestCase):
     def setUp(self):
