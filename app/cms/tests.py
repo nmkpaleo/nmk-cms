@@ -1,5 +1,6 @@
 from unittest.mock import patch
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 import json
 from zoneinfo import ZoneInfo
 
@@ -56,6 +57,88 @@ from cms.ocr_processing import (
     UNKNOWN_FIELD_NUMBER_PREFIX,
     _apply_rows,
 )
+
+
+class UploadProcessingTests(TestCase):
+    """Tests for handling filesystem timestamps during upload processing."""
+
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username="intern", password="pass")
+        patcher = patch("cms.models.get_current_user", return_value=self.user)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.drawer = DrawerRegister.objects.create(
+            code="DRW", description="Drawer", estimated_documents=1
+        )
+        start = scanning_utils.nairobi_now() - timedelta(minutes=5)
+        end = start + timedelta(minutes=10)
+        self.scanning = Scanning.objects.create(
+            drawer=self.drawer, user=self.user, start_time=start, end_time=end
+        )
+
+    def tearDown(self):
+        incoming_root = Path(settings.MEDIA_ROOT) / "uploads"
+        if incoming_root.exists():
+            import shutil
+
+            shutil.rmtree(incoming_root)
+
+    def test_scanning_lookup_uses_pre_move_ctime(self):
+        incoming = Path(settings.MEDIA_ROOT) / "uploads" / "incoming"
+        incoming.mkdir(parents=True, exist_ok=True)
+        filename = "2025-09-09(1).png"
+        src = incoming / filename
+        src.write_bytes(b"data")
+
+        created = (self.scanning.start_time + timedelta(minutes=1)).astimezone(
+            timezone.utc
+        )
+        stat_result = SimpleNamespace(
+            st_ctime=created.timestamp(),
+            st_mode=0,
+        )
+
+        call_counter = {"count": 0}
+
+        def fake_fromtimestamp(timestamp, tz):
+            call_counter["count"] += 1
+            self.assertEqual(timestamp, stat_result.st_ctime)
+            self.assertEqual(tz, timezone.utc)
+            naive = datetime.utcfromtimestamp(timestamp)
+            return naive.replace(tzinfo=None)
+
+        original_stat = Path.stat
+
+        def fake_stat(path_self):
+            if path_self == src:
+                return stat_result
+            return original_stat(path_self)
+
+        original_to_nairobi = scanning_utils.to_nairobi
+        to_nairobi_calls = []
+
+        def wrapped_to_nairobi(dt):
+            to_nairobi_calls.append(dt)
+            if len(to_nairobi_calls) == 1:
+                self.assertFalse(django_timezone.is_naive(dt))
+                self.assertEqual(dt.tzinfo, timezone.utc)
+            return original_to_nairobi(dt)
+
+        with patch("pathlib.Path.stat", new=fake_stat):
+            with patch(
+                "cms.upload_processing.datetime",
+                new=SimpleNamespace(fromtimestamp=fake_fromtimestamp),
+            ):
+                with patch(
+                    "cms.scanning_utils.to_nairobi", side_effect=wrapped_to_nairobi
+                ):
+                    process_file(src)
+
+        self.assertEqual(call_counter["count"], 1)
+        self.assertGreaterEqual(len(to_nairobi_calls), 1)
+        media = Media.objects.get(media_location=f"uploads/pending/{filename}")
+        self.assertEqual(media.scanning, self.scanning)
 
 
 class GenerateAccessionsFromSeriesTests(TestCase):

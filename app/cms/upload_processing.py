@@ -18,38 +18,16 @@ REJECTED = Path(settings.MEDIA_ROOT) / "uploads" / "rejected"
 
 NAME_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}\(\d+\)\.png$")
 
-def _fromtimestamp_utc(timestamp: float) -> datetime:
-    """Return a UTC-aware datetime built from ``timestamp``."""
-
-    return datetime.fromtimestamp(timestamp, tz=timezone.utc)
-
-
-def _extract_birthtime(stat_result) -> float:
-    """Return the filesystem birthtime stored on ``stat_result``.
-
-    The upload pipeline must rely on the original creation moment that the
-    scanner saved to disk. Any fallbacks (mtime/ctime) reflect post-processing
-    operations and risk matching the file to the wrong scanning session.
-    """
-
-    try:
-        birthtime = stat_result.st_birthtime
-    except AttributeError as exc:  # pragma: no cover - platform dependent
-        raise AttributeError("Filesystem birthtime is required for scan matching") from exc
-
-    if birthtime is None:
-        raise AttributeError("Filesystem birthtime is required for scan matching")
-
-    return birthtime
-
 
 def create_media(
     path: Path, *, filesystem_timestamp: float | None = None
 ) -> None:
     """Create a Media record for a newly accepted scan."""
     if filesystem_timestamp is None:
-        filesystem_timestamp = _extract_birthtime(path.stat())
-    filesystem_created = _fromtimestamp_utc(filesystem_timestamp)
+        filesystem_timestamp = path.stat().st_ctime
+    filesystem_created = datetime.fromtimestamp(
+        filesystem_timestamp, tz=timezone.utc
+    )
     if django_timezone.is_naive(filesystem_created):
         filesystem_created = django_timezone.make_aware(
             filesystem_created, timezone.utc
@@ -97,7 +75,7 @@ def process_file(src: Path) -> Path:
         dest = PENDING / src.name
         dest.parent.mkdir(parents=True, exist_ok=True)
         stat_result = src.stat()
-        filesystem_timestamp = _extract_birthtime(stat_result)
+        filesystem_timestamp = stat_result.st_ctime
         shutil.move(src, dest)
         create_media(dest, filesystem_timestamp=filesystem_timestamp)
     else:
