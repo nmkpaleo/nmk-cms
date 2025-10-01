@@ -527,53 +527,35 @@
         </div>
       </section>
 
-      <section class="qc-section">
+      <section class="qc-section" data-controller="qc-references" data-formset-prefix="reference">
         <div class="qc-section-heading w3-border-bottom w3-padding-small">
           <h3>References</h3>
           <span class="qc-inline-note">Verify bibliographic entries from the card back.</span>
         </div>
+        <div class="w3-margin-bottom">
+          <button
+            type="button"
+            class="w3-button w3-tiny w3-blue w3-round"
+            data-action="click->qc-references#addReference"
+          >
+            Add reference
+          </button>
+        </div>
 
-        {% if reference_formset.forms %}
+        <div data-qc-references-target="container">
           {% for ref_form in reference_formset %}
-            <div class="qc-card">
-              {% for hidden in ref_form.hidden_fields %}
-                {{ hidden }}
-              {% endfor %}
-              <div class="qc-field-grid">
-                <div class="qc-field qc-field--full">
-                  <label class="qc-label" for="{{ ref_form.first_author.id_for_label }}">{{ ref_form.first_author.label }}:</label>
-                  <div class="qc-control">
-                    {{ ref_form.first_author }}
-                    {{ ref_form.first_author.errors }}
-                  </div>
-                </div>
-                <div class="qc-field qc-field--full">
-                  <label class="qc-label" for="{{ ref_form.title.id_for_label }}">{{ ref_form.title.label }}:</label>
-                  <div class="qc-control">
-                    {{ ref_form.title }}
-                    {{ ref_form.title.errors }}
-                  </div>
-                </div>
-                <div class="qc-field">
-                  <label class="qc-label" for="{{ ref_form.year.id_for_label }}">{{ ref_form.year.label }}:</label>
-                  <div class="qc-control">
-                    {{ ref_form.year }}
-                    {{ ref_form.year.errors }}
-                  </div>
-                </div>
-                <div class="qc-field">
-                  <label class="qc-label" for="{{ ref_form.page.id_for_label }}">{{ ref_form.page.label }}:</label>
-                  <div class="qc-control">
-                    {{ ref_form.page }}
-                    {{ ref_form.page.errors }}
-                  </div>
-                </div>
-              </div>
-            </div>
+            {% include "cms/qc/partials/reference_card.html" with ref_form=ref_form %}
           {% endfor %}
-        {% else %}
-          <p class="qc-inline-note">No references were interpreted for this accession.</p>
-        {% endif %}
+        </div>
+        <p
+          class="qc-inline-note"
+          data-qc-references-target="emptyMessage"{% if reference_formset.forms %} hidden{% endif %}
+        >
+          No references were interpreted for this accession.
+        </p>
+        <template data-qc-references-target="template">
+          {% include "cms/qc/partials/reference_card.html" with ref_form=reference_formset.empty_form %}
+        </template>
       </section>
 
       <section class="qc-section">
@@ -704,6 +686,7 @@
   {{ block.super }}
   <script src="https://unpkg.com/@hotwired/stimulus/dist/stimulus.umd.js"></script>
   <script src="{% static 'cms/js/controllers/qc_rows_controller.js' %}"></script>
+  <script src="{% static 'cms/js/controllers/qc_references_controller.js' %}"></script>
   <script src="{% static 'cms/js/media_intern_qc.js' %}"></script>
   <script>
     (function () {
@@ -728,6 +711,14 @@
       } else {
         console.error(
           'QcRowsController not found on window (UMD/global). If this file switches to ES modules, use an ES module setup.'
+        );
+      }
+
+      if (window.QcReferencesController) {
+        app.register('qc-references', window.QcReferencesController);
+      } else {
+        console.error(
+          'QcReferencesController not found on window (UMD/global). Ensure the controller script is included.'
         );
       }
     })();

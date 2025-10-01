@@ -1099,8 +1099,8 @@ SpecimenQCFormSet = formset_factory(AccessionRowSpecimenQCForm, extra=0, can_del
 
 
 class AccessionReferenceQCForm(forms.Form):
-    ref_id = forms.CharField(widget=forms.HiddenInput())
-    order = forms.IntegerField(widget=forms.HiddenInput())
+    ref_id = forms.CharField(required=False, widget=forms.HiddenInput())
+    order = forms.IntegerField(required=False, widget=forms.HiddenInput())
     first_author = forms.CharField(label="First author", required=False, max_length=255)
     title = forms.CharField(label="Title", required=False, max_length=255)
     year = forms.CharField(label="Year", required=False, max_length=32)
@@ -1681,11 +1681,25 @@ class MediaQCFormManager:
             cleaned = form.cleaned_data
             if not cleaned:
                 continue
-            ref_id = (
-                cleaned.get("ref_id")
-                or form.initial.get("ref_id")
-                or f"ref-{len(reference_entries)}"
+
+            def _normalize(value):
+                if isinstance(value, str):
+                    value = value.strip()
+                return value or None
+
+            first_author = _normalize(cleaned.get("first_author"))
+            title = _normalize(cleaned.get("title"))
+            year = _normalize(cleaned.get("year"))
+            page = _normalize(cleaned.get("page"))
+
+            if not any((first_author, title, year, page)):
+                continue
+
+            ref_id = _normalize(cleaned.get("ref_id")) or _normalize(
+                form.initial.get("ref_id")
             )
+            if not ref_id:
+                ref_id = f"ref-{len(reference_entries)}"
             try:
                 order_value = int(cleaned.get("order"))
             except (TypeError, ValueError):
@@ -1694,10 +1708,10 @@ class MediaQCFormManager:
                 {
                     "ref_id": ref_id,
                     "order": order_value,
-                    "first_author": cleaned.get("first_author"),
-                    "title": cleaned.get("title"),
-                    "year": cleaned.get("year"),
-                    "page": cleaned.get("page"),
+                    "first_author": first_author,
+                    "title": title,
+                    "year": year,
+                    "page": page,
                 }
             )
 
