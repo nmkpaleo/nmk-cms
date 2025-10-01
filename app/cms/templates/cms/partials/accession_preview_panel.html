@@ -16,11 +16,13 @@
           <th>Type specimen:</th>
           <td>{{ accession.type_status }}</td>
         </tr>
-        {% if not preview_mode and (user.is_superuser or user|has_group:"Collection Managers") %}
+        {% if not preview_mode %}
+          {% if user.is_superuser or user|has_group:"Collection Managers" %}
         <tr>
           <th>Accessioned by:</th>
           <td>{{ accession.accessioned_by }}</td>
         </tr>
+          {% endif %}
         {% endif %}
         <tr>
           <th>General comment:</th>
