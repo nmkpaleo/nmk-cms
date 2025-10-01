@@ -77,33 +77,26 @@ class UploadProcessingTests(TestCase):
         import shutil
         shutil.rmtree(incoming.parent)
 
-    def test_scanning_lookup_falls_back_to_mtime(self):
+    def test_missing_birthtime_aborts_processing(self):
         incoming = Path(settings.MEDIA_ROOT) / "uploads" / "incoming"
         incoming.mkdir(parents=True, exist_ok=True)
         filename = "2025-09-09(2).png"
         src = incoming / filename
         src.write_bytes(b"data")
-        created = scanning_utils.to_nairobi(self.scanning.start_time) + timedelta(minutes=2)
-        mtime = created.timestamp()
-        stat_result = SimpleNamespace(st_mtime=mtime, st_ctime=mtime + 120, st_mode=0)
+        stat_result = SimpleNamespace(st_mode=0)
 
-        def fake_fromtimestamp(timestamp):
-            self.assertEqual(timestamp, mtime)
-            return datetime.fromtimestamp(timestamp, tz=timezone.utc)
+        original_stat = Path.stat
 
-        with patch("cms.upload_processing._fromtimestamp_utc", side_effect=fake_fromtimestamp):
-            original_stat = Path.stat
+        def fake_stat(path_self):
+            if path_self == src:
+                return stat_result
+            return original_stat(path_self)
 
-            def fake_stat(path_self):
-                if path_self == src:
-                    return stat_result
-                return original_stat(path_self)
-
-            with patch("pathlib.Path.stat", new=fake_stat):
+        with patch("pathlib.Path.stat", new=fake_stat):
+            with self.assertRaises(AttributeError):
                 process_file(src)
 
-        media = Media.objects.get(media_location=f"uploads/pending/{filename}")
-        self.assertEqual(media.scanning, self.scanning)
+        self.assertFalse(Media.objects.filter(media_location=f"uploads/pending/{filename}").exists())
         import shutil
         shutil.rmtree(incoming.parent)
 
