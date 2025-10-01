@@ -1,5 +1,5 @@
 from unittest.mock import patch
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 import json
 from zoneinfo import ZoneInfo
@@ -2836,8 +2836,13 @@ class UploadProcessingTests(TestCase):
         src.write_bytes(b"data")
         created = scanning_utils.to_nairobi(self.scanning.start_time) + timedelta(minutes=1)
         stat_result = SimpleNamespace(st_ctime=created.timestamp(), st_mode=0)
-        with patch("pathlib.Path.stat", return_value=stat_result):
-            process_file(src)
+        def fake_fromtimestamp(timestamp, tz=None):
+            self.assertEqual(tz, timezone.utc)
+            return datetime.fromtimestamp(timestamp, tz=timezone.utc).replace(tzinfo=None)
+
+        with patch("cms.upload_processing.datetime.fromtimestamp", side_effect=fake_fromtimestamp):
+            with patch("pathlib.Path.stat", return_value=stat_result):
+                process_file(src)
         media = Media.objects.get(media_location=f"uploads/pending/{filename}")
         self.assertEqual(media.scanning, self.scanning)
         import shutil
