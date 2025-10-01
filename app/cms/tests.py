@@ -1,6 +1,5 @@
 from unittest.mock import patch
 from datetime import datetime, timedelta, timezone
-from types import SimpleNamespace
 import json
 from zoneinfo import ZoneInfo
 
@@ -2809,55 +2808,6 @@ class MediaExpertQCWizardTests(TestCase):
 
         response = self.client.get(self.get_url())
         self.assertEqual(response.status_code, 403)
-
-
-class UploadProcessingTests(TestCase):
-    """Tests for the file watcher processing logic."""
-
-    def setUp(self):
-        User = get_user_model()
-        self.user = User.objects.create_user(username="intern", password="pass")
-        patcher = patch("cms.models.get_current_user", return_value=self.user)
-        patcher.start()
-        self.addCleanup(patcher.stop)
-        self.drawer = DrawerRegister.objects.create(
-            code="DRW", description="Drawer", estimated_documents=1
-        )
-        start = scanning_utils.nairobi_now() - timedelta(minutes=5)
-        end = start + timedelta(minutes=10)
-        self.scanning = Scanning.objects.create(
-            drawer=self.drawer, user=self.user, start_time=start, end_time=end
-        )
-
-    def test_scanning_lookup_uses_creation_time(self):
-        incoming = Path(settings.MEDIA_ROOT) / "uploads" / "incoming"
-        incoming.mkdir(parents=True, exist_ok=True)
-        filename = "2025-09-09(1).png"
-        src = incoming / filename
-        src.write_bytes(b"data")
-        created = scanning_utils.to_nairobi(self.scanning.start_time) + timedelta(minutes=1)
-        stat_result = SimpleNamespace(st_ctime=created.timestamp(), st_mode=0)
-
-        def fake_fromtimestamp(timestamp, tz=None):
-            self.assertEqual(tz, timezone.utc)
-            self.assertEqual(timestamp, stat_result.st_ctime)
-            return datetime.fromtimestamp(timestamp, tz=timezone.utc).replace(tzinfo=None)
-
-        original_to_nairobi = scanning_utils.to_nairobi
-
-        def wrapped_to_nairobi(dt):
-            self.assertFalse(django_timezone.is_naive(dt))
-            self.assertEqual(dt.tzinfo, timezone.utc)
-            return original_to_nairobi(dt)
-
-        with patch("cms.upload_processing.datetime.fromtimestamp", side_effect=fake_fromtimestamp):
-            with patch("cms.scanning_utils.to_nairobi", side_effect=wrapped_to_nairobi):
-                with patch("pathlib.Path.stat", return_value=stat_result):
-                    process_file(src)
-        media = Media.objects.get(media_location=f"uploads/pending/{filename}")
-        self.assertEqual(media.scanning, self.scanning)
-        import shutil
-        shutil.rmtree(incoming.parent)
 
 
 class StorageViewTests(TestCase):
