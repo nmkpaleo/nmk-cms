@@ -1,3 +1,4 @@
+import logging
 import re
 import shutil
 from pathlib import Path
@@ -8,6 +9,8 @@ from django.utils import timezone as django_timezone
 
 from .models import Media
 from . import scanning_utils
+
+logger = logging.getLogger("cms.upload_processing")
 
 INCOMING = Path(settings.MEDIA_ROOT) / "uploads" / "incoming"
 PENDING = Path(settings.MEDIA_ROOT) / "uploads" / "pending"
@@ -21,9 +24,29 @@ def create_media(path: Path) -> None:
     created = datetime.fromtimestamp(path.stat().st_ctime, tz=timezone.utc)
     if django_timezone.is_naive(created):
         created = django_timezone.make_aware(created, timezone.utc)
+    logger.info(
+        "Processing uploaded media %s with filesystem ctime %s (UTC)",
+        path,
+        created.isoformat(),
+    )
     created = scanning_utils.to_nairobi(created)
     scanning_utils.auto_complete_scans()
     scan = scanning_utils.find_scan_for_timestamp(created)
+    if scan:
+        logger.info(
+            "Matched media %s to scanning #%s (%s -> %s) using Nairobi timestamp %s",
+            path,
+            scan.pk,
+            scan.start_time,
+            scan.end_time,
+            created.isoformat(),
+        )
+    else:
+        logger.warning(
+            "No scanning found for media %s using Nairobi timestamp %s",
+            path,
+            created.isoformat(),
+        )
     media = Media(
         type="photo",
         license="CC0",
