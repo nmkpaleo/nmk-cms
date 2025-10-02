@@ -1,0 +1,83 @@
+{% extends "base_generic.html" %}
+
+{% block title %}{{ queue_title }}{% endblock %}
+
+{% block content %}
+  <div class="w3-container">
+    <h1>{{ queue_title }}</h1>
+    {% if queue_description %}
+      <p>{{ queue_description }}</p>
+    {% endif %}
+
+    {% if media_list %}
+      <div class="w3-responsive">
+        <table class="w3-table w3-striped w3-bordered">
+          <thead>
+            <tr>
+              <th>Media</th>
+              <th>Status</th>
+              <th>Accession / Row</th>
+              <th>Rows rearranged</th>
+              <th>QC comments</th>
+              <th>Updated</th>
+              {% if queue_action_url_name %}
+                <th>Action</th>
+              {% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for media in media_list %}
+              <tr>
+                <td>
+                  {% if media.file_name %}
+                    {{ media.file_name }}
+                  {% else %}
+                    {{ media.media_location }}
+                  {% endif %}
+                </td>
+                <td>{{ media.get_qc_status_display }}</td>
+                <td>
+                  {% if media.accession_row %}
+                    {{ media.accession_row }}
+                  {% elif media.accession %}
+                    {{ media.accession }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+                <td>
+                  {% if media.rows_rearranged %}
+                    Yes
+                  {% else %}
+                    No
+                  {% endif %}
+                </td>
+                <td>{{ media.comment_count|default:0 }}</td>
+                <td>{{ media.modified_on|date:"Y-m-d H:i" }}</td>
+                {% if queue_action_url_name %}
+                  <td>
+                    <a href="{% url queue_action_url_name media.uuid %}" class="w3-button w3-small w3-blue">{{ queue_action_label }}</a>
+                  </td>
+                {% endif %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% if is_paginated %}
+        <div class="w3-bar w3-center w3-margin-top">
+          {% if page_obj.has_previous %}
+            <a class="w3-button" href="?page={{ page_obj.previous_page_number }}">&laquo; Previous</a>
+          {% endif %}
+          <span class="w3-bar-item">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+          {% if page_obj.has_next %}
+            <a class="w3-button" href="?page={{ page_obj.next_page_number }}">Next &raquo;</a>
+          {% endif %}
+        </div>
+      {% endif %}
+    {% else %}
+      <p>{{ queue_empty_message }}</p>
+    {% endif %}
+  </div>
+{% endblock %}

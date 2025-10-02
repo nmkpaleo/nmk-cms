@@ -15,6 +15,8 @@ import string # For generating specimen number
 import uuid
 User = get_user_model()
 
+from .notifications import notify_media_qc_transition
+
 
 class InventoryStatus(models.TextChoices):
     """Status options for inventory sessions."""
@@ -1388,6 +1390,13 @@ class Media(BaseModel):
         if note:
             self._qc_transition_note = note
         self.save()
+        notify_media_qc_transition(
+            self,
+            old_status,
+            new_status,
+            user=user,
+            note=note,
+        )
         return {"created": created, "conflicts": conflicts}
 
 

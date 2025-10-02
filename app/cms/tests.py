@@ -157,6 +157,152 @@ class MediaQCDiffTests(TestCase):
         warnings = {warning["code"] for warning in diff["warnings"]}
         self.assertIn("unlinked_identifications", warnings)
 
+
+class DashboardQueueTests(TestCase):
+    def setUp(self):
+        self.User = get_user_model()
+        self.intern_group = Group.objects.create(name="Interns")
+        self.curator_group = Group.objects.create(name="Curators")
+        self.collection_manager_group = Group.objects.create(name="Collection Managers")
+
+        self.creator = self.User.objects.create_user(username="creator", password="pass")
+        patcher = patch("cms.models.get_current_user", return_value=self.creator)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+        self.media_pending_intern = Media.objects.create(
+            file_name="pending-intern",
+            qc_status=Media.QCStatus.PENDING_INTERN,
+        )
+        self.media_pending_expert = Media.objects.create(
+            file_name="pending-expert",
+            qc_status=Media.QCStatus.PENDING_EXPERT,
+        )
+        self.media_returned = Media.objects.create(
+            file_name="returned",
+            qc_status=Media.QCStatus.REJECTED,
+            rows_rearranged=True,
+        )
+        log = MediaQCLog.objects.create(
+            media=self.media_returned,
+            change_type=MediaQCLog.ChangeType.STATUS,
+            field_name="qc_status",
+            old_value={"qc_status": Media.QCStatus.PENDING_EXPERT},
+            new_value={"qc_status": Media.QCStatus.REJECTED},
+        )
+        MediaQCComment.objects.create(log=log, comment="Needs fixes")
+
+    def _create_user(self, username: str, groups: tuple[Group, ...] = ()):
+        user = self.User.objects.create_user(username=username, password="pass")
+        for group in groups:
+            user.groups.add(group)
+        return user
+
+    def test_dashboard_sections_for_intern(self):
+        user = self._create_user("intern", groups=(self.intern_group,))
+        self.client.force_login(user)
+        response = self.client.get(reverse("dashboard"))
+        self.assertEqual(response.status_code, 200)
+        sections = response.context["qc_sections"]
+        labels = {section["label"] for section in sections}
+        self.assertIn("Pending intern review", labels)
+        self.assertIn("Returned for fixes", labels)
+        self.assertNotIn("Needs expert attention", labels)
+        returned_section = next(section for section in sections if section["key"] == "returned")
+        self.assertEqual([media.pk for media in returned_section["entries"]], [self.media_returned.pk])
+        self.assertEqual(response.context["qc_extra_links"], [])
+
+    def test_dashboard_sections_for_expert(self):
+        user = self._create_user("expert", groups=(self.curator_group,))
+        self.client.force_login(user)
+        response = self.client.get(reverse("dashboard"))
+        self.assertEqual(response.status_code, 200)
+        sections = response.context["qc_sections"]
+        labels = {section["label"] for section in sections}
+        self.assertIn("Pending intern review", labels)
+        self.assertIn("Needs expert attention", labels)
+        self.assertIn("Returned for fixes", labels)
+        extra_labels = {extra["label"] for extra in response.context["qc_extra_links"]}
+        self.assertIn("Media with rearranged rows", extra_labels)
+        self.assertIn("Media with QC comments", extra_labels)
+
+    def test_dashboard_for_user_without_role(self):
+        user = self._create_user("visitor")
+        self.client.force_login(user)
+        response = self.client.get(reverse("dashboard"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["no_role"])
+        self.assertEqual(response.context["qc_sections"], [])
+
+    def test_rows_rearranged_requires_expert(self):
+        user = self._create_user("intern-only", groups=(self.intern_group,))
+        self.client.force_login(user)
+        response = self.client.get(reverse("media_qc_rows_rearranged"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_rows_rearranged_list_for_expert(self):
+        user = self._create_user("manager", groups=(self.collection_manager_group,))
+        self.client.force_login(user)
+        response = self.client.get(reverse("media_qc_rows_rearranged"))
+        self.assertContains(response, self.media_returned.file_name)
+
+    def test_with_comments_queue_filters_correctly(self):
+        user = self._create_user("manager-two", groups=(self.collection_manager_group,))
+        self.client.force_login(user)
+        response = self.client.get(reverse("media_qc_with_comments"))
+        self.assertContains(response, self.media_returned.file_name)
+        self.assertNotContains(response, self.media_pending_expert.file_name)
+
+    def test_pending_intern_queue_access(self):
+        intern_user = self._create_user("queue-intern", groups=(self.intern_group,))
+        self.client.force_login(intern_user)
+        response = self.client.get(reverse("media_qc_pending_intern"))
+        self.assertContains(response, self.media_pending_intern.file_name)
+
+    def test_pending_intern_queue_access_for_expert(self):
+        expert_user = self._create_user("queue-expert", groups=(self.curator_group,))
+        self.client.force_login(expert_user)
+        response = self.client.get(reverse("media_qc_pending_intern"))
+        self.assertContains(response, self.media_pending_intern.file_name)
+
+    def test_returned_queue_for_intern(self):
+        intern_user = self._create_user("queue-returned", groups=(self.intern_group,))
+        self.client.force_login(intern_user)
+        response = self.client.get(reverse("media_qc_returned"))
+        self.assertContains(response, self.media_returned.file_name)
+
+
+class MediaNotificationTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username="notifier", password="pass")
+        patcher = patch("cms.models.get_current_user", return_value=self.user)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_transition_triggers_notification(self):
+        media = Media.objects.create(
+            file_name="notif", qc_status=Media.QCStatus.PENDING_INTERN
+        )
+        with patch("cms.models.notify_media_qc_transition") as mock_notify:
+            media.transition_qc(Media.QCStatus.PENDING_EXPERT, user=self.user, note="Ready")
+
+        mock_notify.assert_called_once()
+        args, kwargs = mock_notify.call_args
+        self.assertEqual(args[0], media)
+        self.assertEqual(args[1], Media.QCStatus.PENDING_INTERN)
+        self.assertEqual(args[2], Media.QCStatus.PENDING_EXPERT)
+        self.assertEqual(kwargs["user"], self.user)
+        self.assertEqual(kwargs["note"], "Ready")
+
+    def test_transition_same_status_skips_notification(self):
+        media = Media.objects.create(
+            file_name="notif-skip", qc_status=Media.QCStatus.PENDING_INTERN
+        )
+        with patch("cms.models.notify_media_qc_transition") as mock_notify:
+            media.transition_qc(Media.QCStatus.PENDING_INTERN, user=self.user)
+
+        mock_notify.assert_not_called()
+
 class UploadProcessingTests(TestCase):
     """Tests for handling scan uploads using filename timestamps."""
 
