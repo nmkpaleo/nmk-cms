@@ -2790,12 +2790,37 @@ def upload_scan(request):
 
 @staff_member_required
 def do_ocr(request):
-    """Process pending scans with OCR."""
-    successes, failures, total, errors = process_pending_scans()
-    messages.info(request, f"{successes}/{total} scans OCR'd")
+    """Process a single pending scan with OCR."""
+
+    successes, failures, total, errors, jammed = process_pending_scans(limit=1)
+    detail = {
+        "successes": successes,
+        "failures": failures,
+        "attempted": total,
+        "errors": errors,
+        "jammed": jammed,
+    }
+
+    if request.headers.get("HX-Request") or request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return JsonResponse(detail)
+
+    if total == 0:
+        messages.info(request, "No pending scans to process.")
+    else:
+        messages.info(request, f"Processed {successes} of {total} scans this run.")
+
     if failures:
-        detail = "; ".join(errors)
-        messages.error(request, f"OCR failed for {failures} scans: {detail}")
+        error_text = "; ".join(errors)
+        messages.error(request, f"OCR failed for {failures} scans: {error_text}")
+    if jammed:
+        messages.error(
+            request,
+            (
+                "OCR halted because scan "
+                f"{jammed} timed out after three attempts. Please investigate before retrying."
+            ),
+        )
+
     return redirect('admin:index')
 
 @login_required

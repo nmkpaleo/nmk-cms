@@ -1874,18 +1874,24 @@ class OcrViewTests(TestCase):
         import shutil
         shutil.rmtree(pending.parent)
 
-    @patch("cms.views.process_pending_scans", return_value=(0, 1, 1, ["test.png: boom"]))
+    @patch(
+        "cms.views.process_pending_scans",
+        return_value=(0, 1, 1, ["test.png: boom"], None),
+    )
     def test_do_ocr_shows_error_details(self, mock_process):
         self.client.login(username="cm", password="pass")
         response = self.client.get(self.url, follow=True)
-        self.assertContains(response, "0/1 scans OCR&#x27;d")
+        self.assertContains(response, "Processed 0 of 1 scans this run.")
         self.assertContains(response, "OCR failed for 1 scans: test.png: boom")
 
-    @patch("cms.views.process_pending_scans", return_value=(3, 0, 5, []))
+    @patch(
+        "cms.views.process_pending_scans",
+        return_value=(3, 0, 5, [], None),
+    )
     def test_do_ocr_reports_progress(self, mock_process):
         self.client.login(username="cm", password="pass")
         response = self.client.get(self.url, follow=True)
-        self.assertContains(response, "3/5 scans OCR&#x27;d")
+        self.assertContains(response, "Processed 3 of 5 scans this run.")
 
 
 class ProcessPendingScansTests(TestCase):
@@ -1908,17 +1914,41 @@ class ProcessPendingScansTests(TestCase):
         file_path.write_bytes(b"data")
         Media.objects.create(media_location=f"uploads/pending/{filename}")
         with self.assertLogs("cms.ocr_processing", level="ERROR") as cm:
-            successes, failures, total, errors = process_pending_scans()
+            successes, failures, total, errors, jammed = process_pending_scans()
         self.assertEqual(successes, 0)
         self.assertEqual(failures, 1)
         self.assertEqual(total, 1)
         self.assertTrue(any("boom" in e for e in errors))
         self.assertTrue(any("boom" in m for m in cm.output))
+        self.assertIsNone(jammed)
         media = Media.objects.get()
         self.assertEqual(media.ocr_status, Media.OCRStatus.FAILED)
         self.assertEqual(media.ocr_data["error"], "boom")
         self.assertEqual(media.media_location.name, f"uploads/failed/{filename}")
         failed_file = Path(settings.MEDIA_ROOT) / "uploads" / "failed" / filename
+        self.assertTrue(failed_file.exists())
+
+    @patch("cms.ocr_processing.time.sleep")
+    @patch("cms.ocr_processing.detect_card_type", side_effect=TimeoutError("timeout"))
+    def test_timeout_retries_and_stops_queue(self, mock_sleep, mock_detect):
+        filename1 = "jam.png"
+        filename2 = "next.png"
+        (self.pending / filename1).write_bytes(b"data")
+        (self.pending / filename2).write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename1}")
+        Media.objects.create(media_location=f"uploads/pending/{filename2}")
+
+        successes, failures, total, errors, jammed = process_pending_scans(limit=5)
+
+        self.assertEqual(successes, 0)
+        self.assertEqual(failures, 1)
+        self.assertEqual(total, 1)
+        self.assertEqual(jammed, filename1)
+        self.assertTrue(any("timeout" in e for e in errors))
+        self.assertEqual(mock_detect.call_count, 3)
+        self.assertGreaterEqual(mock_sleep.call_count, 2)
+        self.assertTrue((self.pending / filename2).exists())
+        failed_file = Path(settings.MEDIA_ROOT) / "uploads" / "failed" / filename1
         self.assertTrue(failed_file.exists())
 
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
@@ -1956,8 +1986,9 @@ class ProcessPendingScansTests(TestCase):
         file_path = self.pending / filename
         file_path.write_bytes(b"data")
         Media.objects.create(media_location=f"uploads/pending/{filename}")
-        successes, failures, total, errors = process_pending_scans()
+        successes, failures, total, errors, jammed = process_pending_scans()
         self.assertEqual((successes, failures, total), (1, 0, 1))
+        self.assertIsNone(jammed)
         self.assertEqual(Accession.objects.count(), 0)
         media = Media.objects.get()
         self.assertEqual(media.ocr_status, Media.OCRStatus.COMPLETED)
@@ -2127,8 +2158,9 @@ class ProcessPendingScansTests(TestCase):
         file_path = self.pending / filename
         file_path.write_bytes(b"data")
         Media.objects.create(media_location=f"uploads/pending/{filename}")
-        successes, failures, total, errors = process_pending_scans()
+        successes, failures, total, errors, jammed = process_pending_scans()
         self.assertEqual((successes, failures, total), (1, 0, 1))
+        self.assertIsNone(jammed)
         media = Media.objects.get()
         with self.assertRaises(ValidationError) as exc:
             media.transition_qc(Media.QCStatus.APPROVED, user=self.user)
