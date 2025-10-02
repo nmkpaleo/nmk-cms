@@ -163,6 +163,14 @@ def is_intern(user):
     return user.groups.filter(name="Interns").exists()
 
 
+def is_qc_expert(user):
+    if not getattr(user, "is_authenticated", False):
+        return False
+    return user.is_superuser or user.groups.filter(
+        name__in=["Curators", "Collection Managers"]
+    ).exists()
+
+
 def can_manage_places(user):
     return user.is_superuser or user.groups.filter(name="Collection Managers").exists()
 
@@ -299,6 +307,7 @@ def dashboard(request):
     """Landing page that adapts content based on user roles."""
     user = request.user
     context = {}
+    role_context_added = False
 
     if user.groups.filter(name="Preparators").exists():
         my_preparations_qs = Preparation.objects.filter(
@@ -319,6 +328,7 @@ def dashboard(request):
                 "priority_tasks": priority_tasks,
             }
         )
+        role_context_added = True
 
     if user.groups.filter(name="Curators").exists():
         completed_preparations = (
@@ -335,6 +345,7 @@ def dashboard(request):
                 "completed_preparations": completed_preparations,
             }
         )
+        role_context_added = True
 
     if user.groups.filter(name="Collection Managers").exists():
         has_active_series = AccessionNumberSeries.objects.filter(
@@ -370,32 +381,14 @@ def dashboard(request):
                 "latest_accessions": latest_accessions,
             }
         )
+        role_context_added = True
 
-    expert_qc_status_lists: list[dict] = []
-    intern_qc_status_lists: list[dict] = []
-    if user.is_superuser or user.groups.filter(
-        name__in=["Curators", "Collection Managers"]
-    ).exists():
-        entries = (
-            Media.objects.filter(qc_status=Media.QCStatus.PENDING_EXPERT)
-            .select_related("accession", "accession_row")
-            .order_by("-modified_on")[:10]
-        )
-        expert_qc_status_lists.append(
-            {
-                "status": Media.QCStatus.PENDING_EXPERT.value,
-                "label": Media.QCStatus.PENDING_EXPERT.label,
-                "entries": entries,
-            }
-        )
-        context.update(
-            {
-                "is_expert": True,
-                "expert_qc_status_lists": expert_qc_status_lists,
-            }
-        )
+    is_expert_user = is_qc_expert(user)
+    if is_expert_user:
+        context["is_expert"] = True
 
-    if user.groups.filter(name="Interns").exists():
+    intern_member = is_intern(user)
+    if intern_member:
         scanning_utils.auto_complete_scans(
             Scanning.objects.filter(user=user, end_time__isnull=True)
         )
@@ -421,38 +414,224 @@ def dashboard(request):
                 getattr(drawer, "active_scan_start", None)
             )
 
-        for status_choice in (
-            Media.QCStatus.PENDING_INTERN,
-            Media.QCStatus.REJECTED,
-        ):
-            entries = (
-                Media.objects.filter(qc_status=status_choice)
-                .select_related("accession", "accession_row")
-                .order_by("-modified_on")[:10]
-            )
-            intern_qc_status_lists.append(
-                {
-                    "status": status_choice.value,
-                    "label": status_choice.label,
-                    "entries": entries,
-                }
-            )
-
         context.update(
             {
                 "is_intern": True,
                 "my_drawers": my_drawers,
-                "intern_qc_status_lists": intern_qc_status_lists,
             }
         )
+        role_context_added = True
 
-    context.setdefault("expert_qc_status_lists", expert_qc_status_lists)
-    context.setdefault("intern_qc_status_lists", intern_qc_status_lists)
+    qc_sections: list[dict] = []
+    section_limit = 10
+    base_qc_qs = Media.objects.select_related("accession", "accession_row").annotate(
+        comment_count=Count("qc_logs__comments", distinct=True)
+    )
 
-    if not context:
+    queue_definitions = [
+        {
+            "key": "pending_intern",
+            "label": "Pending intern review",
+            "filters": {"qc_status": Media.QCStatus.PENDING_INTERN},
+            "action_url_name": "media_intern_qc",
+            "cta_label": "Review",
+            "empty_message": "No media awaiting intern review.",
+            "list_view_name": "media_qc_pending_intern",
+            "roles": {"intern", "expert"},
+        },
+        {
+            "key": "pending_expert",
+            "label": "Needs expert attention",
+            "filters": {"qc_status": Media.QCStatus.PENDING_EXPERT},
+            "action_url_name": "media_expert_qc",
+            "cta_label": "Open Expert QC",
+            "empty_message": "No media awaiting expert review.",
+            "list_view_name": "media_qc_pending_expert",
+            "roles": {"expert"},
+        },
+        {
+            "key": "returned",
+            "label": "Returned for fixes",
+            "filters": {"qc_status": Media.QCStatus.REJECTED},
+            "action_url_name": "media_intern_qc",
+            "cta_label": "Review fixes",
+            "empty_message": "No media returned for fixes.",
+            "list_view_name": "media_qc_returned",
+            "roles": {"intern", "expert"},
+        },
+    ]
+
+    def user_has_role(roles: set[str]) -> bool:
+        if not roles:
+            return True
+        return any(
+            [
+                "expert" in roles and is_expert_user,
+                "intern" in roles and intern_member,
+            ]
+        )
+
+    for definition in queue_definitions:
+        roles = definition.get("roles", set())
+        if not user_has_role(roles):
+            continue
+
+        queryset = base_qc_qs.filter(**definition["filters"]).order_by("-modified_on")
+        entries = list(queryset[: section_limit + 1])
+        has_more = len(entries) > section_limit
+        entries = entries[:section_limit]
+        if entries or definition.get("show_when_empty", True):
+            qc_sections.append(
+                {
+                    "key": definition["key"],
+                    "label": definition["label"],
+                    "entries": entries,
+                    "has_more": has_more,
+                    "action_url_name": definition["action_url_name"],
+                    "cta_label": definition["cta_label"],
+                    "empty_message": definition["empty_message"],
+                    "view_all_url": reverse(definition["list_view_name"]),
+                }
+            )
+
+    qc_extra_links: list[dict] = []
+    if is_expert_user:
+        qc_extra_links.extend(
+            [
+                {
+                    "label": "Media with rearranged rows",
+                    "url": reverse("media_qc_rows_rearranged"),
+                },
+                {
+                    "label": "Media with QC comments",
+                    "url": reverse("media_qc_with_comments"),
+                },
+            ]
+        )
+
+    context["qc_sections"] = qc_sections
+    context["qc_extra_links"] = qc_extra_links
+
+    if not role_context_added and not qc_sections:
         context["no_role"] = True
 
     return render(request, "cms/dashboard.html", context)
+
+
+class MediaQCQueueView(LoginRequiredMixin, UserPassesTestMixin, ListView):
+    """Base list view for filtered media QC queues."""
+
+    model = Media
+    template_name = "cms/qc/media_queue_list.html"
+    context_object_name = "media_list"
+    paginate_by = 50
+    raise_exception = True
+    ordering = ("-modified_on", "-pk")
+    filters: dict[str, object] = {}
+    allowed_roles: set[str] | None = None
+    queue_title: str = ""
+    queue_description: str | None = None
+    queue_action_url_name: str | None = None
+    queue_action_label: str = "Open QC"
+    queue_empty_message: str = "No media match this queue."
+    distinct: bool = True
+
+    def get_filters(self) -> dict[str, object]:
+        return dict(self.filters)
+
+    def get_ordering(self):
+        return self.ordering
+
+    def test_func(self) -> bool:
+        user = self.request.user
+        role_checks = {
+            "expert": is_qc_expert,
+            "intern": is_intern,
+        }
+        allowed_roles = self.allowed_roles or {"expert"}
+        for role in allowed_roles:
+            check = role_checks.get(role)
+            if check and check(user):
+                return True
+        return False
+
+    def get_queryset(self):
+        queryset = Media.objects.filter(**self.get_filters()).select_related(
+            "accession", "accession_row"
+        ).annotate(comment_count=Count("qc_logs__comments", distinct=True))
+
+        if self.distinct:
+            queryset = queryset.distinct()
+
+        ordering = self.get_ordering()
+        if ordering:
+            if isinstance(ordering, (list, tuple)):
+                queryset = queryset.order_by(*ordering)
+            else:
+                queryset = queryset.order_by(ordering)
+
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(
+            {
+                "queue_title": self.queue_title,
+                "queue_description": self.queue_description,
+                "queue_action_url_name": self.queue_action_url_name,
+                "queue_action_label": self.queue_action_label,
+                "queue_empty_message": self.queue_empty_message,
+            }
+        )
+        return context
+
+
+class MediaPendingInternQueueView(MediaQCQueueView):
+    filters = {"qc_status": Media.QCStatus.PENDING_INTERN}
+    allowed_roles = {"intern", "expert"}
+    queue_title = "Pending intern review"
+    queue_action_url_name = "media_intern_qc"
+    queue_action_label = "Review"
+    queue_empty_message = "No media awaiting intern review."
+
+
+class MediaReturnedForFixesQueueView(MediaQCQueueView):
+    filters = {"qc_status": Media.QCStatus.REJECTED}
+    allowed_roles = {"intern", "expert"}
+    queue_title = "Returned for fixes"
+    queue_action_url_name = "media_intern_qc"
+    queue_action_label = "Review fixes"
+    queue_empty_message = "No media have been returned for fixes."
+
+
+class MediaNeedsExpertAttentionQueueView(MediaQCQueueView):
+    filters = {"qc_status": Media.QCStatus.PENDING_EXPERT}
+    allowed_roles = {"expert"}
+    queue_title = "Needs expert attention"
+    queue_action_url_name = "media_expert_qc"
+    queue_action_label = "Open Expert QC"
+    queue_empty_message = "No media awaiting expert review."
+
+
+class MediaRowsRearrangedQueueView(MediaQCQueueView):
+    filters = {"rows_rearranged": True}
+    allowed_roles = {"expert"}
+    queue_title = "Media with rearranged rows"
+    queue_description = "Media flagged during QC because the accession rows were rearranged."
+    queue_action_url_name = "media_expert_qc"
+    queue_action_label = "Open Expert QC"
+    queue_empty_message = "No media are currently flagged for row rearrangements."
+
+
+class MediaWithCommentsQueueView(MediaQCQueueView):
+    filters = {"qc_logs__comments__isnull": False}
+    allowed_roles = {"expert"}
+    queue_title = "Media with QC comments"
+    queue_description = "Items that have at least one QC discussion comment."
+    queue_action_url_name = "media_expert_qc"
+    queue_action_label = "Open Expert QC"
+    queue_empty_message = "No media entries have QC comments yet."
+
 
 def index(request):
     """View function for home page of site."""

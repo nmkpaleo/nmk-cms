@@ -1,114 +1,94 @@
 <h2>Quality Control</h2>
-{% with has_intern=intern_qc_status_lists|length has_expert=expert_qc_status_lists|length %}
-  {% if has_intern or has_expert %}
-    {% if has_expert %}
-      {% for qc_group in expert_qc_status_lists %}
-        <div class="w3-card w3-margin-bottom">
-          <header class="w3-container w3-light-grey">
-            <h3 class="w3-margin">{{ qc_group.label }}</h3>
-          </header>
-          <div class="w3-container">
-            {% if qc_group.entries %}
-              <div class="w3-responsive">
-                <table class="w3-table w3-striped w3-small">
-                  <thead>
-                    <tr>
-                      <th>Media</th>
-                      <th>Accession / Row</th>
-                      <th>Updated</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {% for media in qc_group.entries %}
-                      <tr data-qc-status="{{ qc_group.status }}">
-                        <td>
-                          {% if media.file_name %}
-                            {{ media.file_name }}
-                          {% else %}
-                            {{ media.media_location }}
-                          {% endif %}
-                        </td>
-                        <td>
-                          {% if media.accession_row %}
-                            {{ media.accession_row }}
-                          {% elif media.accession %}
-                            {{ media.accession }}
-                          {% else %}
-                            -
-                          {% endif %}
-                        </td>
-                        <td>{{ media.modified_on|date:"Y-m-d H:i" }}</td>
-                        <td>
-                          <a href="{% url 'media_expert_qc' media.uuid %}" class="w3-button w3-small w3-deep-purple">Open Expert QC</a>
-                        </td>
-                      </tr>
-                    {% endfor %}
-                  </tbody>
-                </table>
-              </div>
-            {% else %}
-              <p class="w3-padding">No media awaiting expert review.</p>
-            {% endif %}
+{% if qc_sections %}
+  {% for section in qc_sections %}
+    <div class="w3-card w3-margin-bottom" data-qc-section="{{ section.key }}">
+      <header class="w3-container w3-light-grey w3-padding">
+        <div class="w3-row">
+          <div class="w3-col s12 m7">
+            <h3 class="w3-margin">{{ section.label }}</h3>
           </div>
+          {% if section.view_all_url %}
+            <div class="w3-col s12 m5 w3-margin-top w3-right-align">
+              <a href="{{ section.view_all_url }}" class="w3-button w3-small w3-white w3-border">View queue</a>
+            </div>
+          {% endif %}
         </div>
-      {% endfor %}
-    {% endif %}
+      </header>
+      <div class="w3-container">
+        {% if section.entries %}
+          <div class="w3-responsive">
+            <table class="w3-table w3-striped w3-small">
+              <thead>
+                <tr>
+                  <th>Media</th>
+                  <th>Accession / Row</th>
+                  <th>Status</th>
+                  <th>Flags</th>
+                  <th>Updated</th>
+                  {% if section.action_url_name %}
+                    <th>Action</th>
+                  {% endif %}
+                </tr>
+              </thead>
+              <tbody>
+                {% for media in section.entries %}
+                  <tr>
+                    <td>
+                      {% if media.file_name %}
+                        {{ media.file_name }}
+                      {% else %}
+                        {{ media.media_location }}
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if media.accession_row %}
+                        {{ media.accession_row }}
+                      {% elif media.accession %}
+                        {{ media.accession }}
+                      {% else %}
+                        -
+                      {% endif %}
+                    </td>
+                    <td>{{ media.get_qc_status_display }}</td>
+                    <td>
+                      {% if media.rows_rearranged %}
+                        <span class="w3-tag w3-amber w3-round w3-small">Rows rearranged</span>
+                      {% endif %}
+                      {% if media.comment_count %}
+                        <span class="w3-tag w3-blue-grey w3-round w3-small">{{ media.comment_count }} comment{{ media.comment_count|pluralize }}</span>
+                      {% endif %}
+                      {% if not media.rows_rearranged and not media.comment_count %}
+                        -
+                      {% endif %}
+                    </td>
+                    <td>{{ media.modified_on|date:"Y-m-d H:i" }}</td>
+                    {% if section.action_url_name %}
+                      <td>
+                        <a href="{% url section.action_url_name media.uuid %}" class="w3-button w3-small w3-blue">{{ section.cta_label }}</a>
+                      </td>
+                    {% endif %}
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p class="w3-padding">{{ section.empty_message }}</p>
+        {% endif %}
+      </div>
+    </div>
+  {% endfor %}
+{% else %}
+  <p>No media requiring quality control at this time.</p>
+{% endif %}
 
-    {% if has_intern %}
-      {% for qc_group in intern_qc_status_lists %}
-        <div class="w3-card w3-margin-bottom">
-          <header class="w3-container w3-light-grey">
-            <h3 class="w3-margin">{{ qc_group.label }}</h3>
-          </header>
-          <div class="w3-container">
-            {% if qc_group.entries %}
-              <div class="w3-responsive">
-                <table class="w3-table w3-striped w3-small">
-                  <thead>
-                    <tr>
-                      <th>Media</th>
-                      <th>Accession / Row</th>
-                      <th>Updated</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {% for media in qc_group.entries %}
-                      <tr data-qc-status="{{ qc_group.status }}">
-                        <td>
-                          {% if media.file_name %}
-                            {{ media.file_name }}
-                          {% else %}
-                            {{ media.media_location }}
-                          {% endif %}
-                        </td>
-                        <td>
-                          {% if media.accession_row %}
-                            {{ media.accession_row }}
-                          {% elif media.accession %}
-                            {{ media.accession }}
-                          {% else %}
-                            -
-                          {% endif %}
-                        </td>
-                        <td>{{ media.modified_on|date:"Y-m-d H:i" }}</td>
-                        <td>
-                          <a href="{% url 'media_intern_qc' media.uuid %}" class="w3-button w3-small w3-blue">Review</a>
-                        </td>
-                      </tr>
-                    {% endfor %}
-                  </tbody>
-                </table>
-              </div>
-            {% else %}
-              <p class="w3-padding">No media in this status.</p>
-            {% endif %}
-          </div>
-        </div>
+{% if qc_extra_links %}
+  <div class="w3-padding w3-small">
+    <strong>Additional queues:</strong>
+    <ul class="w3-ul w3-small w3-margin-top">
+      {% for extra in qc_extra_links %}
+        <li><a href="{{ extra.url }}">{{ extra.label }}</a></li>
       {% endfor %}
-    {% endif %}
-  {% else %}
-    <p>No media requiring quality control at this time.</p>
-  {% endif %}
-{% endwith %}
+    </ul>
+  </div>
+{% endif %}

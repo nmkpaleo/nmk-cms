@@ -24,4 +24,19 @@ sys.modules.setdefault("cms.tests.UploadProcessingTests", _alias)
 
 UploadProcessingTests = _tests_module.UploadProcessingTests
 
-__all__ = ["UploadProcessingTests"]
+_dashboard_alias = ModuleType("cms.tests.DashboardQueueTests")
+_dashboard_alias.DashboardQueueTests = _tests_module.DashboardQueueTests
+sys.modules.setdefault("cms.tests.DashboardQueueTests", _dashboard_alias)
+
+_notification_alias = ModuleType("cms.tests.MediaNotificationTests")
+_notification_alias.MediaNotificationTests = _tests_module.MediaNotificationTests
+sys.modules.setdefault("cms.tests.MediaNotificationTests", _notification_alias)
+
+DashboardQueueTests = _tests_module.DashboardQueueTests
+MediaNotificationTests = _tests_module.MediaNotificationTests
+
+__all__ = [
+    "UploadProcessingTests",
+    "DashboardQueueTests",
+    "MediaNotificationTests",
+]
