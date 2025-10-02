@@ -1,13 +1,15 @@
+import copy
 from unittest.mock import patch
-from datetime import timedelta
-from types import SimpleNamespace
+from datetime import datetime, timedelta
 import json
+from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.timezone import now
+from django.utils import timezone as django_timezone
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.conf import settings
@@ -47,8 +49,207 @@ from cms.forms import DrawerRegisterForm, AccessionNumberSeriesAdminForm
 from cms.filters import DrawerRegisterFilter
 from cms.resources import DrawerRegisterResource, PlaceResource
 from tablib import Dataset
-from cms.upload_processing import process_file
-from cms.ocr_processing import process_pending_scans, describe_accession_conflicts
+from cms.upload_processing import TIMESTAMP_FORMAT, process_file
+from cms import scanning_utils
+from cms.ocr_processing import (
+    process_pending_scans,
+    describe_accession_conflicts,
+    UNKNOWN_FIELD_NUMBER_PREFIX,
+    _apply_rows,
+)
+from cms.qc import diff_media_payload
+
+
+class MediaQCDiffTests(TestCase):
+    def test_diff_detects_reordered_rows_and_totals(self):
+        original = {
+            "accessions": [
+                {
+                    "rows": [
+                        {
+                            "_row_id": "row-0",
+                            "specimen_suffix": {"interpreted": "A"},
+                            "natures": [],
+                        }
+                    ],
+                    "identifications": [
+                        {"taxon": {"interpreted": "Pan"}},
+                    ],
+                    "references": [],
+                    "field_slips": [],
+                }
+            ]
+        }
+        updated = {
+            "accessions": [
+                {
+                    "rows": [
+                        {
+                            "_row_id": "row-1",
+                            "specimen_suffix": {"interpreted": "B"},
+                            "natures": [],
+                        },
+                        {
+                            "_row_id": "row-0",
+                            "specimen_suffix": {"interpreted": "A"},
+                            "natures": [],
+                        },
+                    ],
+                    "identifications": [
+                        {"taxon": {"interpreted": "Pan"}},
+                        {"taxon": {"interpreted": "Homo"}},
+                    ],
+                    "references": [
+                        {
+                            "reference_first_author": {"interpreted": "Doe"},
+                            "reference_title": {"interpreted": "Sample"},
+                            "reference_year": {"interpreted": 1999},
+                            "page": {"interpreted": "10"},
+                        }
+                    ],
+                    "field_slips": [],
+                }
+            ]
+        }
+
+        diff = diff_media_payload(original, updated)
+
+        self.assertTrue(diff["rows_reordered"])
+        totals = {entry["key"]: entry for entry in diff["count_diffs"]}
+        self.assertEqual(totals["rows"]["original"], 1)
+        self.assertEqual(totals["rows"]["current"], 2)
+        self.assertEqual(totals["identifications"]["current"], 2)
+        self.assertEqual(totals["references"]["current"], 1)
+
+    def test_diff_warns_on_unlinked_identifications(self):
+        original = {
+            "accessions": [
+                {
+                    "rows": [
+                        {"_row_id": "row-0", "specimen_suffix": {"interpreted": "A"}},
+                        {"_row_id": "row-1", "specimen_suffix": {"interpreted": "B"}},
+                    ],
+                    "identifications": [
+                        {"taxon": {"interpreted": "Pan"}},
+                        {"taxon": {"interpreted": "Homo"}},
+                    ],
+                    "references": [],
+                    "field_slips": [],
+                }
+            ]
+        }
+        updated = {
+            "accessions": [
+                {
+                    "rows": [
+                        {"_row_id": "row-0", "specimen_suffix": {"interpreted": "A"}},
+                    ],
+                    "identifications": [
+                        {"taxon": {"interpreted": "Pan"}},
+                    ],
+                    "references": [],
+                    "field_slips": [],
+                }
+            ]
+        }
+
+        diff = diff_media_payload(original, updated)
+        warnings = {warning["code"] for warning in diff["warnings"]}
+        self.assertIn("unlinked_identifications", warnings)
+
+class UploadProcessingTests(TestCase):
+    """Tests for handling scan uploads using filename timestamps."""
+
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username="intern", password="pass")
+        patcher = patch("cms.models.get_current_user", return_value=self.user)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.drawer = DrawerRegister.objects.create(
+            code="DRW", description="Drawer", estimated_documents=1
+        )
+        start = scanning_utils.nairobi_now() - timedelta(minutes=5)
+        end = start + timedelta(minutes=10)
+        self.scanning = Scanning.objects.create(
+            drawer=self.drawer, user=self.user, start_time=start, end_time=end
+        )
+
+    def tearDown(self):
+        incoming_root = Path(settings.MEDIA_ROOT) / "uploads"
+        if incoming_root.exists():
+            import shutil
+
+            shutil.rmtree(incoming_root)
+
+    def _filename_for(self, dt: datetime) -> str:
+        return dt.astimezone(scanning_utils.NAIROBI_TZ).strftime(
+            f"{TIMESTAMP_FORMAT}.png"
+        )
+
+    def test_scanning_lookup_uses_filename_timestamp(self):
+        incoming = Path(settings.MEDIA_ROOT) / "uploads" / "incoming"
+        incoming.mkdir(parents=True, exist_ok=True)
+        filename = self._filename_for(self.scanning.start_time + timedelta(minutes=1))
+        src = incoming / filename
+        src.write_bytes(b"data")
+
+        original_to_nairobi = scanning_utils.to_nairobi
+        to_nairobi_calls = []
+
+        def wrapped_to_nairobi(dt):
+            to_nairobi_calls.append(dt)
+            if len(to_nairobi_calls) == 1:
+                self.assertFalse(django_timezone.is_naive(dt))
+                self.assertEqual(dt.tzinfo, scanning_utils.NAIROBI_TZ)
+            return original_to_nairobi(dt)
+
+        with patch(
+            "cms.scanning_utils.to_nairobi", side_effect=wrapped_to_nairobi
+        ):
+            process_file(src)
+
+        self.assertGreaterEqual(len(to_nairobi_calls), 1)
+        media = Media.objects.get(media_location=f"uploads/pending/{filename}")
+        self.assertEqual(media.scanning, self.scanning)
+
+    def test_upload_scan_restores_original_name_after_storage_collision(self):
+        incoming = Path(settings.MEDIA_ROOT) / "uploads" / "incoming"
+        incoming.mkdir(parents=True, exist_ok=True)
+        filename = self._filename_for(self.scanning.start_time + timedelta(minutes=2))
+        original = incoming / filename
+        original.write_bytes(b"original")
+
+        self.user.is_staff = True
+        self.user.save()
+
+        upload = SimpleUploadedFile(filename, b"new-data", content_type="image/png")
+        collision_name = f"{Path(filename).stem}_pNGQW5u.png"
+
+        def fake_save(storage_self, name, content, max_length=None):
+            saved_path = incoming / collision_name
+            saved_path.write_bytes(b"uploaded")
+            return collision_name
+
+        processed_paths = []
+
+        def fake_process(path):
+            processed_paths.append(path)
+            self.assertEqual(path.name, filename)
+            self.assertTrue(path.exists())
+            return path
+
+        url = reverse("admin-upload-scan")
+        self.client.force_login(self.user)
+
+        with patch("cms.views.FileSystemStorage.save", new=fake_save):
+            with patch("cms.views.process_file", side_effect=fake_process):
+                response = self.client.post(url, {"files": [upload]}, follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(processed_paths), 1)
+        self.assertTrue((incoming / filename).exists())
+        self.assertFalse((incoming / collision_name).exists())
 
 
 class GenerateAccessionsFromSeriesTests(TestCase):
@@ -965,6 +1166,55 @@ class ScanningTests(TestCase):
         scan.refresh_from_db()
         self.assertIsNotNone(scan.end_time)
 
+    def test_scan_auto_completes_after_eight_hours(self):
+        start = datetime(2024, 1, 1, 8, 0, tzinfo=ZoneInfo("Africa/Nairobi"))
+        scan = Scanning.objects.create(
+            drawer=self.drawer,
+            user=self.user,
+            start_time=start,
+        )
+        self.client.force_login(self.user)
+        with patch("cms.scanning_utils.nairobi_now", return_value=start + timedelta(hours=9)):
+            self.client.get(reverse("dashboard"))
+        scan.refresh_from_db()
+        expected_end = scanning_utils.calculate_scan_auto_end(start)
+        self.assertEqual(
+            scanning_utils.to_nairobi(scan.end_time),
+            expected_end,
+        )
+
+    def test_scan_auto_completes_at_midnight(self):
+        start = datetime(2024, 1, 1, 21, 0, tzinfo=ZoneInfo("Africa/Nairobi"))
+        scan = Scanning.objects.create(
+            drawer=self.drawer,
+            user=self.user,
+            start_time=start,
+        )
+        self.client.force_login(self.user)
+        with patch("cms.scanning_utils.nairobi_now", return_value=start + timedelta(hours=5)):
+            self.client.get(reverse("dashboard"))
+        scan.refresh_from_db()
+        expected_end = scanning_utils.calculate_scan_auto_end(start)
+        self.assertEqual(
+            scanning_utils.to_nairobi(scan.end_time),
+            expected_end,
+        )
+
+    def test_dashboard_limits_my_drawers_to_one(self):
+        other_drawer = DrawerRegister.objects.create(
+            code="XYZ",
+            description="Other",
+            estimated_documents=1,
+            scanning_status=DrawerRegister.ScanningStatus.IN_PROGRESS,
+            priority=10,
+        )
+        other_drawer.scanning_users.add(self.user)
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("dashboard"))
+        drawers = response.context["my_drawers"]
+        self.assertEqual(len(drawers), 1)
+        self.assertEqual(drawers[0].code, "XYZ")
+
     def test_drawer_detail_shows_scans(self):
         Scanning.objects.create(
             drawer=self.drawer,
@@ -1413,12 +1663,12 @@ class UploadScanViewTests(TestCase):
 
     def test_upload_saves_file(self):
         self.client.login(username="cm", password="pass")
-        upload = SimpleUploadedFile("2025-01-01(1).png", b"data", content_type="image/png")
+        upload = SimpleUploadedFile("2025-01-01T010203.png", b"data", content_type="image/png")
         response = self.client.post(self.url, {"files": upload})
         self.assertEqual(response.status_code, 302)
-        pending = Path(settings.MEDIA_ROOT) / "uploads" / "pending" / "2025-01-01(1).png"
+        pending = Path(settings.MEDIA_ROOT) / "uploads" / "pending" / "2025-01-01T010203.png"
         self.assertTrue(pending.exists())
-        self.assertTrue(Media.objects.filter(media_location=f"uploads/pending/2025-01-01(1).png").exists())
+        self.assertTrue(Media.objects.filter(media_location=f"uploads/pending/2025-01-01T010203.png").exists())
         pending.unlink()
         import shutil
         shutil.rmtree(pending.parent.parent)
@@ -1463,7 +1713,7 @@ class OcrViewTests(TestCase):
         self.client.login(username="cm", password="pass")
         pending = Path(settings.MEDIA_ROOT) / "uploads" / "pending"
         pending.mkdir(parents=True, exist_ok=True)
-        filename = "2025-01-01(1).png"
+        filename = "2025-01-01T010203.png"
         file_path = pending / filename
         file_path.write_bytes(b"data")
         Media.objects.create(media_location=f"uploads/pending/{filename}")
@@ -1940,6 +2190,56 @@ class ProcessPendingScansTests(TestCase):
         link = AccessionFieldSlip.objects.get()
         self.assertEqual(link.fieldslip, existing)
 
+    @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
+    @patch(
+        "cms.ocr_processing.chatgpt_ocr",
+        return_value={
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 123},
+                    "type_status": {"interpreted": "Holotype"},
+                    "published": {"interpreted": "Yes"},
+                    "field_slips": [
+                        {
+                            "field_number": {"interpreted": None},
+                            "verbatim_locality": {"interpreted": "Loc1"},
+                            "verbatim_taxon": {"interpreted": "Homo"},
+                            "verbatim_element": {"interpreted": "Femur"},
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+    def test_creates_field_slip_when_field_number_missing(
+        self, mock_ocr, mock_detect
+    ):
+        Collection.objects.create(abbreviation="KNM", description="Kenya")
+        filename = "acc_fs_unknown.png"
+        file_path = self.pending / filename
+        file_path.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename}")
+        process_pending_scans()
+        media = Media.objects.get()
+        media.transition_qc(Media.QCStatus.APPROVED, user=self.user)
+
+        self.assertEqual(FieldSlip.objects.count(), 1)
+        field_slip = FieldSlip.objects.get()
+        self.assertTrue(
+            field_slip.field_number.startswith(UNKNOWN_FIELD_NUMBER_PREFIX)
+        )
+        self.assertEqual(field_slip.verbatim_locality, "Loc1")
+        self.assertEqual(field_slip.verbatim_taxon, "Homo")
+        self.assertEqual(field_slip.verbatim_element, "Femur")
+
+        self.assertEqual(AccessionFieldSlip.objects.count(), 1)
+        link = AccessionFieldSlip.objects.get()
+        accession = Accession.objects.get()
+        self.assertEqual(link.accession, accession)
+        self.assertEqual(link.fieldslip, field_slip)
+
 
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch(
@@ -2191,6 +2491,11 @@ class MediaExpertQCWizardTests(TestCase):
     def setUp(self):
         User = get_user_model()
         self.expert = User.objects.create_user(username="expert", password="pass")
+
+        patcher = patch("cms.models.get_current_user", return_value=self.expert)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
         self.curators_group = Group.objects.create(name="Curators")
         self.curators_group.user_set.add(self.expert)
 
@@ -2218,11 +2523,21 @@ class MediaExpertQCWizardTests(TestCase):
             },
         )
 
-        patcher = patch("cms.models.get_current_user", return_value=self.expert)
-        patcher.start()
-        self.addCleanup(patcher.stop)
-
         self.client.force_login(self.expert)
+
+    def add_unlinked_identification_warning(self):
+        data = copy.deepcopy(self.media.ocr_data)
+        accessions = data.setdefault("accessions", [])
+        if not accessions:
+            accessions.append({})
+        accession = accessions[0]
+        accession.setdefault("identifications", [])
+        accession["identifications"] = [
+            {"taxon": {"interpreted": "Pan"}},
+            {"taxon": {"interpreted": "Gorilla"}},
+        ]
+        self.media.ocr_data = data
+        self.media.save(update_fields=["ocr_data"])
 
     def build_post_data(self, **overrides):
         data = {
@@ -2268,6 +2583,29 @@ class MediaExpertQCWizardTests(TestCase):
         }
         data.update(overrides)
         return data
+
+    def build_specimen_post_data(self, element=None, **overrides):
+        base = self.build_post_data(
+            **{
+                "row-TOTAL_FORMS": "1",
+                "row-INITIAL_FORMS": "1",
+                "ident-TOTAL_FORMS": "1",
+                "ident-INITIAL_FORMS": "1",
+                "specimen-TOTAL_FORMS": "1",
+                "specimen-INITIAL_FORMS": "1",
+                "specimen-MIN_NUM_FORMS": "0",
+                "specimen-MAX_NUM_FORMS": "1000",
+                "specimen-0-row_id": "row-0",
+                "specimen-0-side": "Left",
+                "specimen-0-condition": "Excellent",
+                "specimen-0-verbatim_element": "Left Femur",
+                "specimen-0-portion": "Proximal",
+                "specimen-0-fragments": "1",
+            }
+        )
+        base["specimen-0-element"] = str(element.pk) if element else ""
+        base.update(overrides)
+        return base
 
     def get_url(self):
         return reverse("media_expert_qc", args=[self.media.uuid])
@@ -2321,6 +2659,146 @@ class MediaExpertQCWizardTests(TestCase):
         self.assertNotIn('data-qc-status="rejected"', response.content.decode())
         self.assertContains(response, "No media in this status.")
 
+    def test_approve_creates_specimen_elements(self):
+        element_parent = Element.objects.create(name="-Undefined")
+        element = Element.objects.create(name="Femur", parent_element=element_parent)
+
+        self.media.ocr_data = {
+            "card_type": "accession_card",
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 123},
+                    "rows": [
+                        {
+                            "_row_id": "row-0",
+                            "specimen_suffix": {"interpreted": "A"},
+                            "natures": [
+                                {
+                                    "element_name": {"interpreted": "Femur"},
+                                    "side": {"interpreted": "Left"},
+                                    "condition": {"interpreted": "Excellent"},
+                                    "verbatim_element": {"interpreted": "Left Femur"},
+                                    "portion": {"interpreted": "Proximal"},
+                                    "fragments": {"interpreted": 1},
+                                }
+                            ],
+                        }
+                    ],
+                    "identifications": [
+                        {
+                            "taxon": {"interpreted": "Homo"},
+                            "verbatim_identification": {"interpreted": "Homo sp."},
+                        }
+                    ],
+                }
+            ],
+        }
+        self.media.save(update_fields=["ocr_data"])
+
+        response = self.client.post(
+            self.get_url(),
+            self.build_specimen_post_data(
+                element,
+                action="approve",
+                qc_comment="",
+                **{
+                    "row-0-row_id": "row-0",
+                    "row-0-order": "0",
+                    "row-0-specimen_suffix": "A",
+                    "row-0-storage": "",
+                    "row-0-status": InventoryStatus.UNKNOWN,
+                    "ident-0-row_id": "row-0",
+                    "ident-0-taxon": "Homo",
+                    "ident-0-verbatim_identification": "Homo sp.",
+                },
+            ),
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        accession = Accession.objects.get()
+        row = accession.accessionrow_set.get()
+        nature = row.natureofspecimen_set.get()
+        self.assertEqual(nature.element, element)
+        self.assertEqual(nature.side, "Left")
+        self.assertEqual(nature.condition, "Excellent")
+        self.assertEqual(nature.verbatim_element, "Left Femur")
+        self.assertEqual(nature.portion, "Proximal")
+        self.assertEqual(nature.fragments, 1)
+
+    def test_approve_with_verbatim_only_creates_specimen_element(self):
+        parent = Element.objects.create(name="-Undefined")
+
+        self.media.ocr_data = {
+            "card_type": "accession_card",
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 123},
+                    "rows": [
+                        {
+                            "_row_id": "row-0",
+                            "specimen_suffix": {"interpreted": "A"},
+                            "natures": [
+                                {
+                                    "element_name": {"interpreted": None},
+                                    "side": {"interpreted": "Left"},
+                                    "condition": {"interpreted": "Excellent"},
+                                    "verbatim_element": {"interpreted": "Partial Femur"},
+                                    "portion": {"interpreted": "Proximal"},
+                                    "fragments": {"interpreted": 2},
+                                }
+                            ],
+                        }
+                    ],
+                    "identifications": [
+                        {
+                            "taxon": {"interpreted": "Homo"},
+                            "verbatim_identification": {"interpreted": "Homo sp."},
+                        }
+                    ],
+                }
+            ],
+        }
+        self.media.save(update_fields=["ocr_data"])
+
+        response = self.client.post(
+            self.get_url(),
+            self.build_specimen_post_data(
+                element=None,
+                action="approve",
+                qc_comment="",
+                **{
+                    "row-0-row_id": "row-0",
+                    "row-0-order": "0",
+                    "row-0-specimen_suffix": "A",
+                    "row-0-storage": "",
+                    "row-0-status": InventoryStatus.UNKNOWN,
+                    "ident-0-row_id": "row-0",
+                    "ident-0-taxon": "Homo",
+                    "ident-0-verbatim_identification": "Homo sp.",
+                    "specimen-0-verbatim_element": "Partial Femur",
+                    "specimen-0-portion": "Proximal",
+                    "specimen-0-fragments": "2",
+                },
+            ),
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        accession = Accession.objects.get()
+        row = accession.accessionrow_set.get()
+        nature = row.natureofspecimen_set.get()
+        self.assertEqual(nature.element.name, "Partial Femur")
+        self.assertEqual(nature.element.parent_element, parent)
+        self.assertEqual(nature.verbatim_element, "Partial Femur")
+        self.assertEqual(nature.fragments, 2)
+
     def test_request_rescan_sets_rejected_status(self):
         response = self.client.post(
             self.get_url(),
@@ -2343,6 +2821,52 @@ class MediaExpertQCWizardTests(TestCase):
         self.media.refresh_from_db()
         self.assertEqual(self.media.qc_status, Media.QCStatus.PENDING_EXPERT)
         self.assertEqual(MediaQCComment.objects.count(), 0)
+
+    def test_approval_blocked_when_warnings_unacknowledged(self):
+        self.add_unlinked_identification_warning()
+
+        response = self.client.post(
+            self.get_url(),
+            self.build_post_data(action="approve", qc_comment="Review"),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "identification record",
+        )
+
+        self.media.refresh_from_db()
+        self.assertEqual(self.media.qc_status, Media.QCStatus.PENDING_EXPERT)
+        self.assertFalse(
+            MediaQCLog.objects.filter(
+                media=self.media, field_name="warning_acknowledged"
+            ).exists()
+        )
+
+    def test_acknowledged_warning_is_logged_on_approval(self):
+        self.add_unlinked_identification_warning()
+
+        post_data = self.build_post_data(
+            action="approve", qc_comment="Warnings reviewed"
+        )
+        post_data.setdefault("acknowledge_warnings", [])
+        post_data["acknowledge_warnings"].append("unlinked_identifications")
+
+        response = self.client.post(self.get_url(), post_data)
+
+        self.assertRedirects(response, reverse("dashboard"))
+
+        self.media.refresh_from_db()
+        self.assertEqual(self.media.qc_status, Media.QCStatus.APPROVED)
+
+        log_entry = MediaQCLog.objects.filter(
+            media=self.media, field_name="warning_acknowledged"
+        ).get()
+        self.assertEqual(log_entry.change_type, MediaQCLog.ChangeType.OCR_DATA)
+        self.assertEqual(log_entry.old_value.get("code"), "unlinked_identifications")
+        self.assertTrue(log_entry.new_value.get("acknowledged"))
+        self.assertEqual(log_entry.new_value.get("count"), 1)
 
     def test_approval_blocked_when_accession_exists(self):
         accession = Accession.objects.create(
@@ -2475,6 +2999,61 @@ class MediaExpertQCWizardTests(TestCase):
         row = accession.accessionrow_set.get(specimen_suffix="-")
         self.assertEqual(row.storage.area, "Shelf 42")
 
+    def test_initial_rows_copy_missing_identifications_and_specimens(self):
+        Element.objects.create(name="Femur")
+        self.media.ocr_data = {
+            "card_type": "accession_card",
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 123},
+                    "rows": [
+                        {
+                            "_row_id": "row-0",
+                            "specimen_suffix": {"interpreted": "A"},
+                            "natures": [
+                                {
+                                    "element_name": {"interpreted": "Femur"},
+                                    "verbatim_element": {"interpreted": "Femur"},
+                                    "portion": {"interpreted": "Proximal"},
+                                }
+                            ],
+                        },
+                        {
+                            "_row_id": "row-1",
+                            "specimen_suffix": {"interpreted": "B"},
+                            "natures": [],
+                        },
+                        {
+                            "_row_id": "row-2",
+                            "specimen_suffix": {"interpreted": "C"},
+                            "natures": [],
+                        },
+                    ],
+                    "identifications": [
+                        {
+                            "taxon": {"interpreted": "Homo"},
+                            "verbatim_identification": {"interpreted": "Homo sp."},
+                        }
+                    ],
+                }
+            ],
+        }
+        self.media.save(update_fields=["ocr_data"])
+
+        response = self.client.get(self.get_url())
+        self.assertEqual(response.status_code, 200)
+        row_contexts = response.context["row_contexts"]
+        self.assertEqual(len(row_contexts), 3)
+        for context in row_contexts:
+            ident_forms = context["ident_forms"]
+            self.assertEqual(len(ident_forms), 1)
+            self.assertEqual(ident_forms[0]["taxon"].value(), "Homo")
+            specimen_forms = context["specimen_forms"]
+            self.assertEqual(len(specimen_forms), 1)
+            self.assertEqual(specimen_forms[0]["verbatim_element"].value(), "Femur")
+
     def test_non_expert_forbidden(self):
         User = get_user_model()
         other = User.objects.create_user(username="visitor", password="pass")
@@ -2483,40 +3062,6 @@ class MediaExpertQCWizardTests(TestCase):
 
         response = self.client.get(self.get_url())
         self.assertEqual(response.status_code, 403)
-
-
-class UploadProcessingTests(TestCase):
-    """Tests for the file watcher processing logic."""
-
-    def setUp(self):
-        User = get_user_model()
-        self.user = User.objects.create_user(username="intern", password="pass")
-        patcher = patch("cms.models.get_current_user", return_value=self.user)
-        patcher.start()
-        self.addCleanup(patcher.stop)
-        self.drawer = DrawerRegister.objects.create(
-            code="DRW", description="Drawer", estimated_documents=1
-        )
-        start = now() - timedelta(minutes=5)
-        end = now() + timedelta(minutes=5)
-        self.scanning = Scanning.objects.create(
-            drawer=self.drawer, user=self.user, start_time=start, end_time=end
-        )
-
-    def test_scanning_lookup_uses_creation_time(self):
-        incoming = Path(settings.MEDIA_ROOT) / "uploads" / "incoming"
-        incoming.mkdir(parents=True, exist_ok=True)
-        filename = "2025-09-09(1).png"
-        src = incoming / filename
-        src.write_bytes(b"data")
-        created = self.scanning.start_time + timedelta(minutes=1)
-        stat_result = SimpleNamespace(st_ctime=created.timestamp(), st_mode=0)
-        with patch("pathlib.Path.stat", return_value=stat_result):
-            process_file(src)
-        media = Media.objects.get(media_location=f"uploads/pending/{filename}")
-        self.assertEqual(media.scanning, self.scanning)
-        import shutil
-        shutil.rmtree(incoming.parent)
 
 
 class StorageViewTests(TestCase):
@@ -2610,6 +3155,62 @@ class MediaFileDeletionTests(TestCase):
         self.assertTrue(file_path.exists())
         media.delete()
         self.assertFalse(file_path.exists())
+
+
+class ApplyRowsFallbackTests(TestCase):
+    def setUp(self):
+        self.collection = Collection.objects.create(
+            abbreviation="KNM", description="Kenya"
+        )
+        self.locality = Locality.objects.create(abbreviation="AB", name="Area")
+        self.accession = Accession.objects.create(
+            collection=self.collection,
+            specimen_prefix=self.locality,
+            specimen_no=100,
+            instance_number=1,
+        )
+
+    def test_reuses_last_identification_and_specimens_for_missing_rows(self):
+        rows = [
+            {
+                "specimen_suffix": "-",
+                "storage": None,
+                "identification": {
+                    "taxon": "Homo sp.",
+                    "verbatim_identification": "Homo sp.",
+                },
+                "natures": [
+                    {
+                        "element_name": "Femur",
+                        "verbatim_element": "Femur",
+                        "portion": "Proximal",
+                        "fragments": 1,
+                    }
+                ],
+            },
+            {
+                "specimen_suffix": "A",
+                "storage": None,
+                "identification": {},
+                "natures": [],
+            },
+            {
+                "specimen_suffix": "B",
+                "storage": None,
+                "identification": {},
+                "natures": [],
+            },
+        ]
+
+        _apply_rows(self.accession, rows)
+
+        for suffix in ("-", "A", "B"):
+            row = self.accession.accessionrow_set.get(specimen_suffix=suffix)
+            ident = row.identification_set.get()
+            self.assertEqual(ident.taxon, "Homo sp.")
+            specimen = row.natureofspecimen_set.get()
+            self.assertEqual(specimen.element.name, "Femur")
+            self.assertEqual(specimen.portion, "Proximal")
 
 
 class MediaInternQCWizardTests(TestCase):
@@ -2747,8 +3348,8 @@ class MediaInternQCWizardTests(TestCase):
             "ident-1-identification_remarks": "",
             "ident-1-reference": "",
             "ident-1-date_identified": "",
-            "specimen-TOTAL_FORMS": "1",
-            "specimen-INITIAL_FORMS": "1",
+            "specimen-TOTAL_FORMS": "2",
+            "specimen-INITIAL_FORMS": "2",
             "specimen-MIN_NUM_FORMS": "0",
             "specimen-MAX_NUM_FORMS": "1000",
             "specimen-0-row_id": "row-0",
@@ -2758,6 +3359,13 @@ class MediaInternQCWizardTests(TestCase):
             "specimen-0-verbatim_element": "Femur",
             "specimen-0-portion": "Proximal",
             "specimen-0-fragments": "3",
+            "specimen-1-row_id": "row-1",
+            "specimen-1-element": str(self.element.pk),
+            "specimen-1-side": "Left",
+            "specimen-1-condition": "Excellent",
+            "specimen-1-verbatim_element": "Femur",
+            "specimen-1-portion": "Proximal",
+            "specimen-1-fragments": "3",
             "reference-TOTAL_FORMS": "1",
             "reference-INITIAL_FORMS": "1",
             "reference-MIN_NUM_FORMS": "0",
@@ -2875,6 +3483,295 @@ class MediaInternQCWizardTests(TestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertIn("Shelf 42", response.context["storage_suggestions"])
+
+    def test_can_add_reference_entry(self):
+        self.client.login(username="intern", password="pass")
+        url = self.get_url()
+        data = self.build_valid_post_data()
+        data.update(
+            {
+                "reference-TOTAL_FORMS": "3",
+                "reference-1-ref_id": "",
+                "reference-1-order": "1",
+                "reference-1-first_author": "New Author",
+                "reference-1-title": "New Insights",
+                "reference-1-year": "2020",
+                "reference-1-page": "10-12",
+                "reference-2-ref_id": "",
+                "reference-2-order": "2",
+                "reference-2-first_author": "  ",
+                "reference-2-title": "",
+                "reference-2-year": "",
+                "reference-2-page": "",
+            }
+        )
+
+        response = self.client.post(url, data, follow=True)
+        self.assertEqual(response.status_code, 200)
+
+        self.media.refresh_from_db()
+        references = self.media.ocr_data["accessions"][0]["references"]
+        self.assertEqual(len(references), 2)
+        self.assertEqual(
+            references[1]["reference_first_author"]["interpreted"], "New Author"
+        )
+        self.assertEqual(references[1]["page"]["interpreted"], "10-12")
+
+    def test_handles_inserted_row_payload(self):
+        self.client.login(username="intern", password="pass")
+        url = self.get_url()
+        data = self.build_valid_post_data()
+        data.update(
+            {
+                "row-TOTAL_FORMS": "3",
+                "row-2-row_id": "row-2",
+                "row-2-order": "2",
+                "row-2-specimen_suffix": "C",
+                "row-2-storage": "Cabinet 4",
+                "row-2-status": InventoryStatus.UNKNOWN,
+                "specimen-TOTAL_FORMS": "2",
+                "specimen-INITIAL_FORMS": "1",
+                "specimen-1-row_id": "row-2",
+                "specimen-1-element": str(self.element.pk),
+                "specimen-1-side": "Right",
+                "specimen-1-condition": "Good",
+                "specimen-1-verbatim_element": "Femur",
+                "specimen-1-portion": "Distal",
+                "specimen-1-fragments": "1",
+            }
+        )
+
+        response = self.client.post(url, data, follow=True)
+        self.assertEqual(response.status_code, 200)
+
+        self.media.refresh_from_db()
+        rows = self.media.ocr_data["accessions"][0]["rows"]
+        self.assertEqual(len(rows), 3)
+        self.assertEqual(rows[2]["specimen_suffix"]["interpreted"], "C")
+        self.assertEqual(rows[2]["storage_area"]["interpreted"], "Cabinet 4")
+        natures = rows[2]["natures"]
+        self.assertEqual(len(natures), 1)
+        self.assertEqual(natures[0]["element_name"]["interpreted"], "Femur")
+        self.assertEqual(natures[0]["portion"]["interpreted"], "Distal")
+
+    def test_handles_added_specimen_payload(self):
+        self.client.login(username="intern", password="pass")
+        url = self.get_url()
+        data = self.build_valid_post_data()
+        data.update(
+            {
+                "specimen-TOTAL_FORMS": "2",
+                "specimen-1-row_id": "row-1",
+                "specimen-1-element": str(self.element.pk),
+                "specimen-1-side": "Right",
+                "specimen-1-condition": "Fair",
+                "specimen-1-verbatim_element": "Mandible fragment",
+                "specimen-1-portion": "Complete",
+                "specimen-1-fragments": "2",
+            }
+        )
+
+        response = self.client.post(url, data, follow=True)
+        self.assertEqual(response.status_code, 200)
+
+        self.media.refresh_from_db()
+        accession_payload = self.media.ocr_data["accessions"][0]
+        rows = accession_payload["rows"]
+        target_row = next(
+            row for row in rows if row["specimen_suffix"]["interpreted"] == "B"
+        )
+        self.assertEqual(len(target_row["natures"]), 1)
+        added_nature = target_row["natures"][0]
+        self.assertEqual(added_nature["element_name"]["interpreted"], "Femur")
+        self.assertEqual(added_nature["side"]["interpreted"], "Right")
+        self.assertEqual(added_nature["portion"]["interpreted"], "Complete")
+
+    def test_handles_ident_update_on_existing_row(self):
+        """Interns can edit the default identification chip on an existing row."""
+
+        self.client.login(username="intern", password="pass")
+        url = self.get_url()
+        data = self.build_valid_post_data()
+        data.update(
+            {
+                "ident-1-taxon": "Homo",
+                "ident-1-identification_qualifier": "cf.",
+                "ident-1-verbatim_identification": "Homo cf.",
+                "ident-1-identification_remarks": "Updated during QC",
+            }
+        )
+
+        response = self.client.post(url, data, follow=True)
+        self.assertEqual(response.status_code, 200)
+
+        self.media.refresh_from_db()
+        accession_payload = self.media.ocr_data["accessions"][0]
+        rows = accession_payload["rows"]
+        identifications = accession_payload["identifications"]
+        suffixes = [row["specimen_suffix"]["interpreted"] for row in rows]
+        updated_index = suffixes.index("B")
+        updated_ident = identifications[updated_index]
+        self.assertEqual(updated_ident["taxon"]["interpreted"], "Homo")
+        self.assertEqual(
+            updated_ident["identification_qualifier"]["interpreted"], "cf."
+        )
+        self.assertEqual(
+            updated_ident["identification_remarks"]["interpreted"],
+            "Updated during QC",
+        )
+
+    def test_handles_new_identification_for_added_row(self):
+        self.client.login(username="intern", password="pass")
+        url = self.get_url()
+        data = self.build_valid_post_data()
+        data.update(
+            {
+                "row-TOTAL_FORMS": "3",
+                "row-2-row_id": "row-2",
+                "row-2-order": "2",
+                "row-2-specimen_suffix": "C",
+                "row-2-storage": "Drawer 15",
+                "row-2-status": InventoryStatus.UNKNOWN,
+                "specimen-TOTAL_FORMS": "2",
+                "specimen-1-row_id": "row-2",
+                "specimen-1-element": str(self.element.pk),
+                "specimen-1-side": "Left",
+                "specimen-1-condition": "Good",
+                "specimen-1-verbatim_element": "Tooth",
+                "specimen-1-portion": "Crown",
+                "specimen-1-fragments": "1",
+                "ident-TOTAL_FORMS": "3",
+                "ident-2-row_id": "row-2",
+                "ident-2-taxon": "Papio",
+                "ident-2-identification_qualifier": "cf.",
+                "ident-2-identified_by": "",
+                "ident-2-verbatim_identification": "Papio cf.",
+                "ident-2-identification_remarks": "Added manually",
+                "ident-2-reference": "",
+                "ident-2-date_identified": "",
+            }
+        )
+
+        response = self.client.post(url, data, follow=True)
+        self.assertEqual(response.status_code, 200)
+
+        self.media.refresh_from_db()
+        accession_payload = self.media.ocr_data["accessions"][0]
+        rows = accession_payload["rows"]
+        identifications = accession_payload["identifications"]
+        suffixes = [row["specimen_suffix"]["interpreted"] for row in rows]
+        self.assertEqual(len(suffixes), len(identifications))
+        new_index = suffixes.index("C")
+        self.assertEqual(
+            identifications[new_index]["taxon"]["interpreted"], "Papio"
+        )
+        self.assertEqual(
+            identifications[new_index]["identification_qualifier"]["interpreted"],
+            "cf.",
+        )
+
+    def test_handles_deleted_identification_payload(self):
+        self.client.login(username="intern", password="pass")
+        url = self.get_url()
+        data = self.build_valid_post_data()
+        data["ident-0-DELETE"] = "on"
+
+        response = self.client.post(url, data, follow=True)
+        self.assertEqual(response.status_code, 200)
+
+        self.media.refresh_from_db()
+        accession_payload = self.media.ocr_data["accessions"][0]
+        rows = accession_payload["rows"]
+        identifications = accession_payload["identifications"]
+        suffixes = [row["specimen_suffix"]["interpreted"] for row in rows]
+        self.assertEqual(len(suffixes), len(identifications))
+        deleted_index = suffixes.index("A")
+        cleared_ident = identifications[deleted_index]
+        self.assertIsNone(cleared_ident["taxon"]["interpreted"])
+        self.assertIsNone(
+            cleared_ident["identification_qualifier"]["interpreted"]
+        )
+        self.assertIsNone(
+            cleared_ident["identification_remarks"]["interpreted"]
+        )
+
+    def test_handles_deleted_specimen_payload(self):
+        """Specimen chips flagged for deletion are removed from the payload."""
+
+        self.client.login(username="intern", password="pass")
+        url = self.get_url()
+        data = self.build_valid_post_data()
+        data["specimen-0-DELETE"] = "on"
+
+        response = self.client.post(url, data, follow=True)
+        self.assertEqual(response.status_code, 200)
+
+        self.media.refresh_from_db()
+        accession_payload = self.media.ocr_data["accessions"][0]
+        rows = accession_payload["rows"]
+        identifications = accession_payload["identifications"]
+        suffixes = [row["specimen_suffix"]["interpreted"] for row in rows]
+        leading_index = suffixes.index("A")
+        leading_row = rows[leading_index]
+        leading_ident = identifications[leading_index]
+        self.assertEqual(leading_row["natures"], [])
+        # Identification remains intact after removing the specimen chip.
+        self.assertEqual(leading_ident["taxon"]["interpreted"], "Pan")
+
+    def test_handles_split_payload_creates_new_row(self):
+        self.client.login(username="intern", password="pass")
+        url = self.get_url()
+        data = self.build_valid_post_data()
+        data.update(
+            {
+                "row-TOTAL_FORMS": "3",
+                "row-2-row_id": "row-2",
+                "row-2-order": "2",
+                "row-2-specimen_suffix": "C",
+                "row-2-storage": "Drawer 10",
+                "row-2-status": InventoryStatus.UNKNOWN,
+            }
+        )
+        data["specimen-0-row_id"] = "row-2"
+
+        response = self.client.post(url, data, follow=True)
+        self.assertEqual(response.status_code, 200)
+
+        self.media.refresh_from_db()
+        accession_payload = self.media.ocr_data["accessions"][0]
+        rows = accession_payload["rows"]
+        self.assertEqual(len(rows), 3)
+        moved_row = rows[2]
+        self.assertEqual(moved_row["storage_area"]["interpreted"], "Drawer 10")
+        self.assertEqual(len(moved_row["natures"]), 1)
+        original_first_row = rows[1]
+        self.assertEqual(original_first_row["natures"], [])
+
+    def test_handles_merged_rows_payload(self):
+        self.client.login(username="intern", password="pass")
+        url = self.get_url()
+        data = self.build_valid_post_data()
+        for key in list(data.keys()):
+            if key.startswith("row-1-"):
+                data.pop(key)
+            if key.startswith("ident-1-"):
+                data.pop(key)
+        data.update(
+            {
+                "row-TOTAL_FORMS": "1",
+                "row-INITIAL_FORMS": "1",
+                "ident-TOTAL_FORMS": "1",
+                "ident-INITIAL_FORMS": "1",
+            }
+        )
+
+        response = self.client.post(url, data, follow=True)
+        self.assertEqual(response.status_code, 200)
+
+        self.media.refresh_from_db()
+        rows = self.media.ocr_data["accessions"][0]["rows"]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["specimen_suffix"]["interpreted"], "A")
 
     def test_does_not_create_storage_when_submission_invalid(self):
         self.client.login(username="intern", password="pass")

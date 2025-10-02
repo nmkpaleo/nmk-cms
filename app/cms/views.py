@@ -93,7 +93,17 @@ from .utils import build_history_entries
 from cms.utils import generate_accessions_from_series
 from cms.upload_processing import process_file
 from cms.ocr_processing import process_pending_scans, describe_accession_conflicts
+from cms.qc import (
+    build_preview_accession,
+    diff_media_payload,
+    ident_payload_has_meaningful_data as qc_ident_payload_has_meaningful_data,
+    interpreted_value as qc_interpreted_value,
+)
+from cms import scanning_utils
 from formtools.wizard.views import SessionWizardView
+
+_ident_payload_has_meaningful_data = qc_ident_payload_has_meaningful_data
+_interpreted_value = qc_interpreted_value
 
 class FieldSlipAutocomplete(autocomplete.Select2QuerySetView):
     def get_queryset(self):
@@ -386,20 +396,30 @@ def dashboard(request):
         )
 
     if user.groups.filter(name="Interns").exists():
+        scanning_utils.auto_complete_scans(
+            Scanning.objects.filter(user=user, end_time__isnull=True)
+        )
         active_scan_id_subquery = Scanning.objects.filter(
             drawer=OuterRef("pk"), user=user, end_time__isnull=True
         ).values("id")[:1]
         active_scan_start_subquery = Scanning.objects.filter(
             drawer=OuterRef("pk"), user=user, end_time__isnull=True
         ).values("start_time")[:1]
-        my_drawers = (
+        my_drawers_qs = (
             DrawerRegister.objects.filter(
                 scanning_status=DrawerRegister.ScanningStatus.IN_PROGRESS,
                 scanning_users=user,
             )
             .annotate(active_scan_id=Subquery(active_scan_id_subquery))
             .annotate(active_scan_start=Subquery(active_scan_start_subquery))
+            .order_by("-priority", "code")
         )
+        my_drawers = list(my_drawers_qs[:1])
+
+        for drawer in my_drawers:
+            drawer.active_scan_start = scanning_utils.to_nairobi(
+                getattr(drawer, "active_scan_start", None)
+            )
 
         for status_choice in (
             Media.QCStatus.PENDING_INTERN,
@@ -1045,6 +1065,9 @@ class AccessionRowIdentificationQCForm(AccessionRowIdentificationForm):
             field = self.fields.get(field_name)
             if field is not None:
                 field.required = False
+        delete_field = self.fields.get('DELETE')
+        if delete_field is not None:
+            delete_field.widget = forms.HiddenInput()
 
 
 class AccessionRowSpecimenQCForm(AccessionRowSpecimenForm):
@@ -1063,16 +1086,21 @@ class AccessionRowSpecimenQCForm(AccessionRowSpecimenForm):
                 field = self.fields.get(field_name)
                 if field is not None:
                     field.required = False
+        delete_field = self.fields.get('DELETE')
+        if delete_field is not None:
+            delete_field.widget = forms.HiddenInput()
 
 
 AccessionRowFormSet = formset_factory(AccessionRowQCForm, extra=0, can_delete=False)
-IdentificationQCFormSet = formset_factory(AccessionRowIdentificationQCForm, extra=0, can_delete=False)
-SpecimenQCFormSet = formset_factory(AccessionRowSpecimenQCForm, extra=0, can_delete=False)
+IdentificationQCFormSet = formset_factory(
+    AccessionRowIdentificationQCForm, extra=0, can_delete=True
+)
+SpecimenQCFormSet = formset_factory(AccessionRowSpecimenQCForm, extra=0, can_delete=True)
 
 
 class AccessionReferenceQCForm(forms.Form):
-    ref_id = forms.CharField(widget=forms.HiddenInput())
-    order = forms.IntegerField(widget=forms.HiddenInput())
+    ref_id = forms.CharField(required=False, widget=forms.HiddenInput())
+    order = forms.IntegerField(required=False, widget=forms.HiddenInput())
     first_author = forms.CharField(label="First author", required=False, max_length=255)
     title = forms.CharField(label="Title", required=False, max_length=255)
     year = forms.CharField(label="Year", required=False, max_length=32)
@@ -1129,6 +1157,35 @@ def _form_order_value(form):
         return 0
 
 
+def _ident_payload_has_explicit_fields(entry: dict) -> bool:
+    if not isinstance(entry, dict):
+        return False
+    for value in entry.values():
+        if isinstance(value, dict) and 'interpreted' in value:
+            return True
+    return bool(entry)
+
+
+def _natures_payload_has_meaningful_data(natures: list[dict]) -> bool:
+    for nature in natures or []:
+        if not isinstance(nature, dict):
+            continue
+        for key in (
+            'element_name',
+            'side',
+            'condition',
+            'verbatim_element',
+            'portion',
+            'fragments',
+        ):
+            interpreted = _interpreted_value(nature.get(key))
+            if interpreted not in (None, ''):
+                return True
+            if key == 'fragments' and interpreted == 0:
+                return True
+    return False
+
+
 def _set_interpreted(container: dict, key: str, value):
     existing = container.get(key)
     if not isinstance(existing, dict):
@@ -1146,48 +1203,29 @@ def _set_interpreted(container: dict, key: str, value):
     return new_field
 
 
-def _iter_field_diffs(old, new, path=""):
-    if isinstance(new, dict) and not isinstance(old, dict):
-        old = {}
-    if isinstance(new, list) and not isinstance(old, list):
-        old = []
-    if isinstance(old, dict) and isinstance(new, dict):
-        keys = set(old.keys()) | set(new.keys())
-        for key in keys:
-            if key == 'interpreted':
-                old_val = old.get('interpreted')
-                new_val = new.get('interpreted')
-                if old_val != new_val:
-                    yield path, old_val, new_val
-            else:
-                sub_path = f"{path}.{key}" if path else key
-                yield from _iter_field_diffs(old.get(key), new.get(key), sub_path)
-    elif isinstance(old, list) and isinstance(new, list):
-        length = max(len(old), len(new))
-        for index in range(length):
-            old_value = old[index] if index < len(old) else None
-            new_value = new[index] if index < len(new) else None
-            sub_path = f"{path}[{index}]" if path else f"[{index}]"
-            yield from _iter_field_diffs(old_value, new_value, sub_path)
-    else:
-        if old != new:
-            yield path, old, new
-
-
 def _build_row_contexts(row_formset, ident_formset, specimen_formset):
-    ident_map = {_form_row_id(form): form for form in ident_formset.forms}
+    ident_map: dict[str, list] = {}
+    for form in ident_formset.forms:
+        row_id = _form_row_id(form)
+        if not row_id:
+            continue
+        ident_map.setdefault(row_id, []).append(form)
     specimen_map: dict[str, list] = {}
     for form in specimen_formset.forms:
         row_id = _form_row_id(form)
+        if not row_id:
+            continue
         specimen_map.setdefault(row_id, []).append(form)
     contexts = []
     for form in row_formset.forms:
         row_id = _form_row_id(form)
+        ident_forms = ident_map.get(row_id, [])
+        specimens = specimen_map.get(row_id, [])
         contexts.append(
             {
                 'row_form': form,
-                'ident_form': ident_map.get(row_id),
-                'specimen_forms': specimen_map.get(row_id, []),
+                'ident_forms': ident_forms,
+                'specimen_forms': specimens,
                 'row_id': row_id,
                 'order': _form_order_value(form),
             }
@@ -1234,8 +1272,16 @@ class MediaQCFormManager:
     def __init__(self, request, media: Media):
         self.request = request
         self.media = media
-        self.original_data = copy.deepcopy(media.ocr_data or {})
-        self.data = copy.deepcopy(media.ocr_data or {})
+
+        stored_data = copy.deepcopy(media.ocr_data or {})
+        snapshot_source = stored_data.get("_original_snapshot")
+        if snapshot_source is None:
+            snapshot_source = copy.deepcopy(stored_data)
+            stored_data["_original_snapshot"] = copy.deepcopy(snapshot_source)
+            media.ocr_data = stored_data
+            media.save(update_fields=["ocr_data"])
+        self.original_data = copy.deepcopy(snapshot_source)
+        self.data = copy.deepcopy(media.ocr_data or stored_data)
         accessions = self.data.setdefault("accessions", [])
         if not accessions:
             accessions.append({})
@@ -1249,6 +1295,18 @@ class MediaQCFormManager:
             ident_payload.extend(
                 {} for _ in range(len(self.rows_payload) - len(ident_payload))
             )
+        propagated_ident_payload: list[dict] = []
+        last_ident_snapshot: dict | None = None
+        for entry in ident_payload:
+            entry = entry or {}
+            if _ident_payload_has_meaningful_data(entry):
+                last_ident_snapshot = copy.deepcopy(entry)
+                propagated_ident_payload.append(entry)
+            elif last_ident_snapshot and not _ident_payload_has_explicit_fields(entry):
+                propagated_ident_payload.append(copy.deepcopy(last_ident_snapshot))
+            else:
+                propagated_ident_payload.append(entry)
+        ident_payload = propagated_ident_payload
         self.ident_payload = ident_payload
         self.row_initial: list[dict] = []
         self.ident_initial: list[dict] = []
@@ -1261,6 +1319,8 @@ class MediaQCFormManager:
         self.fieldslip_payload_map: dict[str, dict] = {}
         self.original_row_ids: list[str] = []
 
+        last_natures_snapshot: list[dict] = []
+
         for index, row_payload in enumerate(self.rows_payload):
             row_id = (
                 row_payload.get("_row_id")
@@ -1269,9 +1329,8 @@ class MediaQCFormManager:
             )
             self.original_row_ids.append(row_id)
             self.row_payload_map[row_id] = row_payload
-            self.ident_payload_map[row_id] = (
-                ident_payload[index] if index < len(ident_payload) else {}
-            )
+            ident_entry = ident_payload[index] if index < len(ident_payload) else {}
+            self.ident_payload_map[row_id] = ident_entry
 
             suffix = (row_payload.get("specimen_suffix") or {}).get("interpreted") or "-"
             storage_name = (row_payload.get("storage_area") or {}).get("interpreted")
@@ -1327,7 +1386,16 @@ class MediaQCFormManager:
                 }
             )
 
-            for nature in row_payload.get("natures") or []:
+            natures_payload = row_payload.get("natures")
+            if not isinstance(natures_payload, list):
+                natures_payload = []
+            if _natures_payload_has_meaningful_data(natures_payload):
+                last_natures_snapshot = copy.deepcopy(natures_payload)
+            elif last_natures_snapshot:
+                natures_payload = copy.deepcopy(last_natures_snapshot)
+                row_payload["natures"] = natures_payload
+
+            for nature in natures_payload or []:
                 element_name = (nature.get("element_name") or {}).get("interpreted")
                 element_obj = (
                     Element.objects.filter(name=element_name).first()
@@ -1475,6 +1543,7 @@ class MediaQCFormManager:
         self.reference_formset = None
         self.fieldslip_formset = None
         self.row_contexts: list[dict] = []
+        self.last_diff_result: dict[str, object] | None = None
 
     def build_forms(self) -> None:
         if self.request.method == "POST":
@@ -1576,6 +1645,8 @@ class MediaQCFormManager:
             cleaned = form.cleaned_data
             if not cleaned:
                 continue
+            if cleaned.get('DELETE'):
+                continue
             row_id = cleaned.get("row_id")
             if not row_id:
                 continue
@@ -1585,6 +1656,8 @@ class MediaQCFormManager:
         for form in self.specimen_formset:
             cleaned = form.cleaned_data
             if not cleaned:
+                continue
+            if cleaned.get('DELETE'):
                 continue
             row_id = cleaned.get("row_id")
             if not row_id:
@@ -1608,11 +1681,25 @@ class MediaQCFormManager:
             cleaned = form.cleaned_data
             if not cleaned:
                 continue
-            ref_id = (
-                cleaned.get("ref_id")
-                or form.initial.get("ref_id")
-                or f"ref-{len(reference_entries)}"
+
+            def _normalize(value):
+                if isinstance(value, str):
+                    value = value.strip()
+                return value or None
+
+            first_author = _normalize(cleaned.get("first_author"))
+            title = _normalize(cleaned.get("title"))
+            year = _normalize(cleaned.get("year"))
+            page = _normalize(cleaned.get("page"))
+
+            if not any((first_author, title, year, page)):
+                continue
+
+            ref_id = _normalize(cleaned.get("ref_id")) or _normalize(
+                form.initial.get("ref_id")
             )
+            if not ref_id:
+                ref_id = f"ref-{len(reference_entries)}"
             try:
                 order_value = int(cleaned.get("order"))
             except (TypeError, ValueError):
@@ -1621,10 +1708,10 @@ class MediaQCFormManager:
                 {
                     "ref_id": ref_id,
                     "order": order_value,
-                    "first_author": cleaned.get("first_author"),
-                    "title": cleaned.get("title"),
-                    "year": cleaned.get("year"),
-                    "page": cleaned.get("page"),
+                    "first_author": first_author,
+                    "title": title,
+                    "year": year,
+                    "page": page,
                 }
             )
 
@@ -1682,6 +1769,13 @@ class MediaQCFormManager:
         comment_cleaned = cleaned_accession.get("comment")
 
         storage_cache: dict[str, Storage] = {}
+
+        diff_result: dict[str, object] = {
+            "field_diffs": [],
+            "rows_reordered": rows_rearranged,
+            "count_diffs": [],
+            "warnings": [],
+        }
 
         with transaction.atomic():
             _set_interpreted(
@@ -1922,13 +2016,18 @@ class MediaQCFormManager:
             self.accession_payload["field_slips"] = updated_field_slips
             self.data["accessions"][0] = self.accession_payload
 
-            diffs = list(_iter_field_diffs(self.original_data, self.data))
+            diff_result = diff_media_payload(
+                self.original_data,
+                self.data,
+                rows_reordered=rows_rearranged,
+            )
 
             self.media.ocr_data = self.data
             self.media.rows_rearranged = rows_rearranged
             self.media.save(update_fields=["ocr_data", "rows_rearranged"])
 
-        for path, old_val, new_val in diffs:
+        field_diffs = diff_result.get("field_diffs", [])
+        for path, old_val, new_val in field_diffs:
             if not path:
                 continue
             MediaQCLog.objects.create(
@@ -1940,7 +2039,8 @@ class MediaQCFormManager:
                 changed_by=self.request.user,
             )
 
-        return {"rows_rearranged": rows_rearranged, "diffs": diffs}
+        self.last_diff_result = diff_result
+        return diff_result
 
 @login_required
 def MediaInternQCWizard(request, pk):
@@ -1979,6 +2079,17 @@ def MediaInternQCWizard(request, pk):
                     )
                     return redirect("dashboard")
 
+    qc_diff = manager.last_diff_result or diff_media_payload(
+        manager.original_data,
+        manager.data,
+        rows_reordered=media.rows_rearranged,
+    )
+    qc_preview = build_preview_accession(
+        manager.data,
+        manager.accession_form,
+        request_user=request.user,
+    )
+
     context = {
         "media": media,
         "accession_form": manager.accession_form,
@@ -1992,6 +2103,9 @@ def MediaInternQCWizard(request, pk):
         "storage_datalist_id": AccessionRowQCForm.storage_datalist_id,
         "qc_comments": qc_comments,
         "latest_qc_comment": latest_qc_comment,
+        "qc_diff": qc_diff,
+        "qc_preview": qc_preview,
+        "qc_acknowledged_warnings": set(),
     }
 
     return render(request, "cms/qc/intern_wizard.html", context)
@@ -2114,14 +2228,20 @@ def MediaExpertQCWizard(request, pk):
     action = "save"
     selected_resolution: dict[str, dict[str, object]] = {}
     conflict_details = describe_accession_conflicts(media)
+    acknowledged_warnings: set[str] = set()
+    diff_result: dict[str, object] | None = None
+    warnings_map: dict[str, dict[str, object]] = {}
 
     if request.method == "POST":
         qc_comment = (request.POST.get("qc_comment") or "").strip()
         action = request.POST.get("action") or "save"
+        acknowledged_warnings = {
+            value for value in request.POST.getlist("acknowledge_warnings") if value
+        }
 
         if manager.forms_valid():
             try:
-                manager.save()
+                diff_result = manager.save()
             except ValidationError as exc:
                 for message in _collect_validation_messages(exc):
                     manager.accession_form.add_error(None, message)
@@ -2136,6 +2256,15 @@ def MediaExpertQCWizard(request, pk):
                         request.POST, conflict_details
                     )
                     selected_resolution = resolution_map
+
+                if diff_result:
+                    warnings_map = {
+                        warning.get("code"): warning
+                        for warning in diff_result.get("warnings", [])
+                        if warning.get("code")
+                    }
+                else:
+                    warnings_map = {}
 
                 if action == "approve":
                     processed = (media.ocr_data or {}).get("_processed_accessions") or []
@@ -2154,34 +2283,65 @@ def MediaExpertQCWizard(request, pk):
                             manager.accession_form.add_error(None, message)
                             messages.error(request, message)
                     else:
-                        try:
-                            with transaction.atomic():
-                                media.transition_qc(
-                                    Media.QCStatus.APPROVED,
-                                    user=user,
-                                    note=qc_comment or None,
-                                    resolution=resolution_map or None,
+                        unresolved_warnings = [
+                            warning
+                            for code, warning in warnings_map.items()
+                            if code not in acknowledged_warnings
+                        ]
+                        if unresolved_warnings:
+                            for warning in unresolved_warnings:
+                                message = warning.get("message") or (
+                                    "Review and acknowledge outstanding QC warnings before approving."
                                 )
-                        except ValidationError as exc:
-                            for message in _collect_validation_messages(exc):
                                 manager.accession_form.add_error(None, message)
                                 messages.error(request, message)
-                            conflict_details = describe_accession_conflicts(media)
-                            selected_resolution = resolution_map
-                        except Exception as exc:
-                            message = f"Importer error: {exc}"
-                            manager.accession_form.add_error(None, message)
-                            messages.error(request, message)
-                            conflict_details = describe_accession_conflicts(media)
-                            selected_resolution = resolution_map
                         else:
-                            media.refresh_from_db()
-                            _create_qc_comment(media, qc_comment, user)
-                            messages.success(
-                                request,
-                                "Media approved and accessions created.",
-                            )
-                            return redirect("dashboard")
+                            try:
+                                with transaction.atomic():
+                                    media.transition_qc(
+                                        Media.QCStatus.APPROVED,
+                                        user=user,
+                                        note=qc_comment or None,
+                                        resolution=resolution_map or None,
+                                    )
+                            except ValidationError as exc:
+                                for message in _collect_validation_messages(exc):
+                                    manager.accession_form.add_error(None, message)
+                                    messages.error(request, message)
+                                conflict_details = describe_accession_conflicts(media)
+                                selected_resolution = resolution_map
+                            except Exception as exc:
+                                message = f"Importer error: {exc}"
+                                manager.accession_form.add_error(None, message)
+                                messages.error(request, message)
+                                conflict_details = describe_accession_conflicts(media)
+                                selected_resolution = resolution_map
+                            else:
+                                media.refresh_from_db()
+                                for code in acknowledged_warnings:
+                                    warning = warnings_map.get(code)
+                                    if not warning:
+                                        continue
+                                    MediaQCLog.objects.create(
+                                        media=media,
+                                        change_type=MediaQCLog.ChangeType.OCR_DATA,
+                                        field_name="warning_acknowledged",
+                                        old_value={"code": code},
+                                        new_value={
+                                            "acknowledged": True,
+                                            "count": warning.get("count"),
+                                        },
+                                        description=(
+                                            f"QC warning acknowledged: {warning.get('label')}"
+                                        ),
+                                        changed_by=user,
+                                    )
+                                _create_qc_comment(media, qc_comment, user)
+                                messages.success(
+                                    request,
+                                    "Media approved and accessions created.",
+                                )
+                                return redirect("dashboard")
                 elif action == "return_intern":
                     try:
                         media.transition_qc(
@@ -2241,6 +2401,17 @@ def MediaExpertQCWizard(request, pk):
     _annotate_conflict_selections(conflict_details, selected_resolution)
     qc_comments = _get_qc_comments(media)
 
+    qc_diff = diff_result or manager.last_diff_result or diff_media_payload(
+        manager.original_data,
+        manager.data,
+        rows_reordered=media.rows_rearranged,
+    )
+    qc_preview = build_preview_accession(
+        manager.data,
+        manager.accession_form,
+        request_user=request.user,
+    )
+
     context = {
         "media": media,
         "accession_form": manager.accession_form,
@@ -2255,6 +2426,9 @@ def MediaExpertQCWizard(request, pk):
         "qc_comment": qc_comment,
         "qc_comments": qc_comments,
         "qc_conflicts": conflict_details,
+        "qc_diff": qc_diff,
+        "qc_preview": qc_preview,
+        "qc_acknowledged_warnings": acknowledged_warnings,
     }
 
     return render(request, "cms/qc/expert_wizard.html", context)
@@ -2362,7 +2536,15 @@ def upload_scan(request):
             fs = FileSystemStorage(location=incoming_dir)
             for file in files:
                 saved_name = fs.save(file.name, file)
-                process_file(incoming_dir / saved_name)
+                saved_path = incoming_dir / saved_name
+                if saved_name != file.name:
+                    desired_path = incoming_dir / file.name
+                    if desired_path.exists():
+                        desired_path.unlink()
+                    saved_path.rename(desired_path)
+                    saved_name = file.name
+                    saved_path = desired_path
+                process_file(saved_path)
                 messages.success(request, f'Uploaded {file.name}')
             return redirect('admin-upload-scan')
         else:
@@ -3030,8 +3212,11 @@ class DrawerRegisterUpdateView(LoginRequiredMixin, DrawerRegisterAccessMixin, Up
 @login_required
 def start_scan(request, pk):
     drawer = get_object_or_404(DrawerRegister, pk=pk)
+    scanning_utils.auto_complete_scans(
+        Scanning.objects.filter(user=request.user, end_time__isnull=True)
+    )
     Scanning.objects.create(
-        drawer=drawer, user=request.user, start_time=now()
+        drawer=drawer, user=request.user, start_time=scanning_utils.nairobi_now()
     )
     return redirect("dashboard")
 
@@ -3045,7 +3230,8 @@ def stop_scan(request, pk):
         .first()
     )
     if scan:
-        scan.end_time = now()
+        auto_end = scanning_utils.calculate_scan_auto_end(scan.start_time)
+        scan.end_time = min(scanning_utils.nairobi_now(), auto_end)
         scan.save()
     return redirect("dashboard")
     

@@ -61,6 +61,13 @@
       gap: 0.75rem;
       padding: 0.25rem 0;
     }
+    .qc-chip[data-chip-type="ident"] .qc-field {
+      grid-template-columns: minmax(150px, max-content) minmax(0, 1fr);
+      align-items: flex-start;
+    }
+    .qc-chip[data-chip-type="ident"] .qc-label {
+      margin-bottom: 0;
+    }
     .qc-label {
       font-weight: 600;
       margin: 0;
@@ -170,6 +177,229 @@
     .qc-row-block + .qc-row-block {
       margin-top: 12px;
     }
+    .qc-row-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .qc-row-card {
+      display: flex;
+      flex-direction: column;
+      border: 1px solid #dcdcdc;
+      border-radius: 6px;
+      padding: 1rem;
+      background-color: #fff;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+    }
+    .qc-row-card[draggable="true"] {
+      cursor: grab;
+    }
+    .qc-row-card__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+      flex-wrap: wrap;
+    }
+    .qc-row-card__drag {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      border: 1px dashed #c7d2fe;
+      background: #eef2ff;
+      color: #3730a3;
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      font-size: 0.85rem;
+    }
+    .qc-row-card__drag-icon {
+      font-size: 0.9rem;
+    }
+    .qc-row-card__actions {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .qc-row-card__body {
+      display: grid;
+      gap: 1rem;
+    }
+    .qc-row-card__chips {
+      display: grid;
+      gap: 1rem;
+    }
+    .qc-row-card__alert {
+      margin-bottom: 0.75rem;
+    }
+    .qc-row-card__alert-actions {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .qc-chip-zone {
+      border: 1px dashed #cbd5f5;
+      border-radius: 6px;
+      padding: 0.75rem;
+      background-color: #f8fafc;
+    }
+    .qc-chip-zone__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: #4c1d95;
+      margin-bottom: 0.5rem;
+    }
+    .qc-chip-zone__list {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      min-height: 2.5rem;
+    }
+    .qc-chip-zone__empty {
+      margin-top: 0.5rem;
+      font-size: 0.8rem;
+      color: #64748b;
+    }
+    .qc-chip-zone--active {
+      background-color: #eef2ff;
+      border-color: #6366f1;
+    }
+    .qc-chip { 
+      display: inline-flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.5rem;
+      background-color: #e0f2fe;
+      border-radius: 999px;
+      padding: 0.25rem 0.75rem;
+      cursor: grab;
+      position: relative;
+    }
+    .qc-chip__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+    .qc-chip__pill {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 0.5rem;
+      border: none;
+      background: none;
+      cursor: pointer;
+      padding: 0;
+      font-size: 0.9rem;
+      color: #0f172a;
+    }
+    .qc-chip__title {
+      font-weight: 600;
+      color: #1d4ed8;
+      text-transform: uppercase;
+      font-size: 0.7rem;
+    }
+    .qc-chip__summary {
+      font-size: 0.85rem;
+      color: #1e293b;
+    }
+    .qc-chip__fields {
+      border-top: 1px solid #bae6fd;
+      padding-top: 0.5rem;
+    }
+    .qc-chip__errors {
+      color: #b91c1c;
+      font-size: 0.8rem;
+      margin-bottom: 0.5rem;
+    }
+    .qc-chip__delete {
+      flex-shrink: 0;
+    }
+    .qc-chip--selected {
+      box-shadow: 0 0 0 2px #2563eb inset;
+    }
+    .qc-chip.is-dragging {
+      opacity: 0.6;
+    }
+    .qc-row-card.is-dragging {
+      opacity: 0.5;
+    }
+    .qc-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .qc-summary-card {
+      border: 1px solid #dcdcdc;
+      border-radius: 4px;
+      padding: 0.75rem;
+      background-color: #f9fafc;
+    }
+    .qc-summary-card--changed {
+      border-color: #4f46e5;
+      background-color: #eef2ff;
+    }
+    .qc-summary-label {
+      font-weight: 600;
+      display: block;
+      color: #555;
+    }
+    .qc-summary-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      display: block;
+      margin-top: 0.25rem;
+    }
+    .qc-summary-delta {
+      font-size: 0.85rem;
+      color: #555;
+    }
+    .qc-warning-list {
+      margin: 0.5rem 0 0;
+      padding-left: 1.25rem;
+    }
+    .qc-warning-ack-container {
+      margin-top: 0.75rem;
+      display: grid;
+      gap: 0.5rem;
+    }
+    .qc-warning-ack {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.9rem;
+    }
+    .qc-preview-panel {
+      padding: 16px;
+    }
+    .qc-preview-panel .template-detail-container {
+      margin: 0;
+    }
+    .qc-preview-panel table {
+      font-size: 0.85rem;
+    }
+    .qc-field-grid--compact {
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 0.5rem 0.75rem;
+    }
+    @media (max-width: 720px) {
+      .qc-row-card__actions {
+        width: 100%;
+        justify-content: flex-start;
+      }
+      .qc-chip-zone__list {
+        flex-direction: column;
+      }
+      .qc-chip {
+        border-radius: 12px;
+      }
+    }
     @media (max-width: 1024px) {
       .qc-media,
       .qc-form {
@@ -192,6 +422,9 @@
       }
       .qc-label {
         margin-bottom: 0.25rem;
+      }
+      .qc-chip[data-chip-type="ident"] .qc-field {
+        grid-template-columns: minmax(140px, max-content) minmax(0, 1fr);
       }
       .qc-row-actions {
         justify-content: flex-start;
@@ -217,6 +450,12 @@
         <div class="w3-padding qc-media-fallback w3-small w3-text-grey">
           No media preview is available for this record.
         </div>
+      {% endif %}
+      {% if qc_preview %}
+      <div class="qc-preview-panel">
+        <h3 class="w3-margin-top w3-margin-bottom">Preview accession</h3>
+        {% include "cms/partials/accession_preview_panel.html" with accession=qc_preview.accession geologies=qc_preview.geologies accession_rows=qc_preview.accession_rows first_identifications=qc_preview.first_identifications identification_counts=qc_preview.identification_counts taxonomy=qc_preview.taxonomy references=qc_preview.references preview_mode=True %}
+      </div>
       {% endif %}
     </aside>
 
@@ -252,6 +491,8 @@
           <option value="{{ option }}"></option>
         {% endfor %}
       </datalist>
+
+      {% include "cms/qc/summary_step.html" %}
 
       {% block wizard_extra_fields %}{% endblock %}
 
@@ -296,53 +537,35 @@
         </div>
       </section>
 
-      <section class="qc-section">
+      <section class="qc-section" data-controller="qc-references" data-formset-prefix="reference">
         <div class="qc-section-heading w3-border-bottom w3-padding-small">
           <h3>References</h3>
           <span class="qc-inline-note">Verify bibliographic entries from the card back.</span>
         </div>
+        <div class="w3-margin-bottom">
+          <button
+            type="button"
+            class="w3-button w3-tiny w3-blue w3-round"
+            data-action="click->qc-references#addReference"
+          >
+            Add reference
+          </button>
+        </div>
 
-        {% if reference_formset.forms %}
+        <div data-qc-references-target="container">
           {% for ref_form in reference_formset %}
-            <div class="qc-card">
-              {% for hidden in ref_form.hidden_fields %}
-                {{ hidden }}
-              {% endfor %}
-              <div class="qc-field-grid">
-                <div class="qc-field qc-field--full">
-                  <label class="qc-label" for="{{ ref_form.first_author.id_for_label }}">{{ ref_form.first_author.label }}:</label>
-                  <div class="qc-control">
-                    {{ ref_form.first_author }}
-                    {{ ref_form.first_author.errors }}
-                  </div>
-                </div>
-                <div class="qc-field qc-field--full">
-                  <label class="qc-label" for="{{ ref_form.title.id_for_label }}">{{ ref_form.title.label }}:</label>
-                  <div class="qc-control">
-                    {{ ref_form.title }}
-                    {{ ref_form.title.errors }}
-                  </div>
-                </div>
-                <div class="qc-field">
-                  <label class="qc-label" for="{{ ref_form.year.id_for_label }}">{{ ref_form.year.label }}:</label>
-                  <div class="qc-control">
-                    {{ ref_form.year }}
-                    {{ ref_form.year.errors }}
-                  </div>
-                </div>
-                <div class="qc-field">
-                  <label class="qc-label" for="{{ ref_form.page.id_for_label }}">{{ ref_form.page.label }}:</label>
-                  <div class="qc-control">
-                    {{ ref_form.page }}
-                    {{ ref_form.page.errors }}
-                  </div>
-                </div>
-              </div>
-            </div>
+            {% include "cms/qc/partials/reference_card.html" with ref_form=ref_form %}
           {% endfor %}
-        {% else %}
-          <p class="qc-inline-note">No references were interpreted for this accession.</p>
-        {% endif %}
+        </div>
+        <p
+          class="qc-inline-note"
+          data-qc-references-target="emptyMessage"{% if reference_formset.forms %} hidden{% endif %}
+        >
+          No references were interpreted for this accession.
+        </p>
+        <template data-qc-references-target="template">
+          {% include "cms/qc/partials/reference_card.html" with ref_form=reference_formset.empty_form %}
+        </template>
       </section>
 
       <section class="qc-section">
@@ -459,156 +682,7 @@
         {% endif %}
       </section>
 
-      <section class="qc-section" data-qc-rows-target="container">
-        <div class="qc-section-heading w3-border-bottom w3-padding-small">
-          <h3>Specimen Rows</h3>
-          <span class="qc-inline-note">Use the move buttons to adjust row order.</span>
-        </div>
-
-        {% if row_contexts %}
-          {% for row in row_contexts %}
-            {% with row_form=row.row_form ident_form=row.ident_form specimen_forms=row.specimen_forms %}
-              <div class="qc-card" data-qc-row data-qc-row-id="{{ row.row_id }}">
-                {% for hidden in row_form.hidden_fields %}
-                  {{ hidden }}
-                {% endfor %}
-                {% if ident_form %}
-                  {% for hidden in ident_form.hidden_fields %}
-                    {{ hidden }}
-                  {% endfor %}
-                {% endif %}
-                {% for spec_form in specimen_forms %}
-                  {% for hidden in spec_form.hidden_fields %}
-                    {{ hidden }}
-                  {% endfor %}
-                {% endfor %}
-
-                <div class="qc-field-grid">
-                  <div class="qc-field">
-                    <label class="qc-label" for="{{ row_form.specimen_suffix.id_for_label }}">{{ row_form.specimen_suffix.label }}:</label>
-                    <div class="qc-control">
-                      {{ row_form.specimen_suffix }}
-                      {{ row_form.specimen_suffix.errors }}
-                    </div>
-                  </div>
-                  <div class="qc-field">
-                    <label class="qc-label" for="{{ row_form.storage.id_for_label }}">{{ row_form.storage.label }}:</label>
-                    <div class="qc-control">
-                      {{ row_form.storage }}
-                      {{ row_form.storage.errors }}
-                    </div>
-                  </div>
-                  <div class="qc-row-actions">
-                    <button type="button" class="w3-button w3-small w3-light-grey" data-action="qc-rows#moveUp">&#x25B2; Move up</button>
-                    <button type="button" class="w3-button w3-small w3-light-grey" data-action="qc-rows#moveDown">Move down &#x25BC;</button>
-                  </div>
-                </div>
-
-                <div class="qc-subsection">
-                  <h4>Identification</h4>
-                  {% if ident_form %}
-                    <div class="qc-field-grid">
-                      <div class="qc-field">
-                        <label class="qc-label" for="{{ ident_form.taxon.id_for_label }}">{{ ident_form.taxon.label }}:</label>
-                        <div class="qc-control">
-                          {{ ident_form.taxon }}
-                          {{ ident_form.taxon.errors }}
-                        </div>
-                      </div>
-                      <div class="qc-field">
-                        <label class="qc-label" for="{{ ident_form.identification_qualifier.id_for_label }}">{{ ident_form.identification_qualifier.label }}:</label>
-                        <div class="qc-control">
-                          {{ ident_form.identification_qualifier }}
-                          {{ ident_form.identification_qualifier.errors }}
-                        </div>
-                      </div>
-                      <div class="qc-field">
-                        <label class="qc-label" for="{{ ident_form.identified_by.id_for_label }}">{{ ident_form.identified_by.label }}:</label>
-                        <div class="qc-control">
-                          {{ ident_form.identified_by }}
-                          {{ ident_form.identified_by.errors }}
-                        </div>
-                      </div>
-                      <div class="qc-field">
-                        <label class="qc-label" for="{{ ident_form.verbatim_identification.id_for_label }}">{{ ident_form.verbatim_identification.label }}:</label>
-                        <div class="qc-control">
-                          {{ ident_form.verbatim_identification }}
-                          {{ ident_form.verbatim_identification.errors }}
-                        </div>
-                      </div>
-                      <div class="qc-field qc-field--full">
-                        <label class="qc-label" for="{{ ident_form.identification_remarks.id_for_label }}">{{ ident_form.identification_remarks.label }}:</label>
-                        <div class="qc-control">
-                          {{ ident_form.identification_remarks }}
-                          {{ ident_form.identification_remarks.errors }}
-                        </div>
-                      </div>
-                    </div>
-                  {% else %}
-                    <p class="qc-inline-note">No identification data supplied.</p>
-                  {% endif %}
-                </div>
-
-                <div class="qc-subsection">
-                  <h4>Specimens</h4>
-                  {% if specimen_forms %}
-                    {% for spec_form in specimen_forms %}
-                      <div class="qc-row-block qc-field-grid">
-                        <div class="qc-field">
-                          <label class="qc-label" for="{{ spec_form.element.id_for_label }}">{{ spec_form.element.label }}:</label>
-                          <div class="qc-control">
-                            {{ spec_form.element }}
-                            {{ spec_form.element.errors }}
-                          </div>
-                        </div>
-                        <div class="qc-field">
-                          <label class="qc-label" for="{{ spec_form.side.id_for_label }}">{{ spec_form.side.label }}:</label>
-                          <div class="qc-control">
-                            {{ spec_form.side }}
-                            {{ spec_form.side.errors }}
-                          </div>
-                        </div>
-                        <div class="qc-field">
-                          <label class="qc-label" for="{{ spec_form.condition.id_for_label }}">{{ spec_form.condition.label }}:</label>
-                          <div class="qc-control">
-                            {{ spec_form.condition }}
-                            {{ spec_form.condition.errors }}
-                          </div>
-                        </div>
-                        <div class="qc-field">
-                          <label class="qc-label" for="{{ spec_form.fragments.id_for_label }}">{{ spec_form.fragments.label }}:</label>
-                          <div class="qc-control">
-                            {{ spec_form.fragments }}
-                            {{ spec_form.fragments.errors }}
-                          </div>
-                        </div>
-                        <div class="qc-field qc-field--full">
-                          <label class="qc-label" for="{{ spec_form.verbatim_element.id_for_label }}">{{ spec_form.verbatim_element.label }}:</label>
-                          <div class="qc-control">
-                            {{ spec_form.verbatim_element }}
-                            {{ spec_form.verbatim_element.errors }}
-                          </div>
-                        </div>
-                        <div class="qc-field qc-field--full">
-                          <label class="qc-label" for="{{ spec_form.portion.id_for_label }}">{{ spec_form.portion.label }}:</label>
-                          <div class="qc-control">
-                            {{ spec_form.portion }}
-                            {{ spec_form.portion.errors }}
-                          </div>
-                        </div>
-                      </div>
-                    {% endfor %}
-                  {% else %}
-                    <p class="qc-inline-note">No specimen records were detected for this row.</p>
-                  {% endif %}
-                </div>
-              </div>
-            {% endwith %}
-          {% endfor %}
-        {% else %}
-          <p>No specimen rows were detected in the OCR results.</p>
-        {% endif %}
-      </section>
+      {% include "cms/qc/rows_step.html" %}
 
       <div class="w3-right">
         {% block wizard_actions %}{% endblock %}
@@ -620,5 +694,82 @@
 
 {% block extra_scripts %}
   {{ block.super }}
+  <script src="https://unpkg.com/@hotwired/stimulus/dist/stimulus.umd.js"></script>
+  <script src="{% static 'cms/js/controllers/qc_rows_controller.js' %}"></script>
+  <script src="{% static 'cms/js/controllers/qc_references_controller.js' %}"></script>
   <script src="{% static 'cms/js/media_intern_qc.js' %}"></script>
+  <script>
+    (function () {
+      if (!window.Stimulus || !window.Stimulus.Application) {
+        console.error('Stimulus failed to load');
+        return;
+      }
+
+      var app = window.StimulusApp;
+      if (!app && typeof window.Stimulus.Application.start === 'function') {
+        app = window.Stimulus.Application.start();
+        window.StimulusApp = app;
+      }
+
+      if (!app) {
+        console.error('Stimulus application could not be started.');
+        return;
+      }
+
+      if (window.QcRowsController) {
+        app.register('qc-rows', window.QcRowsController);
+      } else {
+        console.error(
+          'QcRowsController not found on window (UMD/global). If this file switches to ES modules, use an ES module setup.'
+        );
+      }
+
+      if (window.QcReferencesController) {
+        app.register('qc-references', window.QcReferencesController);
+      } else {
+        console.error(
+          'QcReferencesController not found on window (UMD/global). Ensure the controller script is included.'
+        );
+      }
+    })();
+  </script>
+  <script>
+    document.addEventListener('click', function (event) {
+      var trigger = event.target.closest('.qc-chip__delete');
+      if (!trigger) {
+        return;
+      }
+
+      event.preventDefault();
+
+      var chip = trigger.closest('[data-qc-chip]');
+      if (!chip) {
+        return;
+      }
+
+      if (chip.dataset.chipRemoved === 'true') {
+        return;
+      }
+
+      var deleteInput = chip.querySelector('input[name$="-DELETE"]');
+      if (deleteInput) {
+        deleteInput.checked = true;
+      }
+
+      chip.dataset.chipRemoved = 'true';
+      chip.classList.remove('qc-chip--selected');
+      var toggle = chip.querySelector('.qc-chip__pill');
+      if (toggle) {
+        toggle.setAttribute('aria-pressed', 'false');
+      }
+      var fields = chip.querySelector('.qc-chip__fields');
+      if (fields) {
+        fields.hidden = true;
+        fields.style.display = 'none';
+      }
+      chip.hidden = true;
+      chip.setAttribute('aria-hidden', 'true');
+      chip.style.display = 'none';
+    });
+  </script>
 {% endblock %}

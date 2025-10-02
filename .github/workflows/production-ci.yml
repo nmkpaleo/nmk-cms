@@ -30,4 +30,4 @@ jobs:
         with:
           context: ./app
           push: true
-          tags: palaeontologyhelsinki/${{ secrets.DOCKERHUB_PROJECTNAME }}:latest
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_PROJECTNAME }}:latest
