@@ -1268,7 +1268,7 @@ def _process_single_scan(
         raise OCRTimeoutError(str(last_timeout))
 
 
-def process_pending_scans(limit: int = 1) -> tuple[int, int, int, list[str], Optional[str]]:
+def process_pending_scans(limit: int | None = None) -> tuple[int, int, int, list[str], Optional[str]]:
     """Process up to ``limit`` scans awaiting OCR.
 
     Returns a tuple of ``(successes, failures, total, errors, jammed_filename)``

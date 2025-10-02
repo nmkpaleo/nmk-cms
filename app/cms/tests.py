@@ -1840,6 +1840,7 @@ class OcrViewTests(TestCase):
         self.user = User.objects.create_user(username="cm", password="pass", is_staff=True)
         Group.objects.create(name="Collection Managers").user_set.add(self.user)
         self.url = reverse("admin-do-ocr")
+        self.loop_url = f"{self.url}?loop=1"
         patcher = patch("cms.models.get_current_user", return_value=self.user)
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -1851,7 +1852,7 @@ class OcrViewTests(TestCase):
     def test_admin_index_has_ocr_link(self):
         self.client.login(username="cm", password="pass")
         response = self.client.get(reverse("admin:index"))
-        self.assertContains(response, self.url)
+        self.assertContains(response, self.loop_url)
 
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch("cms.ocr_processing.chatgpt_ocr", return_value={"foo": "bar"})
@@ -1892,6 +1893,50 @@ class OcrViewTests(TestCase):
         self.client.login(username="cm", password="pass")
         response = self.client.get(self.url, follow=True)
         self.assertContains(response, "Processed 3 of 5 scans this run.")
+
+    @patch("cms.views._count_pending_scans", return_value=4)
+    @patch("cms.views.process_pending_scans", return_value=(1, 0, 1, [], None))
+    def test_loop_mode_auto_refreshes(self, mock_process, mock_count):
+        self.client.login(username="cm", password="pass")
+        response = self.client.get(self.loop_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Refresh"], f"0;url={self.loop_url}")
+        self.assertIn("Continuing OCR", response.content.decode())
+        session = self.client.session
+        self.assertEqual(session["ocr_loop_stats"]["successes"], 1)
+        self.assertEqual(session["ocr_loop_stats"]["attempted"], 1)
+
+    @patch("cms.views._count_pending_scans")
+    @patch("cms.views.process_pending_scans")
+    def test_loop_mode_finalizes_and_reports(self, mock_process, mock_count):
+        self.client.login(username="cm", password="pass")
+        mock_process.side_effect = [
+            (1, 0, 1, [], None),
+            (1, 0, 1, [], None),
+        ]
+        mock_count.side_effect = [2, 0]
+
+        first = self.client.get(self.loop_url)
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(first["Refresh"], f"0;url={self.loop_url}")
+
+        final = self.client.get(self.loop_url, follow=True)
+        self.assertContains(final, "Processed 2 of 2 scans this run.")
+        self.assertIsNone(self.client.session.get("ocr_loop_stats"))
+
+    @patch("cms.views._count_pending_scans", return_value=5)
+    @patch(
+        "cms.views.process_pending_scans",
+        return_value=(0, 1, 1, ["jam.png: timeout"], "jam.png"),
+    )
+    def test_loop_mode_stops_on_jam(self, mock_process, mock_count):
+        self.client.login(username="cm", password="pass")
+        response = self.client.get(self.loop_url, follow=True)
+        self.assertContains(response, "OCR failed for 1 scans: jam.png: timeout")
+        self.assertContains(
+            response,
+            "OCR halted because scan jam.png timed out after three attempts. Please investigate before retrying.",
+        )
 
 
 class ProcessPendingScansTests(TestCase):
