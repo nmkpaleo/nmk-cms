@@ -1,7 +1,7 @@
 services:
 
   web:
-    image: # PROD IMAGE NAME
+    image: ${DOCKER_PROD_IMAGE}
     restart: unless-stopped
     ports:
       - 8000:8000
@@ -11,6 +11,24 @@ services:
     env_file:
       - ./.env
 
+  redis:
+    image: redis:7.2.4-alpine
+    expose:
+      - "6379"
+    container_name: nmk-cms-redis
+  db:
+    image: mariadb
+    ports:
+      - 3306
+    environment:
+      - MYSQL_DATABASE=${DB_NAME}
+      - MYSQL_USER=${DB_USER}
+      - MYSQL_PASSWORD=${DB_PASS}
+      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASS}
+    command:
+      - "--character-set-server=utf8mb4"
+    volumes:
+      - db:/var/lib/mysql
   nginx:
     build: ./nginx
     restart: unless-stopped
