@@ -633,6 +633,40 @@ class MediaWithCommentsQueueView(MediaQCQueueView):
     queue_empty_message = "No media entries have QC comments yet."
 
 
+class MediaQCHistoryView(LoginRequiredMixin, UserPassesTestMixin, ListView):
+    """Display a paginated timeline of media QC activity."""
+
+    model = MediaQCLog
+    template_name = "cms/qc/history.html"
+    context_object_name = "qc_logs"
+    paginate_by = 25
+    raise_exception = True
+    filter_media: Media | None = None
+
+    def test_func(self) -> bool:
+        user = self.request.user
+        return user.is_superuser or user.is_staff
+
+    def get_queryset(self):
+        queryset = (
+            MediaQCLog.objects.select_related("media", "changed_by")
+            .prefetch_related(_QC_COMMENT_PREFETCH)
+            .order_by("-created_on")
+        )
+        media_uuid = self.request.GET.get("media")
+        self.filter_media = None
+        if media_uuid:
+            queryset = queryset.filter(media__uuid=media_uuid)
+            self.filter_media = Media.objects.filter(uuid=media_uuid).first()
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["filter_media"] = self.filter_media
+        context["page_title"] = "Media QC History"
+        return context
+
+
 def index(request):
     """View function for home page of site."""
     if request.user.is_authenticated:
@@ -1443,6 +1477,24 @@ def _get_qc_comments(media: Media) -> list[MediaQCComment]:
         .select_related("created_by", "log")
         .order_by("created_on")
     )
+
+
+_QC_COMMENT_PREFETCH = Prefetch(
+    "comments",
+    queryset=MediaQCComment.objects.select_related("created_by").order_by("created_on"),
+)
+
+
+def _get_qc_history(media: Media, limit: int | None = None) -> list[MediaQCLog]:
+    queryset = (
+        MediaQCLog.objects.filter(media=media)
+        .select_related("changed_by", "media")
+        .prefetch_related(_QC_COMMENT_PREFETCH)
+        .order_by("-created_on")
+    )
+    if limit is not None:
+        return list(queryset[:limit])
+    return list(queryset)
 
 
 class MediaQCFormManager:
@@ -2282,6 +2334,7 @@ def MediaInternQCWizard(request, pk):
         "storage_datalist_id": AccessionRowQCForm.storage_datalist_id,
         "qc_comments": qc_comments,
         "latest_qc_comment": latest_qc_comment,
+        "qc_history_logs": _get_qc_history(media, limit=10),
         "qc_diff": qc_diff,
         "qc_preview": qc_preview,
         "qc_acknowledged_warnings": set(),
@@ -2604,6 +2657,7 @@ def MediaExpertQCWizard(request, pk):
         "storage_datalist_id": AccessionRowQCForm.storage_datalist_id,
         "qc_comment": qc_comment,
         "qc_comments": qc_comments,
+        "qc_history_logs": _get_qc_history(media, limit=10),
         "qc_conflicts": conflict_details,
         "qc_diff": qc_diff,
         "qc_preview": qc_preview,
