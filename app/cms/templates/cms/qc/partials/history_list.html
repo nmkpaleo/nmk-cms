@@ -1,0 +1,61 @@
+{% with logs=logs compact=compact|default:False show_empty=show_empty|default:False %}
+  {% if logs %}
+    <ul class="qc-history-list">
+      {% for log in logs %}
+        <li class="qc-history-entry">
+          <div class="qc-history-meta">
+            <span class="qc-history-timestamp">{{ log.created_on|date:"Y-m-d H:i" }}</span>
+            <span class="qc-history-user">
+              {% if log.changed_by %}
+                {{ log.changed_by.get_full_name|default:log.changed_by.username }}
+              {% else %}
+                System
+              {% endif %}
+            </span>
+          </div>
+          <div class="qc-history-summary">
+            <strong>{{ log.get_change_type_display }}</strong>
+            {% if log.field_name %}
+              <span class="w3-text-grey">({{ log.field_name }})</span>
+            {% endif %}
+            <span class="w3-small">
+              — <a href="{% url 'media_expert_qc' log.media.uuid %}">{{ log.media.file_name|default:log.media.uuid }}</a>
+            </span>
+          </div>
+          {% if log.description %}
+            <p class="qc-history-description">{{ log.description }}</p>
+          {% endif %}
+          {% if not compact %}
+            {% if log.old_value %}
+              <div class="qc-history-diff"><span class="w3-text-grey">Old:</span> <code>{{ log.old_value }}</code></div>
+            {% endif %}
+            {% if log.new_value %}
+              <div class="qc-history-diff"><span class="w3-text-grey">New:</span> <code>{{ log.new_value }}</code></div>
+            {% endif %}
+          {% endif %}
+          {% with comment_list=log.comments.all %}
+          {% if comment_list %}
+            <div class="qc-history-comments{% if compact %} qc-history-comments--compact{% endif %}">
+              {% for comment in comment_list %}
+                <div class="qc-history-comment w3-panel w3-pale-blue w3-border">
+                  <div class="qc-history-comment-meta">
+                    <span>{{ comment.created_on|date:"Y-m-d H:i" }}</span>
+                    {% if comment.created_by %}
+                      — {{ comment.created_by.get_full_name|default:comment.created_by.username }}
+                    {% else %}
+                      — System
+                    {% endif %}
+                  </div>
+                  <div class="qc-history-comment-body">{{ comment.comment|linebreaksbr }}</div>
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+          {% endwith %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% elif show_empty %}
+    <p class="w3-text-grey">No QC history is available yet.</p>
+  {% endif %}
+{% endwith %}

@@ -61,6 +61,12 @@
               {% endif %}
 
               {% if user.is_authenticated %}
+                {% if user.is_staff or user.is_superuser %}
+                  <li><a href="{% url 'media_qc_history' %}">QC History</a></li>
+                {% endif %}
+              {% endif %}
+
+              {% if user.is_authenticated %}
                 <li>User: {{ user.get_username }}</li>
                 <li>
                   <form id="logout-form" class="logout-form" method="post" action="{% url 'account_logout' %}">

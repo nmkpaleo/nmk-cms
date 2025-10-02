@@ -2671,6 +2671,30 @@ class MediaExpertQCWizardTests(TestCase):
 
         self.client.force_login(self.expert)
 
+    def test_context_includes_recent_history(self):
+        log = MediaQCLog.objects.create(
+            media=self.media,
+            change_type=MediaQCLog.ChangeType.STATUS,
+            field_name="qc_status",
+            old_value={"qc_status": Media.QCStatus.PENDING_EXPERT},
+            new_value={"qc_status": Media.QCStatus.APPROVED},
+            description="Approved after review.",
+            changed_by=self.expert,
+        )
+        MediaQCComment.objects.create(
+            log=log,
+            comment="Resolved outstanding warnings.",
+            created_by=self.expert,
+        )
+
+        response = self.client.get(reverse("media_expert_qc", args=[self.media.uuid]))
+        self.assertEqual(response.status_code, 200)
+        history = response.context["qc_history_logs"]
+        self.assertTrue(history)
+        self.assertEqual(history[0], log)
+        comments = list(history[0].comments.all())
+        self.assertEqual(comments[0].comment, "Resolved outstanding warnings.")
+
     def add_unlinked_identification_warning(self):
         data = copy.deepcopy(self.media.ocr_data)
         accessions = data.setdefault("accessions", [])
@@ -3359,6 +3383,70 @@ class ApplyRowsFallbackTests(TestCase):
             self.assertEqual(specimen.portion, "Proximal")
 
 
+class MediaQCHistoryViewTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.staff = User.objects.create_user(
+            username="staff", password="pass", is_staff=True
+        )
+        self.other = User.objects.create_user(username="viewer", password="pass")
+
+        patcher = patch("cms.models.get_current_user", return_value=self.staff)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+        self.media = Media.objects.create(
+            media_location="uploads/history.png",
+            file_name="history.png",
+        )
+        self.log = MediaQCLog.objects.create(
+            media=self.media,
+            change_type=MediaQCLog.ChangeType.STATUS,
+            field_name="qc_status",
+            old_value={"qc_status": Media.QCStatus.PENDING_INTERN},
+            new_value={"qc_status": Media.QCStatus.PENDING_EXPERT},
+            description="Status advanced to expert review.",
+            changed_by=self.staff,
+        )
+        self.comment = MediaQCComment.objects.create(
+            log=self.log,
+            comment="Looks good.",
+            created_by=self.staff,
+        )
+
+    def test_requires_staff_user(self):
+        self.client.force_login(self.other)
+        response = self.client.get(reverse("media_qc_history"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_staff_can_view_history(self):
+        self.client.force_login(self.staff)
+        response = self.client.get(reverse("media_qc_history"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Status advanced to expert review.")
+        self.assertContains(response, "Looks good.")
+        self.assertIn(self.log, list(response.context["page_obj"].object_list))
+
+    def test_history_can_filter_by_media(self):
+        other_media = Media.objects.create(media_location="uploads/other.png")
+        MediaQCLog.objects.create(
+            media=other_media,
+            change_type=MediaQCLog.ChangeType.STATUS,
+            field_name="qc_status",
+            new_value={"qc_status": Media.QCStatus.PENDING_INTERN},
+            changed_by=self.staff,
+        )
+
+        self.client.force_login(self.staff)
+        response = self.client.get(
+            reverse("media_qc_history"), {"media": str(self.media.uuid)}
+        )
+        self.assertEqual(response.status_code, 200)
+        page_logs = list(response.context["page_obj"].object_list)
+        self.assertEqual(page_logs, [self.log])
+        self.assertEqual(response.context["filter_media"], self.media)
+
+
 class MediaInternQCWizardTests(TestCase):
     def setUp(self):
         User = get_user_model()
@@ -3562,6 +3650,31 @@ class MediaInternQCWizardTests(TestCase):
         fieldslip_forms = response.context["fieldslip_formset"].forms
         self.assertEqual(len(fieldslip_forms), 1)
         self.assertEqual(fieldslip_forms[0]["field_number"].value(), "FS-1")
+
+    def test_context_includes_recent_history(self):
+        log = MediaQCLog.objects.create(
+            media=self.media,
+            change_type=MediaQCLog.ChangeType.STATUS,
+            field_name="qc_status",
+            old_value={"qc_status": Media.QCStatus.PENDING_INTERN},
+            new_value={"qc_status": Media.QCStatus.PENDING_EXPERT},
+            description="Escalated for expert review.",
+            changed_by=self.intern,
+        )
+        MediaQCComment.objects.create(
+            log=log,
+            comment="Please double-check storage.",
+            created_by=self.intern,
+        )
+
+        self.client.login(username="intern", password="pass")
+        response = self.client.get(self.get_url())
+        self.assertEqual(response.status_code, 200)
+        history = response.context["qc_history_logs"]
+        self.assertTrue(history)
+        self.assertEqual(history[0], log)
+        comments = list(history[0].comments.all())
+        self.assertEqual(comments[0].comment, "Please double-check storage.")
 
     def test_post_updates_media_and_logs(self):
         self.client.login(username="intern", password="pass")

@@ -384,6 +384,57 @@
     .qc-preview-panel table {
       font-size: 0.85rem;
     }
+    .qc-history-panel {
+      padding: 16px;
+      border-top: 1px solid #f1f1f1;
+    }
+    .qc-history-panel h3 {
+      margin-top: 0;
+      margin-bottom: 8px;
+    }
+    .qc-history-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .qc-history-entry + .qc-history-entry {
+      border-top: 1px solid #f1f1f1;
+      margin-top: 12px;
+      padding-top: 12px;
+    }
+    .qc-history-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 0.75rem;
+      color: #666;
+    }
+    .qc-history-summary {
+      font-size: 0.85rem;
+      margin-top: 4px;
+    }
+    .qc-history-description {
+      font-size: 0.85rem;
+      margin-top: 4px;
+    }
+    .qc-history-diff {
+      font-size: 0.75rem;
+      margin-top: 4px;
+      word-break: break-word;
+    }
+    .qc-history-comment {
+      font-size: 0.8rem;
+    }
+    .qc-history-comments--compact .qc-history-comment {
+      padding: 8px 12px;
+    }
+    .qc-history-comment-meta {
+      font-size: 0.7rem;
+      color: #555;
+    }
+    .qc-history-comment-body {
+      margin-top: 4px;
+    }
     .qc-field-grid--compact {
       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
       gap: 0.5rem 0.75rem;
@@ -457,6 +508,12 @@
         {% include "cms/partials/accession_preview_panel.html" with accession=qc_preview.accession geologies=qc_preview.geologies accession_rows=qc_preview.accession_rows first_identifications=qc_preview.first_identifications identification_counts=qc_preview.identification_counts taxonomy=qc_preview.taxonomy references=qc_preview.references preview_mode=True %}
       </div>
       {% endif %}
+      <div class="qc-history-panel">
+        <h3 class="w3-margin-top w3-margin-bottom">QC history</h3>
+        <p class="w3-small w3-text-grey">Review prior status changes and discussion without leaving the wizard.</p>
+        {% include "cms/qc/partials/history_list.html" with logs=qc_history_logs compact=True show_empty=True %}
+        <p class="w3-small w3-margin-top"><a href="{% url 'media_qc_history' %}?media={{ media.uuid }}" class="w3-text-indigo">Open full history</a></p>
+      </div>
     </aside>
 
     <form method="post" class="qc-form w3-card w3-white w3-padding" data-controller="qc-rows">
