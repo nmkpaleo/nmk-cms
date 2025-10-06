@@ -1840,6 +1840,7 @@ class OcrViewTests(TestCase):
         self.user = User.objects.create_user(username="cm", password="pass", is_staff=True)
         Group.objects.create(name="Collection Managers").user_set.add(self.user)
         self.url = reverse("admin-do-ocr")
+        self.loop_url = f"{self.url}?loop=1"
         patcher = patch("cms.models.get_current_user", return_value=self.user)
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -1851,7 +1852,7 @@ class OcrViewTests(TestCase):
     def test_admin_index_has_ocr_link(self):
         self.client.login(username="cm", password="pass")
         response = self.client.get(reverse("admin:index"))
-        self.assertContains(response, self.url)
+        self.assertContains(response, self.loop_url)
 
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch("cms.ocr_processing.chatgpt_ocr", return_value={"foo": "bar"})
@@ -1874,18 +1875,68 @@ class OcrViewTests(TestCase):
         import shutil
         shutil.rmtree(pending.parent)
 
-    @patch("cms.views.process_pending_scans", return_value=(0, 1, 1, ["test.png: boom"]))
+    @patch(
+        "cms.views.process_pending_scans",
+        return_value=(0, 1, 1, ["test.png: boom"], None),
+    )
     def test_do_ocr_shows_error_details(self, mock_process):
         self.client.login(username="cm", password="pass")
         response = self.client.get(self.url, follow=True)
-        self.assertContains(response, "0/1 scans OCR&#x27;d")
+        self.assertContains(response, "Processed 0 of 1 scans this run.")
         self.assertContains(response, "OCR failed for 1 scans: test.png: boom")
 
-    @patch("cms.views.process_pending_scans", return_value=(3, 0, 5, []))
+    @patch(
+        "cms.views.process_pending_scans",
+        return_value=(3, 0, 5, [], None),
+    )
     def test_do_ocr_reports_progress(self, mock_process):
         self.client.login(username="cm", password="pass")
         response = self.client.get(self.url, follow=True)
-        self.assertContains(response, "3/5 scans OCR&#x27;d")
+        self.assertContains(response, "Processed 3 of 5 scans this run.")
+
+    @patch("cms.views._count_pending_scans", return_value=4)
+    @patch("cms.views.process_pending_scans", return_value=(1, 0, 1, [], None))
+    def test_loop_mode_auto_refreshes(self, mock_process, mock_count):
+        self.client.login(username="cm", password="pass")
+        response = self.client.get(self.loop_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Refresh"], f"0;url={self.loop_url}")
+        self.assertIn("Continuing OCR", response.content.decode())
+        session = self.client.session
+        self.assertEqual(session["ocr_loop_stats"]["successes"], 1)
+        self.assertEqual(session["ocr_loop_stats"]["attempted"], 1)
+
+    @patch("cms.views._count_pending_scans")
+    @patch("cms.views.process_pending_scans")
+    def test_loop_mode_finalizes_and_reports(self, mock_process, mock_count):
+        self.client.login(username="cm", password="pass")
+        mock_process.side_effect = [
+            (1, 0, 1, [], None),
+            (1, 0, 1, [], None),
+        ]
+        mock_count.side_effect = [2, 0]
+
+        first = self.client.get(self.loop_url)
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(first["Refresh"], f"0;url={self.loop_url}")
+
+        final = self.client.get(self.loop_url, follow=True)
+        self.assertContains(final, "Processed 2 of 2 scans this run.")
+        self.assertIsNone(self.client.session.get("ocr_loop_stats"))
+
+    @patch("cms.views._count_pending_scans", return_value=5)
+    @patch(
+        "cms.views.process_pending_scans",
+        return_value=(0, 1, 1, ["jam.png: timeout"], "jam.png"),
+    )
+    def test_loop_mode_stops_on_jam(self, mock_process, mock_count):
+        self.client.login(username="cm", password="pass")
+        response = self.client.get(self.loop_url, follow=True)
+        self.assertContains(response, "OCR failed for 1 scans: jam.png: timeout")
+        self.assertContains(
+            response,
+            "OCR halted because scan jam.png timed out after three attempts. Please investigate before retrying.",
+        )
 
 
 class ProcessPendingScansTests(TestCase):
@@ -1908,17 +1959,41 @@ class ProcessPendingScansTests(TestCase):
         file_path.write_bytes(b"data")
         Media.objects.create(media_location=f"uploads/pending/{filename}")
         with self.assertLogs("cms.ocr_processing", level="ERROR") as cm:
-            successes, failures, total, errors = process_pending_scans()
+            successes, failures, total, errors, jammed = process_pending_scans()
         self.assertEqual(successes, 0)
         self.assertEqual(failures, 1)
         self.assertEqual(total, 1)
         self.assertTrue(any("boom" in e for e in errors))
         self.assertTrue(any("boom" in m for m in cm.output))
+        self.assertIsNone(jammed)
         media = Media.objects.get()
         self.assertEqual(media.ocr_status, Media.OCRStatus.FAILED)
         self.assertEqual(media.ocr_data["error"], "boom")
         self.assertEqual(media.media_location.name, f"uploads/failed/{filename}")
         failed_file = Path(settings.MEDIA_ROOT) / "uploads" / "failed" / filename
+        self.assertTrue(failed_file.exists())
+
+    @patch("cms.ocr_processing.time.sleep")
+    @patch("cms.ocr_processing.detect_card_type", side_effect=TimeoutError("timeout"))
+    def test_timeout_retries_and_stops_queue(self, mock_sleep, mock_detect):
+        filename1 = "jam.png"
+        filename2 = "next.png"
+        (self.pending / filename1).write_bytes(b"data")
+        (self.pending / filename2).write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename1}")
+        Media.objects.create(media_location=f"uploads/pending/{filename2}")
+
+        successes, failures, total, errors, jammed = process_pending_scans(limit=5)
+
+        self.assertEqual(successes, 0)
+        self.assertEqual(failures, 1)
+        self.assertEqual(total, 1)
+        self.assertEqual(jammed, filename1)
+        self.assertTrue(any("timeout" in e for e in errors))
+        self.assertEqual(mock_detect.call_count, 3)
+        self.assertGreaterEqual(mock_sleep.call_count, 2)
+        self.assertTrue((self.pending / filename2).exists())
+        failed_file = Path(settings.MEDIA_ROOT) / "uploads" / "failed" / filename1
         self.assertTrue(failed_file.exists())
 
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
@@ -1956,8 +2031,9 @@ class ProcessPendingScansTests(TestCase):
         file_path = self.pending / filename
         file_path.write_bytes(b"data")
         Media.objects.create(media_location=f"uploads/pending/{filename}")
-        successes, failures, total, errors = process_pending_scans()
+        successes, failures, total, errors, jammed = process_pending_scans()
         self.assertEqual((successes, failures, total), (1, 0, 1))
+        self.assertIsNone(jammed)
         self.assertEqual(Accession.objects.count(), 0)
         media = Media.objects.get()
         self.assertEqual(media.ocr_status, Media.OCRStatus.COMPLETED)
@@ -2127,8 +2203,9 @@ class ProcessPendingScansTests(TestCase):
         file_path = self.pending / filename
         file_path.write_bytes(b"data")
         Media.objects.create(media_location=f"uploads/pending/{filename}")
-        successes, failures, total, errors = process_pending_scans()
+        successes, failures, total, errors, jammed = process_pending_scans()
         self.assertEqual((successes, failures, total), (1, 0, 1))
+        self.assertIsNone(jammed)
         media = Media.objects.get()
         with self.assertRaises(ValidationError) as exc:
             media.transition_qc(Media.QCStatus.APPROVED, user=self.user)

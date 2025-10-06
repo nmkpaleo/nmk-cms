@@ -25,9 +25,10 @@ except Exception:  # pragma: no cover
             os.environ.setdefault(key.strip(), value.strip())
 
 try:  # pragma: no cover - library may not be installed in tests
-    from openai import OpenAI
+    from openai import OpenAI, APITimeoutError
 except ImportError:  # pragma: no cover
     OpenAI = None
+    APITimeoutError = None  # type: ignore[assignment]
 
 from django.conf import settings
 from django.db.models import Max, Prefetch
@@ -51,6 +52,15 @@ from .models import (
 
 
 UNKNOWN_FIELD_NUMBER_PREFIX = "UNKNOWN FIELD NUMBER #"
+
+
+class OCRTimeoutError(RuntimeError):
+    """Raised when OCR processing times out after repeated attempts."""
+
+
+_TIMEOUT_EXCEPTIONS: tuple[type[BaseException], ...] = (TimeoutError,)
+if "APITimeoutError" in globals() and APITimeoutError is not None:  # pragma: no cover - depends on openai version
+    _TIMEOUT_EXCEPTIONS = _TIMEOUT_EXCEPTIONS + (APITimeoutError,)
 
 
 logger = logging.getLogger(__name__)
@@ -1201,31 +1211,33 @@ def create_accessions_from_media(
     return {"created": created_records, "conflicts": conflicts}
 
 
-def process_pending_scans(limit: int = 100) -> tuple[int, int, int, list[str]]:
-    """Process up to ``limit`` scans awaiting OCR.
+def _mark_scan_failed(media: Media, path: Path, failed_dir: Path, exc: Exception | str) -> None:
+    """Move ``path`` to the failed directory and persist failure metadata."""
 
-    Returns a tuple of ``(successes, failures, total, errors)`` where ``total``
-    is the number of scans considered and ``errors`` is a list of error
-    descriptions for failed scans.
-    """
+    failed_dir.mkdir(parents=True, exist_ok=True)
+    dest = failed_dir / path.name
+    if path.exists():  # Guard against situations where the file was already moved.
+        shutil.move(path, dest)
+    media.media_location.name = str(dest.relative_to(settings.MEDIA_ROOT))
+    media.ocr_status = Media.OCRStatus.FAILED
+    media.ocr_data = {"error": str(exc)}
+    media.save(update_fields=["media_location", "ocr_status", "ocr_data"])
 
-    pending = Path(settings.MEDIA_ROOT) / "uploads" / "pending"
-    ocr_dir = Path(settings.MEDIA_ROOT) / "uploads" / "ocr"
-    failed_dir = Path(settings.MEDIA_ROOT) / "uploads" / "failed"
 
-    files = sorted(pending.glob("*"))[:limit]
-    total = len(files)
-    estimator = OCRCostEstimator()
-    successes = 0
-    failures = 0
-    errors: list[str] = []
+def _process_single_scan(
+    media: Media,
+    path: Path,
+    estimator: "OCRCostEstimator",
+    ocr_dir: Path,
+    *,
+    max_attempts: int = 3,
+) -> None:
+    """Run OCR for a single pending scan, retrying on timeouts."""
 
-    for path in files:
-        relative = str(path.relative_to(settings.MEDIA_ROOT))
-        media = Media.objects.filter(media_location=relative).first()
-        if not media:
-            continue
-        cost_status = estimator.scan_card()
+    cost_status = estimator.scan_card()
+    last_timeout: BaseException | None = None
+
+    for attempt in range(1, max_attempts + 1):
         try:
             card_type_info = detect_card_type(path)
             card_type = card_type_info.get("card_type", "unknown")
@@ -1240,18 +1252,70 @@ def process_pending_scans(limit: int = 100) -> tuple[int, int, int, list[str]]:
             media.ocr_status = Media.OCRStatus.COMPLETED
             media.qc_status = Media.QCStatus.PENDING_INTERN
             media.save(update_fields=["ocr_data", "media_location", "ocr_status", "qc_status"])
+            return
+        except _TIMEOUT_EXCEPTIONS as exc:  # type: ignore[arg-type]
+            last_timeout = exc
+            logger.warning(
+                "OCR attempt %s/%s timed out for %s", attempt, max_attempts, path.name
+            )
+            if attempt == max_attempts:
+                raise OCRTimeoutError(str(exc)) from exc
+            time.sleep(2 ** (attempt - 1))
+        except Exception:
+            raise
+
+    if last_timeout is not None:
+        raise OCRTimeoutError(str(last_timeout))
+
+
+def process_pending_scans(limit: int | None = None) -> tuple[int, int, int, list[str], Optional[str]]:
+    """Process up to ``limit`` scans awaiting OCR.
+
+    Returns a tuple of ``(successes, failures, total, errors, jammed_filename)``
+    where ``total`` is the number of scans considered and ``errors`` is a list
+    of error descriptions for failed scans. ``jammed_filename`` will be set if
+    OCR was halted early because a scan repeatedly timed out.
+    """
+
+    pending = Path(settings.MEDIA_ROOT) / "uploads" / "pending"
+    ocr_dir = Path(settings.MEDIA_ROOT) / "uploads" / "ocr"
+    failed_dir = Path(settings.MEDIA_ROOT) / "uploads" / "failed"
+
+    files = sorted(pending.glob("*"))
+    estimator = OCRCostEstimator()
+    successes = 0
+    failures = 0
+    total = 0
+    errors: list[str] = []
+    jammed_filename: Optional[str] = None
+
+    for path in files:
+        if limit is not None and total >= limit:
+            break
+
+        relative = str(path.relative_to(settings.MEDIA_ROOT))
+        media = Media.objects.filter(media_location=relative).first()
+        if not media:
+            continue
+
+        total += 1
+
+        try:
+            _process_single_scan(media, path, estimator, ocr_dir)
             successes += 1
+        except OCRTimeoutError as exc:
+            failures += 1
+            # Do not expose exception details to users
+            errors.append(f"{path.name}: scan timed out")
+            jammed_filename = path.name
+            logger.error("OCR timed out for %s after multiple attempts", path, exc_info=True)
+            _mark_scan_failed(media, path, failed_dir, exc)
+            break
         except Exception as exc:
             failures += 1
-            error_msg = f"{path.name}: {exc}"
-            errors.append(error_msg)
+            # Do not expose exception details to users
+            errors.append(f"{path.name}: scan failed")
             logger.exception("OCR processing failed for %s", path)
-            failed_dir.mkdir(parents=True, exist_ok=True)
-            dest = failed_dir / path.name
-            shutil.move(path, dest)
-            media.media_location.name = str(dest.relative_to(settings.MEDIA_ROOT))
-            media.ocr_status = Media.OCRStatus.FAILED
-            media.ocr_data = {"error": str(exc)}
-            media.save()
+            _mark_scan_failed(media, path, failed_dir, exc)
 
-    return successes, failures, total, errors
+    return successes, failures, total, errors, jammed_filename

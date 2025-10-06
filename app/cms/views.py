@@ -4,6 +4,7 @@ import json
 import os
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from typing import Any
 from dal import autocomplete
 from django import forms
 from django.db import transaction
@@ -2788,14 +2789,105 @@ def upload_scan(request):
     return render(request, 'admin/upload_scan.html', {'form': form})
 
 
+def _count_pending_scans() -> int:
+    pending_dir = Path(settings.MEDIA_ROOT) / "uploads" / "pending"
+    if not pending_dir.exists():
+        return 0
+    return sum(1 for _ in pending_dir.glob("*"))
+
+
+def _should_loop(request) -> bool:
+    flag = request.GET.get("loop", "").lower()
+    return flag in {"1", "true", "yes", "on"}
+
+
 @staff_member_required
 def do_ocr(request):
-    """Process pending scans with OCR."""
-    successes, failures, total, errors = process_pending_scans()
-    messages.info(request, f"{successes}/{total} scans OCR'd")
-    if failures:
-        detail = "; ".join(errors)
-        messages.error(request, f"OCR failed for {failures} scans: {detail}")
+    """Process pending scans sequentially, looping if requested."""
+
+    loop = _should_loop(request)
+    successes, failures, total, errors, jammed = process_pending_scans(limit=1)
+
+    aggregated: dict[str, Any] | None = None
+    if loop:
+        stats = request.session.get("ocr_loop_stats", {
+            "successes": 0,
+            "failures": 0,
+            "attempted": 0,
+            "errors": [],
+        })
+        stats["successes"] += successes
+        stats["failures"] += failures
+        stats["attempted"] += total
+        stats.setdefault("errors", [])
+        stats["errors"].extend(errors)
+        if jammed:
+            stats["jammed"] = jammed
+        aggregated = stats
+        request.session["ocr_loop_stats"] = stats
+        request.session.modified = True
+
+    remaining = _count_pending_scans()
+    errors_list = list(aggregated["errors"]) if aggregated else list(errors)
+
+    # Sanitize error messages for external exposure: extract only the scan filename portion.
+    def _sanitize_ocr_errors(error_list):
+        sanitized = []
+        for msg in error_list:
+            # Expected format: "{filename}: {exception}"
+            parts = msg.split(':', 1)
+            filename = parts[0].strip() if parts else "Unknown"
+            sanitized.append(filename)
+        return sanitized
+
+    sanitized_errors = _sanitize_ocr_errors(errors_list)
+    detail = {
+        "successes": aggregated["successes"] if aggregated else successes,
+        "failures": aggregated["failures"] if aggregated else failures,
+        "attempted": aggregated["attempted"] if aggregated else total,
+        "errors": sanitized_errors,
+        "jammed": aggregated.get("jammed") if aggregated else jammed,
+        "remaining": remaining,
+        "loop": loop,
+    }
+
+    if request.headers.get("HX-Request") or request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return JsonResponse(detail)
+
+    if loop and remaining > 0 and not detail["jammed"]:
+        next_url = f"{reverse('admin-do-ocr')}?loop=1"
+        body = (
+            "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+            f"<title>Continuing OCR…</title><meta http-equiv=\"refresh\" content=\"0; url={next_url}\"></head>"
+            "<body><p>Continuing OCR… processed "
+            f"{detail['successes']} of {detail['attempted']} scans so far.</p></body></html>"
+        )
+        response = HttpResponse(body)
+        response["Refresh"] = f"0;url={next_url}"
+        return response
+
+    if loop and "ocr_loop_stats" in request.session:
+        del request.session["ocr_loop_stats"]
+        request.session.modified = True
+
+    if detail["attempted"] == 0:
+        messages.info(request, "No pending scans to process.")
+        # Show only affected scan file names, not raw error messages
+    else:
+        messages.info(request, f"Processed {detail['successes']} of {detail['attempted']} scans this run.")
+
+    if detail["failures"]:
+        error_text = "; ".join(detail["errors"])
+        messages.error(request, f"OCR failed for {detail['failures']} scans: {error_text}")
+    if detail["jammed"]:
+        messages.error(
+            request,
+            (
+                "OCR halted because scan "
+                f"{detail['jammed']} timed out after three attempts. Please investigate before retrying."
+            ),
+        )
+
     return redirect('admin:index')
 
 @login_required
