@@ -547,19 +547,12 @@ class ScanUploadForm(forms.Form):
 
         limit_display = filesizeformat(self.max_upload_bytes)
         errors = []
-        total_size = 0
 
         for uploaded in uploaded_files:
-            total_size += uploaded.size
             if uploaded.size > self.max_upload_bytes:
                 errors.append(
                     f"{uploaded.name} is {filesizeformat(uploaded.size)}, which exceeds the {limit_display} limit per file."
                 )
-
-        if total_size > self.max_upload_bytes and len(uploaded_files) > 1:
-            errors.append(
-                f"The combined upload is {filesizeformat(total_size)}, which exceeds the {limit_display} limit for a single submission."
-            )
 
         if errors:
             raise forms.ValidationError(errors)

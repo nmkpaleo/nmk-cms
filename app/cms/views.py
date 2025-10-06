@@ -2815,8 +2815,9 @@ def upload_scan(request):
         form = ScanUploadForm(request.POST, request.FILES, **form_kwargs)
         if form.is_valid():
             files = form.cleaned_data['files']
+            total_files = len(files)
             fs = FileSystemStorage(location=incoming_dir)
-            for file in files:
+            for index, file in enumerate(files, start=1):
                 saved_name = fs.save(file.name, file)
                 saved_path = incoming_dir / saved_name
                 if saved_name != file.name:
@@ -2827,7 +2828,10 @@ def upload_scan(request):
                     saved_name = file.name
                     saved_path = desired_path
                 process_file(saved_path)
-                messages.success(request, f'Uploaded {file.name}')
+                messages.success(
+                    request,
+                    f'Uploaded {file.name} ({index} of {total_files})',
+                )
             return redirect('admin-upload-scan')
     else:
         form = ScanUploadForm(**form_kwargs)
@@ -2835,6 +2839,7 @@ def upload_scan(request):
     context = {
         'form': form,
         'scan_upload_max_bytes': settings.SCAN_UPLOAD_MAX_BYTES,
+        'scan_upload_batch_max_bytes': settings.SCAN_UPLOAD_BATCH_MAX_BYTES,
         'scan_upload_timeout_seconds': settings.SCAN_UPLOAD_TIMEOUT_SECONDS,
     }
 

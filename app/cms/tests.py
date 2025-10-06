@@ -9,6 +9,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
+from django.contrib.messages import get_messages
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -1896,23 +1897,24 @@ class UploadScanViewTests(TestCase):
             self.assertFalse(any(incoming.iterdir()))
 
     @override_settings(SCAN_UPLOAD_MAX_BYTES=15)
-    def test_upload_rejects_oversized_batch(self):
+    def test_upload_accepts_large_batch_when_each_file_is_valid(self):
         self.client.login(username="cm", password="pass")
         upload_one = SimpleUploadedFile("2025-01-01T010203.png", b"a" * 10, content_type="image/png")
         upload_two = SimpleUploadedFile("2025-01-01T010204.png", b"b" * 10, content_type="image/png")
-        response = self.client.post(self.url, {"files": [upload_one, upload_two]})
+        response = self.client.post(self.url, {"files": [upload_one, upload_two]}, follow=True)
         self.assertEqual(response.status_code, 200)
-        self.assertFormError(
-            response,
-            "form",
-            "files",
+        messages = [str(message) for message in get_messages(response.wsgi_request)]
+        self.assertEqual(
+            messages,
             [
-                "The combined upload is 20 bytes, which exceeds the 15 bytes limit for a single submission.",
+                "Uploaded 2025-01-01T010203.png (1 of 2)",
+                "Uploaded 2025-01-01T010204.png (2 of 2)",
             ],
         )
-        incoming = self.uploads_root / "incoming"
-        if incoming.exists():
-            self.assertFalse(any(incoming.iterdir()))
+        pending = Path(settings.MEDIA_ROOT) / "uploads" / "pending"
+        self.assertTrue(pending.exists())
+        saved_files = {item.name for item in pending.iterdir()}
+        self.assertSetEqual(saved_files, {"2025-01-01T010203.png", "2025-01-01T010204.png"})
 
 
 class OcrViewTests(TestCase):
