@@ -173,6 +173,8 @@ class DashboardQueueTests(TestCase):
         self.media_pending_intern = Media.objects.create(
             file_name="pending-intern",
             qc_status=Media.QCStatus.PENDING_INTERN,
+            ocr_status=Media.OCRStatus.COMPLETED,
+            media_location="uploads/ocr/pending-intern.png",
         )
         self.media_pending_expert = Media.objects.create(
             file_name="pending-expert",
@@ -265,6 +267,36 @@ class DashboardQueueTests(TestCase):
         response = self.client.get(reverse("media_qc_pending_intern"))
         self.assertContains(response, self.media_pending_intern.file_name)
 
+    def test_pending_intern_queue_excludes_non_ocr_ready_media(self):
+        Media.objects.create(
+            file_name="pending-ocr-incomplete",
+            qc_status=Media.QCStatus.PENDING_INTERN,
+            ocr_status=Media.OCRStatus.PENDING,
+            media_location="uploads/ocr/pending-ocr-incomplete.png",
+        )
+        Media.objects.create(
+            file_name="pending-upload",
+            qc_status=Media.QCStatus.PENDING_INTERN,
+            ocr_status=Media.OCRStatus.COMPLETED,
+            media_location="uploads/pending/pending-upload.png",
+        )
+
+        intern_user = self._create_user("queue-filter", groups=(self.intern_group,))
+        self.client.force_login(intern_user)
+
+        dashboard_response = self.client.get(reverse("dashboard"))
+        sections = {section["key"]: section for section in dashboard_response.context["qc_sections"]}
+        pending_entries = {media.file_name for media in sections["pending_intern"]["entries"]}
+
+        self.assertIn(self.media_pending_intern.file_name, pending_entries)
+        self.assertNotIn("pending-ocr-incomplete", pending_entries)
+        self.assertNotIn("pending-upload", pending_entries)
+
+        queue_response = self.client.get(reverse("media_qc_pending_intern"))
+        self.assertContains(queue_response, self.media_pending_intern.file_name)
+        self.assertNotContains(queue_response, "pending-ocr-incomplete")
+        self.assertNotContains(queue_response, "pending-upload")
+
     def test_returned_queue_for_intern(self):
         intern_user = self._create_user("queue-returned", groups=(self.intern_group,))
         self.client.force_login(intern_user)
@@ -281,7 +313,10 @@ class MediaNotificationTests(TestCase):
 
     def test_transition_triggers_notification(self):
         media = Media.objects.create(
-            file_name="notif", qc_status=Media.QCStatus.PENDING_INTERN
+            file_name="notif",
+            qc_status=Media.QCStatus.PENDING_INTERN,
+            ocr_status=Media.OCRStatus.COMPLETED,
+            media_location="uploads/ocr/notif.png",
         )
         with patch("cms.models.notify_media_qc_transition") as mock_notify:
             media.transition_qc(Media.QCStatus.PENDING_EXPERT, user=self.user, note="Ready")
@@ -296,7 +331,10 @@ class MediaNotificationTests(TestCase):
 
     def test_transition_same_status_skips_notification(self):
         media = Media.objects.create(
-            file_name="notif-skip", qc_status=Media.QCStatus.PENDING_INTERN
+            file_name="notif-skip",
+            qc_status=Media.QCStatus.PENDING_INTERN,
+            ocr_status=Media.OCRStatus.COMPLETED,
+            media_location="uploads/ocr/notif-skip.png",
         )
         with patch("cms.models.notify_media_qc_transition") as mock_notify:
             media.transition_qc(Media.QCStatus.PENDING_INTERN, user=self.user)
@@ -1267,9 +1305,10 @@ class ScanningTests(TestCase):
         pending_media = []
         for idx in range(11):
             media = Media.objects.create(
-                media_location=f"uploads/pending/sample-{idx}.jpg",
+                media_location=f"uploads/ocr/sample-{idx}.jpg",
                 file_name=f"Pending Sample {idx}",
                 qc_status=Media.QCStatus.PENDING_INTERN,
+                ocr_status=Media.OCRStatus.COMPLETED,
             )
             Media.objects.filter(pk=media.pk).update(
                 modified_on=now_time - timedelta(minutes=idx)
@@ -2726,8 +2765,9 @@ class MediaExpertQCWizardTests(TestCase):
         self.locality = Locality.objects.create(abbreviation="AB", name="Area 1")
 
         self.media = Media.objects.create(
-            media_location="uploads/pending/expert.png",
+            media_location="uploads/ocr/expert.png",
             qc_status=Media.QCStatus.PENDING_EXPERT,
+            ocr_status=Media.OCRStatus.COMPLETED,
             ocr_data={
                 "card_type": "accession_card",
                 "accessions": [

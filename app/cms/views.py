@@ -433,7 +433,11 @@ def dashboard(request):
         {
             "key": "pending_intern",
             "label": "Pending intern review",
-            "filters": {"qc_status": Media.QCStatus.PENDING_INTERN},
+            "filters": {
+                "qc_status": Media.QCStatus.PENDING_INTERN,
+                "ocr_status": Media.OCRStatus.COMPLETED,
+                "media_location__startswith": "uploads/ocr/",
+            },
             "action_url_name": "media_intern_qc",
             "cta_label": "Review",
             "empty_message": "No media awaiting intern review.",
@@ -588,7 +592,11 @@ class MediaQCQueueView(LoginRequiredMixin, UserPassesTestMixin, ListView):
 
 
 class MediaPendingInternQueueView(MediaQCQueueView):
-    filters = {"qc_status": Media.QCStatus.PENDING_INTERN}
+    filters = {
+        "qc_status": Media.QCStatus.PENDING_INTERN,
+        "ocr_status": Media.OCRStatus.COMPLETED,
+        "media_location__startswith": "uploads/ocr/",
+    }
     allowed_roles = {"intern", "expert"}
     queue_title = "Pending intern review"
     queue_action_url_name = "media_intern_qc"
