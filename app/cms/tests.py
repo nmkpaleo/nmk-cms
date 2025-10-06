@@ -56,6 +56,7 @@ from cms.ocr_processing import (
     describe_accession_conflicts,
     UNKNOWN_FIELD_NUMBER_PREFIX,
     _apply_rows,
+    MAX_OCR_ROWS_PER_ACCESSION,
 )
 from cms.qc import diff_media_payload
 
@@ -2707,6 +2708,50 @@ class ProcessPendingScansTests(TestCase):
         self.assertEqual(nature.portion, "proximal")
         self.assertEqual(nature.fragments, 1)
 
+    @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
+    @patch(
+        "cms.ocr_processing.chatgpt_ocr",
+        return_value={
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 123},
+                    "rows": [
+                        {
+                            "specimen_suffix": {"interpreted": f"S{i:03d}"},
+                        }
+                        for i in range(MAX_OCR_ROWS_PER_ACCESSION + 5)
+                    ],
+                }
+            ]
+        },
+    )
+    def test_limits_rows_to_maximum(self, mock_ocr, mock_detect):
+        Collection.objects.create(abbreviation="KNM", description="Kenya")
+        Locality.objects.create(abbreviation="AB", name="Area 1")
+        filename = "acc_row_limit.png"
+        file_path = self.pending / filename
+        file_path.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename}")
+
+        with self.assertLogs("cms.ocr_processing", level="WARNING") as cm:
+            process_pending_scans()
+
+        self.assertTrue(
+            any("Truncated OCR rows" in message for message in cm.output),
+            cm.output,
+        )
+
+        media = Media.objects.get()
+        result = media.transition_qc(Media.QCStatus.APPROVED, user=self.user)
+        self.assertEqual(len(result["created"]), 1)
+        accession = Accession.objects.get()
+        rows = accession.accessionrow_set.order_by("specimen_suffix")
+        self.assertEqual(rows.count(), MAX_OCR_ROWS_PER_ACCESSION)
+        suffixes = list(rows.values_list("specimen_suffix", flat=True))
+        self.assertIn("S000", suffixes)
+        self.assertNotIn(f"S{MAX_OCR_ROWS_PER_ACCESSION:03d}", suffixes)
 
 class MediaTransitionTests(TestCase):
     def setUp(self):

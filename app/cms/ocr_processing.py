@@ -66,6 +66,9 @@ if "APITimeoutError" in globals() and APITimeoutError is not None:  # pragma: no
 logger = logging.getLogger(__name__)
 
 
+MAX_OCR_ROWS_PER_ACCESSION = 50
+
+
 def _load_env() -> None:
     """Load environment variables from the project root .env file."""
     env_path = Path(__file__).resolve().parents[2] / ".env"
@@ -649,11 +652,28 @@ def _apply_rows(
 ) -> None:
     last_ident_data: dict[str, object] | None = None
     last_natures_data: list[dict[str, object]] = []
+    processed_suffixes: set[str] = set()
+    truncated_suffixes: list[str] = []
 
-    for row in rows:
-        suffix = row.get("specimen_suffix") or "-"
+    for index, row in enumerate(rows):
+        suffix_raw = row.get("specimen_suffix") or "-"
+        suffix = str(suffix_raw)
         if selection is not None and suffix not in selection:
             continue
+        is_new_suffix = suffix not in processed_suffixes
+        if is_new_suffix and len(processed_suffixes) >= MAX_OCR_ROWS_PER_ACCESSION:
+            skipped_seen: set[str] = set()
+            for remaining in rows[index:]:
+                remaining_suffix = str(remaining.get("specimen_suffix") or "-")
+                if selection is not None and remaining_suffix not in selection:
+                    continue
+                if remaining_suffix in processed_suffixes or remaining_suffix in skipped_seen:
+                    continue
+                skipped_seen.add(remaining_suffix)
+                truncated_suffixes.append(remaining_suffix)
+            break
+        if is_new_suffix:
+            processed_suffixes.add(suffix)
         storage_name = row.get("storage")
         storage_obj = _get_or_create_storage(str(storage_name)) if storage_name else None
         defaults = {
@@ -736,6 +756,14 @@ def _apply_rows(
                 portion=nature.get("portion"),
                 fragments=fragments_value,
             )
+
+    if truncated_suffixes:
+        logger.warning(
+            "Truncated OCR rows for accession %s to %s suffixes; skipped suffixes: %s",
+            accession.pk,
+            MAX_OCR_ROWS_PER_ACCESSION,
+            ", ".join(truncated_suffixes),
+        )
 
 
 def _serialize_accession(accession: Accession) -> dict[str, object]:
