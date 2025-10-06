@@ -1305,16 +1305,16 @@ def process_pending_scans(limit: int | None = None) -> tuple[int, int, int, list
             successes += 1
         except OCRTimeoutError as exc:
             failures += 1
-            error_msg = f"{path.name}: {exc}"
-            errors.append(error_msg)
+            # Do not expose exception details to users
+            errors.append(f"{path.name}: scan timed out")
             jammed_filename = path.name
             logger.error("OCR timed out for %s after multiple attempts", path, exc_info=True)
             _mark_scan_failed(media, path, failed_dir, exc)
             break
         except Exception as exc:
             failures += 1
-            error_msg = f"{path.name}: {exc}"
-            errors.append(error_msg)
+            # Do not expose exception details to users
+            errors.append(f"{path.name}: scan failed")
             logger.exception("OCR processing failed for %s", path)
             _mark_scan_failed(media, path, failed_dir, exc)
 
