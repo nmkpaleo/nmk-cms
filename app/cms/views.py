@@ -5,6 +5,7 @@ import os
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 from dal import autocomplete
 from django import forms
 from django.db import transaction
@@ -2846,12 +2847,38 @@ def _should_loop(request) -> bool:
     return flag in {"1", "true", "yes", "on"}
 
 
+def _parse_ocr_limit(request) -> int | None:
+    raw = request.GET.get("limit")
+    if not raw:
+        return None
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return value if value > 0 else None
+
+
+def _compute_expected_total(attempted: int, remaining: int, limit: int | None) -> int:
+    if limit is None:
+        return attempted + remaining
+    return max(attempted, min(limit, attempted + remaining))
+
+
 @staff_member_required
 def do_ocr(request):
     """Process pending scans sequentially, looping if requested."""
 
     loop = _should_loop(request)
-    successes, failures, total, errors, jammed = process_pending_scans(limit=1)
+    limit_hint = _parse_ocr_limit(request)
+    (
+        successes,
+        failures,
+        total,
+        errors,
+        jammed,
+        processed_filenames,
+    ) = process_pending_scans(limit=1)
+    latest_filename = processed_filenames[-1] if processed_filenames else None
 
     aggregated: dict[str, Any] | None = None
     if loop:
@@ -2866,6 +2893,10 @@ def do_ocr(request):
         stats["attempted"] += total
         stats.setdefault("errors", [])
         stats["errors"].extend(errors)
+        stats.setdefault("latest_filename", None)
+        stats.setdefault("expected_total", None)
+        if latest_filename:
+            stats["latest_filename"] = latest_filename
         if jammed:
             stats["jammed"] = jammed
         aggregated = stats
@@ -2874,6 +2905,12 @@ def do_ocr(request):
 
     remaining = _count_pending_scans()
     errors_list = list(aggregated["errors"]) if aggregated else list(errors)
+    attempted_total = aggregated["attempted"] if aggregated else total
+    expected_total = _compute_expected_total(attempted_total, remaining, limit_hint)
+    if aggregated is not None:
+        aggregated["expected_total"] = expected_total
+        if aggregated.get("latest_filename") is None and latest_filename:
+            aggregated["latest_filename"] = latest_filename
 
     # Sanitize error messages for external exposure: extract only the scan filename portion.
     def _sanitize_ocr_errors(error_list):
@@ -2889,23 +2926,35 @@ def do_ocr(request):
     detail = {
         "successes": aggregated["successes"] if aggregated else successes,
         "failures": aggregated["failures"] if aggregated else failures,
-        "attempted": aggregated["attempted"] if aggregated else total,
+        "attempted": attempted_total,
         "errors": sanitized_errors,
         "jammed": aggregated.get("jammed") if aggregated else jammed,
         "remaining": remaining,
         "loop": loop,
+        "expected_total": aggregated.get("expected_total") if aggregated else expected_total,
+        "latest_filename": aggregated.get("latest_filename") if aggregated else latest_filename,
+        "current_index": attempted_total,
     }
 
     if request.headers.get("HX-Request") or request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return JsonResponse(detail)
 
     if loop and remaining > 0 and not detail["jammed"]:
-        next_url = f"{reverse('admin-do-ocr')}?loop=1"
+        query_params = {"loop": "1"}
+        if limit_hint is not None:
+            query_params["limit"] = str(limit_hint)
+        next_url = f"{reverse('admin-do-ocr')}?{urlencode(query_params)}"
+        expected_display = detail["expected_total"] or detail["attempted"]
+        latest_segment = (
+            f" (Latest: {detail['latest_filename']})"
+            if detail["latest_filename"]
+            else ""
+        )
         body = (
             "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
             f"<title>Continuing OCR…</title><meta http-equiv=\"refresh\" content=\"0; url={next_url}\"></head>"
-            "<body><p>Continuing OCR… processed "
-            f"{detail['successes']} of {detail['attempted']} scans so far.</p></body></html>"
+            "<body><p>Continuing OCR… scan "
+            f"{detail['current_index']} of {expected_display}{latest_segment}.</p></body></html>"
         )
         response = HttpResponse(body)
         response["Refresh"] = f"0;url={next_url}"
@@ -2919,7 +2968,16 @@ def do_ocr(request):
         messages.info(request, "No pending scans to process.")
         # Show only affected scan file names, not raw error messages
     else:
-        messages.info(request, f"Processed {detail['successes']} of {detail['attempted']} scans this run.")
+        expected_display = detail["expected_total"] or detail["attempted"]
+        latest_segment = (
+            f" Latest scan: {detail['latest_filename']}."
+            if detail["latest_filename"]
+            else ""
+        )
+        messages.info(
+            request,
+            f"Processed {detail['successes']} of {expected_display} scans this run.{latest_segment}",
+        )
 
     if detail["failures"]:
         error_text = "; ".join(detail["errors"])
