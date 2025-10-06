@@ -1,18 +1,19 @@
 import copy
-from unittest.mock import patch
-from datetime import datetime, timedelta
 import json
+import shutil
+from datetime import datetime, timedelta
+from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.test import TestCase
-from django.urls import reverse
-from django.utils.timezone import now
-from django.utils import timezone as django_timezone
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.conf import settings
+from django.test import TestCase, override_settings
+from django.urls import reverse
+from django.utils import timezone as django_timezone
+from django.utils.timezone import now
 from pathlib import Path
 
 from cms.models import (
@@ -1830,6 +1831,12 @@ class UploadScanViewTests(TestCase):
         self.user = User.objects.create_user(username="cm", password="pass", is_staff=True)
         Group.objects.create(name="Collection Managers").user_set.add(self.user)
         self.url = reverse("admin-upload-scan")
+        self.uploads_root = Path(settings.MEDIA_ROOT) / "uploads"
+        self.addCleanup(self._cleanup_uploads)
+
+    def _cleanup_uploads(self):
+        if self.uploads_root.exists():
+            shutil.rmtree(self.uploads_root)
 
     def test_login_required(self):
         response = self.client.get(self.url)
@@ -1868,8 +1875,44 @@ class UploadScanViewTests(TestCase):
         self.assertTrue(rejected.exists())
         self.assertFalse(Media.objects.filter(media_location="uploads/rejected/badname.png").exists())
         rejected.unlink()
-        import shutil
         shutil.rmtree(rejected.parent.parent)
+
+    @override_settings(SCAN_UPLOAD_MAX_BYTES=10)
+    def test_upload_rejects_oversized_file(self):
+        self.client.login(username="cm", password="pass")
+        upload = SimpleUploadedFile("2025-01-01T010203.png", b"x" * 11, content_type="image/png")
+        response = self.client.post(self.url, {"files": upload})
+        self.assertEqual(response.status_code, 200)
+        self.assertFormError(
+            response,
+            "form",
+            "files",
+            [
+                "2025-01-01T010203.png is 11 bytes, which exceeds the 10 bytes limit per file.",
+            ],
+        )
+        incoming = self.uploads_root / "incoming"
+        if incoming.exists():
+            self.assertFalse(any(incoming.iterdir()))
+
+    @override_settings(SCAN_UPLOAD_MAX_BYTES=15)
+    def test_upload_rejects_oversized_batch(self):
+        self.client.login(username="cm", password="pass")
+        upload_one = SimpleUploadedFile("2025-01-01T010203.png", b"a" * 10, content_type="image/png")
+        upload_two = SimpleUploadedFile("2025-01-01T010204.png", b"b" * 10, content_type="image/png")
+        response = self.client.post(self.url, {"files": [upload_one, upload_two]})
+        self.assertEqual(response.status_code, 200)
+        self.assertFormError(
+            response,
+            "form",
+            "files",
+            [
+                "The combined upload is 20 bytes, which exceeds the 15 bytes limit for a single submission.",
+            ],
+        )
+        incoming = self.uploads_root / "incoming"
+        if incoming.exists():
+            self.assertFalse(any(incoming.iterdir()))
 
 
 class OcrViewTests(TestCase):

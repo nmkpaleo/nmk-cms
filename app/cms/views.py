@@ -2809,10 +2809,12 @@ def upload_scan(request):
     incoming_dir = Path(settings.MEDIA_ROOT) / 'uploads' / 'incoming'
     os.makedirs(incoming_dir, exist_ok=True)
 
+    form_kwargs = {"max_upload_bytes": settings.SCAN_UPLOAD_MAX_BYTES}
+
     if request.method == 'POST':
-        form = ScanUploadForm(request.POST, request.FILES)
-        files = request.FILES.getlist('files')
-        if files:
+        form = ScanUploadForm(request.POST, request.FILES, **form_kwargs)
+        if form.is_valid():
+            files = form.cleaned_data['files']
             fs = FileSystemStorage(location=incoming_dir)
             for file in files:
                 saved_name = fs.save(file.name, file)
@@ -2827,12 +2829,16 @@ def upload_scan(request):
                 process_file(saved_path)
                 messages.success(request, f'Uploaded {file.name}')
             return redirect('admin-upload-scan')
-        else:
-            form.add_error('files', 'No file was submitted. Check the encoding type on the form.')
     else:
-        form = ScanUploadForm()
+        form = ScanUploadForm(**form_kwargs)
 
-    return render(request, 'admin/upload_scan.html', {'form': form})
+    context = {
+        'form': form,
+        'scan_upload_max_bytes': settings.SCAN_UPLOAD_MAX_BYTES,
+        'scan_upload_timeout_seconds': settings.SCAN_UPLOAD_TIMEOUT_SECONDS,
+    }
+
+    return render(request, 'admin/upload_scan.html', context)
 
 
 def _count_pending_scans() -> int:

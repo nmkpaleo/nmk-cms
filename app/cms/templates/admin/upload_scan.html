@@ -1,6 +1,10 @@
 {% extends "admin/base_site.html" %}
 {% block content %}
 <h1>Upload Scan</h1>
+<p class="help">
+  Each file (and the combined batch) must stay under {{ scan_upload_max_bytes|filesizeformat }}.
+  Uploads should complete within {{ scan_upload_timeout_seconds }} seconds before the server times out.
+</p>
 {# enctype is required to submit uploaded files #}
 <form method="post" enctype="multipart/form-data">
   {% csrf_token %}
