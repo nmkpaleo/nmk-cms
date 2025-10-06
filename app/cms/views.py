@@ -2829,11 +2829,23 @@ def do_ocr(request):
 
     remaining = _count_pending_scans()
     errors_list = list(aggregated["errors"]) if aggregated else list(errors)
+
+    # Sanitize error messages for external exposure: extract only the scan filename portion.
+    def _sanitize_ocr_errors(error_list):
+        sanitized = []
+        for msg in error_list:
+            # Expected format: "{filename}: {exception}"
+            parts = msg.split(':', 1)
+            filename = parts[0].strip() if parts else "Unknown"
+            sanitized.append(filename)
+        return sanitized
+
+    sanitized_errors = _sanitize_ocr_errors(errors_list)
     detail = {
         "successes": aggregated["successes"] if aggregated else successes,
         "failures": aggregated["failures"] if aggregated else failures,
         "attempted": aggregated["attempted"] if aggregated else total,
-        "errors": errors_list,
+        "errors": sanitized_errors,
         "jammed": aggregated.get("jammed") if aggregated else jammed,
         "remaining": remaining,
         "loop": loop,
@@ -2860,6 +2872,7 @@ def do_ocr(request):
 
     if detail["attempted"] == 0:
         messages.info(request, "No pending scans to process.")
+        # Show only affected scan file names, not raw error messages
     else:
         messages.info(request, f"Processed {detail['successes']} of {detail['attempted']} scans this run.")
 
