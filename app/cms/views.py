@@ -39,6 +39,7 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.core.exceptions import ValidationError
 from django.forms import formset_factory, modelformset_factory
+from django.forms.widgets import Media as FormsMedia
 from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse_lazy, reverse
@@ -2330,6 +2331,8 @@ def MediaInternQCWizard(request, pk):
         request_user=request.user,
     )
 
+    form_media = _build_qc_form_media(manager)
+
     context = {
         "media": media,
         "accession_form": manager.accession_form,
@@ -2347,6 +2350,7 @@ def MediaInternQCWizard(request, pk):
         "qc_diff": qc_diff,
         "qc_preview": qc_preview,
         "qc_acknowledged_warnings": set(),
+        "form_media": form_media,
     }
 
     return render(request, "cms/qc/intern_wizard.html", context)
@@ -2449,6 +2453,24 @@ def _annotate_conflict_selections(conflicts, resolution_map):
         conflict["selected_field_slips"] = {
             int(value) for value in field_slips if str(value).isdigit()
         }
+
+
+def _build_qc_form_media(manager: "MediaQCFormManager") -> FormsMedia:
+    combined = FormsMedia()
+    for formish in (
+        getattr(manager, "accession_form", None),
+        getattr(manager, "row_formset", None),
+        getattr(manager, "ident_formset", None),
+        getattr(manager, "specimen_formset", None),
+        getattr(manager, "reference_formset", None),
+        getattr(manager, "fieldslip_formset", None),
+    ):
+        if not formish:
+            continue
+        media = getattr(formish, "media", None)
+        if media:
+            combined += media
+    return combined
 
 
 @login_required
@@ -2653,6 +2675,8 @@ def MediaExpertQCWizard(request, pk):
         request_user=request.user,
     )
 
+    form_media = _build_qc_form_media(manager)
+
     context = {
         "media": media,
         "accession_form": manager.accession_form,
@@ -2671,6 +2695,7 @@ def MediaExpertQCWizard(request, pk):
         "qc_diff": qc_diff,
         "qc_preview": qc_preview,
         "qc_acknowledged_warnings": acknowledged_warnings,
+        "form_media": form_media,
     }
 
     return render(request, "cms/qc/expert_wizard.html", context)

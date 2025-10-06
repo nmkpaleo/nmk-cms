@@ -11,7 +11,11 @@
     <!-- Add jQuery (Required for Select2) -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
 
-    {{ form.media.css }}
+    {% if form_media %}
+      {{ form_media.css }}
+    {% elif form %}
+      {{ form.media.css }}
+    {% endif %}
     {% block script %}{% endblock %}
     <!-- Add additional CSS in static file -->
     {% load static %}
@@ -132,7 +136,11 @@
     <script src="{% static 'javascript.js' %}"></script>
 
     {% block extra_scripts %}
-      {{ form.media.js }}
+      {% if form_media %}
+        {{ form_media.js }}
+      {% elif form %}
+        {{ form.media.js }}
+      {% endif %}
     {% endblock %}
 
   </body>
