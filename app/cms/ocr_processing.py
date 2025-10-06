@@ -1268,13 +1268,17 @@ def _process_single_scan(
         raise OCRTimeoutError(str(last_timeout))
 
 
-def process_pending_scans(limit: int | None = None) -> tuple[int, int, int, list[str], Optional[str]]:
+def process_pending_scans(
+    limit: int | None = None,
+) -> tuple[int, int, int, list[str], Optional[str], list[str]]:
     """Process up to ``limit`` scans awaiting OCR.
 
-    Returns a tuple of ``(successes, failures, total, errors, jammed_filename)``
-    where ``total`` is the number of scans considered and ``errors`` is a list
-    of error descriptions for failed scans. ``jammed_filename`` will be set if
-    OCR was halted early because a scan repeatedly timed out.
+    Returns a tuple of ``(successes, failures, total, errors, jammed_filename,
+    processed_filenames)`` where ``total`` is the number of scans considered and
+    ``errors`` is a list of error descriptions for failed scans.
+    ``jammed_filename`` will be set if OCR was halted early because a scan
+    repeatedly timed out, and ``processed_filenames`` records each filename
+    that was attempted regardless of success or failure.
     """
 
     pending = Path(settings.MEDIA_ROOT) / "uploads" / "pending"
@@ -1288,6 +1292,7 @@ def process_pending_scans(limit: int | None = None) -> tuple[int, int, int, list
     total = 0
     errors: list[str] = []
     jammed_filename: Optional[str] = None
+    processed_filenames: list[str] = []
 
     for path in files:
         if limit is not None and total >= limit:
@@ -1299,6 +1304,7 @@ def process_pending_scans(limit: int | None = None) -> tuple[int, int, int, list
             continue
 
         total += 1
+        processed_filenames.append(path.name)
 
         try:
             _process_single_scan(media, path, estimator, ocr_dir)
@@ -1318,4 +1324,4 @@ def process_pending_scans(limit: int | None = None) -> tuple[int, int, int, list
             logger.exception("OCR processing failed for %s", path)
             _mark_scan_failed(media, path, failed_dir, exc)
 
-    return successes, failures, total, errors, jammed_filename
+    return successes, failures, total, errors, jammed_filename, processed_filenames
