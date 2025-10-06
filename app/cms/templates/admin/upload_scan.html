@@ -1,10 +1,182 @@
 {% extends "admin/base_site.html" %}
 {% block content %}
 <h1>Upload Scan</h1>
+
+{% if messages %}
+  <ul class="messagelist">
+    {% for message in messages %}
+      <li class="{{ message.tags }}">{{ message }}</li>
+    {% endfor %}
+  </ul>
+{% endif %}
+
+<p class="help">
+  Each file can be up to {{ scan_upload_max_bytes|filesizeformat }}.
+  {% if scan_upload_batch_max_bytes %}
+    The combined batch must stay under {{ scan_upload_batch_max_bytes|filesizeformat }}.
+  {% else %}
+    There is no combined batch size limit, so you can keep adding files to the list below before submitting.
+  {% endif %}
+  Uploads should complete within {{ scan_upload_timeout_seconds }} seconds before the server times out.
+</p>
+<p class="help">
+  Select multiple files at once or build a batch by choosing files one at a time. The list underneath keeps track of everything that will be sent together.
+</p>
+
 {# enctype is required to submit uploaded files #}
-<form method="post" enctype="multipart/form-data">
+<form id="scan-upload-form" method="post" enctype="multipart/form-data">
   {% csrf_token %}
   {{ form.as_p }}
+  <div class="upload-summary">
+    <p id="scan-upload-status" class="help" aria-live="polite" aria-atomic="true">No files selected yet.</p>
+    <ol id="scan-upload-file-list" class="upload-file-list" aria-live="polite" aria-relevant="additions removals"></ol>
+  </div>
   <button type="submit" class="default">Upload</button>
 </form>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const form = document.getElementById('scan-upload-form');
+  const statusEl = document.getElementById('scan-upload-status');
+  const listEl = document.getElementById('scan-upload-file-list');
+  if (!form || !statusEl || !listEl) {
+    return;
+  }
+
+  const fileInput = form.querySelector('input[type="file"][name="files"]');
+  if (!fileInput) {
+    return;
+  }
+
+  const supportsDataTransfer = typeof window.DataTransfer !== 'undefined';
+  let filesQueue = supportsDataTransfer ? [] : null;
+
+  const keyForFile = (file) => `${file.name}::${file.size}::${file.lastModified}`;
+
+  const syncInputFiles = () => {
+    if (!supportsDataTransfer) {
+      return;
+    }
+    const transfer = new DataTransfer();
+    filesQueue.forEach((file) => transfer.items.add(file));
+    fileInput.files = transfer.files;
+  };
+
+  const formatBytes = (bytes) => {
+    if (!Number.isFinite(bytes)) {
+      return '';
+    }
+    if (bytes === 0) {
+      return '0 bytes';
+    }
+    const units = ['bytes', 'KB', 'MB', 'GB'];
+    const exponent = Math.min(
+      Math.floor(Math.log(bytes) / Math.log(1024)),
+      units.length - 1,
+    );
+    const value = bytes / Math.pow(1024, exponent);
+    return `${value.toFixed(exponent === 0 ? 0 : 1)} ${units[exponent]}`;
+  };
+
+  const renderList = () => {
+    listEl.innerHTML = '';
+    if (supportsDataTransfer) {
+      if (!filesQueue.length) {
+        statusEl.textContent = 'No files selected yet.';
+        return;
+      }
+      statusEl.textContent = `${filesQueue.length} file${filesQueue.length === 1 ? '' : 's'} ready for upload.`;
+      filesQueue.forEach((file, index) => {
+        const item = document.createElement('li');
+        item.className = 'upload-file-list__item';
+
+        const description = document.createElement('span');
+        description.textContent = `${index + 1}. ${file.name} (${formatBytes(file.size)})`;
+        item.appendChild(description);
+
+        const removeButton = document.createElement('button');
+        removeButton.type = 'button';
+        removeButton.className = 'button remove-upload';
+        removeButton.dataset.index = String(index);
+        removeButton.setAttribute('aria-label', `Remove ${file.name} from this batch`);
+        removeButton.textContent = 'Remove';
+        item.appendChild(removeButton);
+
+        listEl.appendChild(item);
+      });
+      return;
+    }
+
+    const fallbackFiles = Array.from(fileInput.files || []);
+    if (!fallbackFiles.length) {
+      statusEl.textContent = 'No files selected yet.';
+      return;
+    }
+    statusEl.textContent = `${fallbackFiles.length} file${fallbackFiles.length === 1 ? '' : 's'} ready for upload (your browser may replace this list if you select more).`;
+    fallbackFiles.forEach((file, index) => {
+      const item = document.createElement('li');
+      item.className = 'upload-file-list__item';
+      item.textContent = `${index + 1}. ${file.name} (${formatBytes(file.size)})`;
+      listEl.appendChild(item);
+    });
+  };
+
+  if (supportsDataTransfer) {
+    fileInput.addEventListener('change', (event) => {
+      const picked = Array.from(event.target.files || []);
+      if (!picked.length) {
+        renderList();
+        return;
+      }
+      const seen = new Set(filesQueue.map((file) => keyForFile(file)));
+      picked.forEach((file) => {
+        const key = keyForFile(file);
+        if (!seen.has(key)) {
+          filesQueue.push(file);
+          seen.add(key);
+        }
+      });
+      syncInputFiles();
+      renderList();
+      fileInput.value = '';
+    });
+
+    listEl.addEventListener('click', (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+      const button = target.closest('button[data-index]');
+      if (!button) {
+        return;
+      }
+      event.preventDefault();
+      const index = Number.parseInt(button.dataset.index || '', 10);
+      if (Number.isNaN(index)) {
+        return;
+      }
+      filesQueue.splice(index, 1);
+      syncInputFiles();
+      renderList();
+    });
+  } else {
+    fileInput.addEventListener('change', renderList);
+  }
+
+  form.addEventListener('submit', () => {
+    const total = supportsDataTransfer
+      ? filesQueue.length
+      : (fileInput.files ? fileInput.files.length : 0);
+    if (!total) {
+      return;
+    }
+    const firstName = supportsDataTransfer
+      ? filesQueue[0].name
+      : (fileInput.files ? fileInput.files[0].name : '');
+    statusEl.textContent = `Uploading ${firstName} (1 of ${total})…`;
+  });
+
+  renderList();
+});
+</script>
 {% endblock %}
