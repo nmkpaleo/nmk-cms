@@ -38,7 +38,7 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.core.exceptions import ValidationError
-from django.forms import formset_factory, modelformset_factory
+from django.forms import BaseFormSet, formset_factory, modelformset_factory
 from django.forms.widgets import Media as FormsMedia
 from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, render, redirect
@@ -1271,6 +1271,22 @@ class AccessionRowQCForm(AccessionRowUpdateForm):
         return None
 
 
+class HiddenDeleteFormSetMixin:
+    def add_fields(self, form, index):
+        super().add_fields(form, index)
+        if not getattr(self, "can_delete", False):
+            return
+        delete_field = form.fields.get("DELETE")
+        if delete_field is not None:
+            delete_field.widget = forms.HiddenInput()
+            delete_field.label = ""
+            delete_field.help_text = ""
+
+
+class HiddenDeleteFormSet(HiddenDeleteFormSetMixin, BaseFormSet):
+    pass
+
+
 class AccessionRowIdentificationQCForm(AccessionRowIdentificationForm):
     row_id = forms.CharField(widget=forms.HiddenInput())
 
@@ -1288,9 +1304,6 @@ class AccessionRowIdentificationQCForm(AccessionRowIdentificationForm):
             field = self.fields.get(field_name)
             if field is not None:
                 field.required = False
-        delete_field = self.fields.get('DELETE')
-        if delete_field is not None:
-            delete_field.widget = forms.HiddenInput()
 
 
 class AccessionRowSpecimenQCForm(AccessionRowSpecimenForm):
@@ -1309,16 +1322,15 @@ class AccessionRowSpecimenQCForm(AccessionRowSpecimenForm):
                 field = self.fields.get(field_name)
                 if field is not None:
                     field.required = False
-        delete_field = self.fields.get('DELETE')
-        if delete_field is not None:
-            delete_field.widget = forms.HiddenInput()
 
 
 AccessionRowFormSet = formset_factory(AccessionRowQCForm, extra=0, can_delete=False)
 IdentificationQCFormSet = formset_factory(
-    AccessionRowIdentificationQCForm, extra=0, can_delete=True
+    AccessionRowIdentificationQCForm, extra=0, can_delete=True, formset=HiddenDeleteFormSet
 )
-SpecimenQCFormSet = formset_factory(AccessionRowSpecimenQCForm, extra=0, can_delete=True)
+SpecimenQCFormSet = formset_factory(
+    AccessionRowSpecimenQCForm, extra=0, can_delete=True, formset=HiddenDeleteFormSet
+)
 
 
 class AccessionReferenceQCForm(forms.Form):
