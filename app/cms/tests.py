@@ -63,6 +63,24 @@ from cms.ocr_processing import (
 from cms.qc import diff_media_payload
 
 
+DEFAULT_USAGE_PAYLOAD = {
+    "model": "gpt-4o",
+    "request_id": "req-test",
+    "prompt_tokens": 100,
+    "completion_tokens": 200,
+    "total_tokens": 300,
+    "prompt_cost_usd": 0.0005,
+    "completion_cost_usd": 0.003,
+    "total_cost_usd": 0.0035,
+}
+
+
+def with_usage(payload: dict) -> dict:
+    data = copy.deepcopy(payload)
+    data["usage"] = copy.deepcopy(DEFAULT_USAGE_PAYLOAD)
+    return data
+
+
 class MediaQCDiffTests(TestCase):
     def test_diff_detects_reordered_rows_and_totals(self):
         original = {
@@ -1940,7 +1958,7 @@ class OcrViewTests(TestCase):
         self.assertContains(response, self.loop_url)
 
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
-    @patch("cms.ocr_processing.chatgpt_ocr", return_value={"foo": "bar"})
+    @patch("cms.ocr_processing.chatgpt_ocr", return_value=with_usage({"foo": "bar"}))
     def test_ocr_moves_file_and_saves_json(self, mock_ocr, mock_detect):
         self.client.login(username="cm", password="pass")
         pending = Path(settings.MEDIA_ROOT) / "uploads" / "pending"
@@ -1957,6 +1975,7 @@ class OcrViewTests(TestCase):
         self.assertEqual(media.ocr_status, Media.OCRStatus.COMPLETED)
         self.assertEqual(media.media_location.name, f"uploads/ocr/{filename}")
         self.assertEqual(media.ocr_data["foo"], "bar")
+        self.assertEqual(media.ocr_data["usage"], DEFAULT_USAGE_PAYLOAD)
         import shutil
         shutil.rmtree(pending.parent)
 
@@ -2098,7 +2117,7 @@ class ProcessPendingScansTests(TestCase):
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch(
         "cms.ocr_processing.chatgpt_ocr",
-        return_value={
+        return_value=with_usage({
             "accessions": [
                 {
                     "collection_abbreviation": {"interpreted": "KNM"},
@@ -2122,7 +2141,7 @@ class ProcessPendingScansTests(TestCase):
                     ],
                 }
             ]
-        },
+        }),
     )
     def test_creates_accession_and_links_media(self, mock_ocr, mock_detect):
         Collection.objects.create(abbreviation="KNM", description="Kenya")
@@ -2161,6 +2180,7 @@ class ProcessPendingScansTests(TestCase):
         media.refresh_from_db()
         self.assertEqual(media.accession, accession)
         self.assertEqual(media.qc_status, Media.QCStatus.APPROVED)
+        self.assertEqual(media.ocr_data["usage"], DEFAULT_USAGE_PAYLOAD)
         self.assertIn("_processed_accessions", media.ocr_data)
         repeat = media.transition_qc(Media.QCStatus.APPROVED, user=self.user)
         self.assertEqual(repeat["created"], [])
@@ -2169,7 +2189,7 @@ class ProcessPendingScansTests(TestCase):
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch(
         "cms.ocr_processing.chatgpt_ocr",
-        return_value={
+        return_value=with_usage({
             "accessions": [
                 {
                     "collection_abbreviation": {"interpreted": "KNM"},
@@ -2187,7 +2207,7 @@ class ProcessPendingScansTests(TestCase):
                     ],
                 }
             ]
-        },
+        }),
     )
     def test_reuses_existing_reference(self, mock_ocr, mock_detect):
         Collection.objects.create(abbreviation="KNM", description="Kenya")
@@ -2216,7 +2236,7 @@ class ProcessPendingScansTests(TestCase):
     def test_reference_reused_across_scans_with_variants(self, mock_ocr, mock_detect):
         Collection.objects.create(abbreviation="KNM", description="Kenya")
         mock_ocr.side_effect = [
-            {
+            with_usage({
                 "accessions": [
                     {
                         "collection_abbreviation": {"interpreted": "KNM"},
@@ -2233,8 +2253,8 @@ class ProcessPendingScansTests(TestCase):
                         ],
                     }
                 ]
-            },
-            {
+            }),
+            with_usage({
                 "accessions": [
                     {
                         "collection_abbreviation": {"interpreted": "KNM"},
@@ -2251,7 +2271,7 @@ class ProcessPendingScansTests(TestCase):
                         ],
                     }
                 ]
-            },
+            }),
         ]
 
         filename1 = "acc_ref1.png"
@@ -2282,7 +2302,7 @@ class ProcessPendingScansTests(TestCase):
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch(
         "cms.ocr_processing.chatgpt_ocr",
-        return_value={
+        return_value=with_usage({
             "accessions": [
                 {
                     "collection_abbreviation": {"interpreted": "KNM"},
@@ -2293,7 +2313,7 @@ class ProcessPendingScansTests(TestCase):
                     "additional_notes": [],
                 }
             ]
-        },
+        }),
     )
     def test_existing_accession_reports_conflict(self, mock_ocr, mock_detect):
         collection = Collection.objects.create(abbreviation="KNM", description="Kenya")
@@ -2418,7 +2438,7 @@ class ProcessPendingScansTests(TestCase):
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch(
         "cms.ocr_processing.chatgpt_ocr",
-        return_value={
+        return_value=with_usage({
             "accessions": [
                 {
                     "collection_abbreviation": {"interpreted": "KNM"},
@@ -2446,7 +2466,7 @@ class ProcessPendingScansTests(TestCase):
                     ],
                 }
             ]
-        },
+        }),
     )
     def test_creates_field_slip_and_links(self, mock_ocr, mock_detect):
         Collection.objects.create(abbreviation="KNM", description="Kenya")
@@ -2475,7 +2495,7 @@ class ProcessPendingScansTests(TestCase):
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch(
         "cms.ocr_processing.chatgpt_ocr",
-        return_value={
+        return_value=with_usage({
             "accessions": [
                 {
                     "collection_abbreviation": {"interpreted": "KNM"},
@@ -2493,7 +2513,7 @@ class ProcessPendingScansTests(TestCase):
                     ],
                 }
             ]
-        },
+        }),
     )
     def test_reuses_existing_field_slip(self, mock_ocr, mock_detect):
         Collection.objects.create(abbreviation="KNM", description="Kenya")
@@ -2517,7 +2537,7 @@ class ProcessPendingScansTests(TestCase):
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch(
         "cms.ocr_processing.chatgpt_ocr",
-        return_value={
+        return_value=with_usage({
             "accessions": [
                 {
                     "collection_abbreviation": {"interpreted": "KNM"},
@@ -2535,7 +2555,7 @@ class ProcessPendingScansTests(TestCase):
                     ],
                 }
             ]
-        },
+        }),
     )
     def test_creates_field_slip_when_field_number_missing(
         self, mock_ocr, mock_detect
@@ -2568,7 +2588,7 @@ class ProcessPendingScansTests(TestCase):
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch(
         "cms.ocr_processing.chatgpt_ocr",
-        return_value={
+        return_value=with_usage({
             "accessions": [
                 {
                     "collection_abbreviation": {"interpreted": "KNM"},
@@ -2582,7 +2602,7 @@ class ProcessPendingScansTests(TestCase):
                     ],
                 }
             ]
-        },
+        }),
     )
     def test_creates_rows_and_storage(self, mock_ocr, mock_detect):
         Collection.objects.create(abbreviation="KNM", description="Kenya")
@@ -2605,7 +2625,7 @@ class ProcessPendingScansTests(TestCase):
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch(
         "cms.ocr_processing.chatgpt_ocr",
-        return_value={
+        return_value=with_usage({
             "accessions": [
                 {
                     "collection_abbreviation": {"interpreted": "KNM"},
@@ -2623,7 +2643,7 @@ class ProcessPendingScansTests(TestCase):
                     ],
                 }
             ]
-        },
+        }),
     )
     def test_reuses_existing_row(self, mock_ocr, mock_detect):
         Collection.objects.create(abbreviation="KNM", description="Kenya")
@@ -2639,7 +2659,7 @@ class ProcessPendingScansTests(TestCase):
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch(
         "cms.ocr_processing.chatgpt_ocr",
-        return_value={
+        return_value=with_usage({
             "accessions": [
                 {
                     "collection_abbreviation": {"interpreted": "KNM"},
@@ -2650,7 +2670,7 @@ class ProcessPendingScansTests(TestCase):
                     ],
                 }
             ]
-        },
+        }),
     )
     def test_preserves_dash_suffix(self, mock_ocr, mock_detect):
         Collection.objects.create(abbreviation="KNM", description="Kenya")
@@ -2667,7 +2687,7 @@ class ProcessPendingScansTests(TestCase):
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch(
         "cms.ocr_processing.chatgpt_ocr",
-        return_value={
+        return_value=with_usage({
             "accessions": [
                 {
                     "collection_abbreviation": {"interpreted": "KNM"},
@@ -2686,7 +2706,7 @@ class ProcessPendingScansTests(TestCase):
                     ],
                 }
             ]
-        },
+        }),
     )
     def test_creates_identifications_for_rows(self, mock_ocr, mock_detect):
         Collection.objects.create(abbreviation="KNM", description="Kenya")
@@ -2708,7 +2728,7 @@ class ProcessPendingScansTests(TestCase):
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch(
         "cms.ocr_processing.chatgpt_ocr",
-        return_value={
+        return_value=with_usage({
             "accessions": [
                 {
                     "collection_abbreviation": {"interpreted": "KNM"},
@@ -2731,7 +2751,7 @@ class ProcessPendingScansTests(TestCase):
                     ],
                 }
             ]
-        },
+        }),
     )
     def test_creates_natures_for_rows(self, mock_ocr, mock_detect):
         Collection.objects.create(abbreviation="KNM", description="Kenya")
@@ -2756,7 +2776,7 @@ class ProcessPendingScansTests(TestCase):
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch(
         "cms.ocr_processing.chatgpt_ocr",
-        return_value={
+        return_value=with_usage({
             "accessions": [
                 {
                     "collection_abbreviation": {"interpreted": "KNM"},
@@ -2770,7 +2790,7 @@ class ProcessPendingScansTests(TestCase):
                     ],
                 }
             ]
-        },
+        }),
     )
     def test_limits_rows_to_maximum(self, mock_ocr, mock_detect):
         Collection.objects.create(abbreviation="KNM", description="Kenya")
