@@ -1490,6 +1490,20 @@ class LLMUsageRecord(models.Model):
     completion_tokens = models.PositiveIntegerField(default=0)
     total_tokens = models.PositiveIntegerField(default=0)
     cost_usd = models.DecimalField(max_digits=12, decimal_places=6, default=Decimal("0"))
+    remaining_quota_usd = models.DecimalField(
+        max_digits=12,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        help_text="Latest remaining ChatGPT quota reported with this usage record.",
+    )
+    processing_seconds = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        null=True,
+        blank=True,
+        help_text="Measured time spent processing the OCR request in seconds.",
+    )
     response_id = models.CharField(max_length=255, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1539,7 +1553,7 @@ class LLMUsageRecord(models.Model):
         model_name = payload.get("model") or payload.get("model_name") or "unknown"
         response_id = payload.get("request_id") or payload.get("response_id")
 
-        return {
+        data: dict[str, object | None] = {
             "model_name": str(model_name),
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
@@ -1547,6 +1561,19 @@ class LLMUsageRecord(models.Model):
             "cost_usd": cost_usd,
             "response_id": str(response_id) if response_id not in (None, "") else None,
         }
+
+        remaining_quota = payload.get("remaining_quota") or payload.get("remaining_quota_usd")
+        if remaining_quota not in (None, ""):
+            data["remaining_quota_usd"] = cls._coerce_decimal(remaining_quota)
+
+        duration = payload.get("processing_seconds") or payload.get("duration_seconds")
+        if duration not in (None, ""):
+            try:
+                data["processing_seconds"] = Decimal(str(duration))
+            except (InvalidOperation, TypeError, ValueError):
+                pass
+
+        return data
 
     def update_from_payload(self, payload: dict[str, object]) -> None:
         defaults = self.defaults_from_payload(payload)

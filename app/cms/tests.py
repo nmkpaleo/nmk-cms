@@ -79,9 +79,12 @@ DEFAULT_USAGE_PAYLOAD = {
 }
 
 
-def with_usage(payload: dict) -> dict:
+def with_usage(payload: dict, *, usage_overrides: dict | None = None) -> dict:
     data = copy.deepcopy(payload)
-    data["usage"] = copy.deepcopy(DEFAULT_USAGE_PAYLOAD)
+    usage_payload = copy.deepcopy(DEFAULT_USAGE_PAYLOAD)
+    if usage_overrides:
+        usage_payload.update(usage_overrides)
+    data["usage"] = usage_payload
     return data
 
 
@@ -1962,7 +1965,10 @@ class OcrViewTests(TestCase):
         self.assertContains(response, self.loop_url)
 
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
-    @patch("cms.ocr_processing.chatgpt_ocr", return_value=with_usage({"foo": "bar"}))
+    @patch(
+        "cms.ocr_processing.chatgpt_ocr",
+        return_value=with_usage({"foo": "bar"}, usage_overrides={"remaining_quota_usd": 11.0}),
+    )
     def test_ocr_moves_file_and_saves_json(self, mock_ocr, mock_detect):
         self.client.login(username="cm", password="pass")
         pending = Path(settings.MEDIA_ROOT) / "uploads" / "pending"
@@ -1979,7 +1985,11 @@ class OcrViewTests(TestCase):
         self.assertEqual(media.ocr_status, Media.OCRStatus.COMPLETED)
         self.assertEqual(media.media_location.name, f"uploads/ocr/{filename}")
         self.assertEqual(media.ocr_data["foo"], "bar")
-        self.assertEqual(media.ocr_data["usage"], DEFAULT_USAGE_PAYLOAD)
+        usage_data = media.ocr_data["usage"]
+        for key, value in DEFAULT_USAGE_PAYLOAD.items():
+            self.assertEqual(usage_data[key], value)
+        self.assertIn("processing_seconds", usage_data)
+        self.assertGreaterEqual(usage_data["processing_seconds"], 0)
         usage_record = media.llm_usage_record
         self.assertEqual(usage_record.model_name, DEFAULT_USAGE_PAYLOAD["model"])
         self.assertEqual(usage_record.prompt_tokens, DEFAULT_USAGE_PAYLOAD["prompt_tokens"])
@@ -1990,6 +2000,9 @@ class OcrViewTests(TestCase):
             Decimal(str(DEFAULT_USAGE_PAYLOAD["total_cost_usd"])),
         )
         self.assertEqual(usage_record.response_id, DEFAULT_USAGE_PAYLOAD["request_id"])
+        self.assertEqual(usage_record.remaining_quota_usd, Decimal("11.0"))
+        self.assertIsNotNone(usage_record.processing_seconds)
+        self.assertGreaterEqual(float(usage_record.processing_seconds), 0.0)
         import shutil
         shutil.rmtree(pending.parent)
 
@@ -2194,9 +2207,14 @@ class ProcessPendingScansTests(TestCase):
         media.refresh_from_db()
         self.assertEqual(media.accession, accession)
         self.assertEqual(media.qc_status, Media.QCStatus.APPROVED)
-        self.assertEqual(media.ocr_data["usage"], DEFAULT_USAGE_PAYLOAD)
+        usage_data = media.ocr_data["usage"]
+        for key, value in DEFAULT_USAGE_PAYLOAD.items():
+            self.assertEqual(usage_data[key], value)
+        self.assertIn("processing_seconds", usage_data)
+        self.assertGreaterEqual(usage_data["processing_seconds"], 0)
         usage_record = media.llm_usage_record
         self.assertEqual(usage_record.total_tokens, DEFAULT_USAGE_PAYLOAD["total_tokens"])
+        self.assertIsNotNone(usage_record.processing_seconds)
         self.assertIn("_processed_accessions", media.ocr_data)
         repeat = media.transition_qc(Media.QCStatus.APPROVED, user=self.user)
         self.assertEqual(repeat["created"], [])
@@ -4428,6 +4446,98 @@ class BackfillLLMUsageCommandTests(TestCase):
         call_command("backfill_llm_usage", dry_run=True)
 
         self.assertFalse(LLMUsageRecord.objects.exists())
+
+
+class ChatGPTUsageReportViewTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.staff_user = User.objects.create_user(
+            username="staff-usage", password="pass", is_staff=True
+        )
+        self.standard_user = User.objects.create_user(
+            username="standard-usage", password="pass", is_staff=False
+        )
+        self.url = reverse("admin-chatgpt-usage")
+
+        older = django_timezone.now() - timedelta(days=7)
+        newer = django_timezone.now() - timedelta(days=1)
+
+        media_one = Media.objects.create(media_location="uploads/ocr/report-one.png")
+        media_two = Media.objects.create(media_location="uploads/ocr/report-two.png")
+
+        record_one = LLMUsageRecord.objects.create(
+            media=media_one,
+            model_name="gpt-4o",
+            prompt_tokens=50,
+            completion_tokens=25,
+            total_tokens=75,
+            cost_usd=Decimal("0.75"),
+            processing_seconds=Decimal("1.50"),
+        )
+        record_two = LLMUsageRecord.objects.create(
+            media=media_two,
+            model_name="gpt-4o-mini",
+            prompt_tokens=40,
+            completion_tokens=40,
+            total_tokens=80,
+            cost_usd=Decimal("0.40"),
+            processing_seconds=Decimal("2.25"),
+            remaining_quota_usd=Decimal("7.50"),
+        )
+
+        LLMUsageRecord.objects.filter(pk=record_one.pk).update(
+            created_at=older, updated_at=older
+        )
+        LLMUsageRecord.objects.filter(pk=record_two.pk).update(
+            created_at=newer, updated_at=newer
+        )
+
+    def test_requires_staff_access(self):
+        self.client.force_login(self.standard_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/admin/login/", response.url)
+
+    @override_settings(LLM_USAGE_MONTHLY_BUDGET_USD=Decimal("10"))
+    def test_renders_with_aggregated_totals(self):
+        self.client.force_login(self.staff_user)
+
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+
+        daily_totals = response.context["daily_totals"]
+        weekly_totals = response.context["weekly_totals"]
+        cumulative_cost = response.context["cumulative_cost"]
+        budget_progress = response.context["budget_progress"]
+        total_processing_seconds = response.context["total_processing_seconds"]
+        avg_processing_seconds = response.context["avg_processing_seconds"]
+        scans_processed = response.context["scans_processed"]
+        remaining_quota = response.context["remaining_quota_usd"]
+
+        self.assertEqual(len(daily_totals), 2)
+        self.assertTrue(any(row["record_count"] == 1 for row in daily_totals))
+        self.assertEqual(len(weekly_totals), 2)
+        self.assertEqual(cumulative_cost, Decimal("1.15"))
+        self.assertAlmostEqual(float(budget_progress), 11.5)
+        self.assertEqual(total_processing_seconds, Decimal("3.75"))
+        self.assertAlmostEqual(float(avg_processing_seconds), 1.875)
+        self.assertEqual(scans_processed, 2)
+        self.assertEqual(remaining_quota, Decimal("7.50"))
+
+        self.assertContains(response, "Scans processed")
+        self.assertContains(response, "Processing time")
+        self.assertContains(response, "Remaining quota")
+
+    def test_hides_remaining_quota_when_unavailable(self):
+        LLMUsageRecord.objects.update(remaining_quota_usd=None)
+
+        self.client.force_login(self.staff_user)
+
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+
+        self.assertIsNone(response.context["remaining_quota_usd"])
+        self.assertNotContains(response, "Remaining quota")
 
 
 class AdminAutocompleteTests(TestCase):

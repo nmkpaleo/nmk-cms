@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/4.0/ref/settings/
 import os
 import sys
 import json
+from decimal import Decimal
 
 from pathlib import Path
 
@@ -27,6 +28,8 @@ OPENAI_PRICING = {
     "gpt-4o": {"prompt": 0.000005, "completion": 0.000015},
     "gpt-4o-mini": {"prompt": 0.00000015, "completion": 0.0000006},
 }
+
+LLM_USAGE_MONTHLY_BUDGET_USD = Decimal("120")
 
 try:
     with open(os.path.join(BASE_DIR, "config.json")) as config_file:
@@ -73,6 +76,7 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
+    "django.contrib.humanize",
     "django.contrib.sites",
     "django.contrib.staticfiles",
     "django_filters",

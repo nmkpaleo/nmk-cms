@@ -93,6 +93,23 @@ def get_openai_client() -> Any:
     return _client
 
 
+def _object_to_dict(obj: Any) -> dict[str, object]:
+    if obj is None:
+        return {}
+    if isinstance(obj, dict):
+        return obj
+    for attr in ("model_dump", "to_dict", "dict"):
+        method = getattr(obj, attr, None)
+        if callable(method):
+            try:
+                data = method()
+            except Exception:  # pragma: no cover - defensive in case API changes
+                continue
+            if isinstance(data, dict):
+                return data
+    return {}
+
+
 def build_usage_payload(response: Any, model: str) -> dict[str, object | None]:
     """Return pricing and token usage metadata for an OpenAI response."""
 
@@ -120,7 +137,15 @@ def build_usage_payload(response: Any, model: str) -> dict[str, object | None]:
     if prompt_cost is not None or completion_cost is not None:
         total_cost = round((prompt_cost or 0.0) + (completion_cost or 0.0), 6)
 
-    return {
+    usage_dict = _object_to_dict(usage)
+    remaining_quota = None
+    for key in ("remaining_quota", "remaining_quota_usd", "remaining_budget", "remaining_budget_usd"):
+        value = usage_dict.get(key)
+        if value not in (None, ""):
+            remaining_quota = value
+            break
+
+    payload = {
         "model": getattr(response, "model", model) or model,
         "request_id": getattr(response, "id", None),
         "prompt_tokens": prompt_tokens,
@@ -130,6 +155,11 @@ def build_usage_payload(response: Any, model: str) -> dict[str, object | None]:
         "completion_cost_usd": completion_cost,
         "total_cost_usd": total_cost,
     }
+
+    if remaining_quota not in (None, ""):
+        payload["remaining_quota_usd"] = remaining_quota
+
+    return payload
 
 
 def encode_image_to_base64(image_path: Path) -> str:
@@ -1369,7 +1399,10 @@ def _process_single_scan(
             card_type_info = detect_card_type(path)
             card_type = card_type_info.get("card_type", "unknown")
             user_prompt = build_prompt_for_card_type(card_type)
+            start_ts = time.perf_counter()
             result = chatgpt_ocr(path, path.name, user_prompt)
+            elapsed = time.perf_counter() - start_ts
+            elapsed = max(elapsed, 0.0)
             result["card_type"] = card_type
             dest = ocr_dir / path.name
             dest.parent.mkdir(parents=True, exist_ok=True)
@@ -1381,6 +1414,14 @@ def _process_single_scan(
             media.save(update_fields=["ocr_data", "media_location", "ocr_status", "qc_status"])
             usage_payload = result.get("usage")
             if isinstance(usage_payload, dict):
+                usage_payload = usage_payload.copy()
+                usage_payload.setdefault("processing_seconds", round(elapsed, 3))
+                if "remaining_quota_usd" not in usage_payload:
+                    for key in ("remaining_quota", "remaining_quota_usd", "remaining_budget", "remaining_budget_usd"):
+                        value = result.get(key)
+                        if value not in (None, ""):
+                            usage_payload.setdefault("remaining_quota_usd", value)
+                            break
                 defaults = LLMUsageRecord.defaults_from_payload(usage_payload)
                 LLMUsageRecord.objects.update_or_create(media=media, defaults=defaults)
             return

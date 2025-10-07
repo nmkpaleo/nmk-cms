@@ -3,14 +3,15 @@ import csv
 import json
 import os
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 from dal import autocomplete
 from django import forms
 from django.db import transaction
-from django.db.models import Value, CharField, Count, Q, Max, Prefetch, OuterRef, Subquery
-from django.db.models.functions import Concat, Greatest
+from django.db.models import Value, CharField, Count, Q, Max, Prefetch, OuterRef, Subquery, Sum
+from django.db.models.functions import Concat, Greatest, TruncDate, TruncWeek
 from django.http import JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -44,8 +45,10 @@ from django.forms.widgets import Media as FormsMedia
 from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse_lazy, reverse
+from django.utils import timezone
 from django.utils.timezone import now
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, FormView
+from django.core.serializers.json import DjangoJSONEncoder
 
 from cms.forms import (AccessionBatchForm, AccessionCommentForm,
                     AccessionForm, AccessionFieldSlipForm, AccessionGeologyForm,
@@ -89,6 +92,7 @@ from cms.models import (
     Person,
     MediaQCLog,
     MediaQCComment,
+    LLMUsageRecord,
 )
 
 from cms.resources import FieldSlipResource
@@ -2797,6 +2801,190 @@ def upload_media(request, accession_id):
         form = MediaUploadForm()
 
     return render(request, 'cms/upload_media.html', {'form': form, 'accession': accession})
+
+
+class LLMUsageReportFilterForm(forms.Form):
+    start_date = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={"type": "date"}),
+        label="Start date",
+    )
+    end_date = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={"type": "date"}),
+        label="End date",
+    )
+    model_name = forms.ChoiceField(required=False, label="Model")
+
+    def __init__(self, *args, **kwargs):
+        model_choices = kwargs.pop("model_choices", [])
+        super().__init__(*args, **kwargs)
+        choices = [("", "All models")] + [(value, value) for value in model_choices]
+        self.fields["model_name"].choices = choices
+
+    def clean(self):
+        cleaned_data = super().clean()
+        start_date = cleaned_data.get("start_date")
+        end_date = cleaned_data.get("end_date")
+        if start_date and end_date and end_date < start_date:
+            raise forms.ValidationError("End date cannot be before the start date.")
+        return cleaned_data
+
+
+def _coerce_decimal(value: object) -> Decimal:
+    if value in (None, ""):
+        return Decimal("0")
+    try:
+        return Decimal(str(value))
+    except (ValueError, ArithmeticError):
+        return Decimal("0")
+
+
+@staff_member_required
+def chatgpt_usage_report(request):
+    today = timezone.localdate()
+    default_start = today - timedelta(days=30)
+
+    base_qs = LLMUsageRecord.objects.all()
+    model_values = list(
+        base_qs.order_by("model_name").values_list("model_name", flat=True).distinct()
+    )
+
+    if request.GET:
+        form = LLMUsageReportFilterForm(request.GET, model_choices=model_values)
+        form_is_valid = form.is_valid()
+    else:
+        form = LLMUsageReportFilterForm(
+            data={"start_date": default_start, "end_date": today},
+            model_choices=model_values,
+        )
+        form_is_valid = form.is_valid()
+
+    if form_is_valid:
+        start_date = form.cleaned_data.get("start_date") or default_start
+        end_date = form.cleaned_data.get("end_date") or today
+        model_name = form.cleaned_data.get("model_name") or None
+    else:
+        start_date = default_start
+        end_date = today
+        model_name = None
+
+    filtered_qs = base_qs
+    if start_date:
+        filtered_qs = filtered_qs.filter(created_at__date__gte=start_date)
+    if end_date:
+        filtered_qs = filtered_qs.filter(created_at__date__lte=end_date)
+    if model_name:
+        filtered_qs = filtered_qs.filter(model_name=model_name)
+
+    daily_totals_qs = (
+        filtered_qs
+        .annotate(day=TruncDate("created_at"))
+        .values("day")
+        .order_by("day")
+        .annotate(
+            prompt_tokens=Sum("prompt_tokens"),
+            completion_tokens=Sum("completion_tokens"),
+            total_tokens=Sum("total_tokens"),
+            cost_usd=Sum("cost_usd"),
+            processing_seconds=Sum("processing_seconds"),
+            record_count=Count("id"),
+        )
+    )
+
+    weekly_totals_qs = (
+        filtered_qs
+        .annotate(week=TruncWeek("created_at"))
+        .values("week")
+        .order_by("week")
+        .annotate(
+            prompt_tokens=Sum("prompt_tokens"),
+            completion_tokens=Sum("completion_tokens"),
+            total_tokens=Sum("total_tokens"),
+            cost_usd=Sum("cost_usd"),
+            processing_seconds=Sum("processing_seconds"),
+            record_count=Count("id"),
+        )
+    )
+
+    totals = filtered_qs.aggregate(
+        prompt_tokens=Sum("prompt_tokens"),
+        completion_tokens=Sum("completion_tokens"),
+        total_tokens=Sum("total_tokens"),
+        cost_usd=Sum("cost_usd"),
+        processing_seconds=Sum("processing_seconds"),
+        record_count=Count("id"),
+    )
+
+    cumulative_cost = totals.get("cost_usd") or Decimal("0")
+    total_processing_seconds = totals.get("processing_seconds") or Decimal("0")
+    scans_processed = totals.get("record_count") or 0
+    avg_processing_seconds = None
+    if scans_processed:
+        avg_processing_seconds = total_processing_seconds / Decimal(scans_processed)
+
+    latest_remaining_quota = (
+        filtered_qs.exclude(remaining_quota_usd__isnull=True)
+        .order_by("-created_at")
+        .values_list("remaining_quota_usd", flat=True)
+        .first()
+    )
+
+    budget_raw = getattr(settings, "LLM_USAGE_MONTHLY_BUDGET_USD", None)
+    budget_total = _coerce_decimal(budget_raw) if budget_raw is not None else None
+    if budget_total and budget_total > 0:
+        budget_progress = (cumulative_cost / budget_total) * Decimal("100")
+    else:
+        budget_progress = None
+
+    def _prepare_time_series(items, label_key):
+        return {
+            "labels": [entry[label_key].isoformat() if entry[label_key] else None for entry in items],
+            "costs": [float(entry["cost_usd"] or 0) for entry in items],
+            "total_tokens": [int(entry["total_tokens"] or 0) for entry in items],
+            "processing_seconds": [float(entry.get("processing_seconds") or 0) for entry in items],
+        }
+
+    daily_totals = list(daily_totals_qs)
+    weekly_totals = list(weekly_totals_qs)
+
+    def _attach_average(entries: list[dict[str, Any]]) -> None:
+        for entry in entries:
+            total_seconds = _coerce_decimal(entry.get("processing_seconds"))
+            entry["processing_seconds"] = total_seconds
+            count = entry.get("record_count") or 0
+            if count:
+                entry["avg_processing_seconds"] = total_seconds / Decimal(count)
+            else:
+                entry["avg_processing_seconds"] = None
+
+    _attach_average(daily_totals)
+    _attach_average(weekly_totals)
+
+    chart_data = {
+        "daily": _prepare_time_series(daily_totals, "day"),
+        "weekly": _prepare_time_series(weekly_totals, "week"),
+    }
+
+    context = {
+        "filter_form": form,
+        "daily_totals": daily_totals,
+        "weekly_totals": weekly_totals,
+        "totals": totals,
+        "cumulative_cost": cumulative_cost,
+        "total_processing_seconds": total_processing_seconds,
+        "avg_processing_seconds": avg_processing_seconds,
+        "scans_processed": scans_processed,
+        "remaining_quota_usd": latest_remaining_quota,
+        "budget_total": budget_total,
+        "budget_progress": budget_progress,
+        "chart_data_json": json.dumps(chart_data, cls=DjangoJSONEncoder),
+        "start_date": start_date,
+        "end_date": end_date,
+        "model_name": model_name,
+    }
+
+    return render(request, "admin/chatgpt_usage_report.html", context)
 
 
 @staff_member_required
