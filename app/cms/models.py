@@ -18,6 +18,7 @@ import string # For generating specimen number
 import uuid
 User = get_user_model()
 
+from .merge import MergeMixin, MergeStrategy
 from .notifications import notify_media_qc_transition
 
 
@@ -462,7 +463,12 @@ class Comment(BaseModel):
 
 
 # FieldSlip Model
-class FieldSlip(BaseModel):
+class FieldSlip(MergeMixin, BaseModel):
+    merge_fields = {
+        "field_number": MergeStrategy.PREFER_NON_NULL,
+        "verbatim_taxon": MergeStrategy.PREFER_NON_NULL,
+        "verbatim_element": MergeStrategy.PREFER_NON_NULL,
+    }
     field_number = models.CharField(max_length=100, null=False, blank=False, help_text="Field number assigned to the specimen.")
     discoverer = models.CharField(max_length=255, null=True, blank=True, help_text="Person who discovered the specimen.")
     collector = models.CharField(max_length=255, null=True, blank=True, help_text="Person who collected the specimen.")
@@ -491,9 +497,13 @@ class FieldSlip(BaseModel):
         ordering = ["field_number"]
         verbose_name = "Field Slip"
         verbose_name_plural = "Field Slips"
+        permissions = [("can_merge", "Can merge field slip records")]
 
 # Storage Model
-class Storage(BaseModel):
+class Storage(MergeMixin, BaseModel):
+    merge_fields = {
+        "area": MergeStrategy.PREFER_NON_NULL,
+    }
     area = models.CharField(
         max_length=255,
         blank=False,
@@ -515,13 +525,18 @@ class Storage(BaseModel):
     class Meta:
         verbose_name = "Storage"
         verbose_name_plural = "Storages"
+        permissions = [("can_merge", "Can merge storage records")]
 
     def __str__(self):
         return self.area
 
 
 # Reference Model
-class Reference(BaseModel):
+class Reference(MergeMixin, BaseModel):
+    merge_fields = {
+        "title": MergeStrategy.PREFER_NON_NULL,
+        "citation": MergeStrategy.CONCAT_TEXT,
+    }
     title = models.CharField(
         max_length=255,
         blank=False,
@@ -583,6 +598,7 @@ class Reference(BaseModel):
     class Meta:
         verbose_name = "Reference"
         verbose_name_plural = "References"
+        permissions = [("can_merge", "Can merge reference records")]
 
     def __str__(self):
         return self.citation
