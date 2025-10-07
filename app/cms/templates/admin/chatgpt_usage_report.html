@@ -70,14 +70,12 @@
         {% if avg_processing_seconds is not None %}<br><small>Avg {{ avg_processing_seconds|floatformat:2 }}s / scan</small>{% endif %}
       </p>
     </article>
-    <article class="summary-card">
-      <h2>Remaining quota</h2>
-      {% if remaining_quota_usd is not None %}
+    {% if remaining_quota_usd is not None %}
+      <article class="summary-card">
+        <h2>Remaining quota</h2>
         <p>${{ remaining_quota_usd|floatformat:2 }}</p>
-      {% else %}
-        <p>Not provided by API.</p>
-      {% endif %}
-    </article>
+      </article>
+    {% endif %}
   </section>
 
   <section class="usage-visualizations">

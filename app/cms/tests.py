@@ -4528,6 +4528,17 @@ class ChatGPTUsageReportViewTests(TestCase):
         self.assertContains(response, "Processing time")
         self.assertContains(response, "Remaining quota")
 
+    def test_hides_remaining_quota_when_unavailable(self):
+        LLMUsageRecord.objects.update(remaining_quota_usd=None)
+
+        self.client.force_login(self.staff_user)
+
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+
+        self.assertIsNone(response.context["remaining_quota_usd"])
+        self.assertNotContains(response, "Remaining quota")
+
 
 class AdminAutocompleteTests(TestCase):
     """Ensure admin uses select2 autocomplete for heavy foreign keys."""
