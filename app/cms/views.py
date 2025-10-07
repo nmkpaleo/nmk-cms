@@ -2887,6 +2887,7 @@ def chatgpt_usage_report(request):
             completion_tokens=Sum("completion_tokens"),
             total_tokens=Sum("total_tokens"),
             cost_usd=Sum("cost_usd"),
+            processing_seconds=Sum("processing_seconds"),
             record_count=Count("id"),
         )
     )
@@ -2901,6 +2902,7 @@ def chatgpt_usage_report(request):
             completion_tokens=Sum("completion_tokens"),
             total_tokens=Sum("total_tokens"),
             cost_usd=Sum("cost_usd"),
+            processing_seconds=Sum("processing_seconds"),
             record_count=Count("id"),
         )
     )
@@ -2910,9 +2912,23 @@ def chatgpt_usage_report(request):
         completion_tokens=Sum("completion_tokens"),
         total_tokens=Sum("total_tokens"),
         cost_usd=Sum("cost_usd"),
+        processing_seconds=Sum("processing_seconds"),
+        record_count=Count("id"),
     )
 
     cumulative_cost = totals.get("cost_usd") or Decimal("0")
+    total_processing_seconds = totals.get("processing_seconds") or Decimal("0")
+    scans_processed = totals.get("record_count") or 0
+    avg_processing_seconds = None
+    if scans_processed:
+        avg_processing_seconds = total_processing_seconds / Decimal(scans_processed)
+
+    latest_remaining_quota = (
+        filtered_qs.exclude(remaining_quota_usd__isnull=True)
+        .order_by("-created_at")
+        .values_list("remaining_quota_usd", flat=True)
+        .first()
+    )
 
     budget_raw = getattr(settings, "LLM_USAGE_MONTHLY_BUDGET_USD", None)
     budget_total = _coerce_decimal(budget_raw) if budget_raw is not None else None
@@ -2926,10 +2942,24 @@ def chatgpt_usage_report(request):
             "labels": [entry[label_key].isoformat() if entry[label_key] else None for entry in items],
             "costs": [float(entry["cost_usd"] or 0) for entry in items],
             "total_tokens": [int(entry["total_tokens"] or 0) for entry in items],
+            "processing_seconds": [float(entry.get("processing_seconds") or 0) for entry in items],
         }
 
     daily_totals = list(daily_totals_qs)
     weekly_totals = list(weekly_totals_qs)
+
+    def _attach_average(entries: list[dict[str, Any]]) -> None:
+        for entry in entries:
+            total_seconds = _coerce_decimal(entry.get("processing_seconds"))
+            entry["processing_seconds"] = total_seconds
+            count = entry.get("record_count") or 0
+            if count:
+                entry["avg_processing_seconds"] = total_seconds / Decimal(count)
+            else:
+                entry["avg_processing_seconds"] = None
+
+    _attach_average(daily_totals)
+    _attach_average(weekly_totals)
 
     chart_data = {
         "daily": _prepare_time_series(daily_totals, "day"),
@@ -2942,6 +2972,10 @@ def chatgpt_usage_report(request):
         "weekly_totals": weekly_totals,
         "totals": totals,
         "cumulative_cost": cumulative_cost,
+        "total_processing_seconds": total_processing_seconds,
+        "avg_processing_seconds": avg_processing_seconds,
+        "scans_processed": scans_processed,
+        "remaining_quota_usd": latest_remaining_quota,
         "budget_total": budget_total,
         "budget_progress": budget_progress,
         "chart_data_json": json.dumps(chart_data, cls=DjangoJSONEncoder),

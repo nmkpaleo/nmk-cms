@@ -59,6 +59,25 @@
         <p>No budget configured.</p>
       {% endif %}
     </article>
+    <article class="summary-card">
+      <h2>Scans processed</h2>
+      <p>{{ scans_processed|default:0|intcomma }}</p>
+    </article>
+    <article class="summary-card">
+      <h2>Processing time</h2>
+      <p>
+        {{ total_processing_seconds|default_if_none:0|floatformat:2 }}s total
+        {% if avg_processing_seconds is not None %}<br><small>Avg {{ avg_processing_seconds|floatformat:2 }}s / scan</small>{% endif %}
+      </p>
+    </article>
+    <article class="summary-card">
+      <h2>Remaining quota</h2>
+      {% if remaining_quota_usd is not None %}
+        <p>${{ remaining_quota_usd|floatformat:2 }}</p>
+      {% else %}
+        <p>Not provided by API.</p>
+      {% endif %}
+    </article>
   </section>
 
   <section class="usage-visualizations">
@@ -84,6 +103,8 @@
             <th scope="col">Completion tokens</th>
             <th scope="col">Total tokens</th>
             <th scope="col">Cost (USD)</th>
+            <th scope="col">Processing time (s)</th>
+            <th scope="col">Avg per scan (s)</th>
           </tr>
         </thead>
         <tbody>
@@ -95,10 +116,12 @@
               <td>{{ row.completion_tokens|intcomma }}</td>
               <td>{{ row.total_tokens|intcomma }}</td>
               <td>${{ row.cost_usd|floatformat:4 }}</td>
+              <td>{{ row.processing_seconds|default_if_none:0|floatformat:2 }}</td>
+              <td>{% if row.avg_processing_seconds is not None %}{{ row.avg_processing_seconds|floatformat:2 }}{% else %}&mdash;{% endif %}</td>
             </tr>
           {% empty %}
             <tr>
-              <td colspan="6">No usage records found for the selected filters.</td>
+              <td colspan="8">No usage records found for the selected filters.</td>
             </tr>
           {% endfor %}
         </tbody>
@@ -116,6 +139,8 @@
             <th scope="col">Completion tokens</th>
             <th scope="col">Total tokens</th>
             <th scope="col">Cost (USD)</th>
+            <th scope="col">Processing time (s)</th>
+            <th scope="col">Avg per scan (s)</th>
           </tr>
         </thead>
         <tbody>
@@ -127,10 +152,12 @@
               <td>{{ row.completion_tokens|intcomma }}</td>
               <td>{{ row.total_tokens|intcomma }}</td>
               <td>${{ row.cost_usd|floatformat:4 }}</td>
+              <td>{{ row.processing_seconds|default_if_none:0|floatformat:2 }}</td>
+              <td>{% if row.avg_processing_seconds is not None %}{{ row.avg_processing_seconds|floatformat:2 }}{% else %}&mdash;{% endif %}</td>
             </tr>
           {% empty %}
             <tr>
-              <td colspan="6">No usage records found for the selected filters.</td>
+              <td colspan="8">No usage records found for the selected filters.</td>
             </tr>
           {% endfor %}
         </tbody>

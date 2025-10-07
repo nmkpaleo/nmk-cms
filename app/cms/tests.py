@@ -79,9 +79,12 @@ DEFAULT_USAGE_PAYLOAD = {
 }
 
 
-def with_usage(payload: dict) -> dict:
+def with_usage(payload: dict, *, usage_overrides: dict | None = None) -> dict:
     data = copy.deepcopy(payload)
-    data["usage"] = copy.deepcopy(DEFAULT_USAGE_PAYLOAD)
+    usage_payload = copy.deepcopy(DEFAULT_USAGE_PAYLOAD)
+    if usage_overrides:
+        usage_payload.update(usage_overrides)
+    data["usage"] = usage_payload
     return data
 
 
@@ -1962,7 +1965,10 @@ class OcrViewTests(TestCase):
         self.assertContains(response, self.loop_url)
 
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
-    @patch("cms.ocr_processing.chatgpt_ocr", return_value=with_usage({"foo": "bar"}))
+    @patch(
+        "cms.ocr_processing.chatgpt_ocr",
+        return_value=with_usage({"foo": "bar"}, usage_overrides={"remaining_quota_usd": 11.0}),
+    )
     def test_ocr_moves_file_and_saves_json(self, mock_ocr, mock_detect):
         self.client.login(username="cm", password="pass")
         pending = Path(settings.MEDIA_ROOT) / "uploads" / "pending"
@@ -1979,7 +1985,11 @@ class OcrViewTests(TestCase):
         self.assertEqual(media.ocr_status, Media.OCRStatus.COMPLETED)
         self.assertEqual(media.media_location.name, f"uploads/ocr/{filename}")
         self.assertEqual(media.ocr_data["foo"], "bar")
-        self.assertEqual(media.ocr_data["usage"], DEFAULT_USAGE_PAYLOAD)
+        usage_data = media.ocr_data["usage"]
+        for key, value in DEFAULT_USAGE_PAYLOAD.items():
+            self.assertEqual(usage_data[key], value)
+        self.assertIn("processing_seconds", usage_data)
+        self.assertGreaterEqual(usage_data["processing_seconds"], 0)
         usage_record = media.llm_usage_record
         self.assertEqual(usage_record.model_name, DEFAULT_USAGE_PAYLOAD["model"])
         self.assertEqual(usage_record.prompt_tokens, DEFAULT_USAGE_PAYLOAD["prompt_tokens"])
@@ -1990,6 +2000,9 @@ class OcrViewTests(TestCase):
             Decimal(str(DEFAULT_USAGE_PAYLOAD["total_cost_usd"])),
         )
         self.assertEqual(usage_record.response_id, DEFAULT_USAGE_PAYLOAD["request_id"])
+        self.assertEqual(usage_record.remaining_quota_usd, Decimal("11.0"))
+        self.assertIsNotNone(usage_record.processing_seconds)
+        self.assertGreaterEqual(float(usage_record.processing_seconds), 0.0)
         import shutil
         shutil.rmtree(pending.parent)
 
@@ -2194,9 +2207,14 @@ class ProcessPendingScansTests(TestCase):
         media.refresh_from_db()
         self.assertEqual(media.accession, accession)
         self.assertEqual(media.qc_status, Media.QCStatus.APPROVED)
-        self.assertEqual(media.ocr_data["usage"], DEFAULT_USAGE_PAYLOAD)
+        usage_data = media.ocr_data["usage"]
+        for key, value in DEFAULT_USAGE_PAYLOAD.items():
+            self.assertEqual(usage_data[key], value)
+        self.assertIn("processing_seconds", usage_data)
+        self.assertGreaterEqual(usage_data["processing_seconds"], 0)
         usage_record = media.llm_usage_record
         self.assertEqual(usage_record.total_tokens, DEFAULT_USAGE_PAYLOAD["total_tokens"])
+        self.assertIsNotNone(usage_record.processing_seconds)
         self.assertIn("_processed_accessions", media.ocr_data)
         repeat = media.transition_qc(Media.QCStatus.APPROVED, user=self.user)
         self.assertEqual(repeat["created"], [])
@@ -4454,6 +4472,7 @@ class ChatGPTUsageReportViewTests(TestCase):
             completion_tokens=25,
             total_tokens=75,
             cost_usd=Decimal("0.75"),
+            processing_seconds=Decimal("1.50"),
         )
         record_two = LLMUsageRecord.objects.create(
             media=media_two,
@@ -4462,6 +4481,8 @@ class ChatGPTUsageReportViewTests(TestCase):
             completion_tokens=40,
             total_tokens=80,
             cost_usd=Decimal("0.40"),
+            processing_seconds=Decimal("2.25"),
+            remaining_quota_usd=Decimal("7.50"),
         )
 
         LLMUsageRecord.objects.filter(pk=record_one.pk).update(
@@ -4488,12 +4509,24 @@ class ChatGPTUsageReportViewTests(TestCase):
         weekly_totals = response.context["weekly_totals"]
         cumulative_cost = response.context["cumulative_cost"]
         budget_progress = response.context["budget_progress"]
+        total_processing_seconds = response.context["total_processing_seconds"]
+        avg_processing_seconds = response.context["avg_processing_seconds"]
+        scans_processed = response.context["scans_processed"]
+        remaining_quota = response.context["remaining_quota_usd"]
 
         self.assertEqual(len(daily_totals), 2)
         self.assertTrue(any(row["record_count"] == 1 for row in daily_totals))
         self.assertEqual(len(weekly_totals), 2)
         self.assertEqual(cumulative_cost, Decimal("1.15"))
         self.assertAlmostEqual(float(budget_progress), 11.5)
+        self.assertEqual(total_processing_seconds, Decimal("3.75"))
+        self.assertAlmostEqual(float(avg_processing_seconds), 1.875)
+        self.assertEqual(scans_processed, 2)
+        self.assertEqual(remaining_quota, Decimal("7.50"))
+
+        self.assertContains(response, "Scans processed")
+        self.assertContains(response, "Processing time")
+        self.assertContains(response, "Remaining quota")
 
 
 class AdminAutocompleteTests(TestCase):
