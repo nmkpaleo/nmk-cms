@@ -173,7 +173,7 @@ JSON schema:
           "value": { "raw": string|null, "interpreted": string|null, "confidence": number},                    // the OCR:d data value
         }
       ],
-      "references": [                                                                                          // zero or more full references as written on the card back side (e.g., "ref: John M. Harris and Meave G. Leakey (2003) \"Lothagam: The dawn of Humanity in Eastern Africa\" Pg 485-519")
+      "references": [                                                                                          // zero or more full references as written on the card back side (e.g. "ref: John M. Harris and Meave G. Leakey (2003) \"Lothagam: The dawn of Humanity in Eastern Africa\" Pg 485-519")
         {
           "reference_first_author": { "raw": string|null, "interpreted": string|null, "confidence": number},   // (e.g., "Harris, John M." from "John M. Harris and Meave G. Leakey (2003) \"Lothagam: The dawn of Humanity in Eastern Africa\" Pg 485-519")
           "reference_year": { "raw": integer|null, "interpreted": string|null, "confidence": number},          // (e.g., "2003" from "John M. Harris and Meave G. Leakey (2003) \"Lothagam: The dawn of Humanity in Eastern Africa\" Pg 485-519")
@@ -241,6 +241,86 @@ Rules:
 - "verbatim_taxon": use identifications.verbatim_identification
 
 Return only the JSON object — no comments or explanations."""
+        )
+        return textwrap.dedent(
+            """You are an OCR transcriber for two-sided museum specimen cards (top=front, bottom=back).
+Return exactly ONE minified JSON object (no code fences). Use the schema below.
+Value objects use short keys: "r","i","c" = raw, interpreted, confidence.
+Preserve r exactly; normalize only in i. Set missing to null.
+Omit "c" when confidence ≥ 0.90. Omit any key whose entire content would be null; arrays may be empty.
+
+Schema (structure only):
+{
+ "accessions":[
+  {
+    "collection_abbreviation":{r,i,c},
+    "specimen_prefix_abbreviation":{r,i,c},
+    "specimen_no":{r,i,c},
+    "type_status":{r,i,c},
+    "published":{r,i,c},
+    "additional_notes":[{"heading":{r,i,c},"value":{r,i,c}}],
+    "references":[{"reference_first_author":{r,i,c},"reference_year":{r,i,c},"reference_title":{r,i,c},"page":{r,i,c}}],
+    "field_slips":[
+      {
+        "field_number":{r,i,c},
+        "verbatim_locality":{r,i,c},
+        "verbatim_taxon":{r,i,c},
+        "verbatim_element":{r,i,c},
+        "verbatim_horizon":{
+          "formation":{r,i,c},
+          "member":{r,i,c},
+          "bed_or_horizon":{r,i,c},
+          "chronostratigraphy":{r,i,c}
+        },
+        "aerial_photo":{r,i,c},
+        "verbatim_latitude":{r,i,c},
+        "verbatim_longitude":{r,i,c},
+        "verbatim_elevation":{r,i,c}
+      }
+    ],
+    "identifications":[
+      {
+        "taxon":{r,i,c},
+        "identification_qualifier":{r,i,c},
+        "verbatim_identification":{r,i,c},
+        "identification_remarks":{r,i,c}
+      }
+    ],
+    "rows":[
+      {
+        "specimen_suffix":{r,i,c},
+        "storage":{r,i,c},
+        "identification":{
+          "taxon":{r,i,c},
+          "identification_qualifier":{r,i,c},
+          "verbatim_identification":{r,i,c},
+          "identification_remarks":{r,i,c}
+        },
+        "natures":[
+          {
+            "element_name":{r,i,c},
+            "side":{r,i,c},
+            "condition":{r,i,c},
+            "verbatim_element":{r,i,c},
+            "portion":{r,i,c},
+            "fragments":{r,i,c}
+          }
+        ]
+      }
+    ]
+  }
+ ]
+}
+
+Rules:
+- collection_abbreviation ∈ {KNM, KNMI, KNMP}; if absent use KNM.
+- Family names end -IDAE; subfamily -INAE; tribe -INI.
+- Expand suffix ranges (e.g., A–C → rows A,B,C). Default suffix “-”.
+- Copy the same storage value to all rows if present.
+- published: “Yes” or “No”.
+- verbatim_taxon mirrors identifications.verbatim_identification.
+- Ignore “P.T.O/PTO” and any struck-through text.
+- Output only the minified JSON."""
         )
     elif card_type == "field_slip":
         return (
