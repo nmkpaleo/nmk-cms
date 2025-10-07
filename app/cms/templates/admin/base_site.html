@@ -11,6 +11,6 @@
 {% block nav-global %}
   <!-- Navigation shortcut to the scan upload form -->
   <a href="{% url 'admin-upload-scan' %}" class="button">Upload scans</a>
-  <a href="{% url 'admin-do-ocr' %}?loop=1" class="button">Do OCR</a>
+  <a href="{% url 'admin-do-ocr' %}" class="button">Do OCR</a>
   <a href="{% url 'admin-chatgpt-usage' %}" class="button">ChatGPT usage</a>
 {% endblock %}

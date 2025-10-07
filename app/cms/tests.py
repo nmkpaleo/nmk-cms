@@ -1962,7 +1962,45 @@ class OcrViewTests(TestCase):
     def test_admin_index_has_ocr_link(self):
         self.client.login(username="cm", password="pass")
         response = self.client.get(reverse("admin:index"))
-        self.assertContains(response, self.loop_url)
+        self.assertContains(response, self.url)
+
+    @patch("cms.views._count_pending_scans", return_value=42)
+    def test_do_ocr_prompt_displays_options(self, mock_count):
+        self.client.login(username="cm", password="pass")
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Process pending scans")
+        self.assertContains(response, "Process all pending scans (42)")
+        self.assertContains(response, 'value="100"')
+        self.assertContains(response, 'value="1000"')
+
+    @patch("cms.views._count_pending_scans", return_value=10)
+    def test_do_ocr_prompt_rejects_invalid_choice(self, mock_count):
+        self.client.login(username="cm", password="pass")
+        response = self.client.post(self.url, {"scan_limit": "invalid"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Please choose one of the available options.")
+
+    @patch("cms.views._count_pending_scans", return_value=50)
+    def test_do_ocr_prompt_redirects_with_limit(self, mock_count):
+        self.client.login(username="cm", password="pass")
+        response = self.client.post(self.url, {"scan_limit": "200"})
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response["Location"].endswith("?loop=1&limit=200"))
+
+    @patch("cms.views._count_pending_scans", return_value=12)
+    def test_do_ocr_prompt_redirects_for_all(self, mock_count):
+        self.client.login(username="cm", password="pass")
+        response = self.client.post(self.url, {"scan_limit": "all"})
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response["Location"].endswith("?loop=1"))
+        self.assertNotIn("limit=", response["Location"])
+
+    @patch("cms.views._count_pending_scans", return_value=0)
+    def test_do_ocr_prompt_handles_no_pending(self, mock_count):
+        self.client.login(username="cm", password="pass")
+        response = self.client.post(self.url, {"scan_limit": "all"}, follow=True)
+        self.assertContains(response, "No pending scans to process.")
 
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch(
@@ -2006,27 +2044,41 @@ class OcrViewTests(TestCase):
         import shutil
         shutil.rmtree(pending.parent)
 
+    @patch("cms.views._count_pending_scans", return_value=5)
     @patch(
         "cms.views.process_pending_scans",
-        return_value=(0, 1, 1, ["test.png: boom"], None, ["test.png"]),
+        return_value=(0, 1, 1, ["test.png: boom"], None, ["test.png"], False),
     )
-    def test_do_ocr_shows_error_details(self, mock_process):
+    def test_do_ocr_shows_error_details(self, mock_process, mock_count):
         self.client.login(username="cm", password="pass")
-        response = self.client.get(self.url, follow=True)
+        response = self.client.post(self.url, {"scan_limit": "all"}, follow=True)
         self.assertContains(response, "Processed 0 of 1 scans this run. Latest scan: test.png.")
         self.assertContains(response, "OCR failed for 1 scans: test.png")
 
+    @patch("cms.views._count_pending_scans", return_value=2)
     @patch(
         "cms.views.process_pending_scans",
-        return_value=(3, 0, 5, [], None, ["scan-5.png"]),
+        return_value=(3, 0, 5, [], None, ["scan-5.png"], False),
     )
-    def test_do_ocr_reports_progress(self, mock_process):
+    def test_do_ocr_reports_progress(self, mock_process, mock_count):
         self.client.login(username="cm", password="pass")
-        response = self.client.get(self.url, follow=True)
+        response = self.client.post(self.url, {"scan_limit": "all"}, follow=True)
         self.assertContains(response, "Processed 3 of 5 scans this run. Latest scan: scan-5.png.")
 
+    @patch("cms.views._count_pending_scans", return_value=5)
+    @patch(
+        "cms.views.process_pending_scans",
+        return_value=(0, 0, 0, ["insufficient_quota"], None, [], True),
+    )
+    def test_do_ocr_aborts_on_insufficient_quota(self, mock_process, mock_count):
+        self.client.login(username="cm", password="pass")
+        response = self.client.post(self.url, {"scan_limit": "all"}, follow=True)
+        self.assertContains(response, "OpenAI quota has been exhausted")
+        messages = [str(message) for message in get_messages(response.wsgi_request)]
+        self.assertTrue(any("OpenAI quota" in message for message in messages))
+
     @patch("cms.views._count_pending_scans", return_value=4)
-    @patch("cms.views.process_pending_scans", return_value=(1, 0, 1, [], None, ["scan-1.png"]))
+    @patch("cms.views.process_pending_scans", return_value=(1, 0, 1, [], None, ["scan-1.png"], False))
     def test_loop_mode_auto_refreshes(self, mock_process, mock_count):
         self.client.login(username="cm", password="pass")
         response = self.client.get(self.loop_url)
@@ -2040,7 +2092,7 @@ class OcrViewTests(TestCase):
         self.assertEqual(session["ocr_loop_stats"]["latest_filename"], "scan-1.png")
 
     @patch("cms.views._count_pending_scans", return_value=99)
-    @patch("cms.views.process_pending_scans", return_value=(1, 0, 1, [], None, ["scan-1.png"]))
+    @patch("cms.views.process_pending_scans", return_value=(1, 0, 1, [], None, ["scan-1.png"], False))
     def test_loop_mode_uses_limit_for_expected_total(self, mock_process, mock_count):
         self.client.login(username="cm", password="pass")
         url = f"{self.loop_url}&limit=100"
@@ -2054,8 +2106,8 @@ class OcrViewTests(TestCase):
     def test_loop_mode_finalizes_and_reports(self, mock_process, mock_count):
         self.client.login(username="cm", password="pass")
         mock_process.side_effect = [
-            (1, 0, 1, [], None, ["scan-1.png"]),
-            (1, 0, 1, [], None, ["scan-2.png"]),
+            (1, 0, 1, [], None, ["scan-1.png"], False),
+            (1, 0, 1, [], None, ["scan-2.png"], False),
         ]
         mock_count.side_effect = [2, 0]
 
@@ -2067,10 +2119,29 @@ class OcrViewTests(TestCase):
         self.assertContains(final, "Processed 2 of 2 scans this run. Latest scan: scan-2.png.")
         self.assertIsNone(self.client.session.get("ocr_loop_stats"))
 
+    @patch("cms.views._count_pending_scans")
+    @patch("cms.views.process_pending_scans")
+    def test_loop_mode_respects_limit(self, mock_process, mock_count):
+        self.client.login(username="cm", password="pass")
+        mock_process.side_effect = [
+            (1, 0, 1, [], None, ["scan-1.png"], False),
+            (1, 0, 1, [], None, ["scan-2.png"], False),
+        ]
+        mock_count.side_effect = [5, 4]
+
+        url = f"{self.loop_url}&limit=2"
+        first = self.client.get(url)
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(first["Refresh"], f"0;url={url}")
+
+        final = self.client.get(url, follow=True)
+        self.assertContains(final, "Processed 2 of 2 scans this run. Latest scan: scan-2.png.")
+        self.assertIsNone(self.client.session.get("ocr_loop_stats"))
+
     @patch("cms.views._count_pending_scans", return_value=5)
     @patch(
         "cms.views.process_pending_scans",
-        return_value=(0, 1, 1, ["jam.png: timeout"], "jam.png", ["jam.png"]),
+        return_value=(0, 1, 1, ["jam.png: timeout"], "jam.png", ["jam.png"], False),
     )
     def test_loop_mode_stops_on_jam(self, mock_process, mock_count):
         self.client.login(username="cm", password="pass")
@@ -2080,6 +2151,17 @@ class OcrViewTests(TestCase):
             response,
             "OCR halted because scan jam.png timed out after three attempts. Please investigate before retrying.",
         )
+
+    @patch("cms.views._count_pending_scans", return_value=5)
+    @patch(
+        "cms.views.process_pending_scans",
+        return_value=(0, 0, 0, ["insufficient_quota"], None, [], True),
+    )
+    def test_loop_mode_aborts_on_insufficient_quota(self, mock_process, mock_count):
+        self.client.login(username="cm", password="pass")
+        response = self.client.get(self.loop_url, follow=True)
+        self.assertContains(response, "OpenAI quota has been exhausted")
+        self.assertIsNone(self.client.session.get("ocr_loop_stats"))
 
 
 class ProcessPendingScansTests(TestCase):
@@ -2102,7 +2184,7 @@ class ProcessPendingScansTests(TestCase):
         file_path.write_bytes(b"data")
         Media.objects.create(media_location=f"uploads/pending/{filename}")
         with self.assertLogs("cms.ocr_processing", level="ERROR") as cm:
-            successes, failures, total, errors, jammed, processed = process_pending_scans()
+            successes, failures, total, errors, jammed, processed, insufficient = process_pending_scans()
         self.assertEqual(successes, 0)
         self.assertEqual(failures, 1)
         self.assertEqual(total, 1)
@@ -2110,6 +2192,7 @@ class ProcessPendingScansTests(TestCase):
         self.assertTrue(any("boom" in m for m in cm.output))
         self.assertIsNone(jammed)
         self.assertEqual(processed, [filename])
+        self.assertFalse(insufficient)
         media = Media.objects.get()
         self.assertEqual(media.ocr_status, Media.OCRStatus.FAILED)
         self.assertEqual(media.ocr_data["error"], "boom")
@@ -2127,7 +2210,7 @@ class ProcessPendingScansTests(TestCase):
         Media.objects.create(media_location=f"uploads/pending/{filename1}")
         Media.objects.create(media_location=f"uploads/pending/{filename2}")
 
-        successes, failures, total, errors, jammed, processed = process_pending_scans(limit=5)
+        successes, failures, total, errors, jammed, processed, insufficient = process_pending_scans(limit=5)
 
         self.assertEqual(successes, 0)
         self.assertEqual(failures, 1)
@@ -2140,7 +2223,63 @@ class ProcessPendingScansTests(TestCase):
         failed_file = Path(settings.MEDIA_ROOT) / "uploads" / "failed" / filename1
         self.assertTrue(failed_file.exists())
         self.assertEqual(processed, [filename1])
+        self.assertFalse(insufficient)
 
+    @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
+    @patch(
+        "cms.ocr_processing.chatgpt_ocr",
+        side_effect=Exception("You exceeded your current quota, please check your plan."),
+    )
+    def test_insufficient_quota_leaves_scan_pending(self, mock_chat, mock_detect):
+        filename = "quota.png"
+        file_path = self.pending / filename
+        file_path.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename}")
+
+        successes, failures, total, errors, jammed, processed, insufficient = process_pending_scans()
+
+        self.assertEqual(successes, 0)
+        self.assertEqual(failures, 0)
+        self.assertEqual(total, 0)
+        self.assertEqual(errors, ["insufficient_quota"])
+        self.assertIsNone(jammed)
+        self.assertEqual(processed, [])
+        self.assertTrue(insufficient)
+        self.assertTrue((self.pending / filename).exists())
+        media = Media.objects.get()
+        self.assertEqual(media.media_location.name, f"uploads/pending/{filename}")
+        self.assertEqual(media.ocr_status, Media.OCRStatus.PENDING)
+
+
+class ChatGPTUsageReportViewTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username="staff", password="pass", is_staff=True
+        )
+        patcher = patch("cms.models.get_current_user", return_value=self.user)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.url = reverse("admin-chatgpt-usage")
+
+    def test_estimated_scans_displayed(self):
+        self.client.login(username="staff", password="pass")
+        media = Media.objects.create(media_location="uploads/ocr/sample.png")
+        LLMUsageRecord.objects.create(
+            media=media,
+            model_name="gpt-4o",
+            prompt_tokens=100,
+            completion_tokens=50,
+            total_tokens=150,
+            cost_usd=Decimal("0.75"),
+            processing_seconds=Decimal("12.5"),
+            remaining_quota_usd=Decimal("25.00"),
+        )
+
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "~33 scans")
+        self.assertContains(response, "avg $0.7500")
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch(
         "cms.ocr_processing.chatgpt_ocr",
@@ -2176,7 +2315,7 @@ class ProcessPendingScansTests(TestCase):
         file_path = self.pending / filename
         file_path.write_bytes(b"data")
         Media.objects.create(media_location=f"uploads/pending/{filename}")
-        successes, failures, total, errors, jammed, processed = process_pending_scans()
+        successes, failures, total, errors, jammed, processed, insufficient = process_pending_scans()
         self.assertEqual((successes, failures, total), (1, 0, 1))
         self.assertIsNone(jammed)
         self.assertEqual(processed, [filename])
@@ -2357,7 +2496,7 @@ class ProcessPendingScansTests(TestCase):
         file_path = self.pending / filename
         file_path.write_bytes(b"data")
         Media.objects.create(media_location=f"uploads/pending/{filename}")
-        successes, failures, total, errors, jammed, processed = process_pending_scans()
+        successes, failures, total, errors, jammed, processed, insufficient = process_pending_scans()
         self.assertEqual((successes, failures, total), (1, 0, 1))
         self.assertIsNone(jammed)
         self.assertEqual(processed, [filename])
