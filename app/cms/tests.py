@@ -4430,6 +4430,72 @@ class BackfillLLMUsageCommandTests(TestCase):
         self.assertFalse(LLMUsageRecord.objects.exists())
 
 
+class ChatGPTUsageReportViewTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.staff_user = User.objects.create_user(
+            username="staff-usage", password="pass", is_staff=True
+        )
+        self.standard_user = User.objects.create_user(
+            username="standard-usage", password="pass", is_staff=False
+        )
+        self.url = reverse("admin-chatgpt-usage")
+
+        older = django_timezone.now() - timedelta(days=7)
+        newer = django_timezone.now() - timedelta(days=1)
+
+        media_one = Media.objects.create(media_location="uploads/ocr/report-one.png")
+        media_two = Media.objects.create(media_location="uploads/ocr/report-two.png")
+
+        record_one = LLMUsageRecord.objects.create(
+            media=media_one,
+            model_name="gpt-4o",
+            prompt_tokens=50,
+            completion_tokens=25,
+            total_tokens=75,
+            cost_usd=Decimal("0.75"),
+        )
+        record_two = LLMUsageRecord.objects.create(
+            media=media_two,
+            model_name="gpt-4o-mini",
+            prompt_tokens=40,
+            completion_tokens=40,
+            total_tokens=80,
+            cost_usd=Decimal("0.40"),
+        )
+
+        LLMUsageRecord.objects.filter(pk=record_one.pk).update(
+            created_at=older, updated_at=older
+        )
+        LLMUsageRecord.objects.filter(pk=record_two.pk).update(
+            created_at=newer, updated_at=newer
+        )
+
+    def test_requires_staff_access(self):
+        self.client.force_login(self.standard_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/admin/login/", response.url)
+
+    @override_settings(LLM_USAGE_MONTHLY_BUDGET_USD=Decimal("10"))
+    def test_renders_with_aggregated_totals(self):
+        self.client.force_login(self.staff_user)
+
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+
+        daily_totals = response.context["daily_totals"]
+        weekly_totals = response.context["weekly_totals"]
+        cumulative_cost = response.context["cumulative_cost"]
+        budget_progress = response.context["budget_progress"]
+
+        self.assertEqual(len(daily_totals), 2)
+        self.assertTrue(any(row["record_count"] == 1 for row in daily_totals))
+        self.assertEqual(len(weekly_totals), 2)
+        self.assertEqual(cumulative_cost, Decimal("1.15"))
+        self.assertAlmostEqual(float(budget_progress), 11.5)
+
+
 class AdminAutocompleteTests(TestCase):
     """Ensure admin uses select2 autocomplete for heavy foreign keys."""
 
