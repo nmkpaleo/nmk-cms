@@ -35,6 +35,7 @@ from django.db.models import Max, Prefetch
 
 from .models import (
     Media,
+    LLMUsageRecord,
     Accession,
     Collection,
     Locality,
@@ -1378,6 +1379,10 @@ def _process_single_scan(
             media.ocr_status = Media.OCRStatus.COMPLETED
             media.qc_status = Media.QCStatus.PENDING_INTERN
             media.save(update_fields=["ocr_data", "media_location", "ocr_status", "qc_status"])
+            usage_payload = result.get("usage")
+            if isinstance(usage_payload, dict):
+                defaults = LLMUsageRecord.defaults_from_payload(usage_payload)
+                LLMUsageRecord.objects.update_or_create(media=media, defaults=defaults)
             return
         except _TIMEOUT_EXCEPTIONS as exc:  # type: ignore[arg-type]
             last_timeout = exc

@@ -1,4 +1,6 @@
 import copy
+from datetime import timedelta
+from decimal import Decimal
 import json
 import shutil
 from datetime import datetime, timedelta
@@ -11,6 +13,7 @@ from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
 from django.contrib.messages import get_messages
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone as django_timezone
@@ -43,6 +46,7 @@ from cms.models import (
     NatureOfSpecimen,
     MediaQCLog,
     MediaQCComment,
+    LLMUsageRecord,
     Element,
     Person,
 )
@@ -1976,6 +1980,16 @@ class OcrViewTests(TestCase):
         self.assertEqual(media.media_location.name, f"uploads/ocr/{filename}")
         self.assertEqual(media.ocr_data["foo"], "bar")
         self.assertEqual(media.ocr_data["usage"], DEFAULT_USAGE_PAYLOAD)
+        usage_record = media.llm_usage_record
+        self.assertEqual(usage_record.model_name, DEFAULT_USAGE_PAYLOAD["model"])
+        self.assertEqual(usage_record.prompt_tokens, DEFAULT_USAGE_PAYLOAD["prompt_tokens"])
+        self.assertEqual(usage_record.completion_tokens, DEFAULT_USAGE_PAYLOAD["completion_tokens"])
+        self.assertEqual(usage_record.total_tokens, DEFAULT_USAGE_PAYLOAD["total_tokens"])
+        self.assertEqual(
+            usage_record.cost_usd,
+            Decimal(str(DEFAULT_USAGE_PAYLOAD["total_cost_usd"])),
+        )
+        self.assertEqual(usage_record.response_id, DEFAULT_USAGE_PAYLOAD["request_id"])
         import shutil
         shutil.rmtree(pending.parent)
 
@@ -2181,6 +2195,8 @@ class ProcessPendingScansTests(TestCase):
         self.assertEqual(media.accession, accession)
         self.assertEqual(media.qc_status, Media.QCStatus.APPROVED)
         self.assertEqual(media.ocr_data["usage"], DEFAULT_USAGE_PAYLOAD)
+        usage_record = media.llm_usage_record
+        self.assertEqual(usage_record.total_tokens, DEFAULT_USAGE_PAYLOAD["total_tokens"])
         self.assertIn("_processed_accessions", media.ocr_data)
         repeat = media.transition_qc(Media.QCStatus.APPROVED, user=self.user)
         self.assertEqual(repeat["created"], [])
@@ -4329,6 +4345,89 @@ class MediaInternQCWizardTests(TestCase):
         self.assertContains(response, "Earlier comments")
         self.assertContains(response, "First round of feedback")
         self.assertContains(response, expert.username)
+
+
+class LLMUsageRecordQuerySetTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username="usage", password="pass")
+        patcher = patch("cms.models.get_current_user", return_value=self.user)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_for_media_and_totals_by_day(self):
+        media_one = Media.objects.create(media_location="uploads/ocr/one.png")
+        media_two = Media.objects.create(media_location="uploads/ocr/two.png")
+
+        record_one = LLMUsageRecord.objects.create(
+            media=media_one,
+            model_name="gpt-4o",
+            prompt_tokens=10,
+            completion_tokens=20,
+            total_tokens=30,
+            cost_usd=Decimal("0.123456"),
+        )
+        record_two = LLMUsageRecord.objects.create(
+            media=media_two,
+            model_name="gpt-4o-mini",
+            prompt_tokens=5,
+            completion_tokens=5,
+            total_tokens=10,
+            cost_usd=Decimal("0.010000"),
+        )
+
+        older = django_timezone.now() - timedelta(days=1)
+        LLMUsageRecord.objects.filter(pk=record_one.pk).update(created_at=older, updated_at=older)
+        record_one.refresh_from_db()
+
+        self.assertEqual(list(LLMUsageRecord.objects.for_media(media_one)), [record_one])
+        self.assertEqual(
+            list(LLMUsageRecord.objects.for_media(media_one.pk)),
+            [record_one],
+        )
+
+        totals = list(LLMUsageRecord.objects.totals_by_day())
+        self.assertEqual(len(totals), 2)
+        self.assertEqual(totals[0]["day"], older.date())
+        self.assertEqual(totals[0]["total_tokens"], 30)
+        self.assertEqual(totals[0]["cost_usd"], Decimal("0.123456"))
+        self.assertEqual(totals[1]["total_tokens"], 10)
+        self.assertEqual(totals[1]["cost_usd"], Decimal("0.010000"))
+
+
+class BackfillLLMUsageCommandTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username="usage-cmd", password="pass")
+        patcher = patch("cms.models.get_current_user", return_value=self.user)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_command_creates_usage_records(self):
+        media = Media.objects.create(
+            media_location="uploads/ocr/cmd.png",
+            ocr_data={"usage": DEFAULT_USAGE_PAYLOAD},
+        )
+
+        call_command("backfill_llm_usage")
+
+        media.refresh_from_db()
+        usage_record = media.llm_usage_record
+        self.assertEqual(usage_record.prompt_tokens, DEFAULT_USAGE_PAYLOAD["prompt_tokens"])
+        self.assertEqual(
+            usage_record.cost_usd,
+            Decimal(str(DEFAULT_USAGE_PAYLOAD["total_cost_usd"])),
+        )
+
+    def test_dry_run_reports_without_changes(self):
+        Media.objects.create(
+            media_location="uploads/ocr/cmd.png",
+            ocr_data={"usage": DEFAULT_USAGE_PAYLOAD},
+        )
+
+        call_command("backfill_llm_usage", dry_run=True)
+
+        self.assertFalse(LLMUsageRecord.objects.exists())
 
 
 class AdminAutocompleteTests(TestCase):

@@ -19,6 +19,7 @@ from .models import (
     Media,
     MediaQCLog,
     MediaQCComment,
+    LLMUsageRecord,
     SpecimenGeology,
     GeologicalContext,
     AccessionReference,
@@ -336,6 +337,26 @@ class MediaQCLogInline(admin.TabularInline):
     comments_display.short_description = "Comments"
 
 
+class LLMUsageRecordInline(admin.StackedInline):
+    model = LLMUsageRecord
+    can_delete = False
+    extra = 0
+    fields = (
+        "model_name",
+        "prompt_tokens",
+        "completion_tokens",
+        "total_tokens",
+        "cost_usd",
+        "response_id",
+        "created_at",
+        "updated_at",
+    )
+    readonly_fields = fields
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
 class MediaAdmin(HistoricalImportExportAdmin):
     list_display = (
         'file_name',
@@ -376,7 +397,7 @@ class MediaAdmin(HistoricalImportExportAdmin):
     ]
     list_filter = ('type', 'format', 'qc_status', 'rows_rearranged')
     ordering = ('file_name',)
-    inlines = [MediaQCLogInline]
+    inlines = [MediaQCLogInline, LLMUsageRecordInline]
     fieldsets = (
         (
             None,
@@ -469,6 +490,42 @@ class MediaQCLogAdmin(admin.ModelAdmin):
         for obj in formset.deleted_objects:
             obj.delete()
         formset.save_m2m()
+
+
+@admin.register(LLMUsageRecord)
+class LLMUsageRecordAdmin(admin.ModelAdmin):
+    list_display = (
+        "media",
+        "model_name",
+        "prompt_tokens",
+        "completion_tokens",
+        "total_tokens",
+        "cost_usd",
+        "created_at",
+    )
+    search_fields = (
+        "media__file_name",
+        "media__uuid",
+        "media__id",
+        "model_name",
+        "response_id",
+    )
+    list_filter = ("model_name", "created_at")
+    readonly_fields = (
+        "media",
+        "model_name",
+        "prompt_tokens",
+        "completion_tokens",
+        "total_tokens",
+        "cost_usd",
+        "response_id",
+        "created_at",
+        "updated_at",
+    )
+    ordering = ("-created_at",)
+
+    def has_add_permission(self, request):
+        return False
 
 
 # NatureOfSpecimen Model
