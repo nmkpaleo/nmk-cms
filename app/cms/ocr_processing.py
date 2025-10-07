@@ -92,6 +92,45 @@ def get_openai_client() -> Any:
     return _client
 
 
+def build_usage_payload(response: Any, model: str) -> dict[str, object | None]:
+    """Return pricing and token usage metadata for an OpenAI response."""
+
+    usage = getattr(response, "usage", None)
+    prompt_tokens = getattr(usage, "prompt_tokens", 0) if usage else 0
+    completion_tokens = getattr(usage, "completion_tokens", 0) if usage else 0
+    total_tokens = getattr(usage, "total_tokens", 0) if usage else 0
+
+    if not total_tokens and (prompt_tokens or completion_tokens):
+        total_tokens = prompt_tokens + completion_tokens
+
+    pricing = getattr(settings, "OPENAI_PRICING", {}) or {}
+    rates = pricing.get(model, {}) or {}
+    prompt_rate = rates.get("prompt")
+    completion_rate = rates.get("completion")
+
+    def _cost(tokens: int, rate: float | None) -> float | None:
+        if rate is None or tokens is None:
+            return None
+        return round(tokens * rate, 6)
+
+    prompt_cost = _cost(prompt_tokens, prompt_rate)
+    completion_cost = _cost(completion_tokens, completion_rate)
+    total_cost: float | None = None
+    if prompt_cost is not None or completion_cost is not None:
+        total_cost = round((prompt_cost or 0.0) + (completion_cost or 0.0), 6)
+
+    return {
+        "model": getattr(response, "model", model) or model,
+        "request_id": getattr(response, "id", None),
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": total_tokens,
+        "prompt_cost_usd": prompt_cost,
+        "completion_cost_usd": completion_cost,
+        "total_cost_usd": total_cost,
+    }
+
+
 def encode_image_to_base64(image_path: Path) -> str:
     with open(image_path, "rb") as f:
         return base64.b64encode(f.read()).decode("utf-8")
@@ -335,7 +374,6 @@ def chatgpt_ocr(
     image_path: Path,
     image_id: str,
     user_prompt: str,
-    cost_status: dict,
     model: str = "gpt-4o",
     timeout: int = 60,
     max_retries: int = 3,
@@ -373,30 +411,12 @@ def chatgpt_ocr(
                     line for line in content.strip().splitlines() if not line.strip().startswith("```")
                 )
             result = json.loads(content)
-            result["cost_tracking"] = cost_status
+            result["usage"] = build_usage_payload(response, model)
             return result
         except Exception:
             if attempt == max_retries - 1:
                 raise
             time.sleep(2 ** attempt)
-
-
-class OCRCostEstimator:
-    def __init__(self, budget_usd: float = 2000.0, avg_cost_per_card_usd: float = 0.01) -> None:
-        self.budget = budget_usd
-        self.cost_per_card = avg_cost_per_card_usd
-        self.scanned = 0
-
-    def scan_card(self) -> dict:
-        self.scanned += 1
-        total_cost = self.scanned * self.cost_per_card
-        remaining = max(self.budget - total_cost, 0)
-        return {
-            "scanned_cards": self.scanned,
-            "total_estimated_cost_usd": round(total_cost, 4),
-            "remaining_budget_usd": round(remaining, 4),
-            "cards_left": int(remaining // self.cost_per_card),
-        }
 
 
 def _normalise_boolean(value: object) -> bool:
@@ -1335,14 +1355,12 @@ def _mark_scan_failed(media: Media, path: Path, failed_dir: Path, exc: Exception
 def _process_single_scan(
     media: Media,
     path: Path,
-    estimator: "OCRCostEstimator",
     ocr_dir: Path,
     *,
     max_attempts: int = 3,
 ) -> None:
     """Run OCR for a single pending scan, retrying on timeouts."""
 
-    cost_status = estimator.scan_card()
     last_timeout: BaseException | None = None
 
     for attempt in range(1, max_attempts + 1):
@@ -1350,7 +1368,7 @@ def _process_single_scan(
             card_type_info = detect_card_type(path)
             card_type = card_type_info.get("card_type", "unknown")
             user_prompt = build_prompt_for_card_type(card_type)
-            result = chatgpt_ocr(path, path.name, user_prompt, cost_status)
+            result = chatgpt_ocr(path, path.name, user_prompt)
             result["card_type"] = card_type
             dest = ocr_dir / path.name
             dest.parent.mkdir(parents=True, exist_ok=True)
@@ -1394,7 +1412,6 @@ def process_pending_scans(
     failed_dir = Path(settings.MEDIA_ROOT) / "uploads" / "failed"
 
     files = sorted(pending.glob("*"))
-    estimator = OCRCostEstimator()
     successes = 0
     failures = 0
     total = 0
@@ -1415,7 +1432,7 @@ def process_pending_scans(
         processed_filenames.append(path.name)
 
         try:
-            _process_single_scan(media, path, estimator, ocr_dir)
+            _process_single_scan(media, path, ocr_dir)
             successes += 1
         except OCRTimeoutError as exc:
             failures += 1
