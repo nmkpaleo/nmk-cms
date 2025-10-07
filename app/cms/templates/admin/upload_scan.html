@@ -164,6 +164,9 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   form.addEventListener('submit', () => {
+    if (supportsDataTransfer) {
+      syncInputFiles();
+    }
     const total = supportsDataTransfer
       ? filesQueue.length
       : (fileInput.files ? fileInput.files.length : 0);
