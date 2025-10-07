@@ -74,6 +74,9 @@
       <article class="summary-card">
         <h2>Remaining quota</h2>
         <p>${{ remaining_quota_usd|floatformat:2 }}</p>
+        {% if estimated_scans_remaining is not None %}
+          <p class="summary-subtext">~{{ estimated_scans_remaining|intcomma }} scans at avg ${{ avg_cost_per_scan|default_if_none:0|floatformat:4 }} each</p>
+        {% endif %}
       </article>
     {% endif %}
   </section>
@@ -213,6 +216,13 @@
     .summary-card p {
       font-size: 1.2rem;
       font-weight: 600;
+    }
+
+    .summary-card .summary-subtext {
+      font-size: 0.9rem;
+      font-weight: 400;
+      color: #555;
+      margin-top: 0.25rem;
     }
 
     .usage-visualizations {

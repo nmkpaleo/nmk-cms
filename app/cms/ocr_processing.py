@@ -59,6 +59,10 @@ class OCRTimeoutError(RuntimeError):
     """Raised when OCR processing times out after repeated attempts."""
 
 
+class InsufficientQuotaError(RuntimeError):
+    """Raised when OCR processing cannot continue because the quota was exhausted."""
+
+
 _TIMEOUT_EXCEPTIONS: tuple[type[BaseException], ...] = (TimeoutError,)
 if "APITimeoutError" in globals() and APITimeoutError is not None:  # pragma: no cover - depends on openai version
     _TIMEOUT_EXCEPTIONS = _TIMEOUT_EXCEPTIONS + (APITimeoutError,)
@@ -77,6 +81,36 @@ def _load_env() -> None:
 
 
 _client: Any = None
+
+
+def _is_insufficient_quota_error(exc: BaseException) -> bool:
+    """Return ``True`` if ``exc`` represents an insufficient quota error."""
+
+    # Newer ``openai`` clients expose the error code directly on the exception.
+    code = getattr(exc, "code", None)
+    if isinstance(code, str) and code.lower() == "insufficient_quota":
+        return True
+
+    # Some versions expose a response dictionary with the error details.
+    error_obj = getattr(exc, "error", None)
+    if isinstance(error_obj, dict):
+        err_code = error_obj.get("code") or error_obj.get("type")
+        if isinstance(err_code, str) and err_code.lower() == "insufficient_quota":
+            return True
+
+    response = getattr(exc, "response", None)
+    if isinstance(response, dict):
+        err = response.get("error")
+        if isinstance(err, dict):
+            err_code = err.get("code") or err.get("type")
+            if isinstance(err_code, str) and err_code.lower() == "insufficient_quota":
+                return True
+
+    message = str(exc) if exc else ""
+    if not message:
+        return False
+    message = message.lower()
+    return "insufficient_quota" in message or "exceeded your current quota" in message
 
 
 def get_openai_client() -> Any:
@@ -1433,7 +1467,12 @@ def _process_single_scan(
             if attempt == max_attempts:
                 raise OCRTimeoutError(str(exc)) from exc
             time.sleep(2 ** (attempt - 1))
-        except Exception:
+        except Exception as exc:
+            if _is_insufficient_quota_error(exc):
+                logger.warning(
+                    "OCR aborted for %s because the OpenAI quota was exhausted", path.name
+                )
+                raise InsufficientQuotaError(str(exc)) from exc
             raise
 
     if last_timeout is not None:
@@ -1442,12 +1481,14 @@ def _process_single_scan(
 
 def process_pending_scans(
     limit: int | None = None,
-) -> tuple[int, int, int, list[str], Optional[str], list[str]]:
+) -> tuple[int, int, int, list[str], Optional[str], list[str], bool]:
     """Process up to ``limit`` scans awaiting OCR.
 
     Returns a tuple of ``(successes, failures, total, errors, jammed_filename,
-    processed_filenames)`` where ``total`` is the number of scans considered and
-    ``errors`` is a list of error descriptions for failed scans.
+    processed_filenames, insufficient_quota)`` where ``total`` is the number of
+    scans considered and ``errors`` is a list of error descriptions for failed
+    scans. ``insufficient_quota`` will be ``True`` when processing stopped
+    because the OpenAI quota was exhausted.
     ``jammed_filename`` will be set if OCR was halted early because a scan
     repeatedly timed out, and ``processed_filenames`` records each filename
     that was attempted regardless of success or failure.
@@ -1464,6 +1505,7 @@ def process_pending_scans(
     errors: list[str] = []
     jammed_filename: Optional[str] = None
     processed_filenames: list[str] = []
+    insufficient_quota = False
 
     for path in files:
         if limit is not None and total >= limit:
@@ -1488,6 +1530,13 @@ def process_pending_scans(
             logger.error("OCR timed out for %s after multiple attempts", path, exc_info=True)
             _mark_scan_failed(media, path, failed_dir, exc)
             break
+        except InsufficientQuotaError as exc:
+            insufficient_quota = True
+            errors.append("insufficient_quota")
+            logger.warning("Stopping OCR queue because quota was exhausted: %s", exc)
+            processed_filenames.pop()
+            total -= 1
+            break
         except Exception as exc:
             failures += 1
             # Do not expose exception details to users
@@ -1495,4 +1544,12 @@ def process_pending_scans(
             logger.exception("OCR processing failed for %s", path)
             _mark_scan_failed(media, path, failed_dir, exc)
 
-    return successes, failures, total, errors, jammed_filename, processed_filenames
+    return (
+        successes,
+        failures,
+        total,
+        errors,
+        jammed_filename,
+        processed_filenames,
+        insufficient_quota,
+    )

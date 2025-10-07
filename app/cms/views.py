@@ -2923,12 +2923,28 @@ def chatgpt_usage_report(request):
     if scans_processed:
         avg_processing_seconds = total_processing_seconds / Decimal(scans_processed)
 
+    avg_cost_per_scan: Decimal | None = None
+    if scans_processed and cumulative_cost > 0:
+        avg_cost_per_scan = cumulative_cost / Decimal(scans_processed)
+
     latest_remaining_quota = (
         filtered_qs.exclude(remaining_quota_usd__isnull=True)
         .order_by("-created_at")
         .values_list("remaining_quota_usd", flat=True)
         .first()
     )
+
+    remaining_quota_decimal: Decimal | None = None
+    if latest_remaining_quota is not None:
+        remaining_quota_decimal = _coerce_decimal(latest_remaining_quota)
+
+    estimated_scans_remaining: int | None = None
+    if (
+        remaining_quota_decimal is not None
+        and avg_cost_per_scan is not None
+        and avg_cost_per_scan > 0
+    ):
+        estimated_scans_remaining = int(remaining_quota_decimal / avg_cost_per_scan)
 
     budget_raw = getattr(settings, "LLM_USAGE_MONTHLY_BUDGET_USD", None)
     budget_total = _coerce_decimal(budget_raw) if budget_raw is not None else None
@@ -2982,6 +2998,8 @@ def chatgpt_usage_report(request):
         "start_date": start_date,
         "end_date": end_date,
         "model_name": model_name,
+        "estimated_scans_remaining": estimated_scans_remaining,
+        "avg_cost_per_scan": avg_cost_per_scan,
     }
 
     return render(request, "admin/chatgpt_usage_report.html", context)
@@ -3069,6 +3087,45 @@ def do_ocr(request):
 
     loop = _should_loop(request)
     limit_hint = _parse_ocr_limit(request)
+    if not loop:
+        pending_total = _count_pending_scans()
+        limit_options = [100 * i for i in range(1, 11)]
+        selection_error = None
+        choice_value: str | None = None
+
+        if request.method == "POST":
+            choice = request.POST.get("scan_limit") or ""
+            choice_value = choice
+            valid_values = {str(option) for option in limit_options}
+            if choice == "all":
+                selected_limit = None
+            elif choice in valid_values:
+                selected_limit = int(choice)
+            else:
+                selected_limit = None
+                selection_error = "Please choose one of the available options."
+
+            if selection_error is None and pending_total == 0:
+                messages.info(request, "No pending scans to process.")
+                return redirect("admin-do-ocr")
+
+            if selection_error is None:
+                query_params: dict[str, str] = {"loop": "1"}
+                if selected_limit:
+                    query_params["limit"] = str(selected_limit)
+                url = reverse("admin-do-ocr")
+                if query_params:
+                    url = f"{url}?{urlencode(query_params)}"
+                return redirect(url)
+
+        context = {
+            "pending_total": pending_total,
+            "limit_options": limit_options,
+            "selection_error": selection_error,
+            "selected_choice": choice_value,
+        }
+        return render(request, "admin/do_ocr_prompt.html", context)
+
     (
         successes,
         failures,
@@ -3076,6 +3133,7 @@ def do_ocr(request):
         errors,
         jammed,
         processed_filenames,
+        insufficient_quota,
     ) = process_pending_scans(limit=1)
     latest_filename = processed_filenames[-1] if processed_filenames else None
 
@@ -3094,6 +3152,11 @@ def do_ocr(request):
         stats["errors"].extend(errors)
         stats.setdefault("latest_filename", None)
         stats.setdefault("expected_total", None)
+        stats.setdefault("insufficient_quota", False)
+        stats["insufficient_quota"] = stats["insufficient_quota"] or insufficient_quota
+        stats.setdefault("limit", limit_hint)
+        if limit_hint is not None:
+            stats["limit"] = limit_hint
         if latest_filename:
             stats["latest_filename"] = latest_filename
         if jammed:
@@ -3105,7 +3168,11 @@ def do_ocr(request):
     remaining = _count_pending_scans()
     errors_list = list(aggregated["errors"]) if aggregated else list(errors)
     attempted_total = aggregated["attempted"] if aggregated else total
-    expected_total = _compute_expected_total(attempted_total, remaining, limit_hint)
+    insufficient_quota_flag = (
+        aggregated.get("insufficient_quota") if aggregated else insufficient_quota
+    )
+    selected_limit = aggregated.get("limit") if aggregated else limit_hint
+    expected_total = _compute_expected_total(attempted_total, remaining, selected_limit)
     if aggregated is not None:
         aggregated["expected_total"] = expected_total
         if aggregated.get("latest_filename") is None and latest_filename:
@@ -3115,6 +3182,8 @@ def do_ocr(request):
     def _sanitize_ocr_errors(error_list):
         sanitized = []
         for msg in error_list:
+            if msg == "insufficient_quota":
+                continue
             # Expected format: "{filename}: {exception}"
             parts = msg.split(':', 1)
             filename = parts[0].strip() if parts else "Unknown"
@@ -3133,15 +3202,27 @@ def do_ocr(request):
         "expected_total": aggregated.get("expected_total") if aggregated else expected_total,
         "latest_filename": aggregated.get("latest_filename") if aggregated else latest_filename,
         "current_index": attempted_total,
+        "insufficient_quota": insufficient_quota_flag,
+        "limit": selected_limit,
     }
 
     if request.headers.get("HX-Request") or request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return JsonResponse(detail)
 
-    if loop and remaining > 0 and not detail["jammed"]:
+    limit_reached = (
+        detail["limit"] is not None and detail["current_index"] >= detail["limit"]
+    )
+
+    if (
+        loop
+        and remaining > 0
+        and not detail["jammed"]
+        and not detail["insufficient_quota"]
+        and not limit_reached
+    ):
         query_params = {"loop": "1"}
-        if limit_hint is not None:
-            query_params["limit"] = str(limit_hint)
+        if detail["limit"] is not None:
+            query_params["limit"] = str(detail["limit"])
         next_url = f"{reverse('admin-do-ocr')}?{urlencode(query_params)}"
         expected_display = detail["expected_total"] or detail["attempted"]
         latest_segment = (
@@ -3189,7 +3270,14 @@ def do_ocr(request):
                 f"{detail['jammed']} timed out after three attempts. Please investigate before retrying."
             ),
         )
-
+    if detail["insufficient_quota"]:
+        messages.error(
+            request,
+            (
+                "OCR aborted because the OpenAI quota has been exhausted. "
+                "The current scan remains in the pending folder. Please review your plan and retry later."
+            ),
+        )
     return redirect('admin:index')
 
 @login_required
