@@ -8,3 +8,4 @@
 - [Preparations](preparations.md)
 - [Scan Uploads](scan-uploads.md)
 - [Users](users.md)
+- [Merge Tool](merge-tool.md)
