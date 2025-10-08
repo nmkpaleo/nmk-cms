@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django.db.models import Count, OuterRef, Exists
+from django.conf import settings
 
 from import_export.admin import ImportExportModelAdmin
 from import_export import resources, fields
@@ -82,6 +83,14 @@ class MergeAdminActionMixin:
         dry_run=False,
         archive=True,
     ):
+        if not getattr(settings, "MERGE_TOOL_FEATURE", False):
+            if request is not None:
+                self.message_user(
+                    request,
+                    "The merge tool is currently disabled; no records were merged.",
+                    level=logging.WARNING,
+                )
+            return
         if target is None:
             if request is not None:
                 self.message_user(
