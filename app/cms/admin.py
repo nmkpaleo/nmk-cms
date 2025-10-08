@@ -91,17 +91,25 @@ class MergeAdminActionMixin:
                     level=logging.WARNING,
                 )
             return
+
+        selected = list(queryset)
+
         if target is None:
-            if request is not None:
+            if request is None:
+                raise ValueError(
+                    "Provide a `target` instance when calling this action manually from the shell."
+                )
+            if len(selected) < 2:
                 self.message_user(
                     request,
-                    "Provide a `target` instance when calling this action manually from the shell.",
+                    "Select at least two records to merge.",
                     level=logging.WARNING,
                 )
-            return
+                return
+            target = selected[0]
 
         user = getattr(request, "user", None) if request is not None else None
-        sources = [obj for obj in queryset if obj.pk != getattr(target, "pk", None)]
+        sources = [obj for obj in selected if obj.pk != getattr(target, "pk", None)]
         for source in sources:
             merge_records(
                 source,

@@ -17,6 +17,7 @@ from django.test.utils import isolate_apps
 from django.urls import path
 from unittest.mock import patch
 
+from cms.admin import MergeAdminActionMixin
 from cms.admin_merge import MergeAdminMixin
 from cms.merge.constants import MergeStrategy
 from cms.merge.mixins import MergeMixin
@@ -50,7 +51,7 @@ class MergeAdminWorkflowTests(TransactionTestCase):
             def __str__(self) -> str:
                 return self.name
 
-        class MergeableRecordAdmin(MergeAdminMixin, admin.ModelAdmin):
+        class MergeableRecordAdmin(MergeAdminActionMixin, MergeAdminMixin, admin.ModelAdmin):
             list_display = ("name", "email")
 
         cls.Model = MergeableRecord
@@ -80,6 +81,11 @@ class MergeAdminWorkflowTests(TransactionTestCase):
             name="Can merge mergeable records",
             content_type=content_type,
         )
+        cls.merge_content_type_kwargs = {
+            "app_label": content_type.app_label,
+            "model": content_type.model,
+        }
+        cls.merge_content_type_name = content_type.name
         cls.UserModel = get_user_model()
 
     @classmethod
@@ -115,7 +121,16 @@ class MergeAdminWorkflowTests(TransactionTestCase):
             is_staff=True,
         )
         if with_permission:
-            user.user_permissions.add(self.merge_permission)
+            content_type, _ = ContentType.objects.get_or_create(
+                defaults={"name": self.merge_content_type_name},
+                **self.merge_content_type_kwargs,
+            )
+            permission, _ = Permission.objects.get_or_create(
+                codename=self.merge_permission.codename,
+                content_type=content_type,
+                defaults={"name": self.merge_permission.name},
+            )
+            user.user_permissions.add(permission)
         return user
 
     def _build_request(self, method: str, path: str, *, data: dict[str, str] | None = None, user=None):
@@ -181,6 +196,29 @@ class MergeAdminWorkflowTests(TransactionTestCase):
 
         self.assertFalse(self.Model.objects.filter(pk=self.source.pk).exists())
         self.assertTrue(MergeLog.objects.filter(target_pk=str(self.target.pk)).exists())
+
+    @override_settings(MERGE_TOOL_FEATURE=True)
+    def test_manual_action_defaults_to_first_selected_target(self):
+        user = self._login(with_permission=True)
+
+        post_data = {
+            "action": "merge_records_action",
+            ACTION_CHECKBOX_NAME: [str(self.target.pk), str(self.source.pk)],
+        }
+        queryset = self.Model._default_manager.filter(
+            pk__in=[self.target.pk, self.source.pk]
+        ).order_by("pk")
+        action_request = self._build_request(
+            "post", self.changelist_url, data=post_data, user=user
+        )
+
+        with self._override_admin_urls():
+            self.model_admin.merge_records_action(action_request, queryset)
+
+        self.target.refresh_from_db()
+        self.assertEqual(self.target.name, "Source")
+        self.assertEqual(self.target.email, "target@example.com")
+        self.assertFalse(self.Model.objects.filter(pk=self.source.pk).exists())
     @contextmanager
     def _override_admin_urls(self):
         def resolve(name, *args, **kwargs):
