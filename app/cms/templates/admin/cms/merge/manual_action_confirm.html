@@ -1,0 +1,52 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block nav-global %}{% endblock %}
+
+{% block content %}
+<div class="content">
+  <h1>{{ title }}</h1>
+  <p>{% trans "Select which record should receive the merged data. The remaining records will be merged into the chosen target." %}</p>
+
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="{{ action_name }}">
+    <input type="hidden" name="merge_confirmed" value="yes">
+    {% if select_across %}
+      <input type="hidden" name="select_across" value="{{ select_across }}">
+    {% endif %}
+
+    <table class="adminlist">
+      <thead>
+        <tr>
+          <th scope="col">{% trans "Target" %}</th>
+          <th scope="col">{% trans "Object" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for obj in objects %}
+          <tr>
+            <td>
+              <label>
+                <input type="radio" name="{{ merge_target_field }}" value="{{ obj.pk }}" required>
+              </label>
+            </td>
+            <td>{{ obj }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div hidden>
+      {% for obj in objects %}
+        <input type="hidden" name="{{ action_checkbox_name }}" value="{{ obj.pk }}">
+      {% endfor %}
+    </div>
+
+    <div class="submit-row">
+      <button type="submit" class="button button-primary">{% trans "Merge records" %}</button>
+      <a href="{{ changelist_url }}" class="button cancel-link">{% trans "Cancel" %}</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

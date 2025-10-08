@@ -106,7 +106,44 @@ class MergeAdminActionMixin:
                     level=logging.WARNING,
                 )
                 return
-            target = selected[0]
+
+            target_id = request.POST.get("merge_target")
+            if not target_id:
+                opts = self.model._meta
+                changelist_url = reverse(
+                    f"admin:{opts.app_label}_{opts.model_name}_changelist"
+                )
+                context = {
+                    "title": "Choose a target record",
+                    "action_checkbox_name": admin.ACTION_CHECKBOX_NAME,
+                    "opts": opts,
+                    "objects": selected,
+                    "action_name": "merge_records_action",
+                    "merge_target_field": "merge_target",
+                    "changelist_url": changelist_url,
+                    "select_across": request.POST.get("select_across"),
+                }
+                return render(
+                    request,
+                    "admin/cms/merge/manual_action_confirm.html",
+                    context,
+                )
+
+            try:
+                target = next(
+                    obj for obj in selected if str(obj.pk) == str(target_id)
+                )
+            except StopIteration:
+                try:
+                    target = queryset.model._default_manager.get(pk=target_id)
+                except queryset.model.DoesNotExist:
+                    self.message_user(
+                        request,
+                        "Selected target is no longer available.",
+                        level=logging.ERROR,
+                    )
+                    return
+                selected.append(target)
 
         user = getattr(request, "user", None) if request is not None else None
         sources = [obj for obj in selected if obj.pk != getattr(target, "pk", None)]
@@ -805,7 +842,7 @@ class ScanningAdmin(admin.ModelAdmin):
 # ----------------------------------------------------------------------
 # Flat file import integration
 # ----------------------------------------------------------------------
-from django.urls import path
+from django.urls import path, reverse
 from django.contrib import messages
 from django.shortcuts import render, redirect
 from django import forms

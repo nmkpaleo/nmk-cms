@@ -11,7 +11,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.db import connection, models
-from django.http import HttpResponseRedirect
+from django.http import HttpResponse, HttpResponseRedirect
 from django.test import RequestFactory, TransactionTestCase, override_settings
 from django.test.utils import isolate_apps
 from django.urls import path
@@ -25,7 +25,10 @@ from cms.models import MergeLog
 
 
 test_admin_site = AdminSite(name="merge-admin-test")
-urlpatterns = [path("admin/", test_admin_site.urls)]
+urlpatterns = [
+    path("admin/", test_admin_site.urls),
+    path("admin/upload-scan/", lambda request: HttpResponse(""), name="admin-upload-scan"),
+]
 
 
 @isolate_apps("cms")
@@ -198,7 +201,7 @@ class MergeAdminWorkflowTests(TransactionTestCase):
         self.assertTrue(MergeLog.objects.filter(target_pk=str(self.target.pk)).exists())
 
     @override_settings(MERGE_TOOL_FEATURE=True)
-    def test_manual_action_defaults_to_first_selected_target(self):
+    def test_manual_action_prompts_for_target_selection(self):
         user = self._login(with_permission=True)
 
         post_data = {
@@ -213,12 +216,30 @@ class MergeAdminWorkflowTests(TransactionTestCase):
         )
 
         with self._override_admin_urls():
-            self.model_admin.merge_records_action(action_request, queryset)
+            response = self.model_admin.merge_records_action(
+                action_request, queryset
+            )
+        self.assertIsNotNone(response)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Choose a target record", response.content)
 
-        self.target.refresh_from_db()
-        self.assertEqual(self.target.name, "Source")
-        self.assertEqual(self.target.email, "target@example.com")
-        self.assertFalse(self.Model.objects.filter(pk=self.source.pk).exists())
+        confirm_data = {
+            "action": "merge_records_action",
+            "merge_confirmed": "yes",
+            "merge_target": str(self.source.pk),
+            ACTION_CHECKBOX_NAME: [str(self.target.pk), str(self.source.pk)],
+        }
+        confirm_request = self._build_request(
+            "post", self.changelist_url, data=confirm_data, user=user
+        )
+
+        with self._override_admin_urls():
+            self.model_admin.merge_records_action(confirm_request, queryset)
+
+        self.source.refresh_from_db()
+        self.assertEqual(self.source.email, "target@example.com")
+        self.assertEqual(self.source.name, "Target")
+        self.assertFalse(self.Model.objects.filter(pk=self.target.pk).exists())
     @contextmanager
     def _override_admin_urls(self):
         def resolve(name, *args, **kwargs):
@@ -235,7 +256,9 @@ class MergeAdminWorkflowTests(TransactionTestCase):
                 return f"/admin/{self.app_label}/{self.model_name}/{object_id}/change/"
             return name
 
-        with patch("cms.admin_merge.reverse", side_effect=resolve) as mock_reverse, patch(
+        with patch("cms.admin.reverse", side_effect=resolve), patch(
+            "cms.admin_merge.reverse", side_effect=resolve
+        ) as mock_reverse, patch(
             "cms.admin_merge.redirect",
             side_effect=lambda to, *args, **kwargs: HttpResponseRedirect(
                 resolve(to, *args, **kwargs) if isinstance(to, str) else to

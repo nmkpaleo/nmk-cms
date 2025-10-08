@@ -81,16 +81,31 @@ class MergeCandidateAPITests(TransactionTestCase):
             "fields": "name",
             "threshold": "70",
         }
-        response = self.client.get(self.url, params)
+        response = self.client.get(self.url, params, HTTP_ACCEPT="application/json")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual([result["candidate"]["pk"] for result in payload["results"]], [self.best.pk])
 
         params["threshold"] = "50"
-        response = self.client.get(self.url, params)
+        response = self.client.get(self.url, params, HTTP_ACCEPT="application/json")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(
             [result["candidate"]["pk"] for result in payload["results"]],
             [self.best.pk, self.partial.pk],
         )
+
+    def test_html_request_renders_template(self):
+        staff = self.UserModel.objects.create_user(username="staff", password="pass", is_staff=True)
+        self.client.force_login(staff)
+
+        params = {
+            "model_label": self.model_label,
+            "query": "Alpha",
+            "fields": "name",
+            "threshold": "50",
+        }
+        response = self.client.get(self.url, params)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Merge candidate search results")
+        self.assertContains(response, "Alpha Beta")
