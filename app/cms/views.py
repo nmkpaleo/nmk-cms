@@ -214,7 +214,9 @@ class MergeCandidateAPIView(View):
         try:
             fields = self._extract_fields(request, model)
         except ValueError as exc:
-            return JsonResponse({"detail": str(exc)}, status=400)
+            import logging
+            logging.exception("Invalid field specification in MergeCandidateAPIView")
+            return JsonResponse({"detail": "Invalid field specification."}, status=400)
 
         if not fields:
             return JsonResponse({"detail": "No fields available for scoring."}, status=400)
