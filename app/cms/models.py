@@ -100,6 +100,72 @@ class BaseModel(models.Model):
             raise ValidationError("You must be logged in to delete this record.")
         super().delete(*args, **kwargs)
 
+
+class MergeLog(BaseModel):
+    """Audit trail capturing the outcome of merge operations."""
+
+    model_label = models.CharField(
+        max_length=255,
+        help_text="Dotted label of the model the merge acted upon.",
+    )
+    source_pk = models.CharField(
+        max_length=255,
+        help_text="Primary key of the source record that was merged.",
+    )
+    target_pk = models.CharField(
+        max_length=255,
+        help_text="Primary key of the target record that received the data.",
+    )
+    resolved_values = models.JSONField(
+        help_text="Final values applied to the target record.",
+    )
+    strategy_map = models.JSONField(
+        help_text="Strategies that were used to resolve field conflicts.",
+    )
+    source_snapshot = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="Serialised representation of the source record before merge.",
+    )
+    target_before = models.JSONField(
+        help_text="Serialised state of the target record before the merge.",
+    )
+    target_after = models.JSONField(
+        help_text="Serialised state of the target record after the merge.",
+    )
+    performed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="merge_logs",
+        help_text="User that triggered the merge, when available.",
+    )
+    executed_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="Timestamp when the merge completed.",
+    )
+
+    class Meta:
+        ordering = ["-executed_at"]
+        verbose_name = "Merge Log Entry"
+        verbose_name_plural = "Merge Log Entries"
+
+    def clean(self):
+        # Override BaseModel.clean to allow system initiated writes without an
+        # authenticated request user being available.
+        return None
+
+    def save(self, *args, **kwargs):
+        if self.performed_by and not self.created_by:
+            self.created_by = self.performed_by
+        if self.performed_by and not self.modified_by:
+            self.modified_by = self.performed_by
+        super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return f"Merge {self.source_pk} → {self.target_pk} ({self.model_label})"
+
 # Locality Model
 class Locality(BaseModel):
     abbreviation = models.CharField(
