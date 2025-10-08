@@ -34,6 +34,11 @@ django-userforeignkey>=0.5.0
 django-filter>=23.1
 openai>=1.40.0
 python-dotenv>=1.0.1
+plotly
+numpy
+pandas
+matplotlib
+seaborn
 # Fuzzy matching libraries used for merge candidate discovery
 python-Levenshtein>=0.25.0
 rapidfuzz>=3.4.0

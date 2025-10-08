@@ -50,6 +50,7 @@
               <li><a href="{% url 'locality_list' %}">Localities</a></li>
               <li><a href="{% url 'place_list' %}">Places</a></li>
               <li><a href="{% url 'reference_list' %}">References</a></li>
+              <li><a href="{% url 'media_report' %}">Reports</a></li>
               
               {% if user.is_superuser or user|has_group:"Collection Managers" %}
                 <li><a href="{% url 'fieldslip_list' %}">Field Slips</a></li>
