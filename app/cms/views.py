@@ -224,7 +224,9 @@ class MergeCandidateAPIView(View):
         try:
             queryset = self._build_queryset(request, model)
         except ValueError as exc:
-            return JsonResponse({"detail": str(exc)}, status=400)
+            import logging
+            logging.exception("ValueError in MergeCandidateAPIView._build_queryset")
+            return JsonResponse({"detail": "Invalid query for model."}, status=400)
 
         try:
             matches = score_candidates(model, query, fields=fields, threshold=threshold, queryset=queryset)
