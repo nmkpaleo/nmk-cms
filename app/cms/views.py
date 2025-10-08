@@ -199,7 +199,9 @@ class MergeCandidateAPIView(View):
         try:
             model = self._get_model_from_label(request.GET.get("model_label", ""))
         except ValueError as exc:
-            return JsonResponse({"detail": str(exc)}, status=400)
+            import logging
+            logging.exception("Invalid model label exception in MergeCandidateAPIView")
+            return JsonResponse({"detail": "Invalid model label."}, status=400)
 
         query = (request.GET.get("query") or "").strip()
         if not query:
