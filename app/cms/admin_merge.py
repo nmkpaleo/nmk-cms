@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Iterable, List, Mapping
 
 from django import forms
+from django.conf import settings
 from django.contrib import admin, messages
 from django.contrib.admin.utils import display_for_field
 from django.core.exceptions import ValidationError
@@ -16,6 +18,19 @@ from django.utils.translation import gettext_lazy as _
 
 from .merge import merge_records
 from .merge.constants import MERGE_STRATEGY_CHOICES, MergeStrategy
+from .merge.signals import merge_failed
+
+try:  # pragma: no cover - optional dependency
+    import sentry_sdk
+except Exception:  # pragma: no cover - defensive
+    sentry_sdk = None
+
+
+logger = logging.getLogger(__name__)
+
+MERGE_DISABLED_MESSAGE = _(
+    "The merge tool is currently disabled. Contact an administrator if this is unexpected."
+)
 
 
 def manual_value_strategy(
@@ -205,8 +220,16 @@ class MergeAdminMixin:
         css = {"all": ("cms/css/merge_admin.css",)}
         js = ("cms/js/merge_admin.js",)
 
+    def is_merge_tool_enabled(self) -> bool:
+        """Return ``True`` when the merge tooling is enabled via settings."""
+
+        return getattr(settings, "MERGE_TOOL_FEATURE", False)
+
     @admin.action(description=_("Merge selected records"))
     def merge_selected(self, request, queryset):  # type: ignore[override]
+        if not self.is_merge_tool_enabled():
+            self.message_user(request, MERGE_DISABLED_MESSAGE, level=messages.WARNING)
+            return None
         if not self.has_merge_permission(request):
             self.message_user(
                 request,
@@ -230,15 +253,19 @@ class MergeAdminMixin:
 
     def get_actions(self, request):  # type: ignore[override]
         actions = super().get_actions(request)
-        if not self.has_merge_permission(request):
+        if not self.is_merge_tool_enabled() or not self.has_merge_permission(request):
             actions.pop("merge_selected", None)
         return actions
 
     def has_merge_permission(self, request: HttpRequest) -> bool:
+        if not self.is_merge_tool_enabled():
+            return False
         opts = self.model._meta
         return request.user.has_perm(f"{opts.app_label}.can_merge")
 
     def get_mergeable_fields(self) -> list[models.Field]:
+        if not self.is_merge_tool_enabled():
+            return []
         fields: list[models.Field] = []
         for field in self.model._meta.concrete_fields:  # type: ignore[attr-defined]
             if field.primary_key or not getattr(field, "editable", False):
@@ -248,6 +275,8 @@ class MergeAdminMixin:
 
     def get_urls(self):  # type: ignore[override]
         urls = super().get_urls()
+        if not self.is_merge_tool_enabled():
+            return urls
         info = self.model._meta.app_label, self.model._meta.model_name
         custom = [
             path(
@@ -259,6 +288,10 @@ class MergeAdminMixin:
         return custom + urls
 
     def merge_view(self, request: HttpRequest) -> HttpResponse:
+        if not self.is_merge_tool_enabled():
+            self.message_user(request, MERGE_DISABLED_MESSAGE, level=messages.WARNING)
+            info = self.model._meta.app_label, self.model._meta.model_name
+            return redirect(f"admin:{info[0]}_{info[1]}_changelist")
         if not self.has_merge_permission(request):
             self.message_user(
                 request,
@@ -312,6 +345,30 @@ class MergeAdminMixin:
                     user=request.user,
                 )
             except Exception as exc:  # pragma: no cover - surfaced to admin UI
+                source = form.cleaned_data.get("source")
+                target = form.cleaned_data.get("target")
+                logger.exception(
+                    "Merge failed for %s into %s", source, target, exc_info=exc
+                )
+                merge_failed.send(
+                    sender=self.__class__,
+                    request=request,
+                    source=source,
+                    target=target,
+                    error=exc,
+                )
+                if sentry_sdk is not None:  # pragma: no cover - optional dependency
+                    sentry_sdk.add_breadcrumb(
+                        category="merge",
+                        message="Merge operation failed",
+                        level="error",
+                        data={
+                            "model": f"{self.model._meta.app_label}.{self.model._meta.model_name}",
+                            "source": getattr(source, "pk", None),
+                            "target": getattr(target, "pk", None),
+                        },
+                    )
+                    sentry_sdk.capture_exception(exc)
                 self.message_user(request, str(exc), level=messages.ERROR)
             else:
                 target = merge_result.target
@@ -396,7 +453,9 @@ class MergeAdminMixin:
             "source_summary": self._serialise_instance(source_obj),
             "target_summary": self._serialise_instance(target_obj),
             "changelist_url": changelist_url,
-            "search_url": reverse("merge_candidate_search"),
+            "search_url": reverse("merge_candidate_search")
+            if self.is_merge_tool_enabled()
+            else "",
             "model_label": f"{opts.app_label}.{opts.model_name}",
         }
         return context

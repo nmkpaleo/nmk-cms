@@ -57,6 +57,9 @@ SECRET_KEY = get_var("SECRET_KEY", "development_key")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = bool(int(get_var("DEBUG", 1)))
 
+# Feature rollout flags
+MERGE_TOOL_FEATURE = bool(int(get_var("ENABLE_ADMIN_MERGE", 0)))
+
 ALLOWED_HOSTS = []
 ALLOWED_HOSTS_ENV = get_var("ALLOWED_HOSTS")
 if ALLOWED_HOSTS_ENV:
@@ -123,6 +126,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "cms.context_processors.merge_feature_flag",
             ],
         },
     },

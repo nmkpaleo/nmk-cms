@@ -163,18 +163,29 @@ class MergeCandidateAdminView(LoginRequiredMixin, TemplateView):
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_staff:
             return HttpResponseForbidden("Staff access required.")
+        if not getattr(settings, "MERGE_TOOL_FEATURE", False):
+            messages.warning(
+                request,
+                "The merge candidate search is currently disabled.",
+            )
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["merge_models"] = self._get_merge_models()
-        context["search_url"] = reverse("merge_candidate_search")
+        context["search_url"] = (
+            reverse("merge_candidate_search")
+            if getattr(settings, "MERGE_TOOL_FEATURE", False)
+            else ""
+        )
         context["default_threshold"] = 75
         return context
 
     def _get_merge_models(self) -> list[dict[str, str]]:
         """Return a sorted list of merge-enabled models for the UI selector."""
 
+        if not getattr(settings, "MERGE_TOOL_FEATURE", False):
+            return []
         options: list[dict[str, str]] = []
         for model in MERGE_REGISTRY.keys():
             meta = model._meta
@@ -193,6 +204,10 @@ class MergeCandidateAPIView(View):
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated or not request.user.is_staff:
             return JsonResponse({"detail": "Forbidden"}, status=403)
+        if not getattr(settings, "MERGE_TOOL_FEATURE", False):
+            return JsonResponse(
+                {"detail": "Merge tooling is currently disabled."}, status=503
+            )
         return super().dispatch(request, *args, **kwargs)
 
     def get(self, request, *args, **kwargs):

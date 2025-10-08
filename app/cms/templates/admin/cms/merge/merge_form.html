@@ -2,6 +2,13 @@
 {% load i18n static %}
 
 {% block content %}
+{% if not merge_tool_enabled %}
+<div class="merge-admin">
+  <div class="merge-admin__intro">
+    <p class="errornote">{% trans "The merge interface is currently disabled by configuration." %}</p>
+  </div>
+</div>
+{% else %}
 <div class="merge-admin" data-merge-admin data-search-url="{{ search_url }}" data-model-label="{{ model_label }}">
   <h1 class="merge-admin__title">{{ title }}</h1>
 
@@ -145,4 +152,5 @@
     </div>
   </form>
 </div>
+{% endif %}
 {% endblock %}

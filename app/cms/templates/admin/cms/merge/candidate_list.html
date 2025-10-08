@@ -1,5 +1,5 @@
 {% extends "admin/base_site.html" %}
-{% load static %}
+{% load static i18n %}
 
 {% block extrahead %}
   {{ block.super }}
@@ -7,6 +7,13 @@
 {% endblock %}
 
 {% block content %}
+{% if not merge_tool_enabled %}
+<div class="w3-container w3-margin-top">
+  <div class="w3-panel w3-pale-red w3-border w3-border-red">
+    <p class="w3-margin">{% trans "The merge candidate search is currently disabled. Enable the feature flag to access this tool." %}</p>
+  </div>
+</div>
+{% else %}
 <div class="w3-container w3-margin-top" data-merge-root>
   <div class="w3-card w3-padding">
     <h2 class="w3-margin-top">Merge candidate search</h2>
@@ -113,4 +120,5 @@
 </template>
 
 {% include "admin/cms/merge/compare.html" %}
+{% endif %}
 {% endblock %}

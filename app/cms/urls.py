@@ -173,10 +173,19 @@ urlpatterns += [
     path("autocomplete/fieldslip/", FieldSlipAutocomplete.as_view(), name="fieldslip-autocomplete"),
 ]
 
-urlpatterns += [
-    path("merge/", staff_login_required(MergeCandidateAdminView.as_view()), name="merge_candidates"),
-    path("merge/search/", staff_login_required(MergeCandidateAPIView.as_view()), name="merge_candidate_search"),
-]
+if getattr(settings, "MERGE_TOOL_FEATURE", False):
+    urlpatterns += [
+        path(
+            "merge/",
+            staff_login_required(MergeCandidateAdminView.as_view()),
+            name="merge_candidates",
+        ),
+        path(
+            "merge/search/",
+            staff_login_required(MergeCandidateAPIView.as_view()),
+            name="merge_candidate_search",
+        ),
+    ]
 
 urlpatterns += [
     path("dashboard/", dashboard, name="dashboard"),

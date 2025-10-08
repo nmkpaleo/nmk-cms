@@ -1,11 +1,15 @@
 """Simple registry utilities for storing merge specific rules."""
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, Mapping, MutableMapping, Type
 
+from django.conf import settings
 from django.db import models
 
 from .constants import MergeStrategy
+
+logger = logging.getLogger(__name__)
 
 MERGE_REGISTRY: MutableMapping[Type[models.Model], Dict[str, Any]] = {}
 
@@ -17,6 +21,12 @@ def register_merge_rules(
     relations: Mapping[str, Any] | None = None,
 ) -> None:
     """Register custom merge rules for a model class."""
+
+    if not getattr(settings, "MERGE_TOOL_FEATURE", False):
+        logger.debug(
+            "Merge tool disabled; skipping registry update for %s", model
+        )
+        return
 
     record = MERGE_REGISTRY.setdefault(model, {"fields": {}, "relations": {}})
     if fields:
