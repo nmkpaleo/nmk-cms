@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
 from django.db.models import Count, OuterRef, Exists
 from django.conf import settings
 
@@ -115,7 +116,7 @@ class MergeAdminActionMixin:
                 )
                 context = {
                     "title": "Choose a target record",
-                    "action_checkbox_name": admin.ACTION_CHECKBOX_NAME,
+                    "action_checkbox_name": ACTION_CHECKBOX_NAME,
                     "opts": opts,
                     "objects": selected,
                     "action_name": "merge_records_action",

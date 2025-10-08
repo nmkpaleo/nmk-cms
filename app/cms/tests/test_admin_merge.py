@@ -76,8 +76,6 @@ class MergeAdminWorkflowTests(TransactionTestCase):
         cls.merge_url = f"/admin/{cls.app_label}/{cls.model_name}/merge/"
         cls.admin_site = test_admin_site
         cls.model_admin = model_admin
-        setattr(admin, "ACTION_CHECKBOX_NAME", ACTION_CHECKBOX_NAME)
-
         content_type = ContentType.objects.get_for_model(MergeableRecord)
         cls.merge_permission, _ = Permission.objects.get_or_create(
             codename="can_merge",
