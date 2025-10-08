@@ -1,0 +1,116 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrahead %}
+  {{ block.super }}
+  <script src="{% static 'js/merge.js' %}" defer></script>
+{% endblock %}
+
+{% block content %}
+<div class="w3-container w3-margin-top" data-merge-root>
+  <div class="w3-card w3-padding">
+    <h2 class="w3-margin-top">Merge candidate search</h2>
+    <p class="w3-small w3-text-grey">
+      Use the form below to search for potential duplicates. The search uses fuzzy matching on the
+      selected fields and returns the closest matches first.
+    </p>
+    {% if not merge_models %}
+      <div class="w3-panel w3-pale-red w3-border w3-border-red">
+        <p class="w3-margin">No models are currently registered for merging. Register models in
+          <code>cms.merge.registry</code> to enable the interface.</p>
+      </div>
+    {% else %}
+      <form class="w3-row-padding" data-merge-search-form data-search-url="{{ search_url }}">
+        <div class="w3-third w3-margin-bottom">
+          <label class="w3-text-grey" for="id_merge_model">Model</label>
+          <select class="w3-select" name="model_label" id="id_merge_model" required>
+            {% for model in merge_models %}
+              <option value="{{ model.label }}">{{ model.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="w3-third w3-margin-bottom">
+          <label class="w3-text-grey" for="id_merge_query">Search term</label>
+          <input class="w3-input w3-border" type="text" id="id_merge_query" name="query" placeholder="e.g. Specimen number" required />
+        </div>
+        <div class="w3-third w3-margin-bottom">
+          <label class="w3-text-grey" for="id_merge_threshold">Threshold</label>
+          <input class="w3-input w3-border" type="number" id="id_merge_threshold" name="threshold" min="0" max="100" step="1" value="{{ default_threshold }}" />
+        </div>
+        <div class="w3-third w3-margin-bottom">
+          <label class="w3-text-grey" for="id_merge_fields">Fields (optional)</label>
+          <input class="w3-input w3-border" type="text" id="id_merge_fields" name="fields" placeholder="Comma separated field names" />
+        </div>
+        <div class="w3-third w3-margin-bottom">
+          <label class="w3-text-grey" for="id_merge_date_field">Date field</label>
+          <input class="w3-input w3-border" type="text" id="id_merge_date_field" name="date_field" placeholder="created_at" />
+        </div>
+        <div class="w3-third w3-margin-bottom">
+          <label class="w3-text-grey" for="id_merge_date_after">From date</label>
+          <input class="w3-input w3-border" type="date" id="id_merge_date_after" name="date_after" />
+        </div>
+        <div class="w3-third w3-margin-bottom">
+          <label class="w3-text-grey" for="id_merge_date_before">To date</label>
+          <input class="w3-input w3-border" type="date" id="id_merge_date_before" name="date_before" />
+        </div>
+        <div class="w3-third w3-margin-bottom">
+          <label class="w3-text-grey" for="id_merge_page_size">Page size</label>
+          <input class="w3-input w3-border" type="number" id="id_merge_page_size" name="page_size" min="1" max="200" value="25" />
+        </div>
+        <div class="w3-third w3-margin-bottom">
+          <label class="w3-text-grey" for="id_merge_filters">Filters (JSON)</label>
+          <input class="w3-input w3-border" type="text" id="id_merge_filters" name="filters" placeholder='{"collection": 1}' />
+        </div>
+        <div class="w3-col w3-margin-bottom">
+          <button class="w3-button w3-blue w3-margin-right" type="submit">Search</button>
+          <button class="w3-button w3-light-grey" type="reset" data-merge-reset>Reset</button>
+        </div>
+        <p class="w3-col w3-text-red w3-small" data-merge-error hidden></p>
+      </form>
+    {% endif %}
+  </div>
+
+  <div class="w3-row-padding w3-margin-top" data-merge-selection>
+    <div class="w3-half w3-margin-bottom">
+      <div class="w3-card w3-padding">
+        <h3 class="w3-margin-top">Source record</h3>
+        <input class="w3-input w3-border w3-margin-bottom" type="text" readonly name="source_id" data-merge-field="source" placeholder="No record selected" />
+        <p class="w3-small w3-text-grey" data-merge-display="source"></p>
+        <button class="w3-button w3-small w3-light-grey" type="button" data-merge-clear="source">Clear source</button>
+      </div>
+    </div>
+    <div class="w3-half w3-margin-bottom">
+      <div class="w3-card w3-padding">
+        <h3 class="w3-margin-top">Target record</h3>
+        <input class="w3-input w3-border w3-margin-bottom" type="text" readonly name="target_id" data-merge-field="target" placeholder="No record selected" />
+        <p class="w3-small w3-text-grey" data-merge-display="target"></p>
+        <button class="w3-button w3-small w3-light-grey" type="button" data-merge-clear="target">Clear target</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="w3-container" data-merge-status hidden></div>
+  <div class="w3-container" data-merge-results></div>
+</div>
+
+<template id="merge-result-template">
+  <div class="w3-card w3-margin-bottom w3-padding" data-merge-result>
+    <div class="w3-row">
+      <div class="w3-col m8">
+        <h4 class="w3-margin-top" data-merge-label></h4>
+        <p class="w3-small w3-text-grey">ID: <span data-merge-object-id></span></p>
+      </div>
+      <div class="w3-col m4 w3-right-align">
+        <span class="w3-tag w3-round w3-blue w3-large" data-merge-score></span>
+      </div>
+    </div>
+    <ul class="w3-ul w3-small" data-merge-preview></ul>
+    <div class="w3-bar w3-margin-top">
+      <button class="w3-button w3-green w3-margin-right" type="button" data-merge-select="source">Use as source</button>
+      <button class="w3-button w3-indigo" type="button" data-merge-select="target">Use as target</button>
+    </div>
+  </div>
+</template>
+
+{% include "admin/cms/merge/compare.html" %}
+{% endblock %}

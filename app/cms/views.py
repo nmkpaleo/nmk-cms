@@ -9,7 +9,8 @@ from typing import Any
 from urllib.parse import urlencode
 from dal import autocomplete
 from django import forms
-from django.db import transaction
+from django.apps import apps
+from django.db import models, transaction
 from django.db.models import Value, CharField, Count, Q, Max, Prefetch, OuterRef, Subquery, Sum
 from django.db.models.functions import Concat, Greatest, TruncDate, TruncWeek
 from django.http import JsonResponse
@@ -32,22 +33,23 @@ from .filters import (
 
 from django.views.generic import DetailView
 from django.core.files.storage import FileSystemStorage
-from django.core.paginator import Paginator
+from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
 from django.conf import settings
 
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
-from django.core.exceptions import ValidationError
+from django.core.exceptions import FieldDoesNotExist, ValidationError
 from django.forms import BaseFormSet, formset_factory, modelformset_factory
 from django.forms.widgets import Media as FormsMedia
 from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse_lazy, reverse
 from django.utils import timezone
+from django.utils.dateparse import parse_date, parse_datetime
 from django.utils.timezone import now
-from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, FormView
+from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, FormView, TemplateView
 from django.core.serializers.json import DjangoJSONEncoder
 
 from cms.forms import (AccessionBatchForm, AccessionCommentForm,
@@ -95,6 +97,8 @@ from cms.models import (
     LLMUsageRecord,
 )
 
+from cms.merge import MERGE_REGISTRY, MergeMixin
+from cms.merge.fuzzy import score_candidates
 from cms.resources import FieldSlipResource
 from .utils import build_history_entries
 from cms.utils import generate_accessions_from_series
@@ -148,6 +152,289 @@ class ReferenceAutocomplete(LoginRequiredMixin, View):
         ]
 
         return JsonResponse({"results": results, "more": has_more})
+
+
+class MergeCandidateAdminView(LoginRequiredMixin, TemplateView):
+    """Render the administrative interface for locating merge candidates."""
+
+    template_name = "admin/cms/merge/candidate_list.html"
+    raise_exception = True
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_staff:
+            return HttpResponseForbidden("Staff access required.")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["merge_models"] = self._get_merge_models()
+        context["search_url"] = reverse("merge_candidate_search")
+        context["default_threshold"] = 75
+        return context
+
+    def _get_merge_models(self) -> list[dict[str, str]]:
+        """Return a sorted list of merge-enabled models for the UI selector."""
+
+        options: list[dict[str, str]] = []
+        for model in MERGE_REGISTRY.keys():
+            meta = model._meta
+            label = f"{meta.app_label}.{meta.model_name}"
+            verbose_name = str(getattr(meta, "verbose_name_plural", meta.verbose_name)).title()
+            options.append({"label": label, "name": verbose_name})
+        options.sort(key=lambda item: item["name"])
+        return options
+
+
+class MergeCandidateAPIView(View):
+    """Expose fuzzy merge candidates for staff via a JSON API."""
+
+    http_method_names = ["get"]
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated or not request.user.is_staff:
+            return JsonResponse({"detail": "Forbidden"}, status=403)
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
+        try:
+            model = self._get_model_from_label(request.GET.get("model_label", ""))
+        except ValueError as exc:
+            import logging
+            logging.exception("Invalid model label exception in MergeCandidateAPIView")
+            return JsonResponse({"detail": "Invalid model label."}, status=400)
+
+        query = (request.GET.get("query") or "").strip()
+        if not query:
+            return JsonResponse({"detail": "The `query` parameter is required."}, status=400)
+
+        threshold = self._parse_threshold(request.GET.get("threshold"))
+        if threshold is None:
+            return JsonResponse({"detail": "The `threshold` parameter must be numeric."}, status=400)
+
+        try:
+            fields = self._extract_fields(request, model)
+        except ValueError as exc:
+            import logging
+            logging.exception("Invalid field specification in MergeCandidateAPIView")
+            return JsonResponse({"detail": "Invalid field specification."}, status=400)
+
+        if not fields:
+            return JsonResponse({"detail": "No fields available for scoring."}, status=400)
+
+        try:
+            queryset = self._build_queryset(request, model)
+        except ValueError as exc:
+            import logging
+            logging.exception("ValueError in MergeCandidateAPIView._build_queryset")
+            return JsonResponse({"detail": "Invalid query for model."}, status=400)
+
+        try:
+            matches = score_candidates(model, query, fields=fields, threshold=threshold, queryset=queryset)
+        except RuntimeError as exc:
+            import logging
+            logging.exception("RuntimeError in MergeCandidateAPIView.score_candidates")
+            return JsonResponse({"detail": "Service temporarily unavailable."}, status=503)
+
+        page_size, paginator, page_obj = self._paginate(request, matches)
+
+        if paginator is None or page_obj is None:
+            payload = {
+                "model": f"{model._meta.app_label}.{model._meta.model_name}",
+                "query": query,
+                "threshold": threshold,
+                "page": 1,
+                "page_size": page_size,
+                "total_results": 0,
+                "num_pages": 0,
+                "preview_fields": fields,
+                "results": [],
+            }
+            return JsonResponse(payload)
+
+        payload = {
+            "model": f"{model._meta.app_label}.{model._meta.model_name}",
+            "query": query,
+            "threshold": threshold,
+            "page": page_obj.number,
+            "page_size": paginator.per_page,
+            "total_results": paginator.count,
+            "num_pages": paginator.num_pages,
+            "preview_fields": fields,
+            "results": [self._serialise_match(match, fields) for match in page_obj.object_list],
+        }
+        return JsonResponse(payload)
+
+    def _get_model_from_label(self, label: str):
+        if not label:
+            raise ValueError("The `model_label` parameter is required.")
+        if "." not in label:
+            raise ValueError("`model_label` must use the format 'app_label.ModelName'.")
+        app_label, model_name = label.split(".", 1)
+        try:
+            model = apps.get_model(app_label, model_name)
+        except LookupError as exc:  # pragma: no cover - defensive guard
+            raise ValueError(str(exc)) from exc
+        if model is None:
+            raise ValueError(f"Unknown model '{label}'.")
+        if model not in MERGE_REGISTRY:
+            raise ValueError(f"Model '{label}' is not registered for merging.")
+        if not issubclass(model, MergeMixin):
+            raise ValueError(f"Model '{label}' must inherit from MergeMixin.")
+        return model
+
+    def _parse_threshold(self, raw_value: str | None) -> float | None:
+        if raw_value in (None, ""):
+            return 75.0
+        try:
+            value = float(raw_value)
+        except (TypeError, ValueError):
+            return None
+        return max(0.0, min(value, 100.0))
+
+    def _extract_fields(self, request, model) -> list[str]:
+        explicit_fields: list[str] = []
+        raw_multi = request.GET.getlist("fields")
+        for value in raw_multi:
+            for item in value.split(","):
+                candidate = item.strip()
+                if candidate:
+                    explicit_fields.append(candidate)
+        if not explicit_fields and request.GET.get("fields"):
+            for item in request.GET["fields"].split(","):
+                candidate = item.strip()
+                if candidate:
+                    explicit_fields.append(candidate)
+
+        if explicit_fields:
+            return explicit_fields
+
+        instance = None
+        try:
+            instance = model()
+        except TypeError:
+            instance = None
+
+        if isinstance(instance, MergeMixin):
+            inferred = list(instance.get_merge_display_fields())
+        else:
+            inferred = []
+
+        if not inferred:
+            inferred = []
+            for field in model._meta.concrete_fields:
+                if not getattr(field, "editable", False) or field.primary_key:
+                    continue
+                inferred.append(field.name)
+                if len(inferred) >= 5:
+                    break
+
+        return inferred
+
+    def _build_queryset(self, request, model):
+        queryset = model._default_manager.all()
+        filters_payload = request.GET.get("filters")
+        filter_kwargs: dict[str, Any] = {}
+        if filters_payload:
+            try:
+                decoded = json.loads(filters_payload)
+            except json.JSONDecodeError as exc:
+                raise ValueError("`filters` must contain valid JSON.") from exc
+            if not isinstance(decoded, dict):
+                raise ValueError("`filters` must be a JSON object.")
+            filter_kwargs.update(decoded)
+
+        date_field = request.GET.get("date_field")
+        if date_field:
+            try:
+                field = model._meta.get_field(date_field)
+            except FieldDoesNotExist as exc:
+                raise ValueError(f"Unknown date field '{date_field}'.") from exc
+            if not isinstance(field, (models.DateField, models.DateTimeField)):
+                raise ValueError(f"Field '{date_field}' is not a date field.")
+            after = request.GET.get("date_after")
+            before = request.GET.get("date_before")
+            if after:
+                parsed_after = self._parse_datetime(after, end_of_day=False)
+                if parsed_after is None:
+                    raise ValueError("`date_after` must be a valid ISO formatted date/time value.")
+                filter_kwargs[f"{date_field}__gte"] = parsed_after
+            if before:
+                parsed_before = self._parse_datetime(before, end_of_day=True)
+                if parsed_before is None:
+                    raise ValueError("`date_before` must be a valid ISO formatted date/time value.")
+                filter_kwargs[f"{date_field}__lte"] = parsed_before
+
+        if filter_kwargs:
+            queryset = queryset.filter(**filter_kwargs)
+        return queryset
+
+    def _parse_datetime(self, raw_value: str, *, end_of_day: bool) -> datetime | None:
+        parsed = parse_datetime(raw_value)
+        if parsed is None:
+            date_value = parse_date(raw_value)
+            if date_value is None:
+                return None
+            if end_of_day:
+                parsed = datetime.combine(date_value, datetime.max.time())
+            else:
+                parsed = datetime.combine(date_value, datetime.min.time())
+        if timezone.is_naive(parsed):
+            try:
+                parsed = timezone.make_aware(parsed, timezone.get_current_timezone())
+            except Exception:  # pragma: no cover - fallback for already aware values
+                return parsed
+        return parsed
+
+    def _paginate(self, request, matches):
+        page_size = self._get_page_size(request)
+        if not matches:
+            return page_size, None, None
+
+        paginator = Paginator(matches, page_size)
+        page_number = self._get_page_number(request)
+        try:
+            page_obj = paginator.page(page_number)
+        except (EmptyPage, PageNotAnInteger):
+            page_obj = paginator.page(paginator.num_pages)
+        return page_size, paginator, page_obj
+
+    def _get_page_size(self, request) -> int:
+        size = self._parse_positive_int(request.GET.get("page_size"), default=25)
+        if size is None:
+            raise ValueError("`page_size` must be a positive integer.")
+        return min(size, 200)
+
+    def _get_page_number(self, request) -> int:
+        page_number = self._parse_positive_int(request.GET.get("page"), default=1)
+        if page_number is None:
+            raise ValueError("`page` must be a positive integer.")
+        return page_number
+
+    def _parse_positive_int(self, raw_value: str | None, *, default: int | None) -> int | None:
+        if raw_value in (None, ""):
+            return default
+        try:
+            value = int(raw_value)
+        except (TypeError, ValueError):
+            return None
+        if value <= 0:
+            return None
+        return value
+
+    def _serialise_match(self, match, fields: list[str]) -> dict[str, Any]:
+        preview = []
+        for field_name in fields:
+            value = getattr(match.instance, field_name, "")
+            preview.append({"field": field_name, "value": "" if value is None else str(value)})
+
+        return {
+            "score": round(match.score, 2),
+            "candidate": {
+                "pk": match.instance.pk,
+                "label": str(match.instance),
+            },
+            "preview": preview,
+        }
 
 class PreparationAccessMixin(UserPassesTestMixin):
     def test_func(self):
