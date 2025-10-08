@@ -250,7 +250,7 @@
     }
     clearError();
     setStatus('Searching for candidates…', 'info');
-    const url = searchForm.dataset.searchUrl;
+    const url = (searchForm.dataset.searchUrl || searchForm.getAttribute('action') || '').trim();
     if (!url) {
       showError('Search endpoint is not configured.');
       return;

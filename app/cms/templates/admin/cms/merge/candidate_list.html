@@ -27,7 +27,7 @@
           <code>cms.merge.registry</code> to enable the interface.</p>
       </div>
     {% else %}
-      <form class="w3-row-padding" data-merge-search-form data-search-url="{{ search_url }}">
+      <form class="w3-row-padding" data-merge-search-form data-search-url="{{ search_url }}" action="{{ search_url }}" method="get">
         <div class="w3-third w3-margin-bottom">
           <label class="w3-text-grey" for="id_merge_model">Model</label>
           <select class="w3-select" name="model_label" id="id_merge_model" required>
