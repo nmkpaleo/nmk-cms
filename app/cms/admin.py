@@ -8,6 +8,7 @@ from import_export.widgets import ForeignKeyWidget, DateWidget
 from simple_history.admin import SimpleHistoryAdmin
 
 from .forms import AccessionNumberSeriesAdminForm, DrawerRegisterForm
+from .merge import merge_records
 
 from .models import (
     AccessionNumberSeries,
@@ -19,6 +20,7 @@ from .models import (
     Media,
     MediaQCLog,
     MediaQCComment,
+    LLMUsageRecord,
     SpecimenGeology,
     GeologicalContext,
     AccessionReference,
@@ -39,6 +41,7 @@ from .models import (
     DrawerRegister,
     Scanning,
     UnexpectedSpecimen,
+    MergeLog,
 )
 from .resources import *
 
@@ -61,6 +64,53 @@ from cms.models import Accession
 User = get_user_model()
 
 import pprint
+
+
+class MergeAdminActionMixin:
+    """Provides a reusable action for invoking the merge engine manually."""
+
+    actions = ["merge_records_action"]
+
+    def merge_records_action(
+        self,
+        request,
+        queryset,
+        *,
+        target=None,
+        strategy_map=None,
+        dry_run=False,
+        archive=True,
+    ):
+        if target is None:
+            if request is not None:
+                self.message_user(
+                    request,
+                    "Provide a `target` instance when calling this action manually from the shell.",
+                    level=logging.WARNING,
+                )
+            return
+
+        user = getattr(request, "user", None) if request is not None else None
+        sources = [obj for obj in queryset if obj.pk != getattr(target, "pk", None)]
+        for source in sources:
+            merge_records(
+                source,
+                target,
+                strategy_map or {},
+                user=user,
+                dry_run=dry_run,
+                archive=archive,
+            )
+
+        if request is not None:
+            self.message_user(
+                request,
+                f"Merged {len(sources)} record(s) into {target}",
+                level=logging.INFO,
+            )
+
+    merge_records_action.short_description = "Merge selected records (manual invocation)"
+    merge_records_action.allowed_permissions = ("change",)
 
 
 class HistoricalImportExportAdmin(SimpleHistoryAdmin, ImportExportModelAdmin):
@@ -238,7 +288,7 @@ class ElementAdmin(HistoricalImportExportAdmin):
     ordering = ('name',)
 
 # FieldSlip Model
-class FieldSlipAdmin(HistoricalImportExportAdmin):
+class FieldSlipAdmin(MergeAdminActionMixin, HistoricalImportExportAdmin):
     resource_class = FieldSlipResource
     list_display = ('field_number', 'discoverer', 'collector', 'collection_date', 'verbatim_locality', 'verbatim_taxon', 'verbatim_element')
     search_fields = ('field_number', 'discoverer', 'collector', 'verbatim_locality')
@@ -336,6 +386,26 @@ class MediaQCLogInline(admin.TabularInline):
     comments_display.short_description = "Comments"
 
 
+class LLMUsageRecordInline(admin.StackedInline):
+    model = LLMUsageRecord
+    can_delete = False
+    extra = 0
+    fields = (
+        "model_name",
+        "prompt_tokens",
+        "completion_tokens",
+        "total_tokens",
+        "cost_usd",
+        "response_id",
+        "created_at",
+        "updated_at",
+    )
+    readonly_fields = fields
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
 class MediaAdmin(HistoricalImportExportAdmin):
     list_display = (
         'file_name',
@@ -376,7 +446,7 @@ class MediaAdmin(HistoricalImportExportAdmin):
     ]
     list_filter = ('type', 'format', 'qc_status', 'rows_rearranged')
     ordering = ('file_name',)
-    inlines = [MediaQCLogInline]
+    inlines = [MediaQCLogInline, LLMUsageRecordInline]
     fieldsets = (
         (
             None,
@@ -471,6 +541,42 @@ class MediaQCLogAdmin(admin.ModelAdmin):
         formset.save_m2m()
 
 
+@admin.register(LLMUsageRecord)
+class LLMUsageRecordAdmin(admin.ModelAdmin):
+    list_display = (
+        "media",
+        "model_name",
+        "prompt_tokens",
+        "completion_tokens",
+        "total_tokens",
+        "cost_usd",
+        "created_at",
+    )
+    search_fields = (
+        "media__file_name",
+        "media__uuid",
+        "media__id",
+        "model_name",
+        "response_id",
+    )
+    list_filter = ("model_name", "created_at")
+    readonly_fields = (
+        "media",
+        "model_name",
+        "prompt_tokens",
+        "completion_tokens",
+        "total_tokens",
+        "cost_usd",
+        "response_id",
+        "created_at",
+        "updated_at",
+    )
+    ordering = ("-created_at",)
+
+    def has_add_permission(self, request):
+        return False
+
+
 # NatureOfSpecimen Model
 class NatureOfSpecimenAdmin(HistoricalImportExportAdmin):
     resource_class = NatureOfSpecimenResource
@@ -485,7 +591,7 @@ class PersonAdmin(HistoricalImportExportAdmin):
     search_fields = ('first_name', 'last_name', 'orcid')
 
 # Reference Model
-class ReferenceAdmin(HistoricalImportExportAdmin):
+class ReferenceAdmin(MergeAdminActionMixin, HistoricalImportExportAdmin):
     resource_class = ReferenceResource
     list_display = ('citation', 'doi')
     search_fields = ('citation', 'doi')
@@ -497,7 +603,7 @@ class SpecimenGeologyAdmin(HistoricalImportExportAdmin):
     ordering = ('accession',)
 
 # Storage Model
-class StorageAdmin(HistoricalImportExportAdmin):
+class StorageAdmin(MergeAdminActionMixin, HistoricalImportExportAdmin):
     resource_class = StorageResource
     list_display = ('area', 'parent_area')
     search_fields = ('area', 'parent_area__area')
@@ -728,3 +834,31 @@ def get_urls():
 
 
 admin.site.get_urls = get_urls
+@admin.register(MergeLog)
+class MergeLogAdmin(admin.ModelAdmin):
+    list_display = (
+        "model_label",
+        "source_pk",
+        "target_pk",
+        "performed_by",
+        "executed_at",
+    )
+    list_filter = ("model_label", "performed_by")
+    search_fields = ("source_pk", "target_pk", "model_label")
+    readonly_fields = (
+        "model_label",
+        "source_pk",
+        "target_pk",
+        "resolved_values",
+        "strategy_map",
+        "source_snapshot",
+        "target_before",
+        "target_after",
+        "performed_by",
+        "executed_at",
+        "created_on",
+        "modified_on",
+        "created_by",
+        "modified_by",
+    )
+

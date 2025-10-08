@@ -35,6 +35,7 @@ from django.db.models import Max, Prefetch
 
 from .models import (
     Media,
+    LLMUsageRecord,
     Accession,
     Collection,
     Locality,
@@ -58,6 +59,10 @@ class OCRTimeoutError(RuntimeError):
     """Raised when OCR processing times out after repeated attempts."""
 
 
+class InsufficientQuotaError(RuntimeError):
+    """Raised when OCR processing cannot continue because the quota was exhausted."""
+
+
 _TIMEOUT_EXCEPTIONS: tuple[type[BaseException], ...] = (TimeoutError,)
 if "APITimeoutError" in globals() and APITimeoutError is not None:  # pragma: no cover - depends on openai version
     _TIMEOUT_EXCEPTIONS = _TIMEOUT_EXCEPTIONS + (APITimeoutError,)
@@ -78,6 +83,36 @@ def _load_env() -> None:
 _client: Any = None
 
 
+def _is_insufficient_quota_error(exc: BaseException) -> bool:
+    """Return ``True`` if ``exc`` represents an insufficient quota error."""
+
+    # Newer ``openai`` clients expose the error code directly on the exception.
+    code = getattr(exc, "code", None)
+    if isinstance(code, str) and code.lower() == "insufficient_quota":
+        return True
+
+    # Some versions expose a response dictionary with the error details.
+    error_obj = getattr(exc, "error", None)
+    if isinstance(error_obj, dict):
+        err_code = error_obj.get("code") or error_obj.get("type")
+        if isinstance(err_code, str) and err_code.lower() == "insufficient_quota":
+            return True
+
+    response = getattr(exc, "response", None)
+    if isinstance(response, dict):
+        err = response.get("error")
+        if isinstance(err, dict):
+            err_code = err.get("code") or err.get("type")
+            if isinstance(err_code, str) and err_code.lower() == "insufficient_quota":
+                return True
+
+    message = str(exc) if exc else ""
+    if not message:
+        return False
+    message = message.lower()
+    return "insufficient_quota" in message or "exceeded your current quota" in message
+
+
 def get_openai_client() -> Any:
     """Return a configured OpenAI client or ``None`` if unavailable."""
     global _client
@@ -90,6 +125,75 @@ def get_openai_client() -> Any:
         return None
     _client = OpenAI(api_key=api_key)
     return _client
+
+
+def _object_to_dict(obj: Any) -> dict[str, object]:
+    if obj is None:
+        return {}
+    if isinstance(obj, dict):
+        return obj
+    for attr in ("model_dump", "to_dict", "dict"):
+        method = getattr(obj, attr, None)
+        if callable(method):
+            try:
+                data = method()
+            except Exception:  # pragma: no cover - defensive in case API changes
+                continue
+            if isinstance(data, dict):
+                return data
+    return {}
+
+
+def build_usage_payload(response: Any, model: str) -> dict[str, object | None]:
+    """Return pricing and token usage metadata for an OpenAI response."""
+
+    usage = getattr(response, "usage", None)
+    prompt_tokens = getattr(usage, "prompt_tokens", 0) if usage else 0
+    completion_tokens = getattr(usage, "completion_tokens", 0) if usage else 0
+    total_tokens = getattr(usage, "total_tokens", 0) if usage else 0
+
+    if not total_tokens and (prompt_tokens or completion_tokens):
+        total_tokens = prompt_tokens + completion_tokens
+
+    pricing = getattr(settings, "OPENAI_PRICING", {}) or {}
+    rates = pricing.get(model, {}) or {}
+    prompt_rate = rates.get("prompt")
+    completion_rate = rates.get("completion")
+
+    def _cost(tokens: int, rate: float | None) -> float | None:
+        if rate is None or tokens is None:
+            return None
+        return round(tokens * rate, 6)
+
+    prompt_cost = _cost(prompt_tokens, prompt_rate)
+    completion_cost = _cost(completion_tokens, completion_rate)
+    total_cost: float | None = None
+    if prompt_cost is not None or completion_cost is not None:
+        total_cost = round((prompt_cost or 0.0) + (completion_cost or 0.0), 6)
+
+    usage_dict = _object_to_dict(usage)
+    remaining_quota = None
+    for key in ("remaining_quota", "remaining_quota_usd", "remaining_budget", "remaining_budget_usd"):
+        value = usage_dict.get(key)
+        if value not in (None, ""):
+            remaining_quota = value
+            break
+
+    payload = {
+        "model": getattr(response, "model", model) or model,
+        "request_id": getattr(response, "id", None),
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": total_tokens,
+        "prompt_cost_usd": prompt_cost,
+        "completion_cost_usd": completion_cost,
+        "total_cost_usd": total_cost,
+    }
+
+    if remaining_quota not in (None, ""):
+        payload["remaining_quota_usd"] = remaining_quota
+
+    return payload
 
 
 def encode_image_to_base64(image_path: Path) -> str:
@@ -173,7 +277,7 @@ JSON schema:
           "value": { "raw": string|null, "interpreted": string|null, "confidence": number},                    // the OCR:d data value
         }
       ],
-      "references": [                                                                                          // zero or more full references as written on the card back side (e.g., "ref: John M. Harris and Meave G. Leakey (2003) \"Lothagam: The dawn of Humanity in Eastern Africa\" Pg 485-519")
+      "references": [                                                                                          // zero or more full references as written on the card back side (e.g. "ref: John M. Harris and Meave G. Leakey (2003) \"Lothagam: The dawn of Humanity in Eastern Africa\" Pg 485-519")
         {
           "reference_first_author": { "raw": string|null, "interpreted": string|null, "confidence": number},   // (e.g., "Harris, John M." from "John M. Harris and Meave G. Leakey (2003) \"Lothagam: The dawn of Humanity in Eastern Africa\" Pg 485-519")
           "reference_year": { "raw": integer|null, "interpreted": string|null, "confidence": number},          // (e.g., "2003" from "John M. Harris and Meave G. Leakey (2003) \"Lothagam: The dawn of Humanity in Eastern Africa\" Pg 485-519")
@@ -242,6 +346,86 @@ Rules:
 
 Return only the JSON object — no comments or explanations."""
         )
+        return textwrap.dedent(
+            """You are an OCR transcriber for two-sided museum specimen cards (top=front, bottom=back).
+Return exactly ONE minified JSON object (no code fences). Use the schema below.
+Value objects use short keys: "r","i","c" = raw, interpreted, confidence.
+Preserve r exactly; normalize only in i. Set missing to null.
+Omit "c" when confidence ≥ 0.90. Omit any key whose entire content would be null; arrays may be empty.
+
+Schema (structure only):
+{
+ "accessions":[
+  {
+    "collection_abbreviation":{r,i,c},
+    "specimen_prefix_abbreviation":{r,i,c},
+    "specimen_no":{r,i,c},
+    "type_status":{r,i,c},
+    "published":{r,i,c},
+    "additional_notes":[{"heading":{r,i,c},"value":{r,i,c}}],
+    "references":[{"reference_first_author":{r,i,c},"reference_year":{r,i,c},"reference_title":{r,i,c},"page":{r,i,c}}],
+    "field_slips":[
+      {
+        "field_number":{r,i,c},
+        "verbatim_locality":{r,i,c},
+        "verbatim_taxon":{r,i,c},
+        "verbatim_element":{r,i,c},
+        "verbatim_horizon":{
+          "formation":{r,i,c},
+          "member":{r,i,c},
+          "bed_or_horizon":{r,i,c},
+          "chronostratigraphy":{r,i,c}
+        },
+        "aerial_photo":{r,i,c},
+        "verbatim_latitude":{r,i,c},
+        "verbatim_longitude":{r,i,c},
+        "verbatim_elevation":{r,i,c}
+      }
+    ],
+    "identifications":[
+      {
+        "taxon":{r,i,c},
+        "identification_qualifier":{r,i,c},
+        "verbatim_identification":{r,i,c},
+        "identification_remarks":{r,i,c}
+      }
+    ],
+    "rows":[
+      {
+        "specimen_suffix":{r,i,c},
+        "storage":{r,i,c},
+        "identification":{
+          "taxon":{r,i,c},
+          "identification_qualifier":{r,i,c},
+          "verbatim_identification":{r,i,c},
+          "identification_remarks":{r,i,c}
+        },
+        "natures":[
+          {
+            "element_name":{r,i,c},
+            "side":{r,i,c},
+            "condition":{r,i,c},
+            "verbatim_element":{r,i,c},
+            "portion":{r,i,c},
+            "fragments":{r,i,c}
+          }
+        ]
+      }
+    ]
+  }
+ ]
+}
+
+Rules:
+- collection_abbreviation ∈ {KNM, KNMI, KNMP}; if absent use KNM.
+- Family names end -IDAE; subfamily -INAE; tribe -INI.
+- Expand suffix ranges (e.g., A–C → rows A,B,C). Default suffix “-”.
+- Copy the same storage value to all rows if present.
+- published: “Yes” or “No”.
+- verbatim_taxon mirrors identifications.verbatim_identification.
+- Ignore “P.T.O/PTO” and any struck-through text.
+- Output only the minified JSON."""
+        )
     elif card_type == "field_slip":
         return (
             "Do your best to OCR this field slip. Extract fields such as FIELD NO., COLLECTOR, DATE, LOCALITY, HORIZON, TAXON NOTES. "
@@ -255,7 +439,6 @@ def chatgpt_ocr(
     image_path: Path,
     image_id: str,
     user_prompt: str,
-    cost_status: dict,
     model: str = "gpt-4o",
     timeout: int = 60,
     max_retries: int = 3,
@@ -293,30 +476,12 @@ def chatgpt_ocr(
                     line for line in content.strip().splitlines() if not line.strip().startswith("```")
                 )
             result = json.loads(content)
-            result["cost_tracking"] = cost_status
+            result["usage"] = build_usage_payload(response, model)
             return result
         except Exception:
             if attempt == max_retries - 1:
                 raise
             time.sleep(2 ** attempt)
-
-
-class OCRCostEstimator:
-    def __init__(self, budget_usd: float = 2000.0, avg_cost_per_card_usd: float = 0.01) -> None:
-        self.budget = budget_usd
-        self.cost_per_card = avg_cost_per_card_usd
-        self.scanned = 0
-
-    def scan_card(self) -> dict:
-        self.scanned += 1
-        total_cost = self.scanned * self.cost_per_card
-        remaining = max(self.budget - total_cost, 0)
-        return {
-            "scanned_cards": self.scanned,
-            "total_estimated_cost_usd": round(total_cost, 4),
-            "remaining_budget_usd": round(remaining, 4),
-            "cards_left": int(remaining // self.cost_per_card),
-        }
 
 
 def _normalise_boolean(value: object) -> bool:
@@ -1255,14 +1420,12 @@ def _mark_scan_failed(media: Media, path: Path, failed_dir: Path, exc: Exception
 def _process_single_scan(
     media: Media,
     path: Path,
-    estimator: "OCRCostEstimator",
     ocr_dir: Path,
     *,
     max_attempts: int = 3,
 ) -> None:
     """Run OCR for a single pending scan, retrying on timeouts."""
 
-    cost_status = estimator.scan_card()
     last_timeout: BaseException | None = None
 
     for attempt in range(1, max_attempts + 1):
@@ -1270,7 +1433,10 @@ def _process_single_scan(
             card_type_info = detect_card_type(path)
             card_type = card_type_info.get("card_type", "unknown")
             user_prompt = build_prompt_for_card_type(card_type)
-            result = chatgpt_ocr(path, path.name, user_prompt, cost_status)
+            start_ts = time.perf_counter()
+            result = chatgpt_ocr(path, path.name, user_prompt)
+            elapsed = time.perf_counter() - start_ts
+            elapsed = max(elapsed, 0.0)
             result["card_type"] = card_type
             dest = ocr_dir / path.name
             dest.parent.mkdir(parents=True, exist_ok=True)
@@ -1280,6 +1446,18 @@ def _process_single_scan(
             media.ocr_status = Media.OCRStatus.COMPLETED
             media.qc_status = Media.QCStatus.PENDING_INTERN
             media.save(update_fields=["ocr_data", "media_location", "ocr_status", "qc_status"])
+            usage_payload = result.get("usage")
+            if isinstance(usage_payload, dict):
+                usage_payload = usage_payload.copy()
+                usage_payload.setdefault("processing_seconds", round(elapsed, 3))
+                if "remaining_quota_usd" not in usage_payload:
+                    for key in ("remaining_quota", "remaining_quota_usd", "remaining_budget", "remaining_budget_usd"):
+                        value = result.get(key)
+                        if value not in (None, ""):
+                            usage_payload.setdefault("remaining_quota_usd", value)
+                            break
+                defaults = LLMUsageRecord.defaults_from_payload(usage_payload)
+                LLMUsageRecord.objects.update_or_create(media=media, defaults=defaults)
             return
         except _TIMEOUT_EXCEPTIONS as exc:  # type: ignore[arg-type]
             last_timeout = exc
@@ -1289,7 +1467,12 @@ def _process_single_scan(
             if attempt == max_attempts:
                 raise OCRTimeoutError(str(exc)) from exc
             time.sleep(2 ** (attempt - 1))
-        except Exception:
+        except Exception as exc:
+            if _is_insufficient_quota_error(exc):
+                logger.warning(
+                    "OCR aborted for %s because the OpenAI quota was exhausted", path.name
+                )
+                raise InsufficientQuotaError(str(exc)) from exc
             raise
 
     if last_timeout is not None:
@@ -1298,12 +1481,14 @@ def _process_single_scan(
 
 def process_pending_scans(
     limit: int | None = None,
-) -> tuple[int, int, int, list[str], Optional[str], list[str]]:
+) -> tuple[int, int, int, list[str], Optional[str], list[str], bool]:
     """Process up to ``limit`` scans awaiting OCR.
 
     Returns a tuple of ``(successes, failures, total, errors, jammed_filename,
-    processed_filenames)`` where ``total`` is the number of scans considered and
-    ``errors`` is a list of error descriptions for failed scans.
+    processed_filenames, insufficient_quota)`` where ``total`` is the number of
+    scans considered and ``errors`` is a list of error descriptions for failed
+    scans. ``insufficient_quota`` will be ``True`` when processing stopped
+    because the OpenAI quota was exhausted.
     ``jammed_filename`` will be set if OCR was halted early because a scan
     repeatedly timed out, and ``processed_filenames`` records each filename
     that was attempted regardless of success or failure.
@@ -1314,13 +1499,13 @@ def process_pending_scans(
     failed_dir = Path(settings.MEDIA_ROOT) / "uploads" / "failed"
 
     files = sorted(pending.glob("*"))
-    estimator = OCRCostEstimator()
     successes = 0
     failures = 0
     total = 0
     errors: list[str] = []
     jammed_filename: Optional[str] = None
     processed_filenames: list[str] = []
+    insufficient_quota = False
 
     for path in files:
         if limit is not None and total >= limit:
@@ -1335,7 +1520,7 @@ def process_pending_scans(
         processed_filenames.append(path.name)
 
         try:
-            _process_single_scan(media, path, estimator, ocr_dir)
+            _process_single_scan(media, path, ocr_dir)
             successes += 1
         except OCRTimeoutError as exc:
             failures += 1
@@ -1345,6 +1530,13 @@ def process_pending_scans(
             logger.error("OCR timed out for %s after multiple attempts", path, exc_info=True)
             _mark_scan_failed(media, path, failed_dir, exc)
             break
+        except InsufficientQuotaError as exc:
+            insufficient_quota = True
+            errors.append("insufficient_quota")
+            logger.warning("Stopping OCR queue because quota was exhausted: %s", exc)
+            processed_filenames.pop()
+            total -= 1
+            break
         except Exception as exc:
             failures += 1
             # Do not expose exception details to users
@@ -1352,4 +1544,12 @@ def process_pending_scans(
             logger.exception("OCR processing failed for %s", path)
             _mark_scan_failed(media, path, failed_dir, exc)
 
-    return successes, failures, total, errors, jammed_filename, processed_filenames
+    return (
+        successes,
+        failures,
+        total,
+        errors,
+        jammed_filename,
+        processed_filenames,
+        insufficient_quota,
+    )

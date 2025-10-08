@@ -3,14 +3,15 @@ import csv
 import json
 import os
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 from dal import autocomplete
 from django import forms
 from django.db import transaction
-from django.db.models import Value, CharField, Count, Q, Max, Prefetch, OuterRef, Subquery
-from django.db.models.functions import Concat, Greatest
+from django.db.models import Value, CharField, Count, Q, Max, Prefetch, OuterRef, Subquery, Sum
+from django.db.models.functions import Concat, Greatest, TruncDate, TruncWeek
 from django.http import JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -44,8 +45,10 @@ from django.forms.widgets import Media as FormsMedia
 from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse_lazy, reverse
+from django.utils import timezone
 from django.utils.timezone import now
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, FormView
+from django.core.serializers.json import DjangoJSONEncoder
 
 from cms.forms import (AccessionBatchForm, AccessionCommentForm,
                     AccessionForm, AccessionFieldSlipForm, AccessionGeologyForm,
@@ -89,6 +92,7 @@ from cms.models import (
     Person,
     MediaQCLog,
     MediaQCComment,
+    LLMUsageRecord,
 )
 from django.shortcuts import render
 from .models import Media
@@ -2919,6 +2923,208 @@ def upload_media(request, accession_id):
     return render(request, 'cms/upload_media.html', {'form': form, 'accession': accession})
 
 
+class LLMUsageReportFilterForm(forms.Form):
+    start_date = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={"type": "date"}),
+        label="Start date",
+    )
+    end_date = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={"type": "date"}),
+        label="End date",
+    )
+    model_name = forms.ChoiceField(required=False, label="Model")
+
+    def __init__(self, *args, **kwargs):
+        model_choices = kwargs.pop("model_choices", [])
+        super().__init__(*args, **kwargs)
+        choices = [("", "All models")] + [(value, value) for value in model_choices]
+        self.fields["model_name"].choices = choices
+
+    def clean(self):
+        cleaned_data = super().clean()
+        start_date = cleaned_data.get("start_date")
+        end_date = cleaned_data.get("end_date")
+        if start_date and end_date and end_date < start_date:
+            raise forms.ValidationError("End date cannot be before the start date.")
+        return cleaned_data
+
+
+def _coerce_decimal(value: object) -> Decimal:
+    if value in (None, ""):
+        return Decimal("0")
+    try:
+        return Decimal(str(value))
+    except (ValueError, ArithmeticError):
+        return Decimal("0")
+
+
+@staff_member_required
+def chatgpt_usage_report(request):
+    today = timezone.localdate()
+    default_start = today - timedelta(days=30)
+
+    base_qs = LLMUsageRecord.objects.all()
+    model_values = list(
+        base_qs.order_by("model_name").values_list("model_name", flat=True).distinct()
+    )
+
+    if request.GET:
+        form = LLMUsageReportFilterForm(request.GET, model_choices=model_values)
+        form_is_valid = form.is_valid()
+    else:
+        form = LLMUsageReportFilterForm(
+            data={"start_date": default_start, "end_date": today},
+            model_choices=model_values,
+        )
+        form_is_valid = form.is_valid()
+
+    if form_is_valid:
+        start_date = form.cleaned_data.get("start_date") or default_start
+        end_date = form.cleaned_data.get("end_date") or today
+        model_name = form.cleaned_data.get("model_name") or None
+    else:
+        start_date = default_start
+        end_date = today
+        model_name = None
+
+    filtered_qs = base_qs
+    if start_date:
+        filtered_qs = filtered_qs.filter(created_at__date__gte=start_date)
+    if end_date:
+        filtered_qs = filtered_qs.filter(created_at__date__lte=end_date)
+    if model_name:
+        filtered_qs = filtered_qs.filter(model_name=model_name)
+
+    daily_totals_qs = (
+        filtered_qs
+        .annotate(day=TruncDate("created_at"))
+        .values("day")
+        .order_by("day")
+        .annotate(
+            prompt_tokens=Sum("prompt_tokens"),
+            completion_tokens=Sum("completion_tokens"),
+            total_tokens=Sum("total_tokens"),
+            cost_usd=Sum("cost_usd"),
+            processing_seconds=Sum("processing_seconds"),
+            record_count=Count("id"),
+        )
+    )
+
+    weekly_totals_qs = (
+        filtered_qs
+        .annotate(week=TruncWeek("created_at"))
+        .values("week")
+        .order_by("week")
+        .annotate(
+            prompt_tokens=Sum("prompt_tokens"),
+            completion_tokens=Sum("completion_tokens"),
+            total_tokens=Sum("total_tokens"),
+            cost_usd=Sum("cost_usd"),
+            processing_seconds=Sum("processing_seconds"),
+            record_count=Count("id"),
+        )
+    )
+
+    totals = filtered_qs.aggregate(
+        prompt_tokens=Sum("prompt_tokens"),
+        completion_tokens=Sum("completion_tokens"),
+        total_tokens=Sum("total_tokens"),
+        cost_usd=Sum("cost_usd"),
+        processing_seconds=Sum("processing_seconds"),
+        record_count=Count("id"),
+    )
+
+    cumulative_cost = totals.get("cost_usd") or Decimal("0")
+    total_processing_seconds = totals.get("processing_seconds") or Decimal("0")
+    scans_processed = totals.get("record_count") or 0
+    avg_processing_seconds = None
+    if scans_processed:
+        avg_processing_seconds = total_processing_seconds / Decimal(scans_processed)
+
+    avg_cost_per_scan: Decimal | None = None
+    if scans_processed and cumulative_cost > 0:
+        avg_cost_per_scan = cumulative_cost / Decimal(scans_processed)
+
+    latest_remaining_quota = (
+        filtered_qs.exclude(remaining_quota_usd__isnull=True)
+        .order_by("-created_at")
+        .values_list("remaining_quota_usd", flat=True)
+        .first()
+    )
+
+    remaining_quota_decimal: Decimal | None = None
+    if latest_remaining_quota is not None:
+        remaining_quota_decimal = _coerce_decimal(latest_remaining_quota)
+
+    estimated_scans_remaining: int | None = None
+    if (
+        remaining_quota_decimal is not None
+        and avg_cost_per_scan is not None
+        and avg_cost_per_scan > 0
+    ):
+        estimated_scans_remaining = int(remaining_quota_decimal / avg_cost_per_scan)
+
+    budget_raw = getattr(settings, "LLM_USAGE_MONTHLY_BUDGET_USD", None)
+    budget_total = _coerce_decimal(budget_raw) if budget_raw is not None else None
+    if budget_total and budget_total > 0:
+        budget_progress = (cumulative_cost / budget_total) * Decimal("100")
+    else:
+        budget_progress = None
+
+    def _prepare_time_series(items, label_key):
+        return {
+            "labels": [entry[label_key].isoformat() if entry[label_key] else None for entry in items],
+            "costs": [float(entry["cost_usd"] or 0) for entry in items],
+            "total_tokens": [int(entry["total_tokens"] or 0) for entry in items],
+            "processing_seconds": [float(entry.get("processing_seconds") or 0) for entry in items],
+        }
+
+    daily_totals = list(daily_totals_qs)
+    weekly_totals = list(weekly_totals_qs)
+
+    def _attach_average(entries: list[dict[str, Any]]) -> None:
+        for entry in entries:
+            total_seconds = _coerce_decimal(entry.get("processing_seconds"))
+            entry["processing_seconds"] = total_seconds
+            count = entry.get("record_count") or 0
+            if count:
+                entry["avg_processing_seconds"] = total_seconds / Decimal(count)
+            else:
+                entry["avg_processing_seconds"] = None
+
+    _attach_average(daily_totals)
+    _attach_average(weekly_totals)
+
+    chart_data = {
+        "daily": _prepare_time_series(daily_totals, "day"),
+        "weekly": _prepare_time_series(weekly_totals, "week"),
+    }
+
+    context = {
+        "filter_form": form,
+        "daily_totals": daily_totals,
+        "weekly_totals": weekly_totals,
+        "totals": totals,
+        "cumulative_cost": cumulative_cost,
+        "total_processing_seconds": total_processing_seconds,
+        "avg_processing_seconds": avg_processing_seconds,
+        "scans_processed": scans_processed,
+        "remaining_quota_usd": latest_remaining_quota,
+        "budget_total": budget_total,
+        "budget_progress": budget_progress,
+        "chart_data_json": json.dumps(chart_data, cls=DjangoJSONEncoder),
+        "start_date": start_date,
+        "end_date": end_date,
+        "model_name": model_name,
+        "estimated_scans_remaining": estimated_scans_remaining,
+        "avg_cost_per_scan": avg_cost_per_scan,
+    }
+
+    return render(request, "admin/chatgpt_usage_report.html", context)
+
+
 @staff_member_required
 def upload_scan(request):
     """Upload one or more scan images to the ``uploads/incoming`` folder.
@@ -3001,6 +3207,45 @@ def do_ocr(request):
 
     loop = _should_loop(request)
     limit_hint = _parse_ocr_limit(request)
+    if not loop:
+        pending_total = _count_pending_scans()
+        limit_options = [100 * i for i in range(1, 11)]
+        selection_error = None
+        choice_value: str | None = None
+
+        if request.method == "POST":
+            choice = request.POST.get("scan_limit") or ""
+            choice_value = choice
+            valid_values = {str(option) for option in limit_options}
+            if choice == "all":
+                selected_limit = None
+            elif choice in valid_values:
+                selected_limit = int(choice)
+            else:
+                selected_limit = None
+                selection_error = "Please choose one of the available options."
+
+            if selection_error is None and pending_total == 0:
+                messages.info(request, "No pending scans to process.")
+                return redirect("admin-do-ocr")
+
+            if selection_error is None:
+                query_params: dict[str, str] = {"loop": "1"}
+                if selected_limit:
+                    query_params["limit"] = str(selected_limit)
+                url = reverse("admin-do-ocr")
+                if query_params:
+                    url = f"{url}?{urlencode(query_params)}"
+                return redirect(url)
+
+        context = {
+            "pending_total": pending_total,
+            "limit_options": limit_options,
+            "selection_error": selection_error,
+            "selected_choice": choice_value,
+        }
+        return render(request, "admin/do_ocr_prompt.html", context)
+
     (
         successes,
         failures,
@@ -3008,6 +3253,7 @@ def do_ocr(request):
         errors,
         jammed,
         processed_filenames,
+        insufficient_quota,
     ) = process_pending_scans(limit=1)
     latest_filename = processed_filenames[-1] if processed_filenames else None
 
@@ -3026,6 +3272,11 @@ def do_ocr(request):
         stats["errors"].extend(errors)
         stats.setdefault("latest_filename", None)
         stats.setdefault("expected_total", None)
+        stats.setdefault("insufficient_quota", False)
+        stats["insufficient_quota"] = stats["insufficient_quota"] or insufficient_quota
+        stats.setdefault("limit", limit_hint)
+        if limit_hint is not None:
+            stats["limit"] = limit_hint
         if latest_filename:
             stats["latest_filename"] = latest_filename
         if jammed:
@@ -3037,7 +3288,11 @@ def do_ocr(request):
     remaining = _count_pending_scans()
     errors_list = list(aggregated["errors"]) if aggregated else list(errors)
     attempted_total = aggregated["attempted"] if aggregated else total
-    expected_total = _compute_expected_total(attempted_total, remaining, limit_hint)
+    insufficient_quota_flag = (
+        aggregated.get("insufficient_quota") if aggregated else insufficient_quota
+    )
+    selected_limit = aggregated.get("limit") if aggregated else limit_hint
+    expected_total = _compute_expected_total(attempted_total, remaining, selected_limit)
     if aggregated is not None:
         aggregated["expected_total"] = expected_total
         if aggregated.get("latest_filename") is None and latest_filename:
@@ -3047,6 +3302,8 @@ def do_ocr(request):
     def _sanitize_ocr_errors(error_list):
         sanitized = []
         for msg in error_list:
+            if msg == "insufficient_quota":
+                continue
             # Expected format: "{filename}: {exception}"
             parts = msg.split(':', 1)
             filename = parts[0].strip() if parts else "Unknown"
@@ -3065,15 +3322,27 @@ def do_ocr(request):
         "expected_total": aggregated.get("expected_total") if aggregated else expected_total,
         "latest_filename": aggregated.get("latest_filename") if aggregated else latest_filename,
         "current_index": attempted_total,
+        "insufficient_quota": insufficient_quota_flag,
+        "limit": selected_limit,
     }
 
     if request.headers.get("HX-Request") or request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return JsonResponse(detail)
 
-    if loop and remaining > 0 and not detail["jammed"]:
+    limit_reached = (
+        detail["limit"] is not None and detail["current_index"] >= detail["limit"]
+    )
+
+    if (
+        loop
+        and remaining > 0
+        and not detail["jammed"]
+        and not detail["insufficient_quota"]
+        and not limit_reached
+    ):
         query_params = {"loop": "1"}
-        if limit_hint is not None:
-            query_params["limit"] = str(limit_hint)
+        if detail["limit"] is not None:
+            query_params["limit"] = str(detail["limit"])
         next_url = f"{reverse('admin-do-ocr')}?{urlencode(query_params)}"
         expected_display = detail["expected_total"] or detail["attempted"]
         latest_segment = (
@@ -3121,7 +3390,14 @@ def do_ocr(request):
                 f"{detail['jammed']} timed out after three attempts. Please investigate before retrying."
             ),
         )
-
+    if detail["insufficient_quota"]:
+        messages.error(
+            request,
+            (
+                "OCR aborted because the OpenAI quota has been exhausted. "
+                "The current scan remains in the pending folder. Please review your plan and retry later."
+            ),
+        )
     return redirect('admin:index')
 
 @login_required

@@ -1,0 +1,346 @@
+{% extends "admin/base_site.html" %}
+{% load humanize %}
+
+{% block extrahead %}
+  {{ block.super }}
+  <script src="https://cdn.plot.ly/plotly-2.30.0.min.js" defer></script>
+{% endblock %}
+
+{% block content %}
+  <h1>ChatGPT Usage Report</h1>
+
+  <form method="get" class="usage-filter">
+    <fieldset>
+      <legend>Filter usage</legend>
+      {% if filter_form.errors %}
+        <ul class="errorlist">
+          {% for field, errors in filter_form.errors.items %}
+            {% for error in errors %}
+              <li>{{ error }}</li>
+            {% endfor %}
+          {% endfor %}
+        </ul>
+      {% endif %}
+      <div class="filter-grid">
+        <div class="form-row">
+          {{ filter_form.start_date.label_tag }}
+          {{ filter_form.start_date }}
+        </div>
+        <div class="form-row">
+          {{ filter_form.end_date.label_tag }}
+          {{ filter_form.end_date }}
+        </div>
+        <div class="form-row">
+          {{ filter_form.model_name.label_tag }}
+          {{ filter_form.model_name }}
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="default">Apply filters</button>
+        <a href="{% url 'admin-chatgpt-usage' %}" class="button">Reset</a>
+      </div>
+    </fieldset>
+  </form>
+
+  <section class="usage-summary">
+    <article class="summary-card">
+      <h2>Total tokens</h2>
+      <p>{{ totals.total_tokens|default:0|intcomma }}</p>
+    </article>
+    <article class="summary-card">
+      <h2>Total cost (USD)</h2>
+      <p>${{ cumulative_cost|default:0|floatformat:4 }}</p>
+    </article>
+    <article class="summary-card">
+      <h2>Budget progress</h2>
+      {% if budget_total %}
+        <p>${{ budget_total|floatformat:2 }} budget &mdash; {{ budget_progress|floatformat:2 }}% used</p>
+      {% else %}
+        <p>No budget configured.</p>
+      {% endif %}
+    </article>
+    <article class="summary-card">
+      <h2>Scans processed</h2>
+      <p>{{ scans_processed|default:0|intcomma }}</p>
+    </article>
+    <article class="summary-card">
+      <h2>Processing time</h2>
+      <p>
+        {{ total_processing_seconds|default_if_none:0|floatformat:2 }}s total
+        {% if avg_processing_seconds is not None %}<br><small>Avg {{ avg_processing_seconds|floatformat:2 }}s / scan</small>{% endif %}
+      </p>
+    </article>
+    {% if remaining_quota_usd is not None %}
+      <article class="summary-card">
+        <h2>Remaining quota</h2>
+        <p>${{ remaining_quota_usd|floatformat:2 }}</p>
+        {% if estimated_scans_remaining is not None %}
+          <p class="summary-subtext">~{{ estimated_scans_remaining|intcomma }} scans at avg ${{ avg_cost_per_scan|default_if_none:0|floatformat:4 }} each</p>
+        {% endif %}
+      </article>
+    {% endif %}
+  </section>
+
+  <section class="usage-visualizations">
+    <div class="chart-card">
+      <h2>Daily usage</h2>
+      <div id="usage-daily-chart" class="usage-chart" aria-label="Daily ChatGPT usage chart"></div>
+    </div>
+    <div class="chart-card">
+      <h2>Weekly usage</h2>
+      <div id="usage-weekly-chart" class="usage-chart" aria-label="Weekly ChatGPT usage chart"></div>
+    </div>
+  </section>
+
+  <section class="usage-tables">
+    <div class="table-card">
+      <h2>Daily totals</h2>
+      <table class="usage-table">
+        <thead>
+          <tr>
+            <th scope="col">Date</th>
+            <th scope="col">Records</th>
+            <th scope="col">Prompt tokens</th>
+            <th scope="col">Completion tokens</th>
+            <th scope="col">Total tokens</th>
+            <th scope="col">Cost (USD)</th>
+            <th scope="col">Processing time (s)</th>
+            <th scope="col">Avg per scan (s)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in daily_totals %}
+            <tr>
+              <td>{{ row.day|date:"Y-m-d" }}</td>
+              <td>{{ row.record_count }}</td>
+              <td>{{ row.prompt_tokens|intcomma }}</td>
+              <td>{{ row.completion_tokens|intcomma }}</td>
+              <td>{{ row.total_tokens|intcomma }}</td>
+              <td>${{ row.cost_usd|floatformat:4 }}</td>
+              <td>{{ row.processing_seconds|default_if_none:0|floatformat:2 }}</td>
+              <td>{% if row.avg_processing_seconds is not None %}{{ row.avg_processing_seconds|floatformat:2 }}{% else %}&mdash;{% endif %}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="8">No usage records found for the selected filters.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="table-card">
+      <h2>Weekly totals</h2>
+      <table class="usage-table">
+        <thead>
+          <tr>
+            <th scope="col">Week starting</th>
+            <th scope="col">Records</th>
+            <th scope="col">Prompt tokens</th>
+            <th scope="col">Completion tokens</th>
+            <th scope="col">Total tokens</th>
+            <th scope="col">Cost (USD)</th>
+            <th scope="col">Processing time (s)</th>
+            <th scope="col">Avg per scan (s)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in weekly_totals %}
+            <tr>
+              <td>{% if row.week %}{{ row.week|date:"Y-m-d" }}{% else %}&mdash;{% endif %}</td>
+              <td>{{ row.record_count }}</td>
+              <td>{{ row.prompt_tokens|intcomma }}</td>
+              <td>{{ row.completion_tokens|intcomma }}</td>
+              <td>{{ row.total_tokens|intcomma }}</td>
+              <td>${{ row.cost_usd|floatformat:4 }}</td>
+              <td>{{ row.processing_seconds|default_if_none:0|floatformat:2 }}</td>
+              <td>{% if row.avg_processing_seconds is not None %}{{ row.avg_processing_seconds|floatformat:2 }}{% else %}&mdash;{% endif %}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="8">No usage records found for the selected filters.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <style>
+    .usage-filter fieldset {
+      border: 1px solid #ddd;
+      padding: 1rem;
+      margin-bottom: 1.5rem;
+      background-color: #fff;
+    }
+
+    .filter-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+    }
+
+    .form-row label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+
+    .form-actions {
+      margin-top: 1rem;
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .usage-summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .summary-card {
+      background-color: #fff;
+      border: 1px solid #ddd;
+      padding: 1rem;
+      border-radius: 4px;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    }
+
+    .summary-card h2 {
+      margin-top: 0;
+      font-size: 1.1rem;
+    }
+
+    .summary-card p {
+      font-size: 1.2rem;
+      font-weight: 600;
+    }
+
+    .summary-card .summary-subtext {
+      font-size: 0.9rem;
+      font-weight: 400;
+      color: #555;
+      margin-top: 0.25rem;
+    }
+
+    .usage-visualizations {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .chart-card {
+      background-color: #fff;
+      border: 1px solid #ddd;
+      padding: 1rem;
+      border-radius: 4px;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    }
+
+    .usage-chart {
+      min-height: 320px;
+    }
+
+    .usage-tables {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .table-card {
+      background-color: #fff;
+      border: 1px solid #ddd;
+      padding: 1rem;
+      border-radius: 4px;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+      overflow-x: auto;
+    }
+
+    .usage-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .usage-table th,
+    .usage-table td {
+      border: 1px solid #e5e5e5;
+      padding: 0.5rem 0.75rem;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .usage-table th:first-child,
+    .usage-table td:first-child {
+      text-align: left;
+    }
+
+    .usage-table thead {
+      background-color: #f5f5f5;
+    }
+  </style>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const chartData = JSON.parse('{{ chart_data_json|escapejs }}');
+
+      const buildTraces = (series) => {
+        return [
+          {
+            x: series.labels,
+            y: series.costs,
+            type: 'bar',
+            name: 'Cost (USD)',
+            marker: {color: '#2a5599'},
+            yaxis: 'y1',
+          },
+          {
+            x: series.labels,
+            y: series.total_tokens,
+            type: 'scatter',
+            mode: 'lines+markers',
+            name: 'Total tokens',
+            marker: {color: '#f57c00'},
+            yaxis: 'y2',
+          },
+        ];
+      };
+
+      const layout = (title) => ({
+        title,
+        margin: {t: 40, r: 40, b: 60, l: 60},
+        legend: {orientation: 'h'},
+        xaxis: {title: 'Date'},
+        yaxis: {title: 'Cost (USD)', rangemode: 'tozero'},
+        yaxis2: {
+          title: 'Total tokens',
+          overlaying: 'y',
+          side: 'right',
+          rangemode: 'tozero',
+        },
+        hovermode: 'x unified',
+      });
+
+      if (chartData.daily.labels.length) {
+        Plotly.newPlot(
+          'usage-daily-chart',
+          buildTraces(chartData.daily),
+          layout('Daily usage'),
+          {responsive: true}
+        );
+      }
+
+      if (chartData.weekly.labels.length) {
+        Plotly.newPlot(
+          'usage-weekly-chart',
+          buildTraces(chartData.weekly),
+          layout('Weekly usage'),
+          {responsive: true}
+        );
+      }
+    });
+  </script>
+{% endblock %}

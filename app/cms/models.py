@@ -1,12 +1,15 @@
+from decimal import Decimal, InvalidOperation
+
 from crum import get_current_user
 from django.db import models
+from django.db.models.functions import TruncDate
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError
 from django.urls import reverse
 from django.utils import timezone
 from django_userforeignkey.models.fields import UserForeignKey
-from django.db.models import UniqueConstraint
+from django.db.models import Count, Sum, UniqueConstraint
 from django.contrib.auth.models import User
 from simple_history.models import HistoricalRecords
 import os # For file handling in media class
@@ -15,6 +18,7 @@ import string # For generating specimen number
 import uuid
 User = get_user_model()
 
+from .merge import MergeMixin, MergeStrategy
 from .notifications import notify_media_qc_transition
 
 
@@ -95,6 +99,72 @@ class BaseModel(models.Model):
         if not user or isinstance(user, AnonymousUser):
             raise ValidationError("You must be logged in to delete this record.")
         super().delete(*args, **kwargs)
+
+
+class MergeLog(BaseModel):
+    """Audit trail capturing the outcome of merge operations."""
+
+    model_label = models.CharField(
+        max_length=255,
+        help_text="Dotted label of the model the merge acted upon.",
+    )
+    source_pk = models.CharField(
+        max_length=255,
+        help_text="Primary key of the source record that was merged.",
+    )
+    target_pk = models.CharField(
+        max_length=255,
+        help_text="Primary key of the target record that received the data.",
+    )
+    resolved_values = models.JSONField(
+        help_text="Final values applied to the target record.",
+    )
+    strategy_map = models.JSONField(
+        help_text="Strategies that were used to resolve field conflicts.",
+    )
+    source_snapshot = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="Serialised representation of the source record before merge.",
+    )
+    target_before = models.JSONField(
+        help_text="Serialised state of the target record before the merge.",
+    )
+    target_after = models.JSONField(
+        help_text="Serialised state of the target record after the merge.",
+    )
+    performed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="merge_logs",
+        help_text="User that triggered the merge, when available.",
+    )
+    executed_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="Timestamp when the merge completed.",
+    )
+
+    class Meta:
+        ordering = ["-executed_at"]
+        verbose_name = "Merge Log Entry"
+        verbose_name_plural = "Merge Log Entries"
+
+    def clean(self):
+        # Override BaseModel.clean to allow system initiated writes without an
+        # authenticated request user being available.
+        return None
+
+    def save(self, *args, **kwargs):
+        if self.performed_by and not self.created_by:
+            self.created_by = self.performed_by
+        if self.performed_by and not self.modified_by:
+            self.modified_by = self.performed_by
+        super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return f"Merge {self.source_pk} → {self.target_pk} ({self.model_label})"
 
 # Locality Model
 class Locality(BaseModel):
@@ -459,7 +529,12 @@ class Comment(BaseModel):
 
 
 # FieldSlip Model
-class FieldSlip(BaseModel):
+class FieldSlip(MergeMixin, BaseModel):
+    merge_fields = {
+        "field_number": MergeStrategy.PREFER_NON_NULL,
+        "verbatim_taxon": MergeStrategy.PREFER_NON_NULL,
+        "verbatim_element": MergeStrategy.PREFER_NON_NULL,
+    }
     field_number = models.CharField(max_length=100, null=False, blank=False, help_text="Field number assigned to the specimen.")
     discoverer = models.CharField(max_length=255, null=True, blank=True, help_text="Person who discovered the specimen.")
     collector = models.CharField(max_length=255, null=True, blank=True, help_text="Person who collected the specimen.")
@@ -488,9 +563,13 @@ class FieldSlip(BaseModel):
         ordering = ["field_number"]
         verbose_name = "Field Slip"
         verbose_name_plural = "Field Slips"
+        permissions = [("can_merge", "Can merge field slip records")]
 
 # Storage Model
-class Storage(BaseModel):
+class Storage(MergeMixin, BaseModel):
+    merge_fields = {
+        "area": MergeStrategy.PREFER_NON_NULL,
+    }
     area = models.CharField(
         max_length=255,
         blank=False,
@@ -512,13 +591,18 @@ class Storage(BaseModel):
     class Meta:
         verbose_name = "Storage"
         verbose_name_plural = "Storages"
+        permissions = [("can_merge", "Can merge storage records")]
 
     def __str__(self):
         return self.area
 
 
 # Reference Model
-class Reference(BaseModel):
+class Reference(MergeMixin, BaseModel):
+    merge_fields = {
+        "title": MergeStrategy.PREFER_NON_NULL,
+        "citation": MergeStrategy.CONCAT_TEXT,
+    }
     title = models.CharField(
         max_length=255,
         blank=False,
@@ -580,6 +664,7 @@ class Reference(BaseModel):
     class Meta:
         verbose_name = "Reference"
         verbose_name_plural = "References"
+        permissions = [("can_merge", "Can merge reference records")]
 
     def __str__(self):
         return self.citation
@@ -1450,6 +1535,133 @@ class MediaQCComment(models.Model):
     def __str__(self):
         creator = self.created_by if self.created_by else "System"
         return f"Comment by {creator} on {self.log}"
+
+
+class LLMUsageRecordQuerySet(models.QuerySet):
+    def for_media(self, media: "Media | int") -> "LLMUsageRecordQuerySet":
+        media_id = getattr(media, "pk", media)
+        return self.filter(media_id=media_id)
+
+    def totals_by_day(self):
+        return (
+            self.annotate(day=TruncDate("created_at"))
+            .values("day")
+            .annotate(
+                prompt_tokens=Sum("prompt_tokens"),
+                completion_tokens=Sum("completion_tokens"),
+                total_tokens=Sum("total_tokens"),
+                cost_usd=Sum("cost_usd"),
+                record_count=Count("id"),
+            )
+            .order_by("day")
+        )
+
+
+class LLMUsageRecordManager(models.Manager.from_queryset(LLMUsageRecordQuerySet)):  # type: ignore[misc]
+    pass
+
+
+class LLMUsageRecord(models.Model):
+    media = models.OneToOneField(
+        "Media",
+        on_delete=models.CASCADE,
+        related_name="llm_usage_record",
+    )
+    model_name = models.CharField(max_length=255)
+    prompt_tokens = models.PositiveIntegerField(default=0)
+    completion_tokens = models.PositiveIntegerField(default=0)
+    total_tokens = models.PositiveIntegerField(default=0)
+    cost_usd = models.DecimalField(max_digits=12, decimal_places=6, default=Decimal("0"))
+    remaining_quota_usd = models.DecimalField(
+        max_digits=12,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        help_text="Latest remaining ChatGPT quota reported with this usage record.",
+    )
+    processing_seconds = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        null=True,
+        blank=True,
+        help_text="Measured time spent processing the OCR request in seconds.",
+    )
+    response_id = models.CharField(max_length=255, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects: LLMUsageRecordManager = LLMUsageRecordManager()
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"Usage for {self.media_id}: {self.model_name}"
+
+    @staticmethod
+    def _coerce_int(value: object) -> int:
+        if value in (None, ""):
+            return 0
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
+
+    @staticmethod
+    def _coerce_decimal(value: object) -> Decimal:
+        if value in (None, ""):
+            return Decimal("0")
+        try:
+            return Decimal(str(value))
+        except (InvalidOperation, TypeError, ValueError):
+            return Decimal("0")
+
+    @classmethod
+    def defaults_from_payload(cls, payload: dict[str, object]) -> dict[str, object]:
+        prompt_tokens = cls._coerce_int(payload.get("prompt_tokens"))
+        completion_tokens = cls._coerce_int(payload.get("completion_tokens"))
+        total_tokens = cls._coerce_int(payload.get("total_tokens"))
+        if total_tokens == 0 and (prompt_tokens or completion_tokens):
+            total_tokens = prompt_tokens + completion_tokens
+
+        prompt_cost = cls._coerce_decimal(payload.get("prompt_cost_usd"))
+        completion_cost = cls._coerce_decimal(payload.get("completion_cost_usd"))
+        total_cost = payload.get("total_cost_usd")
+        if total_cost not in (None, ""):
+            cost_usd = cls._coerce_decimal(total_cost)
+        else:
+            cost_usd = prompt_cost + completion_cost
+
+        model_name = payload.get("model") or payload.get("model_name") or "unknown"
+        response_id = payload.get("request_id") or payload.get("response_id")
+
+        data: dict[str, object | None] = {
+            "model_name": str(model_name),
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": total_tokens,
+            "cost_usd": cost_usd,
+            "response_id": str(response_id) if response_id not in (None, "") else None,
+        }
+
+        remaining_quota = payload.get("remaining_quota") or payload.get("remaining_quota_usd")
+        if remaining_quota not in (None, ""):
+            data["remaining_quota_usd"] = cls._coerce_decimal(remaining_quota)
+
+        duration = payload.get("processing_seconds") or payload.get("duration_seconds")
+        if duration not in (None, ""):
+            try:
+                data["processing_seconds"] = Decimal(str(duration))
+            except (InvalidOperation, TypeError, ValueError):
+                pass
+
+        return data
+
+    def update_from_payload(self, payload: dict[str, object]) -> None:
+        defaults = self.defaults_from_payload(payload)
+        for field, value in defaults.items():
+            setattr(self, field, value)
+        self.save(update_fields=list(defaults.keys()) + ["updated_at"])
 
 
 class SpecimenGeology(BaseModel):
