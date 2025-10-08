@@ -16,8 +16,19 @@ class MergeMixin(models.Model):
     #: to fine tune default behaviour for individual fields.
     merge_fields: ClassVar[MutableMapping[str, MergeStrategy | str]] = {}
 
-    #: Mapping of relation field names (FK/M2M) to merge strategies.
-    relation_strategies: ClassVar[MutableMapping[str, MergeStrategy | str]] = {}
+    #: Mapping of relation field names to handling directives.
+    #:
+    #: Each entry can be one of the following:
+    #:
+    #: - ``"reassign"``: repoint FK/one-to-one relations from the source to the
+    #:   merge target.
+    #: - ``"merge"``: combine many-to-many memberships.
+    #: - ``"skip"``: leave the relation untouched.
+    #: - ``MergeStrategy`` value or dictionary containing ``{"strategy": ...}``
+    #:   to preserve backwards compatibility with strategy based merging.
+    #: - Callable accepting ``relation_name``, ``field``, ``source``, ``target``,
+    #:   ``dry_run`` and ``options`` keyword arguments for bespoke behaviour.
+    relation_strategies: ClassVar[MutableMapping[str, Any]] = {}
 
     class Meta:
         abstract = True
@@ -29,7 +40,7 @@ class MergeMixin(models.Model):
         return cls.merge_fields.get(field_name, DEFAULT_FIELD_STRATEGY)
 
     @classmethod
-    def get_relation_strategy(cls, relation_name: str) -> MergeStrategy | str:
+    def get_relation_strategy(cls, relation_name: str) -> Any:
         """Return the strategy to use for relations when merging records."""
 
         return cls.relation_strategies.get(relation_name, DEFAULT_RELATION_STRATEGY)

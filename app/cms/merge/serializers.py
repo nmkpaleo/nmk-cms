@@ -22,7 +22,14 @@ def flatten_related(instance) -> Mapping[str, Any]:
 
     related_state: Dict[str, Any] = {}
     for field in instance._meta.related_objects:  # type: ignore[attr-defined]
-        accessor = getattr(instance, field.get_accessor_name())
+        accessor_name = field.get_accessor_name()
+        try:
+            accessor = getattr(instance, accessor_name)
+        except AttributeError:
+            continue
+        except field.related_model.DoesNotExist:  # type: ignore[attr-defined]
+            related_state[field.name] = None
+            continue
         if field.one_to_many or field.many_to_many:
             related_state[field.name] = list(accessor.values_list("pk", flat=True))
         else:

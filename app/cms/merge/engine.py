@@ -3,11 +3,17 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, Mapping, MutableMapping, Tuple, cast
+from typing import Any, Callable, Dict, Iterable, Mapping, MutableMapping, Optional, Tuple, cast
 
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
 from django.db.models import Model
+from django.db.models.fields.related import (
+    ForeignObjectRel,
+    ManyToManyField,
+    ManyToManyRel,
+    OneToOneRel,
+)
 
 from .constants import MergeStrategy
 from .mixins import MergeMixin
@@ -21,7 +27,353 @@ class MergeResult:
 
     target: MergeMixin
     resolved_values: Mapping[str, Any]
-    relation_values: Mapping[str, Iterable[Any]]
+    relation_actions: Mapping[str, Mapping[str, Any]]
+
+
+@dataclass(frozen=True)
+class RelationDirective:
+    """Normalised representation of relation handling instructions."""
+
+    action: str
+    options: Mapping[str, Any]
+    callback: Optional[Callable[..., Mapping[str, Any] | None]] = None
+
+
+RELATION_ACTION_REASSIGN = "reassign"
+RELATION_ACTION_MERGE = "merge"
+RELATION_ACTION_SKIP = "skip"
+RELATION_ACTION_STRATEGY = "strategy"
+RELATION_ACTION_CUSTOM = "custom"
+
+
+def _default_relation_action(field: Any) -> str:
+    """Return the default action that should be applied to ``field``."""
+
+    if isinstance(field, (ManyToManyRel, ManyToManyField)):
+        return RELATION_ACTION_MERGE
+    if isinstance(field, (ForeignObjectRel, OneToOneRel)):
+        return RELATION_ACTION_REASSIGN
+    return RELATION_ACTION_SKIP
+
+
+def _serialise_callable(value: Callable[..., Any] | None) -> str | None:
+    """Return a dotted path representation for ``value`` when available."""
+
+    if not callable(value):
+        return None
+    module = getattr(value, "__module__", None)
+    qualname = getattr(value, "__qualname__", getattr(value, "__name__", None))
+    if module and qualname:
+        return f"{module}.{qualname}"
+    if qualname:
+        return qualname
+    return repr(value)
+
+
+def _normalise_relation_spec(field: Any, raw_value: Any) -> RelationDirective:
+    """Normalise ``raw_value`` into a :class:`RelationDirective`."""
+
+    action = None
+    options: Mapping[str, Any] = {}
+    callback: Optional[Callable[..., Mapping[str, Any] | None]] = None
+
+    if callable(raw_value):
+        action = RELATION_ACTION_CUSTOM
+        callback = cast(Callable[..., Mapping[str, Any] | None], raw_value)
+    elif isinstance(raw_value, Mapping):
+        mapping = cast(Mapping[str, Any], raw_value)
+        if "callback" in mapping and callable(mapping["callback"]):
+            callback = cast(Callable[..., Mapping[str, Any] | None], mapping["callback"])
+            action = mapping.get("action", RELATION_ACTION_CUSTOM)
+        elif "callable" in mapping and callable(mapping["callable"]):
+            callback = cast(Callable[..., Mapping[str, Any] | None], mapping["callable"])
+            action = mapping.get("action", RELATION_ACTION_CUSTOM)
+        else:
+            strategy_value = mapping.get("strategy")
+            if isinstance(strategy_value, MergeStrategy):
+                options = {
+                    "strategy": strategy_value,
+                    **{
+                        k: v
+                        for k, v in mapping.items()
+                        if k not in {"strategy", "callback", "callable"}
+                    },
+                }
+                action = RELATION_ACTION_STRATEGY
+            elif isinstance(strategy_value, str) and strategy_value in MergeStrategy._value2member_map_:
+                options = {
+                    "strategy": MergeStrategy(strategy_value),
+                    **{
+                        k: v
+                        for k, v in mapping.items()
+                        if k not in {"strategy", "callback", "callable"}
+                    },
+                }
+                action = RELATION_ACTION_STRATEGY
+            else:
+                action = cast(str, mapping.get("action"))
+                options = {
+                    k: v
+                    for k, v in mapping.items()
+                    if k not in {"action", "callback", "callable"}
+                }
+    elif isinstance(raw_value, MergeStrategy):
+        options = {"strategy": raw_value}
+        action = RELATION_ACTION_STRATEGY
+    elif isinstance(raw_value, str):
+        if raw_value in MergeStrategy._value2member_map_:
+            options = {"strategy": MergeStrategy(raw_value)}
+            action = RELATION_ACTION_STRATEGY
+        else:
+            action = raw_value
+
+    if not action:
+        action = _default_relation_action(field)
+
+    if action == RELATION_ACTION_CUSTOM and callback is None:
+        raise ValueError("Custom relation directives require a callable callback")
+
+    return RelationDirective(action=action, options=options, callback=callback)
+
+
+def _serialise_options(options: Mapping[str, Any]) -> Dict[str, Any]:
+    """Return a JSON serialisable copy of ``options``."""
+
+    serialised: Dict[str, Any] = {}
+    for key, value in options.items():
+        if isinstance(value, set):
+            serialised[key] = sorted(value)
+        elif isinstance(value, MergeStrategy):
+            serialised[key] = value.value
+        elif callable(value):
+            serialised[key] = _serialise_callable(value)
+        else:
+            serialised[key] = value
+    return serialised
+
+
+def _reassign_related_objects(
+    *,
+    field: ForeignObjectRel | OneToOneRel,
+    relation_name: str,
+    source: MergeMixin,
+    target: MergeMixin,
+    dry_run: bool,
+    options: Mapping[str, Any],
+) -> Mapping[str, Any] | None:
+    """Reassign FK/one-to-one relations from ``source`` to ``target``."""
+
+    related_field = field.field
+    attname = related_field.attname
+    log_payload: Dict[str, Any] = {"action": RELATION_ACTION_REASSIGN}
+
+    if isinstance(field, OneToOneRel):
+        accessor = field.get_accessor_name()
+        try:
+            related_obj = getattr(source, accessor)
+        except field.related_model.DoesNotExist:  # type: ignore[attr-defined]
+            log_payload["updated"] = 0
+            return log_payload
+
+        target_has = True
+        try:
+            getattr(target, accessor)
+        except field.related_model.DoesNotExist:  # type: ignore[attr-defined]
+            target_has = False
+
+        if target_has:
+            log_payload["skipped"] = 1
+            log_payload["reason"] = "target_has_relation"
+            return log_payload
+
+        if not dry_run:
+            setattr(related_obj, field.field.name, target)
+            related_obj.save(update_fields=[field.field.name])
+
+        log_payload["updated"] = 1
+        return log_payload
+
+    manager = getattr(source, relation_name)
+    queryset = manager.select_for_update()
+    total = queryset.count()
+    if not total:
+        log_payload["updated"] = 0
+        return log_payload
+
+    if not dry_run:
+        update_kwargs = {attname: target.pk}
+        queryset.update(**update_kwargs)
+
+    log_payload["updated"] = total
+    return log_payload
+
+
+def _merge_many_to_many(
+    *,
+    field: ManyToManyField | ManyToManyRel,
+    relation_name: str,
+    source: MergeMixin,
+    target: MergeMixin,
+    dry_run: bool,
+    options: Mapping[str, Any],
+) -> Mapping[str, Any] | None:
+    """Merge many-to-many relations by unifying membership sets."""
+
+    allow = options.get("allow") or options.get("allowed")
+    allow_set = set(allow or []) if allow else None
+
+    source_manager = getattr(source, relation_name)
+    target_manager = getattr(target, relation_name)
+
+    source_ids = set(source_manager.values_list("pk", flat=True))
+    target_ids = set(target_manager.values_list("pk", flat=True))
+
+    if allow_set is not None:
+        source_ids &= allow_set
+
+    if not source_ids:
+        return {"action": RELATION_ACTION_MERGE, "added": 0, "skipped": 0}
+
+    missing_ids = sorted(source_ids - target_ids)
+    skipped = len(source_ids & target_ids)
+    added = 0
+
+    if not dry_run and missing_ids:
+        through_model = source_manager.through
+        if getattr(through_model._meta, "auto_created", False):
+            target_manager.add(*missing_ids)
+            added = len(missing_ids)
+        else:
+            source_field_name = source_manager.source_field_name
+            target_field_name = source_manager.target_field_name
+            through_qs = (
+                through_model._default_manager.select_for_update()
+                .filter(**{f"{source_field_name}_id": source.pk})
+                .filter(**{f"{target_field_name}_id__in": missing_ids})
+            )
+            for link in through_qs:
+                remote_id = getattr(link, f"{target_field_name}_id")
+                exists = through_model._default_manager.filter(
+                    **{
+                        f"{source_field_name}_id": target.pk,
+                        f"{target_field_name}_id": remote_id,
+                    }
+                ).exists()
+                if exists:
+                    skipped += 1
+                    continue
+                setattr(link, f"{source_field_name}_id", target.pk)
+                link.save(update_fields=[f"{source_field_name}_id"])
+                added += 1
+    elif not dry_run:
+        added = len(missing_ids)
+
+    return {
+        "action": RELATION_ACTION_MERGE,
+        "added": added if not dry_run else len(missing_ids),
+        "skipped": skipped,
+    }
+
+
+def _apply_relation_directive(
+    *,
+    directive: RelationDirective,
+    field: Any,
+    relation_name: str,
+    source: MergeMixin,
+    target: MergeMixin,
+    dry_run: bool,
+) -> Mapping[str, Any] | None:
+    """Execute ``directive`` for ``relation_name`` returning a log payload."""
+
+    if directive.action == RELATION_ACTION_SKIP:
+        return {"action": RELATION_ACTION_SKIP}
+
+    if directive.action == RELATION_ACTION_STRATEGY:
+        strategy = directive.options.get("strategy")
+        if not isinstance(field, (ManyToManyRel, ManyToManyField)):
+            raise TypeError(
+                "Strategy based relation handling is only supported for many-to-many relations"
+            )
+        if not isinstance(strategy, MergeStrategy):
+            raise ValueError("Relation strategy directives must provide a MergeStrategy")
+        resolved_relation = strategies.resolve_relation(
+            strategy,
+            relation_name=relation_name,
+            source=source,
+            target=target,
+            options=directive.options,
+        )
+        if resolved_relation is strategies.UNCHANGED or resolved_relation is None:
+            return {"action": RELATION_ACTION_STRATEGY, "updated": 0}
+        resolved_list = list(resolved_relation)
+        if not dry_run:
+            manager = getattr(target, relation_name)
+            manager.set(resolved_list)
+        return {
+            "action": RELATION_ACTION_STRATEGY,
+            "updated": len(resolved_list),
+        }
+
+    if directive.action == RELATION_ACTION_REASSIGN and isinstance(
+        field, (ForeignObjectRel, OneToOneRel)
+    ):
+        return _reassign_related_objects(
+            field=field,
+            relation_name=relation_name,
+            source=source,
+            target=target,
+            dry_run=dry_run,
+            options=directive.options,
+        )
+
+    if directive.action == RELATION_ACTION_MERGE and isinstance(
+        field, (ManyToManyRel, ManyToManyField)
+    ):
+        return _merge_many_to_many(
+            field=field,
+            relation_name=relation_name,
+            source=source,
+            target=target,
+            dry_run=dry_run,
+            options=directive.options,
+        )
+
+    if directive.action == RELATION_ACTION_CUSTOM and callable(directive.callback):
+        return directive.callback(
+            relation_name=relation_name,
+            field=field,
+            source=source,
+            target=target,
+            dry_run=dry_run,
+            options=directive.options,
+        )
+
+    return None
+
+
+def _relation_strategy_log_payload(directive: RelationDirective) -> Dict[str, Any]:
+    """Serialise ``directive`` for merge logging purposes."""
+
+    payload: Dict[str, Any] = {"action": directive.action}
+
+    if directive.action == RELATION_ACTION_STRATEGY:
+        strategy = directive.options.get("strategy")
+        if isinstance(strategy, MergeStrategy):
+            payload["strategy"] = strategy.value
+
+    option_payload = {
+        key: value
+        for key, value in directive.options.items()
+        if key != "strategy"
+    }
+    if option_payload:
+        payload["options"] = _serialise_options(option_payload)
+
+    if directive.action == RELATION_ACTION_CUSTOM:
+        payload["callback"] = _serialise_callable(directive.callback)
+
+    return payload
 
 
 def _normalize_strategy_spec(value: Any) -> Tuple[MergeStrategy, Mapping[str, Any]]:
@@ -76,11 +428,11 @@ def serialize_model_state(instance: Model) -> Dict[str, Any]:
 
 def _log_merge(
     *,
-    source: MergeMixin,
+    source_pk: Any,
     target: MergeMixin,
     user: Any,
     resolved_fields: Mapping[str, Any],
-    resolved_relations: Mapping[str, Iterable[Any]],
+    relation_actions: Mapping[str, Mapping[str, Any]],
     strategy_map: Mapping[str, Any],
     source_snapshot: Mapping[str, Any] | None,
     target_before: Mapping[str, Any],
@@ -91,13 +443,14 @@ def _log_merge(
     content_type = ContentType.objects.get_for_model(target, for_concrete_model=True)
     MergeLog.objects.create(
         model_label=f"{content_type.app_label}.{content_type.model}",
-        source_pk=source.pk,
+        source_pk=source_pk,
         target_pk=target.pk,
         resolved_values={
             "fields": resolved_fields,
-            "relations": resolved_relations,
+            "relations": relation_actions,
         },
         strategy_map=strategy_map,
+        relation_actions=relation_actions,
         source_snapshot=source_snapshot,
         target_before=target_before,
         target_after=target_after,
@@ -124,6 +477,7 @@ def merge_records(
         raise TypeError("Both instances must inherit from MergeMixin")
 
     model_cls = source.__class__
+    source_pk_value = source.pk
     base_strategies: MutableMapping[str, Any] = {
         "fields": getattr(model_cls, "merge_fields", {}) or {},
         "relations": getattr(model_cls, "relation_strategies", {}) or {},
@@ -131,28 +485,28 @@ def merge_records(
     effective_strategy = _deep_merge(base_strategies, strategy_map or {})
 
     resolved_fields: Dict[str, Any] = {}
-    resolved_relations: Dict[str, Iterable[Any]] = {}
+    relation_actions: Dict[str, Dict[str, Any]] = {}
 
-    strategy_log: Dict[str, Any] = {}
-    for category, mapping in effective_strategy.items():
-        if not isinstance(mapping, Mapping):
-            continue
-        category_payload: Dict[str, Any] = {}
-        for name, raw_value in mapping.items():
-            if isinstance(raw_value, Mapping):
-                strategy_name = MergeStrategy(raw_value.get("strategy")).value
-                payload = {"strategy": strategy_name}
-                for opt_key, opt_value in raw_value.items():
-                    if opt_key == "strategy":
-                        continue
-                    payload[opt_key] = opt_value
-            else:
-                payload = {"strategy": MergeStrategy(raw_value).value}
-            category_payload[name] = payload
-        strategy_log[category] = category_payload
+    strategy_log: Dict[str, Any] = {"fields": {}, "relations": {}}
+    field_strategy_log = cast(Dict[str, Any], strategy_log["fields"])
+    relation_strategy_overrides = effective_strategy.get("relations", {})
+
+    for field_name, raw_strategy in effective_strategy.get("fields", {}).items():
+        if isinstance(raw_strategy, Mapping):
+            strategy_name = MergeStrategy(raw_strategy.get("strategy")).value
+            payload = {"strategy": strategy_name}
+            for opt_key, opt_value in raw_strategy.items():
+                if opt_key == "strategy":
+                    continue
+                payload[opt_key] = opt_value
+        else:
+            payload = {"strategy": MergeStrategy(raw_strategy).value}
+        field_strategy_log[field_name] = payload
 
     source_snapshot = serialize_model_state(source) if archive else None
     target_before = serialize_model_state(target)
+    relation_strategy_log: Dict[str, Any] = {}
+    processed_relation_names: set[str] = set()
 
     with transaction.atomic():
         for field_name, raw_strategy in effective_strategy.get("fields", {}).items():
@@ -173,21 +527,65 @@ def merge_records(
         if update_fields and not dry_run:
             target.save(update_fields=update_fields)
 
-        for relation_name, raw_strategy in effective_strategy.get("relations", {}).items():
-            strategy, options = _normalize_strategy_spec(raw_strategy)
-            resolved_relation = strategies.resolve_relation(
-                strategy,
+        for relation_field in source._meta.get_fields():
+            relation_name: Optional[str] = None
+
+            if isinstance(relation_field, ManyToManyField):
+                relation_name = relation_field.name
+            elif isinstance(relation_field, ManyToManyRel):
+                try:
+                    relation_name = relation_field.get_accessor_name()
+                except AttributeError:
+                    relation_name = None
+            elif isinstance(relation_field, OneToOneRel):
+                try:
+                    relation_name = relation_field.get_accessor_name()
+                except AttributeError:
+                    relation_name = None
+            elif isinstance(relation_field, ForeignObjectRel):
+                try:
+                    relation_name = relation_field.get_accessor_name()
+                except AttributeError:
+                    relation_name = None
+
+            if not relation_name:
+                continue
+            if relation_name in processed_relation_names:
+                continue
+
+            if isinstance(relation_field, ForeignObjectRel) and not relation_field.auto_created:
+                continue
+            if isinstance(relation_field, OneToOneRel) and not relation_field.auto_created:
+                continue
+
+            raw_spec = None
+            if isinstance(relation_strategy_overrides, Mapping):
+                raw_spec = relation_strategy_overrides.get(relation_name)
+            directive = _normalise_relation_spec(relation_field, raw_spec)
+
+            relation_strategy_log[relation_name] = _relation_strategy_log_payload(directive)
+            processed_relation_names.add(relation_name)
+
+            result = _apply_relation_directive(
+                directive=directive,
+                field=relation_field,
                 relation_name=relation_name,
                 source=source,
                 target=target,
-                options=options,
+                dry_run=dry_run,
             )
-            if resolved_relation is strategies.UNCHANGED or resolved_relation is None:
-                continue
-            resolved_relations[relation_name] = list(resolved_relation)
-            if not dry_run:
-                manager = getattr(target, relation_name)
-                manager.set(resolved_relation)
+            if result:
+                relation_actions[relation_name] = dict(result)
+
+        if isinstance(relation_strategy_overrides, Mapping):
+            for name in relation_strategy_overrides:
+                if name not in relation_strategy_log:
+                    relation_strategy_log[name] = {
+                        "action": "unresolved",
+                        "reason": "relation_not_found",
+                    }
+
+        strategy_log["relations"] = relation_strategy_log
 
         if not dry_run:
             if archive:
@@ -199,11 +597,11 @@ def merge_records(
 
         if not dry_run:
             _log_merge(
-                source=source,
+                source_pk=source_pk_value,
                 target=target,
                 user=user,
                 resolved_fields=resolved_fields,
-                resolved_relations=resolved_relations,
+                relation_actions=relation_actions,
                 strategy_map=strategy_log,
                 source_snapshot=source_snapshot,
                 target_before=target_before,
@@ -215,5 +613,5 @@ def merge_records(
     return MergeResult(
         target=target,
         resolved_values=resolved_fields,
-        relation_values=resolved_relations,
+        relation_actions=relation_actions,
     )

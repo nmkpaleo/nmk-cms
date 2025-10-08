@@ -14,7 +14,7 @@ def register_merge_rules(
     model: Type[models.Model],
     *,
     fields: Mapping[str, MergeStrategy | str] | None = None,
-    relations: Mapping[str, MergeStrategy | str] | None = None,
+    relations: Mapping[str, Any] | None = None,
 ) -> None:
     """Register custom merge rules for a model class."""
 

@@ -119,6 +119,11 @@ class MergeLog(BaseModel):
     resolved_values = models.JSONField(
         help_text="Final values applied to the target record.",
     )
+    relation_actions = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Actions executed against related objects during the merge.",
+    )
     strategy_map = models.JSONField(
         help_text="Strategies that were used to resolve field conflicts.",
     )
