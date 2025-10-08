@@ -1,0 +1,131 @@
+.merge-admin {
+  max-width: 1100px;
+}
+
+.merge-admin__title {
+  margin-bottom: 1.5rem;
+}
+
+.merge-admin__intro {
+  margin-bottom: 2rem;
+}
+
+.merge-admin__selection {
+  margin-bottom: 2rem;
+}
+
+.merge-admin__selection-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.5rem;
+}
+
+.merge-admin__selection-column {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 1rem;
+}
+
+.merge-admin__selection-label {
+  font-weight: 600;
+}
+
+.merge-admin__badge {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background-color: #f0f0f0;
+  font-size: 0.85em;
+}
+
+.merge-admin__empty {
+  color: #777;
+}
+
+.merge-admin__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.5rem;
+}
+
+.merge-admin__card {
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 1rem;
+  background: #fff;
+}
+
+.merge-admin__card-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.merge-admin__preview {
+  margin: 0.5rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.merge-admin__search-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  align-items: end;
+  margin-bottom: 1rem;
+}
+
+.merge-admin__actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.merge-admin__results {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.5rem;
+}
+
+.merge-admin__notice,
+.merge-admin__error {
+  margin: 0;
+}
+
+.merge-admin__errors {
+  margin-bottom: 1rem;
+  color: #ba2121;
+}
+
+.merge-admin__table-wrapper {
+  overflow-x: auto;
+}
+
+.merge-admin__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.merge-admin__table th,
+.merge-admin__table td {
+  border: 1px solid #ddd;
+  padding: 0.5rem;
+  vertical-align: top;
+}
+
+.merge-admin__table thead th {
+  background-color: #f5f5f5;
+}
+
+.merge-admin__field-error {
+  color: #ba2121;
+  margin-top: 0.4rem;
+}
+
+.merge-admin__field-control[hidden] {
+  display: none;
+}
+
+.merge-admin__value {
+  font-family: monospace;
+}

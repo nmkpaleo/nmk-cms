@@ -8,6 +8,7 @@ from import_export.widgets import ForeignKeyWidget, DateWidget
 from simple_history.admin import SimpleHistoryAdmin
 
 from .forms import AccessionNumberSeriesAdminForm, DrawerRegisterForm
+from .admin_merge import MergeAdminMixin
 from .merge import merge_records
 
 from .models import (
@@ -288,7 +289,7 @@ class ElementAdmin(HistoricalImportExportAdmin):
     ordering = ('name',)
 
 # FieldSlip Model
-class FieldSlipAdmin(MergeAdminActionMixin, HistoricalImportExportAdmin):
+class FieldSlipAdmin(MergeAdminActionMixin, MergeAdminMixin, HistoricalImportExportAdmin):
     resource_class = FieldSlipResource
     list_display = ('field_number', 'discoverer', 'collector', 'collection_date', 'verbatim_locality', 'verbatim_taxon', 'verbatim_element')
     search_fields = ('field_number', 'discoverer', 'collector', 'verbatim_locality')
@@ -591,7 +592,7 @@ class PersonAdmin(HistoricalImportExportAdmin):
     search_fields = ('first_name', 'last_name', 'orcid')
 
 # Reference Model
-class ReferenceAdmin(MergeAdminActionMixin, HistoricalImportExportAdmin):
+class ReferenceAdmin(MergeAdminActionMixin, MergeAdminMixin, HistoricalImportExportAdmin):
     resource_class = ReferenceResource
     list_display = ('citation', 'doi')
     search_fields = ('citation', 'doi')
@@ -603,7 +604,7 @@ class SpecimenGeologyAdmin(HistoricalImportExportAdmin):
     ordering = ('accession',)
 
 # Storage Model
-class StorageAdmin(MergeAdminActionMixin, HistoricalImportExportAdmin):
+class StorageAdmin(MergeAdminActionMixin, MergeAdminMixin, HistoricalImportExportAdmin):
     resource_class = StorageResource
     list_display = ('area', 'parent_area')
     search_fields = ('area', 'parent_area__area')
