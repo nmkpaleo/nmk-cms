@@ -231,7 +231,9 @@ class MergeCandidateAPIView(View):
         try:
             matches = score_candidates(model, query, fields=fields, threshold=threshold, queryset=queryset)
         except RuntimeError as exc:
-            return JsonResponse({"detail": str(exc)}, status=503)
+            import logging
+            logging.exception("RuntimeError in MergeCandidateAPIView.score_candidates")
+            return JsonResponse({"detail": "Service temporarily unavailable."}, status=503)
 
         page_size, paginator, page_obj = self._paginate(request, matches)
 
