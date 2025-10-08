@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Iterable, Mapping, MutableMapping, Optional, Tuple, cast
+from typing import Any, Callable, Dict, Iterable, Mapping, MutableMapping, Optional, cast
 
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
@@ -26,7 +26,7 @@ class MergeResult:
     """Representation of an executed merge."""
 
     target: MergeMixin
-    resolved_values: Mapping[str, Any]
+    resolved_values: Mapping[str, strategies.StrategyResolution]
     relation_actions: Mapping[str, Mapping[str, Any]]
 
 
@@ -134,22 +134,6 @@ def _normalise_relation_spec(field: Any, raw_value: Any) -> RelationDirective:
         raise ValueError("Custom relation directives require a callable callback")
 
     return RelationDirective(action=action, options=options, callback=callback)
-
-
-def _serialise_options(options: Mapping[str, Any]) -> Dict[str, Any]:
-    """Return a JSON serialisable copy of ``options``."""
-
-    serialised: Dict[str, Any] = {}
-    for key, value in options.items():
-        if isinstance(value, set):
-            serialised[key] = sorted(value)
-        elif isinstance(value, MergeStrategy):
-            serialised[key] = value.value
-        elif callable(value):
-            serialised[key] = _serialise_callable(value)
-        else:
-            serialised[key] = value
-    return serialised
 
 
 def _reassign_related_objects(
@@ -368,26 +352,12 @@ def _relation_strategy_log_payload(directive: RelationDirective) -> Dict[str, An
         if key != "strategy"
     }
     if option_payload:
-        payload["options"] = _serialise_options(option_payload)
+        payload["options"] = strategies.serialise_options(option_payload)
 
     if directive.action == RELATION_ACTION_CUSTOM:
         payload["callback"] = _serialise_callable(directive.callback)
 
     return payload
-
-
-def _normalize_strategy_spec(value: Any) -> Tuple[MergeStrategy, Mapping[str, Any]]:
-    """Return a ``(strategy, options)`` pair from raw strategy specifications."""
-
-    options: Mapping[str, Any] = {}
-    if isinstance(value, Mapping):
-        if "strategy" not in value:
-            raise ValueError("Strategy mapping must include a 'strategy' key")
-        strategy = MergeStrategy(value["strategy"])
-        options = cast(Mapping[str, Any], {k: v for k, v in value.items() if k != "strategy"})
-    else:
-        strategy = MergeStrategy(value)
-    return strategy, options
 
 
 def _deep_merge(
@@ -484,24 +454,19 @@ def merge_records(
     }
     effective_strategy = _deep_merge(base_strategies, strategy_map or {})
 
-    resolved_fields: Dict[str, Any] = {}
+    field_strategy_overrides = effective_strategy.get("fields", {}) or {}
+    resolver = strategies.StrategyResolver(model_cls, field_strategy_overrides)
+
+    resolved_fields: Dict[str, strategies.StrategyResolution] = {}
+    resolved_field_payloads: Dict[str, Any] = {}
     relation_actions: Dict[str, Dict[str, Any]] = {}
 
     strategy_log: Dict[str, Any] = {"fields": {}, "relations": {}}
     field_strategy_log = cast(Dict[str, Any], strategy_log["fields"])
     relation_strategy_overrides = effective_strategy.get("relations", {})
 
-    for field_name, raw_strategy in effective_strategy.get("fields", {}).items():
-        if isinstance(raw_strategy, Mapping):
-            strategy_name = MergeStrategy(raw_strategy.get("strategy")).value
-            payload = {"strategy": strategy_name}
-            for opt_key, opt_value in raw_strategy.items():
-                if opt_key == "strategy":
-                    continue
-                payload[opt_key] = opt_value
-        else:
-            payload = {"strategy": MergeStrategy(raw_strategy).value}
-        field_strategy_log[field_name] = payload
+    for field_name in resolver.iter_field_names():
+        field_strategy_log[field_name] = resolver.log_payload(field_name)
 
     source_snapshot = serialize_model_state(source) if archive else None
     target_before = serialize_model_state(target)
@@ -509,19 +474,15 @@ def merge_records(
     processed_relation_names: set[str] = set()
 
     with transaction.atomic():
-        for field_name, raw_strategy in effective_strategy.get("fields", {}).items():
-            strategy, options = _normalize_strategy_spec(raw_strategy)
-            resolved = strategies.resolve_field(
-                strategy,
-                field_name=field_name,
-                source=source,
-                target=target,
-                options=options,
-            )
-            if resolved is strategies.UNCHANGED:
+        for field_name in resolver.iter_field_names():
+            resolution = resolver.resolve_field(field_name, source=source, target=target)
+            if resolution.value is strategies.UNCHANGED:
+                if resolution.note:
+                    resolved_field_payloads[field_name] = resolution.as_log_payload()
                 continue
-            resolved_fields[field_name] = resolved
-            setattr(target, field_name, resolved)
+            resolved_fields[field_name] = resolution
+            resolved_field_payloads[field_name] = resolution.as_log_payload()
+            setattr(target, field_name, resolution.value)
 
         update_fields = list(resolved_fields.keys())
         if update_fields and not dry_run:
@@ -600,7 +561,7 @@ def merge_records(
                 source_pk=source_pk_value,
                 target=target,
                 user=user,
-                resolved_fields=resolved_fields,
+                resolved_fields=resolved_field_payloads,
                 relation_actions=relation_actions,
                 strategy_map=strategy_log,
                 source_snapshot=source_snapshot,
