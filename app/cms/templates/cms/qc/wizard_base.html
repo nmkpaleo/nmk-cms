@@ -331,15 +331,19 @@
     }
     .qc-summary-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 1rem;
-      margin-bottom: 1rem;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
     }
     .qc-summary-card {
       border: 1px solid #dcdcdc;
       border-radius: 4px;
-      padding: 0.75rem;
+      padding: 0.5rem 0.75rem;
       background-color: #f9fafc;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      min-height: 100%;
     }
     .qc-summary-card--changed {
       border-color: #4f46e5;
@@ -348,17 +352,19 @@
     .qc-summary-label {
       font-weight: 600;
       display: block;
-      color: #555;
+      color: #4b5563;
+      font-size: 0.75rem;
+      text-transform: uppercase;
     }
     .qc-summary-value {
-      font-size: 1.5rem;
+      font-size: 1.25rem;
       font-weight: 700;
       display: block;
-      margin-top: 0.25rem;
+      margin-top: 0;
     }
     .qc-summary-delta {
-      font-size: 0.85rem;
-      color: #555;
+      font-size: 0.75rem;
+      color: #6b7280;
     }
     .qc-warning-list {
       margin: 0.5rem 0 0;
@@ -505,7 +511,7 @@
       {% if qc_preview %}
       <div class="qc-preview-panel">
         <h3 class="w3-margin-top w3-margin-bottom">Preview accession</h3>
-        {% include "cms/partials/accession_preview_panel.html" with accession=qc_preview.accession geologies=qc_preview.geologies accession_rows=qc_preview.accession_rows first_identifications=qc_preview.first_identifications identification_counts=qc_preview.identification_counts taxonomy=qc_preview.taxonomy references=qc_preview.references preview_mode=True %}
+        {% include "cms/partials/accession_preview_panel.html" with accession=qc_preview.accession geologies=qc_preview.geologies accession_rows=qc_preview.accession_rows first_identifications=qc_preview.first_identifications identification_counts=qc_preview.identification_counts taxonomy=qc_preview.taxonomy references=qc_preview.references fieldslips=qc_preview.fieldslips preview_mode=True %}
       </div>
       {% endif %}
       <div class="qc-history-panel">
