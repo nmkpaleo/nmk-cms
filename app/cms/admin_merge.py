@@ -8,6 +8,7 @@ from typing import Any, Iterable, List, Mapping
 from django import forms
 from django.conf import settings
 from django.contrib import admin, messages
+from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
 from django.contrib.admin.utils import display_for_field
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -238,7 +239,7 @@ class MergeAdminMixin:
             )
             return None
 
-        selected = request.POST.getlist(admin.ACTION_CHECKBOX_NAME)
+        selected = request.POST.getlist(ACTION_CHECKBOX_NAME)
         if len(selected) < 2:
             self.message_user(
                 request,

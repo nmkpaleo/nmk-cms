@@ -1,4 +1,7 @@
+from typing import Any
+
 from django.contrib import admin
+from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
 from django.db.models import Count, OuterRef, Exists
 from django.conf import settings
 
@@ -91,17 +94,111 @@ class MergeAdminActionMixin:
                     level=logging.WARNING,
                 )
             return
+
+        selected = list(queryset)
+
         if target is None:
-            if request is not None:
+            if request is None:
+                raise ValueError(
+                    "Provide a `target` instance when calling this action manually from the shell."
+                )
+            if len(selected) < 2:
                 self.message_user(
                     request,
-                    "Provide a `target` instance when calling this action manually from the shell.",
+                    "Select at least two records to merge.",
                     level=logging.WARNING,
                 )
-            return
+                return
+
+            target_id = request.POST.get("merge_target")
+            if not target_id:
+                opts = self.model._meta
+                changelist_url = reverse(
+                    f"admin:{opts.app_label}_{opts.model_name}_changelist"
+                )
+
+                serializer = getattr(self, "_serialise_instance", None)
+                preview_columns: list[str] = []
+                serialised_rows: list[dict[str, Any]] = []
+                if callable(serializer):
+                    for obj in selected:
+                        summary = serializer(obj)
+                        preview_items = (summary or {}).get("preview", []) or []
+                        preview_map: dict[str, Any] = {}
+                        for item in preview_items:
+                            label = item.get("field")
+                            if not label:
+                                continue
+                            if label not in preview_columns:
+                                preview_columns.append(label)
+                            preview_map[label] = item.get("value")
+                        serialised_rows.append(
+                            {
+                                "object": obj,
+                                "label": (summary or {}).get("label", str(obj)),
+                                "preview_map": preview_map,
+                            }
+                        )
+
+                if not serialised_rows:
+                    object_rows = [
+                        {
+                            "object": obj,
+                            "label": str(obj),
+                            "preview_values": [],
+                        }
+                        for obj in selected
+                    ]
+                else:
+                    object_rows = []
+                    for row in serialised_rows:
+                        preview_values = [
+                            row["preview_map"].get(column, "—") for column in preview_columns
+                        ]
+                        object_rows.append(
+                            {
+                                "object": row["object"],
+                                "label": row["label"],
+                                "preview_values": preview_values,
+                            }
+                        )
+
+                context = {
+                    "title": "Choose a target record",
+                    "action_checkbox_name": ACTION_CHECKBOX_NAME,
+                    "opts": opts,
+                    "objects": selected,
+                    "object_rows": object_rows,
+                    "preview_columns": preview_columns,
+                    "action_name": "merge_records_action",
+                    "merge_target_field": "merge_target",
+                    "changelist_url": changelist_url,
+                    "select_across": request.POST.get("select_across"),
+                }
+                return render(
+                    request,
+                    "admin/cms/merge/manual_action_confirm.html",
+                    context,
+                )
+
+            try:
+                target = next(
+                    obj for obj in selected if str(obj.pk) == str(target_id)
+                )
+            except StopIteration:
+                try:
+                    target = queryset.model._default_manager.get(pk=target_id)
+                except queryset.model.DoesNotExist:
+                    self.message_user(
+                        request,
+                        "Selected target is no longer available.",
+                        level=logging.ERROR,
+                    )
+                    return
+                selected.append(target)
 
         user = getattr(request, "user", None) if request is not None else None
-        sources = [obj for obj in queryset if obj.pk != getattr(target, "pk", None)]
+        sources = [obj for obj in selected if obj.pk != getattr(target, "pk", None)]
         for source in sources:
             merge_records(
                 source,
@@ -797,7 +894,7 @@ class ScanningAdmin(admin.ModelAdmin):
 # ----------------------------------------------------------------------
 # Flat file import integration
 # ----------------------------------------------------------------------
-from django.urls import path
+from django.urls import path, reverse
 from django.contrib import messages
 from django.shortcuts import render, redirect
 from django import forms

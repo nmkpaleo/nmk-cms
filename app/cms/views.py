@@ -211,44 +211,86 @@ class MergeCandidateAPIView(View):
         return super().dispatch(request, *args, **kwargs)
 
     def get(self, request, *args, **kwargs):
+        wants_json = self._wants_json(request)
         try:
             model = self._get_model_from_label(request.GET.get("model_label", ""))
         except ValueError as exc:
             import logging
             logging.exception("Invalid model label exception in MergeCandidateAPIView")
-            return JsonResponse({"detail": "Invalid model label."}, status=400)
+            return self._error_response(
+                request,
+                "Invalid model label.",
+                status=400,
+                wants_json=wants_json,
+            )
 
         query = (request.GET.get("query") or "").strip()
         if not query:
-            return JsonResponse({"detail": "The `query` parameter is required."}, status=400)
+            return self._error_response(
+                request,
+                "The `query` parameter is required.",
+                status=400,
+                wants_json=wants_json,
+                model=model,
+            )
 
         threshold = self._parse_threshold(request.GET.get("threshold"))
         if threshold is None:
-            return JsonResponse({"detail": "The `threshold` parameter must be numeric."}, status=400)
+            return self._error_response(
+                request,
+                "The `threshold` parameter must be numeric.",
+                status=400,
+                wants_json=wants_json,
+                model=model,
+            )
 
         try:
             fields = self._extract_fields(request, model)
         except ValueError as exc:
             import logging
             logging.exception("Invalid field specification in MergeCandidateAPIView")
-            return JsonResponse({"detail": "Invalid field specification."}, status=400)
+            return self._error_response(
+                request,
+                "Invalid field specification.",
+                status=400,
+                wants_json=wants_json,
+                model=model,
+            )
 
         if not fields:
-            return JsonResponse({"detail": "No fields available for scoring."}, status=400)
+            return self._error_response(
+                request,
+                "No fields available for scoring.",
+                status=400,
+                wants_json=wants_json,
+                model=model,
+            )
 
         try:
             queryset = self._build_queryset(request, model)
         except ValueError as exc:
             import logging
             logging.exception("ValueError in MergeCandidateAPIView._build_queryset")
-            return JsonResponse({"detail": "Invalid query for model."}, status=400)
+            return self._error_response(
+                request,
+                "Invalid query for model.",
+                status=400,
+                wants_json=wants_json,
+                model=model,
+            )
 
         try:
             matches = score_candidates(model, query, fields=fields, threshold=threshold, queryset=queryset)
         except RuntimeError as exc:
             import logging
             logging.exception("RuntimeError in MergeCandidateAPIView.score_candidates")
-            return JsonResponse({"detail": "Service temporarily unavailable."}, status=503)
+            return self._error_response(
+                request,
+                "Service temporarily unavailable.",
+                status=503,
+                wants_json=wants_json,
+                model=model,
+            )
 
         page_size, paginator, page_obj = self._paginate(request, matches)
 
@@ -264,7 +306,14 @@ class MergeCandidateAPIView(View):
                 "preview_fields": fields,
                 "results": [],
             }
-            return JsonResponse(payload)
+            return self._final_response(
+                request,
+                model,
+                payload,
+                paginator=None,
+                page_obj=None,
+                wants_json=wants_json,
+            )
 
         payload = {
             "model": f"{model._meta.app_label}.{model._meta.model_name}",
@@ -277,7 +326,41 @@ class MergeCandidateAPIView(View):
             "preview_fields": fields,
             "results": [self._serialise_match(match, fields) for match in page_obj.object_list],
         }
-        return JsonResponse(payload)
+        return self._final_response(
+            request,
+            model,
+            payload,
+            paginator=paginator,
+            page_obj=page_obj,
+            wants_json=wants_json,
+        )
+
+    def _final_response(
+        self,
+        request,
+        model,
+        payload,
+        *,
+        paginator,
+        page_obj,
+        wants_json=None,
+    ):
+        if wants_json is None:
+            wants_json = self._wants_json(request)
+        if wants_json:
+            return JsonResponse(payload)
+        context = self._build_template_context(
+            request,
+            model,
+            payload=payload,
+            paginator=paginator,
+            page_obj=page_obj,
+        )
+        return render(
+            request,
+            "admin/cms/merge/search_results.html",
+            context,
+        )
 
     def _get_model_from_label(self, label: str):
         if not label:
@@ -305,6 +388,83 @@ class MergeCandidateAPIView(View):
         except (TypeError, ValueError):
             return None
         return max(0.0, min(value, 100.0))
+
+    def _wants_json(self, request) -> bool:
+        format_override = (request.GET.get("format") or "").lower()
+        if format_override == "json":
+            return True
+        if format_override == "html":
+            return False
+        accept = request.headers.get("Accept", "")
+        if "application/json" in accept.lower() and "text/html" not in accept.lower():
+            return True
+        requested_with = request.headers.get("X-Requested-With", "")
+        return requested_with.lower() == "xmlhttprequest"
+
+    def _error_response(
+        self,
+        request,
+        message: str,
+        *,
+        status: int,
+        wants_json: bool | None = None,
+        model=None,
+    ):
+        if wants_json is None:
+            wants_json = self._wants_json(request)
+        if wants_json:
+            return JsonResponse({"detail": message}, status=status)
+        context = self._build_template_context(
+            request,
+            model,
+            payload=None,
+            paginator=None,
+            page_obj=None,
+            error=message,
+        )
+        return render(
+            request,
+            "admin/cms/merge/search_results.html",
+            context,
+            status=status,
+        )
+
+    def _build_template_context(
+        self,
+        request,
+        model,
+        *,
+        payload,
+        paginator,
+        page_obj,
+        error: str | None = None,
+    ):
+        meta = getattr(model, "_meta", None)
+        results = []
+        preview_fields: list[str] = []
+        if payload:
+            results = payload.get("results", [])
+            preview_fields = payload.get("preview_fields", [])
+        return {
+            "error": error,
+            "payload": payload,
+            "results": results,
+            "preview_fields": preview_fields,
+            "paginator": paginator,
+            "page_obj": page_obj,
+            "model_meta": meta,
+            "model_label": payload["model"] if payload else None,
+            "query_params": self._build_query_params(request),
+            "merge_tool_url": reverse("merge_candidates"),
+        }
+
+    def _build_query_params(self, request) -> str:
+        params = request.GET.copy()
+        if "page" in params:
+            params = params.copy()
+            params.pop("page")
+        encoded = params.urlencode()
+        return encoded
 
     def _extract_fields(self, request, model) -> list[str]:
         explicit_fields: list[str] = []

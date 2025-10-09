@@ -8,6 +8,12 @@ The merge tool lets authorised staff review duplicate records side-by-side and c
 2. Grant the **`can_merge`** permission for the model to the groups or users that should initiate merges. Users without the permission will not see the action and will be redirected back to the changelist if they attempt to access merge URLs.
 3. Users must be marked as staff members to access the admin and the merge candidate search endpoint.
 
+## Accessing the merge tools
+
+- **Admin merge form** – open any merge-enabled model's changelist, select the duplicate rows, and choose **Merge selected records** from the actions menu. This launches the compare-and-confirm screen at `.../admin/<app>/<model>/<id>/merge/`.
+- **Fuzzy candidate search** – visit `/merge/` while logged in as a staff user to open the dedicated search UI. The form lists every model registered with `MERGE_REGISTRY` and sends requests to `/merge/search/` to return scored candidates.
+- Both entry points honour the `MERGE_TOOL_FEATURE` flag: when disabled the URLs remain hidden and the templates render a clear *feature disabled* notice.
+
 ## Feature Flag Rollout and Safeguards
 
 The merge tooling is disabled by default and is controlled through the `ENABLE_ADMIN_MERGE` environment variable (surfaceable as `settings.MERGE_TOOL_FEATURE`).

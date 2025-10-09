@@ -1,0 +1,78 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block nav-global %}{% endblock %}
+
+{% block content %}
+<div class="content">
+  <h1>{% trans "Merge candidate search results" %}</h1>
+  <p class="help">{% blocktrans %}These results are also available from the interactive <a href="{{ merge_tool_url }}">merge tool</a>.{% endblocktrans %}</p>
+
+  {% if error %}
+    <ul class="messagelist"><li class="error">{{ error }}</li></ul>
+  {% else %}
+    {% if payload %}
+      <div class="results-summary">
+        <p>
+          <strong>{% trans "Model" %}:</strong>
+          {% if model_meta %}{{ model_meta.verbose_name_plural|default:model_meta.verbose_name|capfirst }}{% else %}{{ payload.model }}{% endif %}
+        </p>
+        <p><strong>{% trans "Query" %}:</strong> {{ payload.query }}</p>
+        <p><strong>{% trans "Threshold" %}:</strong> {{ payload.threshold }}</p>
+        <p><strong>{% trans "Total results" %}:</strong> {{ payload.total_results }}</p>
+      </div>
+    {% endif %}
+
+    {% if results %}
+      <table class="adminlist">
+        <thead>
+          <tr>
+            <th scope="col">{% trans "Score" %}</th>
+            <th scope="col">{% trans "Identifier" %}</th>
+            <th scope="col">{% trans "Label" %}</th>
+            <th scope="col">{% trans "Preview" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for result in results %}
+            <tr>
+              <td>{{ result.score|floatformat:1 }}</td>
+              <td>{{ result.candidate.pk }}</td>
+              <td>{{ result.candidate.label }}</td>
+              <td>
+                <ul>
+                  {% for row in result.preview %}
+                    <li><strong>{{ row.field }}:</strong> {{ row.value }}</li>
+                  {% empty %}
+                    <li class="quiet">{% trans "No preview data" %}</li>
+                  {% endfor %}
+                </ul>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>{% trans "No candidates were found for the supplied search." %}</p>
+    {% endif %}
+
+    {% if paginator and page_obj %}
+      <div class="paginator">
+        <span class="step-links">
+          {% if page_obj.has_previous %}
+            <a href="?page=1{% if query_params %}&{{ query_params|safe }}{% endif %}">{% trans "First" %}</a>
+            <a href="?page={{ page_obj.previous_page_number }}{% if query_params %}&{{ query_params|safe }}{% endif %}">{% trans "Previous" %}</a>
+          {% endif %}
+          <span class="current">
+            {% blocktrans %}Page {{ page_obj.number }} of {{ paginator.num_pages }}{% endblocktrans %}
+          </span>
+          {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}{% if query_params %}&{{ query_params|safe }}{% endif %}">{% trans "Next" %}</a>
+            <a href="?page={{ paginator.num_pages }}{% if query_params %}&{{ query_params|safe }}{% endif %}">{% trans "Last" %}</a>
+          {% endif %}
+        </span>
+      </div>
+    {% endif %}
+  {% endif %}
+</div>
+{% endblock %}
