@@ -6,16 +6,39 @@ This guide collects conventions that keep NMK CMS consistent and maintainable. I
 
 ## Technology Stack and Template Requirements
 
+### Framework and Environment Versions
+- **Python:** 3.10-slim
+- **Django:** 4.2
+
 ### HTML5 and Base Templates
 - Use semantic HTML5 elements (`<header>`, `<main>`, `<section>`, `<article>`, `<aside>`, `<footer>`).
 - Always include `<!DOCTYPE html>`, `<meta charset="utf-8">`, and `<meta name="viewport" content="width=device-width, initial-scale=1">` in `base_generic.html`.
 - Compose page templates by extending `base_generic.html` and populating semantic blocks (`<main>`, `<nav>`, etc.).
 - Extract reusable components into `{% include %}` templates for maintainability.
 
+#### Base Template Requirements
+- The `base_generic.html` file must:
+  - Include the HTML5 boilerplate (`<!DOCTYPE html>`, `<html lang="en">`, `<meta charset="utf-8">`, `<meta name="viewport" content="width=device-width, initial-scale=1">`).
+  - Load global assets in the `<head>` section: W3.CSS (from CDN), Font Awesome (from CDN), and project-wide JavaScript files.
+  - Define common template blocks:
+    - `{% block title %}` for page titles.
+    - `{% block content %}` as the main body area.
+    - `{% block extra_head %}` and `{% block extra_scripts %}` for per-page additions.
+  - Contain semantic wrapper elements (`<header>`, `<main>`, `<footer>`).
+  - Include shared navigation (`{% include 'partials/navbar.html' %}` or equivalent) when applicable.
+- All feature templates must extend this base to ensure global consistency.
+
 ### W3.CSS Styling
 - Load W3.CSS globally from the official CDN in the base template.
 - Prefer W3.CSS utility classes (`w3-container`, `w3-row`, `w3-col`, etc.) before introducing custom CSS.
 - Define custom overrides in a separate stylesheet loaded **after** W3.CSS.
+
+#### W3.CSS Overrides and Custom Styling
+- Custom styles should be minimal and placed in `static/css/custom.css`, loaded **after** W3.CSS in the base template.
+- Prefix all custom classes with a project-specific namespace (e.g., `.nmk-`) to avoid conflicts with W3.CSS.
+- Avoid overriding W3.CSS class definitions directly; instead, extend them using additional class selectors.
+- When overriding is necessary (e.g., for branding colors), document the rationale in comments within `custom.css`.
+- Limit inline styles to debugging or prototyping only.
 
 ### Font Awesome Icons
 - Font Awesome 6 is globally available; prefer the “solid” style for actions and controls.
@@ -134,6 +157,7 @@ This guide collects conventions that keep NMK CMS consistent and maintainable. I
    ```bash
    python manage.py collectstatic
    ```
+5. `base_generic.html` serves as the canonical base template for all apps to maintain consistency.
 
 ---
 
