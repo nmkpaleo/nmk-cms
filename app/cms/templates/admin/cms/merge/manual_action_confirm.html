@@ -3,9 +3,10 @@
 
 {% block nav-global %}{% endblock %}
 
+{% block content_title %}{{ title }}{% endblock %}
+
 {% block content %}
 <div class="content">
-  <h1>{{ title }}</h1>
   <p>{% trans "Select which record should receive the merged data. The remaining records will be merged into the chosen target." %}</p>
 
   <form method="post">
@@ -20,18 +21,24 @@
       <thead>
         <tr>
           <th scope="col">{% trans "Target" %}</th>
-          <th scope="col">{% trans "Object" %}</th>
+          <th scope="col">{% trans "Record" %}</th>
+          {% for column in preview_columns %}
+            <th scope="col">{{ column|capfirst }}</th>
+          {% endfor %}
         </tr>
       </thead>
       <tbody>
-        {% for obj in objects %}
+        {% for row in object_rows %}
           <tr>
             <td>
               <label>
-                <input type="radio" name="{{ merge_target_field }}" value="{{ obj.pk }}" required>
+                <input type="radio" name="{{ merge_target_field }}" value="{{ row.object.pk }}" required>
               </label>
             </td>
-            <td>{{ obj }}</td>
+            <td>{{ row.label }}</td>
+            {% for value in row.preview_values %}
+              <td>{{ value }}</td>
+            {% endfor %}
           </tr>
         {% endfor %}
       </tbody>

@@ -220,6 +220,8 @@ class MergeAdminWorkflowTests(TransactionTestCase):
         self.assertIsNotNone(response)
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Choose a target record", response.content)
+        self.assertIn(b"<th scope=\"col\">Record</th>", response.content)
+        self.assertIn(b"<th scope=\"col\">Name</th>", response.content)
 
         confirm_data = {
             "action": "merge_records_action",

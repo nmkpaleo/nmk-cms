@@ -1,3 +1,5 @@
+from typing import Any
+
 from django.contrib import admin
 from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
 from django.db.models import Count, OuterRef, Exists
@@ -114,11 +116,60 @@ class MergeAdminActionMixin:
                 changelist_url = reverse(
                     f"admin:{opts.app_label}_{opts.model_name}_changelist"
                 )
+
+                serializer = getattr(self, "_serialise_instance", None)
+                preview_columns: list[str] = []
+                serialised_rows: list[dict[str, Any]] = []
+                if callable(serializer):
+                    for obj in selected:
+                        summary = serializer(obj)
+                        preview_items = (summary or {}).get("preview", []) or []
+                        preview_map: dict[str, Any] = {}
+                        for item in preview_items:
+                            label = item.get("field")
+                            if not label:
+                                continue
+                            if label not in preview_columns:
+                                preview_columns.append(label)
+                            preview_map[label] = item.get("value")
+                        serialised_rows.append(
+                            {
+                                "object": obj,
+                                "label": (summary or {}).get("label", str(obj)),
+                                "preview_map": preview_map,
+                            }
+                        )
+
+                if not serialised_rows:
+                    object_rows = [
+                        {
+                            "object": obj,
+                            "label": str(obj),
+                            "preview_values": [],
+                        }
+                        for obj in selected
+                    ]
+                else:
+                    object_rows = []
+                    for row in serialised_rows:
+                        preview_values = [
+                            row["preview_map"].get(column, "—") for column in preview_columns
+                        ]
+                        object_rows.append(
+                            {
+                                "object": row["object"],
+                                "label": row["label"],
+                                "preview_values": preview_values,
+                            }
+                        )
+
                 context = {
                     "title": "Choose a target record",
                     "action_checkbox_name": ACTION_CHECKBOX_NAME,
                     "opts": opts,
                     "objects": selected,
+                    "object_rows": object_rows,
+                    "preview_columns": preview_columns,
                     "action_name": "merge_records_action",
                     "merge_target_field": "merge_target",
                     "changelist_url": changelist_url,
