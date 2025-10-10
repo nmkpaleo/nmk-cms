@@ -2,21 +2,53 @@
 
 This guide collects conventions that keep NMK CMS consistent and maintainable. It will grow as the team documents additional patterns and architectural decisions.
 
+## How to Use This Guide
+
+- **Start here for day-to-day expectations.** Each section outlines baseline standards for Python code, Django views and templates, accessibility, and quality assurance.
+- **Consult dedicated integration notes as needed.** Deep-dive guidance for framework add-ons (e.g., merge tooling or select widgets) now lives in separate documents such as [Django Integrations](./django-integrations.md).
+- **Propose additions when new patterns emerge.** Capture decisions in pull requests so this guide evolves alongside the product.
+
+## Table of Contents
+
+1. [Python and Django Coding Practices](#python-and-django-coding-practices)
+2. [Template and Front-End Standards](#template-and-front-end-standards)
+3. [Page Patterns](#page-patterns)
+4. [UI Components](#ui-components)
+5. [Testing Expectations](#testing-expectations)
+6. [Responsive and Accessibility Guidelines](#responsive-and-accessibility-guidelines)
+7. [Template and Asset Structure](#template-and-asset-structure)
+8. [Documentation and Collaboration Practices](#documentation-and-collaboration-practices)
+
 ---
 
-## Technology Stack and Template Requirements
+## Python and Django Coding Practices
 
-### Framework and Environment Versions
-- **Python:** 3.10-slim
-- **Django:** 4.2
+- **Follow PEP 8 and favour readability.** Keep modules focused, name things descriptively, and prefer explicit imports. Use type hints for new code to aid editor tooling and reviews.
+- **Keep business logic close to the model layer.** Prefer model methods, services, or domain utilities over view-level monoliths so behaviour is reusable across forms, admin actions, and APIs.
+- **Optimise database access.** Use `select_related`/`prefetch_related` for relationship-heavy queries, paginate long lists, and avoid raw SQL unless there is a measured performance need.
+- **Validate through Django forms and serializers.** Avoid duplicating validation logic in views; lean on Django’s form/serializer cleaning methods for consistent error messages and security.
+- **Respect configuration boundaries.** Store secrets in environment variables, keep default settings safe for local development, and document any new settings in release notes.
+- **Log meaningfully and handle errors gracefully.** Capture actionable details, prefer structured logging where available, and present user-friendly feedback on failure.
+
+---
+
+## Template and Front-End Standards
+
+### Technology Stack and Template Requirements
+
+- **Framework and Environment Versions**
+  - **Python:** 3.10-slim
+  - **Django:** 4.2
 
 ### HTML5 and Base Templates
+
 - Use semantic HTML5 elements (`<header>`, `<main>`, `<section>`, `<article>`, `<aside>`, `<footer>`).
 - Always include `<!DOCTYPE html>`, `<meta charset="utf-8">`, and `<meta name="viewport" content="width=device-width, initial-scale=1">` in `base_generic.html`.
 - Compose page templates by extending `base_generic.html` and populating semantic blocks (`<main>`, `<nav>`, etc.).
 - Extract reusable components into `{% include %}` templates for maintainability.
 
 #### Base Template Requirements
+
 - The `base_generic.html` file must:
   - Include the HTML5 boilerplate (`<!DOCTYPE html>`, `<html lang="en">`, `<meta charset="utf-8">`, `<meta name="viewport" content="width=device-width, initial-scale=1">`).
   - Load global assets in the `<head>` section: W3.CSS (from CDN), Font Awesome (from CDN), and project-wide JavaScript files.
@@ -29,11 +61,13 @@ This guide collects conventions that keep NMK CMS consistent and maintainable. I
 - All feature templates must extend this base to ensure global consistency.
 
 ### W3.CSS Styling
+
 - Load W3.CSS globally from the official CDN in the base template.
 - Prefer W3.CSS utility classes (`w3-container`, `w3-row`, `w3-col`, etc.) before introducing custom CSS.
 - Define custom overrides in a separate stylesheet loaded **after** W3.CSS.
 
 #### W3.CSS Overrides and Custom Styling
+
 - Custom styles should be minimal and placed in `static/css/custom.css`, loaded **after** W3.CSS in the base template.
 - Prefix all custom classes with a project-specific namespace (e.g., `.nmk-`) to avoid conflicts with W3.CSS.
 - Avoid overriding W3.CSS class definitions directly; instead, extend them using additional class selectors.
@@ -41,46 +75,17 @@ This guide collects conventions that keep NMK CMS consistent and maintainable. I
 - Limit inline styles to debugging or prototyping only.
 
 ### Font Awesome Icons
+
 - Font Awesome 6 is globally available; prefer the “solid” style for actions and controls.
 - Use `<i>` or `<span>` elements with `aria-hidden="true"` and provide visually hidden text when icons convey meaning.
 - Maintain consistent icon use (e.g., `fa-plus` for “create,” `fa-edit` for “edit”).
 
 ---
 
-## Django Integrations
-
-### Merge Engine Integration
-- **Opt in with `MergeMixin`**: Inherit from `cms.merge.mixins.MergeMixin` on models that can participate in merges. Override `merge_fields` to define default strategies per field and `relation_strategies` when relations require bespoke handling (for example forcing a skip or custom callback).
-- **Archive sources thoughtfully**: Provide an `archive_source_instance` implementation when the source record must be preserved. Serialise the source (for example via `cms.merge.serializers.serialize_instance`) before soft-deleting or exporting to an audit table so administrators can recover data if required.
-- **Register defaults**: Use the merge registry to centralise configuration shared across admin workflows and programmatic merges:
-  ```python
-  from cms.merge.constants import MergeStrategy
-  from cms.merge.registry import register_merge_rules
-
-  register_merge_rules(
-      MyModel,
-      fields={
-          "title": MergeStrategy.LAST_WRITE,
-          "description": MergeStrategy.PREFER_NON_NULL,
-      },
-      relations={
-          "members": "merge",
-      },
-  )
-  ```
-- **Review automated coverage**: The new integration tests in `app/cms/tests/test_merge_engine.py`, `app/cms/tests/test_admin_merge.py`, and `app/cms/tests/test_merge_fuzzy_search.py` illustrate end-to-end expectations for field resolution, admin workflows, and the fuzzy candidate endpoint. Use them as templates when extending the engine to additional models.
-
-### Select2 and History
-- Use **django-select2** for searchable or async dropdowns; initialize via Django form widgets (`ModelSelect2Widget`).
-- Register models with `HistoricalRecords()` from **django-simple-history** for audit tracking.
-- Expose history views under authenticated routes and ensure collected static files include select2 and Font Awesome assets.
-- Cover both select2 integration and history view logic in tests.
-
----
-
 ## Page Patterns
 
 ### List Pages
+
 - **Layout**: Wrap each listing view in a `<div class="w3-container">` and use the W3.CSS grid (`w3-row`, `w3-col s12 m6 l6`, etc.) so headings and actions respond cleanly from mobile through large desktop breakpoints.
 - **Heading Row**: Match the heading text to the navigation caption and keep the primary action (for example “New Accession”) on the same row, right aligned. Use a Font Awesome icon such as `fa-plus-circle` to reinforce the action.
 - **Filters**: Provide a “Show/Hide Filters” toggle using W3 button styles and `fa-filter`. Group filter controls inside `w3-row-padding` blocks with responsive columns. Always include clear/apply buttons and reset to the list route when clearing.
@@ -89,10 +94,12 @@ This guide collects conventions that keep NMK CMS consistent and maintainable. I
 - **Permissions**: Hide creation links or restricted columns using the shared `has_group` filter or context flags so users never navigate to forbidden views.
 
 ### Detail Pages
+
 - Extend the “Detail View” archetype: a single-entity page showing record metadata and related contextual actions.
 - When appropriate, combine with sub-lists or tabs to display related items (e.g., linked records or history logs).
 
 ### Common Archetypes
+
 | Archetype | Description | Example Use |
 |-----------|-------------|-------------|
 | **List View** | Tabular or card-based collections with filtering, sorting, and pagination. | “Project List” page with select2 filters. |
@@ -103,6 +110,7 @@ This guide collects conventions that keep NMK CMS consistent and maintainable. I
 | **History View** | Surfaces audit logs from django-simple-history. | “Project History” page. |
 
 ### Forms and Wizards
+
 - Use W3.CSS form styles for layout and spacing.
 - Leverage Django’s built-in validation alongside HTML5 attributes.
 - Include client-side validation messages where appropriate.
@@ -112,14 +120,17 @@ This guide collects conventions that keep NMK CMS consistent and maintainable. I
 ## UI Components
 
 ### Filter Panels
+
 - Use accordion toggles with `w3-animate-opacity` for smooth open/close behaviour.
 - Keep form labels concise and rely on Django Filter widgets. Override widget CSS classes in the filter definition when a W3 input style is required.
 
 ### Icons and Media
+
 - Font Awesome 6 is available globally—prefer the “solid” style for actions, toggles, and table controls.
 - Use descriptive alternative text whenever embedding thumbnail images inside tables.
 
 ### Buttons and Links
+
 - Base action buttons on `w3-button` with contextual colours (`w3-green` for creation, `w3-blue` for confirmation, `w3-gray` for resets). Pair each with an icon to signal intent quickly.
 
 ---
@@ -132,6 +143,8 @@ This guide collects conventions that keep NMK CMS consistent and maintainable. I
   - HTML5 and W3.CSS structure.
   - Select2 widgets and history views.
 - Use `Client` or `RequestFactory` to assert expected markup and accessibility attributes.
+- Add regression tests when fixing bugs or refining complex behaviours (for example, pagination edge cases or permission rules).
+- Keep fixtures lightweight; prefer factory functions or `ModelFactory` helpers when available.
 
 ---
 
@@ -145,6 +158,7 @@ This guide collects conventions that keep NMK CMS consistent and maintainable. I
 - Maintain accessible color contrast (WCAG AA).
 - Provide ARIA attributes (`aria-label`, `aria-live`, etc.) especially for dynamic widgets.
 - Verify layouts across devices using responsive previews or emulators.
+- Ensure interactive controls are keyboard navigable and announce state changes for assistive technologies.
 
 ---
 
@@ -161,25 +175,9 @@ This guide collects conventions that keep NMK CMS consistent and maintainable. I
 
 ---
 
-## Code Comments and Documentation
+## Documentation and Collaboration Practices
 
-- Explain *why* a non-obvious implementation exists rather than restating what code does.
-- Document integrations like select2 or simple-history inline.
-- Remove outdated comments during refactors.
-
----
-
-## Naming Conventions
-
-### URLs
-- Follow the pattern `<feature>_<action>` (e.g. `accession_list`, `fieldslip_detail`). Use hyphenated names only for multi-step flows that already exist (`accession-wizard`).
-- Keep route names aligned with navigation captions so templates can reverse URLs predictably.
-
-### Views
-- Prefer class-based views named `<Model><Action>View` (for example, `AccessionListView`). Function-based views should use verbs that describe the action (`add_geology_to_accession`).
-- Set `context_object_name` to the plural form for list views and singular for detail views to keep template variable names consistent.
-
-### Templates and Context
-- Store list templates under `cms/<feature>_list.html` and detail templates as `cms/<feature>_detail.html`.
-- Pass capability flags such as `can_edit` from the view rather than recalculating permissions in templates.
-- Ensure filter instances are provided in context with the key `filter` so templates can render `filter.form` consistently.
+- Update inline documentation, docstrings, or ADRs when you introduce noteworthy patterns.
+- Reference relevant tickets in commit messages and keep pull requests focused on one change set.
+- Surface decisions about migrations, data scripts, or integration changes in release notes or the `docs/` directory to aid future onboarding.
+- Pair complex refactors with before/after screenshots or architectural diagrams when visual context helps reviewers.
