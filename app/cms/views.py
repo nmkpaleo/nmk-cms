@@ -1838,7 +1838,12 @@ class FieldSlipQCForm(forms.Form):
     verbatim_elevation = forms.CharField(label="Verbatim elevation", required=False, max_length=255)
 
 
-ReferenceQCFormSet = formset_factory(AccessionReferenceQCForm, extra=0, can_delete=False)
+ReferenceQCFormSet = formset_factory(
+    AccessionReferenceQCForm,
+    extra=0,
+    can_delete=True,
+    formset=HiddenDeleteFormSet,
+)
 FieldSlipQCFormSet = formset_factory(FieldSlipQCForm, extra=0, can_delete=False)
 
 
@@ -2400,6 +2405,8 @@ class MediaQCFormManager:
         for form in self.reference_formset:
             cleaned = form.cleaned_data
             if not cleaned:
+                continue
+            if cleaned.get("DELETE"):
                 continue
 
             def _normalize(value):

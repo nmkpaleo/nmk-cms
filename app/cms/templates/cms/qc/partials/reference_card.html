@@ -1,35 +1,60 @@
-<div class="qc-card" data-qc-reference>
-  {% for hidden in ref_form.hidden_fields %}
-    {{ hidden }}
-  {% endfor %}
-  <div class="qc-field-grid">
-    <div class="qc-field qc-field--full">
-      <label class="qc-label" for="{{ ref_form.first_author.id_for_label }}">{{ ref_form.first_author.label }}:</label>
-      <div class="qc-control">
-        {{ ref_form.first_author }}
-        {{ ref_form.first_author.errors }}
+{% with ref_form.DELETE.value as delete_flag %}
+  <div class="qc-card" data-qc-reference{% if delete_flag %} data-reference-deleted="true"{% endif %}>
+    {% for hidden in ref_form.hidden_fields %}
+      {{ hidden }}
+    {% endfor %}
+    <div class="w3-right-align w3-margin-bottom" data-reference-actions>
+      <button
+        type="button"
+        class="w3-button w3-tiny w3-red w3-round"
+        data-action="click->qc-references#deleteReference"
+      >
+        Delete reference
+      </button>
+    </div>
+    <div class="qc-field-grid" data-reference-body{% if delete_flag %} hidden{% endif %}>
+      <div class="qc-field qc-field--full">
+        <label class="qc-label" for="{{ ref_form.first_author.id_for_label }}">{{ ref_form.first_author.label }}:</label>
+        <div class="qc-control">
+          {{ ref_form.first_author }}
+          {{ ref_form.first_author.errors }}
+        </div>
+      </div>
+      <div class="qc-field qc-field--full">
+        <label class="qc-label" for="{{ ref_form.title.id_for_label }}">{{ ref_form.title.label }}:</label>
+        <div class="qc-control">
+          {{ ref_form.title }}
+          {{ ref_form.title.errors }}
+        </div>
+      </div>
+      <div class="qc-field">
+        <label class="qc-label" for="{{ ref_form.year.id_for_label }}">{{ ref_form.year.label }}:</label>
+        <div class="qc-control">
+          {{ ref_form.year }}
+          {{ ref_form.year.errors }}
+        </div>
+      </div>
+      <div class="qc-field">
+        <label class="qc-label" for="{{ ref_form.page.id_for_label }}">{{ ref_form.page.label }}:</label>
+        <div class="qc-control">
+          {{ ref_form.page }}
+          {{ ref_form.page.errors }}
+        </div>
       </div>
     </div>
-    <div class="qc-field qc-field--full">
-      <label class="qc-label" for="{{ ref_form.title.id_for_label }}">{{ ref_form.title.label }}:</label>
-      <div class="qc-control">
-        {{ ref_form.title }}
-        {{ ref_form.title.errors }}
-      </div>
-    </div>
-    <div class="qc-field">
-      <label class="qc-label" for="{{ ref_form.year.id_for_label }}">{{ ref_form.year.label }}:</label>
-      <div class="qc-control">
-        {{ ref_form.year }}
-        {{ ref_form.year.errors }}
-      </div>
-    </div>
-    <div class="qc-field">
-      <label class="qc-label" for="{{ ref_form.page.id_for_label }}">{{ ref_form.page.label }}:</label>
-      <div class="qc-control">
-        {{ ref_form.page }}
-        {{ ref_form.page.errors }}
-      </div>
+    <div
+      class="w3-panel w3-pale-red w3-border w3-small"
+      data-reference-deleted-message
+      {% if not delete_flag %}hidden{% endif %}
+    >
+      <p class="w3-margin-top w3-margin-bottom">This reference will be deleted when you save.</p>
+      <button
+        type="button"
+        class="w3-button w3-tiny w3-light-grey w3-round"
+        data-action="click->qc-references#restoreReference"
+      >
+        Undo delete
+      </button>
     </div>
   </div>
-</div>
+{% endwith %}

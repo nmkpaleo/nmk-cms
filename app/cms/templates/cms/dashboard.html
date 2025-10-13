@@ -83,7 +83,7 @@
   {% if is_collection_manager %}
     {% if has_active_series %}
       <h2>Generate Accession Numbers</h2>
-      <a href="{% url 'accession_create' %}" class="w3-button w3-green">Create Single Accession</a>
+      <a href="{% url 'accession-wizard' %}" class="w3-button w3-green">Create Single Accession</a>
       <a href="{% url 'accession_generate_batch' %}" class="w3-button w3-green">Generate Batch</a>
     {% endif %}
 

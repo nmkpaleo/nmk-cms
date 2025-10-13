@@ -37,6 +37,7 @@
       this.formElement = this.element.closest("form");
       this.prefix = this.element.dataset.formsetPrefix || "reference";
       this.totalFormsInput = this._findManagementInput("TOTAL_FORMS");
+      this._applyInitialDeletedState();
       this.refreshEmptyState();
     }
 
@@ -55,20 +56,46 @@
       var orderValue = this._nextOrder();
       this._setOrderValue(newElement, orderValue);
       this._ensureRefId(newElement, index);
+      this._setDeleteValue(newElement, "");
+      this._toggleReferenceVisibility(newElement, false);
       this.containerTarget.appendChild(newElement);
       this._setTotalForms(index + 1);
       this.refreshEmptyState();
       this._focusFirstField(newElement);
     }
 
+    deleteReference(event) {
+      if (event) {
+        event.preventDefault();
+      }
+      var card = this._findReferenceCard(event);
+      if (!card) {
+        return;
+      }
+      this._markDeleteField(card, true);
+      this._toggleReferenceVisibility(card, true);
+      this.refreshEmptyState();
+    }
+
+    restoreReference(event) {
+      if (event) {
+        event.preventDefault();
+      }
+      var card = this._findReferenceCard(event);
+      if (!card) {
+        return;
+      }
+      this._markDeleteField(card, false);
+      this._toggleReferenceVisibility(card, false);
+      this.refreshEmptyState();
+    }
+
     refreshEmptyState() {
       if (!this.hasEmptyMessageTarget) {
         return;
       }
-      var hasReferences =
-        this.hasContainerTarget &&
-        this.containerTarget.querySelector("[data-qc-reference]");
-      this.emptyMessageTarget.hidden = Boolean(hasReferences);
+      var visible = this._visibleReferences();
+      this.emptyMessageTarget.hidden = visible.length > 0;
     }
 
     _findManagementInput(suffix) {
@@ -138,6 +165,16 @@
       }
     }
 
+    _setDeleteValue(element, value) {
+      if (!element) {
+        return;
+      }
+      var deleteInput = element.querySelector('input[name$="-DELETE"]');
+      if (deleteInput) {
+        deleteInput.value = value || "";
+      }
+    }
+
     _setTotalForms(value) {
       if (this.totalFormsInput) {
         this.totalFormsInput.value = String(value);
@@ -159,6 +196,121 @@
       if (field && typeof field.focus === "function") {
         field.focus();
       }
+    }
+
+    _findReferenceCard(source) {
+      if (!source) {
+        return null;
+      }
+      var element = source.target || source;
+      if (!element.closest) {
+        return null;
+      }
+      return element.closest("[data-qc-reference]");
+    }
+
+    _markDeleteField(card, deleted) {
+      if (!card) {
+        return;
+      }
+      var deleteInput = card.querySelector('input[name$="-DELETE"]');
+      if (!deleteInput) {
+        return;
+      }
+      deleteInput.value = deleted ? "on" : "";
+    }
+
+    _toggleReferenceVisibility(card, deleted) {
+      if (!card) {
+        return;
+      }
+      var body = card.querySelector("[data-reference-body]");
+      var deletedMessage = card.querySelector("[data-reference-deleted-message]");
+      if (deleted) {
+        if (body) {
+          body.hidden = true;
+        }
+        if (deletedMessage) {
+          deletedMessage.hidden = false;
+        }
+        card.dataset.deleted = "true";
+      } else {
+        if (body) {
+          body.hidden = false;
+        }
+        if (deletedMessage) {
+          deletedMessage.hidden = true;
+        }
+        if (card.dataset) {
+          delete card.dataset.deleted;
+        }
+      }
+      this._setFieldDisabledState(card, deleted);
+    }
+
+    _setFieldDisabledState(card, disabled) {
+      if (!card) {
+        return;
+      }
+      card
+        .querySelectorAll("input, textarea, select")
+        .forEach(function (field) {
+          if (!field.name) {
+            return;
+          }
+          if (field.name.match(/-DELETE$/)) {
+            field.disabled = false;
+            return;
+          }
+          if (field.type === "hidden") {
+            return;
+          }
+          field.disabled = disabled;
+        });
+    }
+
+    _visibleReferences() {
+      if (!this.hasContainerTarget) {
+        return [];
+      }
+      var controller = this;
+      return Array.prototype.filter.call(
+        this.containerTarget.querySelectorAll("[data-qc-reference]"),
+        function (element) {
+          return !controller._isMarkedForDeletion(element);
+        }
+      );
+    }
+
+    _isMarkedForDeletion(element) {
+      if (!element) {
+        return false;
+      }
+      if (element.dataset && element.dataset.deleted === "true") {
+        return true;
+      }
+      var deleteInput = element.querySelector('input[name$="-DELETE"]');
+      if (!deleteInput) {
+        return false;
+      }
+      var value = (deleteInput.value || "").toLowerCase();
+      return value === "on" || value === "true" || value === "1";
+    }
+
+    _applyInitialDeletedState() {
+      if (!this.hasContainerTarget) {
+        return;
+      }
+      var controller = this;
+      this.containerTarget
+        .querySelectorAll("[data-qc-reference]")
+        .forEach(function (element) {
+          if (controller._isMarkedForDeletion(element)) {
+            controller._toggleReferenceVisibility(element, true);
+          } else {
+            controller._toggleReferenceVisibility(element, false);
+          }
+        });
     }
   };
 
