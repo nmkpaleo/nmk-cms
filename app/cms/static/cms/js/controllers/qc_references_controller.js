@@ -226,6 +226,7 @@
       }
       var body = card.querySelector("[data-reference-body]");
       var deletedMessage = card.querySelector("[data-reference-deleted-message]");
+      var actions = card.querySelector("[data-reference-actions]");
       if (deleted) {
         if (body) {
           body.hidden = true;
@@ -233,7 +234,11 @@
         if (deletedMessage) {
           deletedMessage.hidden = false;
         }
+        if (actions) {
+          actions.hidden = true;
+        }
         card.dataset.deleted = "true";
+        card.dataset.referenceDeleted = "true";
       } else {
         if (body) {
           body.hidden = false;
@@ -241,8 +246,12 @@
         if (deletedMessage) {
           deletedMessage.hidden = true;
         }
+        if (actions) {
+          actions.hidden = false;
+        }
         if (card.dataset) {
           delete card.dataset.deleted;
+          delete card.dataset.referenceDeleted;
         }
       }
       this._setFieldDisabledState(card, deleted);
@@ -286,8 +295,13 @@
       if (!element) {
         return false;
       }
-      if (element.dataset && element.dataset.deleted === "true") {
-        return true;
+      if (element.dataset) {
+        if (element.dataset.deleted === "true") {
+          return true;
+        }
+        if (element.dataset.referenceDeleted === "true") {
+          return true;
+        }
       }
       var deleteInput = element.querySelector('input[name$="-DELETE"]');
       if (!deleteInput) {

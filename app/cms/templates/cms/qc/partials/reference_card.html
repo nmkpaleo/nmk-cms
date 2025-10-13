@@ -3,7 +3,7 @@
     {% for hidden in ref_form.hidden_fields %}
       {{ hidden }}
     {% endfor %}
-    <div class="w3-right-align w3-margin-bottom" data-reference-actions>
+    <div class="w3-right-align w3-margin-bottom" data-reference-actions{% if delete_flag %} hidden{% endif %}>
       <button
         type="button"
         class="w3-button w3-tiny w3-red w3-round"
