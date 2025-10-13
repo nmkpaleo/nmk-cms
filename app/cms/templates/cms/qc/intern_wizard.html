@@ -177,7 +177,9 @@
   {% endif %}
 {% endblock %}
 {% block wizard_actions %}
-  <button type="submit" name="action" value="forward_expert" class="w3-button w3-green w3-margin-top">Submit for Expert Review</button>
+  {% if not is_expert %}
+    <button type="submit" name="action" value="forward_expert" class="w3-button w3-green w3-margin-top">Submit for Expert Review</button>
+  {% endif %}
   {% if is_expert %}
     <button type="submit" name="action" value="save" class="w3-button w3-small w3-blue-grey w3-margin-top">Save &amp; Continue</button>
     <button type="submit" name="action" value="return_intern" class="w3-button w3-small w3-blue w3-margin-top">Return to Interns</button>

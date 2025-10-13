@@ -267,6 +267,7 @@ class DashboardQueueTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Approve &amp; Accession")
         self.assertContains(response, "Save &amp; Continue")
+        self.assertNotContains(response, "Submit for Expert Review")
 
     def test_intern_wizard_hides_expert_actions_for_interns(self):
         user = self._create_user("intern-access", groups=(self.intern_group,))
@@ -277,6 +278,7 @@ class DashboardQueueTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "Save &amp; Continue")
         self.assertNotContains(response, "Approve &amp; Accession")
+        self.assertContains(response, "Submit for Expert Review")
 
     def test_dashboard_for_user_without_role(self):
         user = self._create_user("visitor")
