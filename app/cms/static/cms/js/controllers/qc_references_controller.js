@@ -2,7 +2,8 @@
   if (typeof module === "object" && typeof module.exports === "object") {
     module.exports = factory(require("@hotwired/stimulus"));
   } else {
-    var controllerClass = null;
+    factory(global.Stimulus || null);
+
     var controllerRegistered = false;
 
     function registerController() {
@@ -15,10 +16,7 @@
         return false;
       }
 
-      if (!controllerClass) {
-        controllerClass = factory(Stimulus);
-      }
-
+      var controllerClass = factory(Stimulus);
       if (!controllerClass) {
         controllerRegistered = true;
         return true;
@@ -42,9 +40,11 @@
 
     if (!registerController()) {
       var onReady = function () {
-        if (registerController() && global.removeEventListener) {
-          global.removeEventListener("load", onReady);
-          global.removeEventListener("DOMContentLoaded", onReady);
+        if (registerController()) {
+          if (global.removeEventListener) {
+            global.removeEventListener("load", onReady);
+            global.removeEventListener("DOMContentLoaded", onReady);
+          }
         }
       };
 
@@ -63,117 +63,158 @@
     }
   }
 })(typeof window !== "undefined" ? window : this, function (Stimulus) {
+  var root = typeof window !== "undefined" ? window : typeof globalThis !== "undefined" ? globalThis : this;
+  if (!root.__qcReferencesState) {
+    root.__qcReferencesState = {
+      fallbackInitialized: false,
+      controllerClass: null,
+      helpers: null,
+    };
+  }
+  var state = root.__qcReferencesState;
+
+  if (!state.helpers) {
+    state.helpers = buildHelpers();
+  }
+
+  if (!state.fallbackInitialized) {
+    initializeFallback(root, state.helpers);
+    state.fallbackInitialized = true;
+  }
+
   if (!Stimulus || !Stimulus.Controller) {
-    return null;
+    return state.controllerClass;
   }
 
-  var Controller = Stimulus.Controller;
-
-  function parseInteger(value) {
-    var number = parseInt(value, 10);
-    return isNaN(number) ? 0 : number;
+  if (!state.controllerClass) {
+    state.controllerClass = createStimulusController(Stimulus.Controller, state.helpers);
   }
 
-  function replacePrefixTokens(html, prefix, index) {
-    if (typeof html !== "string") {
-      return "";
-    }
-    var pattern = new RegExp(prefix + "-__prefix__", "g");
-    return html.replace(pattern, prefix + "-" + index);
-  }
+  return state.controllerClass;
 
-  var QcReferencesController = class extends Controller {
-    static get targets() {
-      return ["container", "template", "emptyMessage"];
+  function buildHelpers() {
+    function parseInteger(value) {
+      var number = parseInt(value, 10);
+      return isNaN(number) ? 0 : number;
     }
 
-    connect() {
-      this.formElement = this.element.closest("form");
-      this.prefix = this.element.dataset.formsetPrefix || "reference";
-      this.totalFormsInput = this._findManagementInput("TOTAL_FORMS");
-      this._applyInitialDeletedState();
-      this.refreshEmptyState();
+    function replacePrefixTokens(html, prefix, index) {
+      if (typeof html !== "string") {
+        return "";
+      }
+      var pattern = new RegExp(prefix + "-__prefix__", "g");
+      return html.replace(pattern, prefix + "-" + index);
     }
 
-    addReference(event) {
-      if (event) {
-        event.preventDefault();
-      }
-      if (!this.hasTemplateTarget || !this.hasContainerTarget) {
-        return;
-      }
-      var index = this._nextIndex();
-      var newElement = this._createReferenceElement(index);
-      if (!newElement) {
-        return;
-      }
-      var orderValue = this._nextOrder();
-      this._setOrderValue(newElement, orderValue);
-      this._ensureRefId(newElement, index);
-      this._setDeleteValue(newElement, "");
-      this._toggleReferenceVisibility(newElement, false);
-      this.containerTarget.appendChild(newElement);
-      this._setTotalForms(index + 1);
-      this.refreshEmptyState();
-      this._focusFirstField(newElement);
-    }
-
-    deleteReference(event) {
-      if (event) {
-        event.preventDefault();
-      }
-      var card = this._findReferenceCard(event);
-      if (!card) {
-        return;
-      }
-      this._markDeleteField(card, true);
-      this._toggleReferenceVisibility(card, true);
-      this.refreshEmptyState();
-    }
-
-    restoreReference(event) {
-      if (event) {
-        event.preventDefault();
-      }
-      var card = this._findReferenceCard(event);
-      if (!card) {
-        return;
-      }
-      this._markDeleteField(card, false);
-      this._toggleReferenceVisibility(card, false);
-      this.refreshEmptyState();
-    }
-
-    refreshEmptyState() {
-      if (!this.hasEmptyMessageTarget) {
-        return;
-      }
-      var visible = this._visibleReferences();
-      this.emptyMessageTarget.hidden = visible.length > 0;
-    }
-
-    _findManagementInput(suffix) {
-      if (!this.formElement) {
+    function findManagementInput(formElement, prefix, suffix) {
+      if (!formElement) {
         return null;
       }
-      return this.formElement.querySelector(
-        'input[name="' + this.prefix + "-" + suffix + '"]'
-      );
+      return formElement.querySelector('input[name="' + prefix + "-" + suffix + '"]');
     }
 
-    _nextIndex() {
-      if (!this.totalFormsInput) {
-        return this._countReferences();
+    function buildContext(source) {
+      if (!source) {
+        return null;
       }
-      return parseInteger(this.totalFormsInput.value);
+
+      var element = null;
+      if (source.element && source.element.nodeType === 1) {
+        element = source.element;
+      } else if (source.nodeType === 1) {
+        element = source;
+      }
+
+      if (!element || !element.querySelector) {
+        return null;
+      }
+
+      var formElement = source.formElement;
+      if (!formElement && element.closest) {
+        formElement = element.closest("form");
+      }
+
+      var prefix = source.prefix;
+      if (!prefix && element.dataset) {
+        prefix = element.dataset.formsetPrefix;
+      }
+      if (!prefix) {
+        prefix = "reference";
+      }
+
+      var container = source.container || source.containerTarget;
+      if (!container && element.querySelector) {
+        container = element.querySelector('[data-qc-references-target="container"]');
+      }
+
+      var template = source.template || source.templateTarget;
+      if (!template && element.querySelector) {
+        template = element.querySelector('template[data-qc-references-target="template"]');
+      }
+
+      var emptyMessage = source.emptyMessage || source.emptyMessageTarget;
+      if (!emptyMessage && element.querySelector) {
+        emptyMessage = element.querySelector('[data-qc-references-target="emptyMessage"]');
+      }
+
+      var totalFormsInput = source.totalFormsInput;
+      if (!totalFormsInput) {
+        totalFormsInput = findManagementInput(formElement, prefix, "TOTAL_FORMS");
+      }
+
+      return {
+        element: element,
+        formElement: formElement,
+        prefix: prefix,
+        container: container,
+        template: template,
+        emptyMessage: emptyMessage,
+        totalFormsInput: totalFormsInput,
+      };
     }
 
-    _nextOrder() {
-      if (!this.hasContainerTarget) {
-        return this._nextIndex();
+    function syncContext(target, ctx) {
+      if (!target || !ctx) {
+        return;
+      }
+      target.formElement = ctx.formElement;
+      target.prefix = ctx.prefix;
+      target.totalFormsInput = ctx.totalFormsInput;
+    }
+
+    function ensureTotalForms(ctx) {
+      if (!ctx) {
+        return;
+      }
+      if (!ctx.totalFormsInput && ctx.formElement) {
+        ctx.totalFormsInput = findManagementInput(ctx.formElement, ctx.prefix, "TOTAL_FORMS");
+      }
+    }
+
+    function countReferences(ctx) {
+      if (!ctx || !ctx.container) {
+        return 0;
+      }
+      return ctx.container.querySelectorAll("[data-qc-reference]").length;
+    }
+
+    function nextIndex(ctx) {
+      if (!ctx) {
+        return 0;
+      }
+      ensureTotalForms(ctx);
+      if (ctx.totalFormsInput) {
+        return parseInteger(ctx.totalFormsInput.value);
+      }
+      return countReferences(ctx);
+    }
+
+    function nextOrder(ctx) {
+      if (!ctx || !ctx.container) {
+        return nextIndex(ctx);
       }
       var maxOrder = -1;
-      this.containerTarget
+      ctx.container
         .querySelectorAll('input[name$="-order"]')
         .forEach(function (input) {
           var value = parseInteger(input.value);
@@ -184,18 +225,24 @@
       return maxOrder + 1;
     }
 
-    _createReferenceElement(index) {
-      var templateHtml = this.templateTarget.innerHTML;
+    function createReferenceElement(ctx, index) {
+      if (!ctx || !ctx.template) {
+        return null;
+      }
+      if (typeof document === "undefined") {
+        return null;
+      }
+      var templateHtml = ctx.template.innerHTML;
       if (!templateHtml) {
         return null;
       }
-      var markup = replacePrefixTokens(templateHtml, this.prefix, index);
+      var markup = replacePrefixTokens(templateHtml, ctx.prefix, index);
       var wrapper = document.createElement("div");
       wrapper.innerHTML = markup.trim();
       return wrapper.firstElementChild;
     }
 
-    _setOrderValue(element, value) {
+    function setOrderValue(element, value) {
       if (!element) {
         return;
       }
@@ -205,7 +252,7 @@
       }
     }
 
-    _ensureRefId(element, index) {
+    function ensureRefId(element, index) {
       if (!element) {
         return;
       }
@@ -219,7 +266,7 @@
       }
     }
 
-    _setDeleteValue(element, value) {
+    function setDeleteValue(element, value) {
       if (!element) {
         return;
       }
@@ -233,20 +280,17 @@
       }
     }
 
-    _setTotalForms(value) {
-      if (this.totalFormsInput) {
-        this.totalFormsInput.value = String(value);
+    function setTotalForms(ctx, value) {
+      if (!ctx) {
+        return;
+      }
+      ensureTotalForms(ctx);
+      if (ctx.totalFormsInput) {
+        ctx.totalFormsInput.value = String(value);
       }
     }
 
-    _countReferences() {
-      if (!this.hasContainerTarget) {
-        return 0;
-      }
-      return this.containerTarget.querySelectorAll("[data-qc-reference]").length;
-    }
-
-    _focusFirstField(element) {
+    function focusFirstField(element) {
       if (!element) {
         return;
       }
@@ -256,18 +300,7 @@
       }
     }
 
-    _findReferenceCard(source) {
-      if (!source) {
-        return null;
-      }
-      var element = source.target || source;
-      if (!element.closest) {
-        return null;
-      }
-      return element.closest("[data-qc-reference]");
-    }
-
-    _markDeleteField(card, deleted) {
+    function markDeleteField(card, deleted) {
       if (!card) {
         return;
       }
@@ -282,7 +315,28 @@
       }
     }
 
-    _toggleReferenceVisibility(card, deleted) {
+    function setFieldDisabledState(card, disabled) {
+      if (!card) {
+        return;
+      }
+      card
+        .querySelectorAll("input, textarea, select")
+        .forEach(function (field) {
+          if (!field.name) {
+            return;
+          }
+          if (field.name.match(/-DELETE$/)) {
+            field.disabled = false;
+            return;
+          }
+          if (field.type === "hidden") {
+            return;
+          }
+          field.disabled = disabled;
+        });
+    }
+
+    function toggleReferenceVisibility(card, deleted) {
       if (!card) {
         return;
       }
@@ -316,56 +370,19 @@
           delete card.dataset.referenceDeleted;
         }
       }
-      this._setFieldDisabledState(card, deleted);
+      setFieldDisabledState(card, deleted);
     }
 
-    _setFieldDisabledState(card, disabled) {
+    function isMarkedForDeletion(card) {
       if (!card) {
-        return;
-      }
-      card
-        .querySelectorAll("input, textarea, select")
-        .forEach(function (field) {
-          if (!field.name) {
-            return;
-          }
-          if (field.name.match(/-DELETE$/)) {
-            field.disabled = false;
-            return;
-          }
-          if (field.type === "hidden") {
-            return;
-          }
-          field.disabled = disabled;
-        });
-    }
-
-    _visibleReferences() {
-      if (!this.hasContainerTarget) {
-        return [];
-      }
-      var controller = this;
-      return Array.prototype.filter.call(
-        this.containerTarget.querySelectorAll("[data-qc-reference]"),
-        function (element) {
-          return !controller._isMarkedForDeletion(element);
-        }
-      );
-    }
-
-    _isMarkedForDeletion(element) {
-      if (!element) {
         return false;
       }
-      if (element.dataset) {
-        if (element.dataset.deleted === "true") {
-          return true;
-        }
-        if (element.dataset.referenceDeleted === "true") {
+      if (card.dataset) {
+        if (card.dataset.deleted === "true" || card.dataset.referenceDeleted === "true") {
           return true;
         }
       }
-      var deleteInput = element.querySelector('input[name$="-DELETE"]');
+      var deleteInput = card.querySelector('input[name$="-DELETE"]');
       if (!deleteInput) {
         return false;
       }
@@ -376,22 +393,258 @@
       return value === "on" || value === "true" || value === "1";
     }
 
-    _applyInitialDeletedState() {
-      if (!this.hasContainerTarget) {
+    function visibleReferences(ctx) {
+      if (!ctx || !ctx.container) {
+        return [];
+      }
+      var references = Array.prototype.slice.call(
+        ctx.container.querySelectorAll("[data-qc-reference]")
+      );
+      return references.filter(function (element) {
+        return !isMarkedForDeletion(element);
+      });
+    }
+
+    function refreshEmptyState(ctx) {
+      if (!ctx || !ctx.emptyMessage) {
         return;
       }
-      var controller = this;
-      this.containerTarget
+      var visible = visibleReferences(ctx);
+      ctx.emptyMessage.hidden = visible.length > 0;
+    }
+
+    function applyInitialDeletedState(ctx) {
+      if (!ctx || !ctx.container) {
+        return;
+      }
+      ctx.container
         .querySelectorAll("[data-qc-reference]")
         .forEach(function (element) {
-          if (controller._isMarkedForDeletion(element)) {
-            controller._toggleReferenceVisibility(element, true);
-          } else {
-            controller._toggleReferenceVisibility(element, false);
-          }
+          toggleReferenceVisibility(element, isMarkedForDeletion(element));
         });
     }
-  };
 
-  return QcReferencesController;
+    function addReference(ctx) {
+      if (!ctx || !ctx.container) {
+        return null;
+      }
+      var index = nextIndex(ctx);
+      var newElement = createReferenceElement(ctx, index);
+      if (!newElement) {
+        return null;
+      }
+      var orderValue = nextOrder(ctx);
+      setOrderValue(newElement, orderValue);
+      ensureRefId(newElement, index);
+      setDeleteValue(newElement, "");
+      toggleReferenceVisibility(newElement, false);
+      ctx.container.appendChild(newElement);
+      setTotalForms(ctx, index + 1);
+      refreshEmptyState(ctx);
+      return newElement;
+    }
+
+    function findReferenceCard(source) {
+      if (!source) {
+        return null;
+      }
+      var element = source.target || source;
+      if (!element.closest) {
+        return null;
+      }
+      return element.closest("[data-qc-reference]");
+    }
+
+    function sectionContext(source) {
+      if (!source || !source.closest) {
+        return null;
+      }
+      var section = source.closest('[data-controller~="qc-references"]');
+      if (!section) {
+        return null;
+      }
+      return { element: section };
+    }
+
+    return {
+      buildContext: buildContext,
+      syncContext: syncContext,
+      refreshEmptyState: refreshEmptyState,
+      applyInitialDeletedState: applyInitialDeletedState,
+      addReference: addReference,
+      markDeleteField: markDeleteField,
+      toggleReferenceVisibility: toggleReferenceVisibility,
+      findReferenceCard: findReferenceCard,
+      focusFirstField: focusFirstField,
+      sectionContext: sectionContext,
+    };
+  }
+
+  function initializeFallback(root, helpers) {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    function hasStimulus() {
+      return Boolean(root.Stimulus && root.Stimulus.Controller);
+    }
+
+    function prepareSections() {
+      if (hasStimulus()) {
+        return;
+      }
+      var sections = document.querySelectorAll('[data-controller~="qc-references"]');
+      sections.forEach(function (section) {
+        if (section.dataset && section.dataset.qcReferencesFallback === "true") {
+          return;
+        }
+        var ctx = helpers.buildContext({ element: section });
+        if (!ctx) {
+          return;
+        }
+        helpers.applyInitialDeletedState(ctx);
+        helpers.refreshEmptyState(ctx);
+        if (section.dataset) {
+          section.dataset.qcReferencesFallback = "true";
+        }
+      });
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", prepareSections);
+    } else {
+      prepareSections();
+    }
+
+    document.addEventListener("click", function (event) {
+      if (event.defaultPrevented) {
+        return;
+      }
+
+      var target = event.target;
+      var addTrigger = target && target.closest ? target.closest("[data-reference-add]") : null;
+      if (addTrigger) {
+        event.preventDefault();
+        var ctxAdd = helpers.buildContext(helpers.sectionContext(addTrigger));
+        if (!ctxAdd) {
+          return;
+        }
+        var newElement = helpers.addReference(ctxAdd);
+        if (newElement) {
+          helpers.focusFirstField(newElement);
+        }
+        return;
+      }
+
+      var deleteTrigger = target && target.closest ? target.closest("[data-reference-delete]") : null;
+      if (deleteTrigger) {
+        event.preventDefault();
+        var cardDelete = helpers.findReferenceCard(deleteTrigger);
+        if (!cardDelete) {
+          return;
+        }
+        var ctxDelete = helpers.buildContext(helpers.sectionContext(deleteTrigger));
+        if (!ctxDelete) {
+          return;
+        }
+        helpers.markDeleteField(cardDelete, true);
+        helpers.toggleReferenceVisibility(cardDelete, true);
+        helpers.refreshEmptyState(ctxDelete);
+        return;
+      }
+
+      var restoreTrigger = target && target.closest ? target.closest("[data-reference-restore]") : null;
+      if (restoreTrigger) {
+        event.preventDefault();
+        var cardRestore = helpers.findReferenceCard(restoreTrigger);
+        if (!cardRestore) {
+          return;
+        }
+        var ctxRestore = helpers.buildContext(helpers.sectionContext(restoreTrigger));
+        if (!ctxRestore) {
+          return;
+        }
+        helpers.markDeleteField(cardRestore, false);
+        helpers.toggleReferenceVisibility(cardRestore, false);
+        helpers.refreshEmptyState(ctxRestore);
+      }
+    });
+  }
+
+  function createStimulusController(Controller, helpers) {
+    var QcReferencesController = class extends Controller {};
+    QcReferencesController.targets = ["container", "template", "emptyMessage"];
+
+    QcReferencesController.prototype.connect = function () {
+      var ctx = helpers.buildContext(this);
+      if (!ctx) {
+        return;
+      }
+      helpers.applyInitialDeletedState(ctx);
+      helpers.refreshEmptyState(ctx);
+      helpers.syncContext(this, ctx);
+    };
+
+    QcReferencesController.prototype.addReference = function (event) {
+      if (event) {
+        event.preventDefault();
+      }
+      var ctx = helpers.buildContext(this);
+      if (!ctx) {
+        return;
+      }
+      var newElement = helpers.addReference(ctx);
+      helpers.syncContext(this, ctx);
+      if (newElement) {
+        helpers.focusFirstField(newElement);
+      }
+    };
+
+    QcReferencesController.prototype.deleteReference = function (event) {
+      if (event) {
+        event.preventDefault();
+      }
+      var card = helpers.findReferenceCard(event);
+      if (!card) {
+        return;
+      }
+      var ctx = helpers.buildContext(this);
+      if (!ctx) {
+        return;
+      }
+      helpers.markDeleteField(card, true);
+      helpers.toggleReferenceVisibility(card, true);
+      helpers.refreshEmptyState(ctx);
+      helpers.syncContext(this, ctx);
+    };
+
+    QcReferencesController.prototype.restoreReference = function (event) {
+      if (event) {
+        event.preventDefault();
+      }
+      var card = helpers.findReferenceCard(event);
+      if (!card) {
+        return;
+      }
+      var ctx = helpers.buildContext(this);
+      if (!ctx) {
+        return;
+      }
+      helpers.markDeleteField(card, false);
+      helpers.toggleReferenceVisibility(card, false);
+      helpers.refreshEmptyState(ctx);
+      helpers.syncContext(this, ctx);
+    };
+
+    QcReferencesController.prototype.refreshEmptyState = function () {
+      var ctx = helpers.buildContext(this);
+      if (!ctx) {
+        return;
+      }
+      helpers.refreshEmptyState(ctx);
+      helpers.syncContext(this, ctx);
+    };
+
+    return QcReferencesController;
+  }
 });
