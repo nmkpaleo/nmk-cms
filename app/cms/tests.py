@@ -252,9 +252,33 @@ class DashboardQueueTests(TestCase):
         self.assertIn("Pending intern review", labels)
         self.assertIn("Needs expert attention", labels)
         self.assertIn("Returned for fixes", labels)
+        keys = [section["key"] for section in sections]
+        self.assertLess(keys.index("pending_expert"), keys.index("pending_intern"))
         extra_labels = {extra["label"] for extra in response.context["qc_extra_links"]}
         self.assertIn("Media with rearranged rows", extra_labels)
         self.assertIn("Media with QC comments", extra_labels)
+
+    def test_expert_can_open_intern_qc_wizard(self):
+        user = self._create_user("expert-access", groups=(self.curator_group,))
+        self.client.force_login(user)
+        response = self.client.get(
+            reverse("media_intern_qc", args=[self.media_pending_intern.uuid])
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Approve &amp; Accession")
+        self.assertContains(response, "Save &amp; Continue")
+        self.assertNotContains(response, "Submit for Expert Review")
+
+    def test_intern_wizard_hides_expert_actions_for_interns(self):
+        user = self._create_user("intern-access", groups=(self.intern_group,))
+        self.client.force_login(user)
+        response = self.client.get(
+            reverse("media_intern_qc", args=[self.media_pending_intern.uuid])
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Save &amp; Continue")
+        self.assertNotContains(response, "Approve &amp; Accession")
+        self.assertContains(response, "Submit for Expert Review")
 
     def test_dashboard_for_user_without_role(self):
         user = self._create_user("visitor")
