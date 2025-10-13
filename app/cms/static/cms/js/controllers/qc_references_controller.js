@@ -171,7 +171,11 @@
       }
       var deleteInput = element.querySelector('input[name$="-DELETE"]');
       if (deleteInput) {
-        deleteInput.value = value || "";
+        var finalValue = value || "";
+        deleteInput.value = finalValue;
+        if (deleteInput.type === "checkbox") {
+          deleteInput.checked = Boolean(finalValue);
+        }
       }
     }
 
@@ -217,7 +221,11 @@
       if (!deleteInput) {
         return;
       }
-      deleteInput.value = deleted ? "on" : "";
+      var finalValue = deleted ? "on" : "";
+      deleteInput.value = finalValue;
+      if (deleteInput.type === "checkbox") {
+        deleteInput.checked = deleted;
+      }
     }
 
     _toggleReferenceVisibility(card, deleted) {
@@ -306,6 +314,9 @@
       var deleteInput = element.querySelector('input[name$="-DELETE"]');
       if (!deleteInput) {
         return false;
+      }
+      if (deleteInput.type === "checkbox") {
+        return Boolean(deleteInput.checked);
       }
       var value = (deleteInput.value || "").toLowerCase();
       return value === "on" || value === "true" || value === "1";
