@@ -899,6 +899,16 @@ def dashboard(request):
 
     queue_definitions = [
         {
+            "key": "pending_expert",
+            "label": "Needs expert attention",
+            "filters": {"qc_status": Media.QCStatus.PENDING_EXPERT},
+            "action_url_name": "media_expert_qc",
+            "cta_label": "Open Expert QC",
+            "empty_message": "No media awaiting expert review.",
+            "list_view_name": "media_qc_pending_expert",
+            "roles": {"expert"},
+        },
+        {
             "key": "pending_intern",
             "label": "Pending intern review",
             "filters": {
@@ -911,16 +921,6 @@ def dashboard(request):
             "empty_message": "No media awaiting intern review.",
             "list_view_name": "media_qc_pending_intern",
             "roles": {"intern", "expert"},
-        },
-        {
-            "key": "pending_expert",
-            "label": "Needs expert attention",
-            "filters": {"qc_status": Media.QCStatus.PENDING_EXPERT},
-            "action_url_name": "media_expert_qc",
-            "cta_label": "Open Expert QC",
-            "empty_message": "No media awaiting expert review.",
-            "list_view_name": "media_qc_pending_expert",
-            "roles": {"expert"},
         },
         {
             "key": "returned",
@@ -2766,8 +2766,12 @@ class MediaQCFormManager:
 def MediaInternQCWizard(request, pk):
     media = get_object_or_404(Media, uuid=pk)
 
-    if not is_intern(request.user):
-        return HttpResponseForbidden("Intern access required.")
+    user = request.user
+    is_intern_user = is_intern(user)
+    is_expert_user = is_qc_expert(user)
+
+    if not (is_intern_user or is_expert_user):
+        return HttpResponseForbidden("Intern or expert access required.")
 
     manager = MediaQCFormManager(request, media)
     manager.build_forms()
@@ -2775,31 +2779,225 @@ def MediaInternQCWizard(request, pk):
     qc_comments = _get_qc_comments(media)
     latest_qc_comment = qc_comments[-1] if qc_comments else None
 
+    qc_comment = ""
+    action = "forward_expert"
+    acknowledged_warnings: set[str] = set()
+    diff_result: dict[str, object] | None = None
+    warnings_map: dict[str, dict[str, object]] = {}
+    conflict_details = (
+        describe_accession_conflicts(media) if is_expert_user else []
+    )
+    selected_resolution: dict[str, dict[str, object]] = {}
+
     if request.method == "POST":
+        if is_expert_user:
+            qc_comment = (request.POST.get("qc_comment") or "").strip()
+            action = request.POST.get("action") or "save"
+            acknowledged_warnings = {
+                value
+                for value in request.POST.getlist("acknowledge_warnings")
+                if value
+            }
+        else:
+            action = request.POST.get("action") or "forward_expert"
+
         if manager.forms_valid():
             try:
-                manager.save()
+                diff_result = manager.save()
             except ValidationError as exc:
                 for message in _collect_validation_messages(exc):
                     manager.accession_form.add_error(None, message)
                     messages.error(request, message)
             else:
-                try:
-                    media.transition_qc(
-                        Media.QCStatus.PENDING_EXPERT,
-                        user=request.user,
-                    )
-                except ValidationError as exc:
-                    for message in _collect_validation_messages(exc):
-                        manager.accession_form.add_error(None, message)
-                        messages.error(request, message)
-                else:
-                    messages.success(
-                        request, "Media forwarded for expert review."
-                    )
-                    return redirect("dashboard")
+                if is_expert_user:
+                    conflict_details = describe_accession_conflicts(media)
+                    resolution_map: dict[str, dict[str, object]] = {}
+                    missing_resolutions: list[str] = []
 
-    qc_diff = manager.last_diff_result or diff_media_payload(
+                    if action == "approve" and conflict_details:
+                        (
+                            resolution_map,
+                            missing_resolutions,
+                        ) = _parse_conflict_resolution(request.POST, conflict_details)
+                        selected_resolution = resolution_map
+
+                    if diff_result:
+                        warnings_map = {
+                            warning.get("code"): warning
+                            for warning in diff_result.get("warnings", [])
+                            if warning.get("code")
+                        }
+                    else:
+                        warnings_map = {}
+
+                    if action == "approve":
+                        processed = (
+                            (media.ocr_data or {}).get("_processed_accessions") or []
+                        )
+                        if media.accession_id or processed:
+                            message = (
+                                "This media already has linked accessions and cannot be "
+                                "approved again."
+                            )
+                            manager.accession_form.add_error(None, message)
+                            messages.error(request, message)
+                        elif missing_resolutions:
+                            for key in missing_resolutions:
+                                message = (
+                                    "Select how to handle the existing accession "
+                                    f"{key} before approving."
+                                )
+                                manager.accession_form.add_error(None, message)
+                                messages.error(request, message)
+                        else:
+                            unresolved_warnings = [
+                                warning
+                                for code, warning in warnings_map.items()
+                                if code not in acknowledged_warnings
+                            ]
+                            if unresolved_warnings:
+                                for warning in unresolved_warnings:
+                                    message = warning.get("message") or (
+                                        "Review and acknowledge outstanding QC warnings "
+                                        "before approving."
+                                    )
+                                    manager.accession_form.add_error(None, message)
+                                    messages.error(request, message)
+                            else:
+                                try:
+                                    with transaction.atomic():
+                                        media.transition_qc(
+                                            Media.QCStatus.APPROVED,
+                                            user=user,
+                                            note=qc_comment or None,
+                                            resolution=resolution_map or None,
+                                        )
+                                except ValidationError as exc:
+                                    for message in _collect_validation_messages(exc):
+                                        manager.accession_form.add_error(None, message)
+                                        messages.error(request, message)
+                                    conflict_details = describe_accession_conflicts(media)
+                                    selected_resolution = resolution_map
+                                except Exception as exc:
+                                    message = f"Importer error: {exc}"
+                                    manager.accession_form.add_error(None, message)
+                                    messages.error(request, message)
+                                    conflict_details = describe_accession_conflicts(media)
+                                    selected_resolution = resolution_map
+                                else:
+                                    media.refresh_from_db()
+                                    for code in acknowledged_warnings:
+                                        warning = warnings_map.get(code)
+                                        if not warning:
+                                            continue
+                                        MediaQCLog.objects.create(
+                                            media=media,
+                                            change_type=MediaQCLog.ChangeType.OCR_DATA,
+                                            field_name="warning_acknowledged",
+                                            old_value={"code": code},
+                                            new_value={
+                                                "acknowledged": True,
+                                                "count": warning.get("count"),
+                                            },
+                                            description=(
+                                                f"QC warning acknowledged: {warning.get('label')}"
+                                            ),
+                                            changed_by=user,
+                                        )
+                                    _create_qc_comment(media, qc_comment, user)
+                                    messages.success(
+                                        request,
+                                        "Media approved and accessions created.",
+                                    )
+                                    return redirect("dashboard")
+                    elif action == "return_intern":
+                        try:
+                            media.transition_qc(
+                                Media.QCStatus.PENDING_INTERN,
+                                user=user,
+                                note=qc_comment or None,
+                            )
+                        except ValidationError as exc:
+                            for message in _collect_validation_messages(exc):
+                                manager.accession_form.add_error(None, message)
+                                messages.error(request, message)
+                        else:
+                            media.refresh_from_db()
+                            _create_qc_comment(media, qc_comment, user)
+                            messages.success(request, "Media returned to interns.")
+                            return redirect("dashboard")
+                    elif action == "request_rescan":
+                        try:
+                            media.transition_qc(
+                                Media.QCStatus.RESCAN,
+                                user=user,
+                                note=qc_comment or None,
+                            )
+                        except ValidationError as exc:
+                            for message in _collect_validation_messages(exc):
+                                manager.accession_form.add_error(None, message)
+                                messages.error(request, message)
+                        else:
+                            media.refresh_from_db()
+                            _create_qc_comment(media, qc_comment, user)
+                            messages.success(request, "Media flagged for rescan.")
+                            return redirect("dashboard")
+                    elif action == "forward_expert":
+                        try:
+                            media.transition_qc(
+                                Media.QCStatus.PENDING_EXPERT,
+                                user=user,
+                                note=qc_comment or None,
+                            )
+                        except ValidationError as exc:
+                            for message in _collect_validation_messages(exc):
+                                manager.accession_form.add_error(None, message)
+                                messages.error(request, message)
+                        else:
+                            messages.success(
+                                request, "Media forwarded for expert review."
+                            )
+                            return redirect("dashboard")
+                    else:
+                        if qc_comment:
+                            try:
+                                media.transition_qc(
+                                    media.qc_status,
+                                    user=user,
+                                    note=qc_comment,
+                                )
+                            except ValidationError as exc:
+                                for message in _collect_validation_messages(exc):
+                                    manager.accession_form.add_error(None, message)
+                                    messages.error(request, message)
+                            else:
+                                media.refresh_from_db()
+                                _create_qc_comment(media, qc_comment, user)
+                                messages.success(request, "Changes saved.")
+                                return redirect("media_intern_qc", pk=media.uuid)
+                        else:
+                            messages.success(request, "Changes saved.")
+                            return redirect("media_intern_qc", pk=media.uuid)
+                else:
+                    try:
+                        media.transition_qc(
+                            Media.QCStatus.PENDING_EXPERT,
+                            user=user,
+                        )
+                    except ValidationError as exc:
+                        for message in _collect_validation_messages(exc):
+                            manager.accession_form.add_error(None, message)
+                            messages.error(request, message)
+                    else:
+                        messages.success(
+                            request, "Media forwarded for expert review."
+                        )
+                        return redirect("dashboard")
+
+    if is_expert_user:
+        _annotate_conflict_selections(conflict_details, selected_resolution)
+
+    qc_diff = diff_result or manager.last_diff_result or diff_media_payload(
         manager.original_data,
         manager.data,
         rows_reordered=media.rows_rearranged,
@@ -2823,13 +3021,16 @@ def MediaInternQCWizard(request, pk):
         "row_contexts": manager.row_contexts,
         "storage_suggestions": manager.storage_suggestions,
         "storage_datalist_id": AccessionRowQCForm.storage_datalist_id,
+        "qc_comment": qc_comment,
         "qc_comments": qc_comments,
         "latest_qc_comment": latest_qc_comment,
         "qc_history_logs": _get_qc_history(media, limit=10),
+        "qc_conflicts": conflict_details if is_expert_user else [],
         "qc_diff": qc_diff,
         "qc_preview": qc_preview,
-        "qc_acknowledged_warnings": set(),
+        "qc_acknowledged_warnings": acknowledged_warnings,
         "form_media": form_media,
+        "is_expert": is_expert_user,
     }
 
     return render(request, "cms/qc/intern_wizard.html", context)

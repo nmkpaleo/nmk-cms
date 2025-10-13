@@ -4,27 +4,23 @@
 {% block wizard_heading %}Intern QC for {{ media.file_name|default:media.pk }}{% endblock %}
 {% block wizard_subheading %}Review the OCR interpretation, adjust as needed, and send the record for expert review.{% endblock %}
 {% block wizard_extra_fields %}
-  {% if latest_qc_comment %}
+  {% if is_expert %}
     <section class="qc-section">
-      <h3 class="w3-border-bottom w3-padding-small w3-margin-bottom">Expert Feedback</h3>
-      <p class="w3-small w3-text-grey">Review the expert guidance before resubmitting this record.</p>
-      <div class="w3-panel w3-pale-blue w3-leftbar w3-border-blue">
-        <p class="w3-small w3-text-grey">
-          Latest reviewer comment
-          {% if latest_qc_comment.created_by %}
-            from {{ latest_qc_comment.created_by.get_full_name|default:latest_qc_comment.created_by.username }}
-          {% else %}
-            (system update)
-          {% endif %}
-          on {{ latest_qc_comment.created_on|date:"Y-m-d H:i" }}:
-        </p>
-        <div class="w3-margin-top w3-margin-bottom">{{ latest_qc_comment.comment|linebreaksbr }}</div>
+      <h3 class="w3-border-bottom w3-padding-small w3-margin-bottom">Expert Guidance</h3>
+      <div class="qc-field-grid">
+        <div class="qc-field qc-field--full">
+          <label class="qc-label" for="qc_comment">Reviewer comment</label>
+          <div class="qc-control">
+            <textarea name="qc_comment" id="qc_comment" rows="3">{{ qc_comment }}</textarea>
+            <p class="qc-inline-note">Comments are stored with the QC log and shared with interns.</p>
+          </div>
+        </div>
       </div>
-      {% if qc_comments|length > 1 %}
+      {% if qc_comments %}
         <div class="qc-card">
-          <h4 class="w3-margin-top w3-margin-bottom">Earlier comments</h4>
+          <h4 class="w3-margin-top w3-margin-bottom">Previous comments</h4>
           <ul class="w3-ul w3-small">
-            {% for comment in qc_comments|slice:":-1" %}
+            {% for comment in qc_comments %}
               <li>
                 <strong>{{ comment.created_on|date:"Y-m-d H:i" }}</strong>
                 {% if comment.created_by %}
@@ -37,8 +33,155 @@
         </div>
       {% endif %}
     </section>
+
+    {% if qc_conflicts %}
+      <section class="qc-section">
+        <h3 class="w3-border-bottom w3-padding-small w3-margin-bottom">Existing Accessions Detected</h3>
+        <p class="qc-inline-note">Choose whether to accession a new instance or update an existing record before approving.</p>
+        {% for conflict in qc_conflicts %}
+          <div class="qc-card qc-conflict" data-conflict="{{ conflict.html_key }}">
+            <h4 class="w3-margin-top w3-margin-bottom">{{ conflict.collection }}-{{ conflict.specimen_prefix }} {{ conflict.specimen_no }}</h4>
+            <p class="qc-inline-note">{{ conflict.message }}</p>
+            <div class="qc-conflict-options">
+              <label class="qc-choice">
+                <input type="radio" name="resolution_action__{{ conflict.html_key }}" value="new_instance" {% if conflict.selected_action == "new_instance" %}checked{% endif %}>
+                Yes — create a new accession instance (next available is #{{ conflict.next_instance }})
+              </label>
+              <label class="qc-choice">
+                <input type="radio" name="resolution_action__{{ conflict.html_key }}" value="update_existing" {% if conflict.selected_action == "update_existing" %}checked{% endif %}>
+                No — update an existing accession
+              </label>
+            </div>
+            <div class="qc-conflict-section" data-conflict-section="new_instance" {% if conflict.selected_action and conflict.selected_action != "new_instance" %}style="display:none"{% endif %}>
+              <p class="qc-inline-note">The importer will create a new accession instance using the reviewed data.</p>
+            </div>
+            <div class="qc-conflict-section" data-conflict-section="update_existing" {% if conflict.selected_action != "update_existing" %}style="display:none"{% endif %}>
+              <div class="qc-field-grid">
+                <div class="qc-field qc-field--full">
+                  <label class="qc-label" for="target_accession__{{ conflict.html_key }}">Existing accession</label>
+                  <div class="qc-control">
+                    <select name="target_accession__{{ conflict.html_key }}" id="target_accession__{{ conflict.html_key }}">
+                      {% for option in conflict.existing_accessions %}
+                        <option value="{{ option.id }}" {% if conflict.selected_accession_id == option.id %}selected{% endif %}>{{ option.label }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div class="qc-conflict-subsection">
+                <h5>Accession fields</h5>
+                <label class="qc-choice qc-choice--stacked">
+                  <input type="checkbox" name="apply_field__{{ conflict.html_key }}__type_status" {% if 'type_status' in conflict.selected_fields %}checked{% endif %}>
+                  Replace type status with <strong>{{ conflict.proposed.type_status|default:'—' }}</strong>
+                  {% if conflict.existing_snapshot.type_status %}
+                    <span class="qc-inline-note">Current value: {{ conflict.existing_snapshot.type_status }}</span>
+                  {% endif %}
+                </label>
+                <label class="qc-choice qc-choice--stacked">
+                  <input type="checkbox" name="apply_field__{{ conflict.html_key }}__comment" {% if 'comment' in conflict.selected_fields %}checked{% endif %}>
+                  Replace comment
+                  <span class="qc-inline-note">Proposed:</span>
+                  <div class="qc-conflict-value">{{ conflict.proposed.comment|default:'—' }}</div>
+                  {% if conflict.existing_snapshot.comment %}
+                    <span class="qc-inline-note">Current:</span>
+                    <div class="qc-conflict-value">{{ conflict.existing_snapshot.comment }}</div>
+                  {% endif %}
+                </label>
+              </div>
+              <div class="qc-conflict-subsection">
+                <h5>Specimen rows</h5>
+                {% if conflict.proposed.rows %}
+                  {% for row in conflict.proposed.rows %}
+                    <label class="qc-choice qc-choice--stacked">
+                      <input type="checkbox" name="replace_row__{{ conflict.html_key }}__{{ row.html_suffix }}" {% if row.specimen_suffix in conflict.selected_rows %}checked{% endif %}>
+                      Update row {{ row.specimen_suffix }} (storage: {{ row.storage|default:'—' }})
+                      {% if row.existing %}
+                        <span class="qc-inline-note">Current storage: {{ row.existing.storage|default:'—' }}</span>
+                      {% endif %}
+                    </label>
+                  {% endfor %}
+                {% else %}
+                  <p class="qc-inline-note">No specimen rows were detected in the proposed data.</p>
+                {% endif %}
+              </div>
+              <div class="qc-conflict-subsection">
+                <h5>References</h5>
+                {% if conflict.proposed.references %}
+                  {% for reference in conflict.proposed.references %}
+                    <label class="qc-choice qc-choice--stacked">
+                      <input type="checkbox" name="add_reference__{{ conflict.html_key }}__{{ reference.index }}" {% if reference.index in conflict.selected_references %}checked{% endif %}>
+                      Add reference {{ reference.first_author|default:'Unknown author' }} ({{ reference.year|default:'—' }}) {{ reference.title|default:'Untitled' }}
+                      {% if reference.page %}<span class="qc-inline-note">Page: {{ reference.page }}</span>{% endif %}
+                    </label>
+                  {% endfor %}
+                {% else %}
+                  <p class="qc-inline-note">No new references were detected.</p>
+                {% endif %}
+              </div>
+              <div class="qc-conflict-subsection">
+                <h5>Field slips</h5>
+                {% if conflict.proposed.field_slips %}
+                  {% for slip in conflict.proposed.field_slips %}
+                    <label class="qc-choice qc-choice--stacked">
+                      <input type="checkbox" name="add_field_slip__{{ conflict.html_key }}__{{ slip.index }}" {% if slip.index in conflict.selected_field_slips %}checked{% endif %}>
+                      Link field slip {{ slip.field_number|default:'—' }}
+                      {% if slip.verbatim_locality or slip.verbatim_taxon %}
+                        <span class="qc-inline-note">{{ slip.verbatim_locality|default:'—' }} — {{ slip.verbatim_taxon|default:'—' }}</span>
+                      {% endif %}
+                    </label>
+                  {% endfor %}
+                {% else %}
+                  <p class="qc-inline-note">No new field slips were detected.</p>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </section>
+    {% endif %}
+  {% else %}
+    {% if latest_qc_comment %}
+      <section class="qc-section">
+        <h3 class="w3-border-bottom w3-padding-small w3-margin-bottom">Expert Feedback</h3>
+        <p class="w3-small w3-text-grey">Review the expert guidance before resubmitting this record.</p>
+        <div class="w3-panel w3-pale-blue w3-leftbar w3-border-blue">
+          <p class="w3-small w3-text-grey">
+            Latest reviewer comment
+            {% if latest_qc_comment.created_by %}
+              from {{ latest_qc_comment.created_by.get_full_name|default:latest_qc_comment.created_by.username }}
+            {% else %}
+              (system update)
+            {% endif %}
+            on {{ latest_qc_comment.created_on|date:"Y-m-d H:i" }}:
+          </p>
+          <div class="w3-margin-top w3-margin-bottom">{{ latest_qc_comment.comment|linebreaksbr }}</div>
+        </div>
+        {% if qc_comments|length > 1 %}
+          <div class="qc-card">
+            <h4 class="w3-margin-top w3-margin-bottom">Earlier comments</h4>
+            <ul class="w3-ul w3-small">
+              {% for comment in qc_comments|slice:":-1" %}
+                <li>
+                  <strong>{{ comment.created_on|date:"Y-m-d H:i" }}</strong>
+                  {% if comment.created_by %}
+                    — {{ comment.created_by.get_full_name|default:comment.created_by.username }}
+                  {% endif %}
+                  <div class="w3-margin-top w3-margin-bottom">{{ comment.comment|linebreaksbr }}</div>
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
+      </section>
+    {% endif %}
   {% endif %}
 {% endblock %}
 {% block wizard_actions %}
-  <button type="submit" class="w3-button w3-green w3-margin-top">Submit for Expert Review</button>
+  <button type="submit" name="action" value="forward_expert" class="w3-button w3-green w3-margin-top">Submit for Expert Review</button>
+  {% if is_expert %}
+    <button type="submit" name="action" value="save" class="w3-button w3-small w3-blue-grey w3-margin-top">Save &amp; Continue</button>
+    <button type="submit" name="action" value="return_intern" class="w3-button w3-small w3-blue w3-margin-top">Return to Interns</button>
+    <button type="submit" name="action" value="request_rescan" class="w3-button w3-small w3-amber w3-margin-top">Request Rescan</button>
+    <button type="submit" name="action" value="approve" class="w3-button w3-small w3-green w3-margin-top">Approve &amp; Accession</button>
+  {% endif %}
 {% endblock %}
