@@ -1547,7 +1547,7 @@ class AccessionWizard(SessionWizardView):
                 identified_by=specimen_form.cleaned_data['identified_by'],
             )
 
-        return redirect('accession-detail', pk=accession.pk)
+        return redirect('accession_detail', pk=accession.pk)
     
 class ReferenceDetailView(DetailView):
     model = Reference
