@@ -2,10 +2,64 @@
   if (typeof module === "object" && typeof module.exports === "object") {
     module.exports = factory(require("@hotwired/stimulus"));
   } else {
-    var controllerClass = factory(global.Stimulus || null);
-    if (controllerClass) {
+    var controllerClass = null;
+    var controllerRegistered = false;
+
+    function registerController() {
+      if (controllerRegistered) {
+        return true;
+      }
+
+      var Stimulus = global.Stimulus;
+      if (!Stimulus || !Stimulus.Controller) {
+        return false;
+      }
+
+      if (!controllerClass) {
+        controllerClass = factory(Stimulus);
+      }
+
+      if (!controllerClass) {
+        controllerRegistered = true;
+        return true;
+      }
+
+      var application = global.StimulusApp;
+      if (!application && Stimulus.Application && typeof Stimulus.Application.start === "function") {
+        application = Stimulus.Application.start();
+        global.StimulusApp = application;
+      }
+
+      if (application && typeof application.register === "function") {
+        application.register("qc-references", controllerClass);
+      }
+
       global.QcReferencesController = controllerClass;
       global.QCReferencesController = controllerClass;
+      controllerRegistered = true;
+      return true;
+    }
+
+    if (!registerController()) {
+      var onReady = function () {
+        if (registerController() && global.removeEventListener) {
+          global.removeEventListener("load", onReady);
+          global.removeEventListener("DOMContentLoaded", onReady);
+        }
+      };
+
+      if (global.addEventListener) {
+        global.addEventListener("DOMContentLoaded", onReady);
+        global.addEventListener("load", onReady);
+      }
+
+      var retries = 0;
+      var intervalId = setInterval(function () {
+        if (registerController() || retries > 200) {
+          clearInterval(intervalId);
+        }
+        retries += 1;
+      }, 50);
     }
   }
 })(typeof window !== "undefined" ? window : this, function (Stimulus) {
