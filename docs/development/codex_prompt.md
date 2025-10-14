@@ -14,13 +14,17 @@ You are responsible for **technical feasibility, maintainability, and adherence 
 ---
 
 ## ⚙️ Codebase Context
-- **Python:** 3.9
+- **Python:** 3.10 (slim base image)
 - **Django:** [4.2]
 - **Database:** MySQL
 - **Auth:** django-allauth (email + social?)
 - **Auditing/versioning:** django-simple-history
 - **Filtering/search:** django-filter (+ QuerySet + pagination)
-- **Templates:** Django templates + W3.CSS (mobile-first) + Font Awesome
+- **Templates:** Django templates extending `base_generic.html`
+  - HTML5 boilerplate (`<!DOCTYPE html>`, `<html lang="en">`, `<meta charset="utf-8">`, `<meta name="viewport" content="width=device-width, initial-scale=1">`)
+  - Semantic layout structure with `<header>`, `<main>`, `<section>`, `<article>`, `<aside>`, `<footer>`
+  - Global assets loaded in the `<head>` (W3.CSS CDN, Font Awesome 6 CDN, shared JS)
+- **Styling:** W3.CSS (mobile-first) with minimal custom overrides in `static/css/custom.css`
 - **Static/media:** [STATIC_ROOT, MEDIA_ROOT], served via **nginx (production)**
 - **App layout:** `/project/`, `/apps/<app_name>/`, `/templates/`, `/static/`
 - **i18n/l10n:** [languages], time zone, gettext usage
@@ -31,6 +35,7 @@ You are responsible for **technical feasibility, maintainability, and adherence 
   - `/docs/admin/**` — site admin docs
   - `/docs/dev/**` — developer docs
   - `CHANGELOG.md` and ADRs in `/docs/adr/**`
+- **Responsive & a11y:** Design mobile-first (W3.CSS breakpoints) with WCAG AA contrast, ARIA attributes, keyboard navigation
 - **Coding standards:** ruff/flake8, black, isort, pre-commit
 - **Security:** django-secure defaults (SECURE_*), CSP (if applicable)
 - **Dependency management:** All dependencies are tracked in `requirements.txt`.
@@ -64,7 +69,7 @@ Provide 5–12 implementation steps covering:
 - Models and migrations
 - URLs, CBVs or APIs
 - Forms/serializers
-- Templates (mobile-first, W3.CSS, Font Awesome icons)
+- Templates (extend `base_generic.html`, use semantic HTML5 structure, mobile-first W3.CSS, Font Awesome icons)
 - Filters and pagination
 - Permissions and auth integration
 - Admin registration (list_display/search/filter)
@@ -109,7 +114,7 @@ Provide a **machine-readable JSON array** of tasks using this schema (indentatio
         ],
         "test_plan": [
           "pytest unit tests for models/forms/views",
-          "integration tests for URLs + templates",
+          "integration tests for URLs + templates (ensure semantic HTML5 regions, base template inheritance)",
           "history recorded by simple-history",
           "filtering works via query params",
           "mobile-first layout renders with W3.CSS classes",
@@ -157,6 +162,7 @@ Checklist:
 - django-simple-history tracking verified.
 - django-filter endpoints documented and tested.
 - Templates mobile-first with W3.CSS; FA icons where specified.
+- Templates extend `base_generic.html` and preserve semantic HTML5 landmarks.
 - All i18n strings wrapped; messages compiled.
 - `requirements.txt` updated **only if needed**; licenses and maintenance status reviewed for new packages.
 - Docs updated in `/docs` (user/admin/dev) + `CHANGELOG.md`.
