@@ -610,6 +610,7 @@
             type="button"
             class="w3-button w3-tiny w3-blue w3-round"
             data-action="click->qc-references#addReference"
+            data-reference-add
           >
             Add reference
           </button>
@@ -834,5 +835,130 @@
       chip.setAttribute('aria-hidden', 'true');
       chip.style.display = 'none';
     });
+  </script>
+  <style>
+    :where([hidden]) {
+      display: none !important;
+    }
+  </style>
+  <script>
+    (function () {
+      function setDeleteValue(input, on) {
+        if (!input) {
+          return;
+        }
+
+        if (input.type === 'checkbox') {
+          input.checked = !!on;
+        } else {
+          input.value = on ? 'on' : '';
+        }
+      }
+
+      function toggleCard(card, deleted) {
+        if (!card) {
+          return;
+        }
+
+        var actions = card.querySelector('[data-reference-actions]');
+        var body = card.querySelector('[data-reference-body]');
+        var msg = card.querySelector('[data-reference-deleted-message]');
+
+        if (actions) {
+          actions.hidden = deleted;
+        }
+
+        if (body) {
+          body.hidden = deleted;
+        }
+
+        if (msg) {
+          msg.hidden = !deleted;
+        }
+      }
+
+      function cardIsDeleted(card) {
+        var delInput = card && card.querySelector('input[name$="-DELETE"]');
+        if (!delInput) {
+          if (!card) {
+            return false;
+          }
+
+          if (typeof card.dataset !== 'undefined' && card.dataset.referenceDeleted === 'true') {
+            return true;
+          }
+
+          return card.hasAttribute('data-reference-deleted');
+        }
+
+        if (delInput.type === 'checkbox') {
+          return delInput.checked;
+        }
+
+        return delInput.value === 'on';
+      }
+
+      function updateEmptyMessage(section) {
+        if (!section) {
+          return;
+        }
+
+        var emptyMessage = section.querySelector('[data-qc-references-target="emptyMessage"]');
+        if (!emptyMessage) {
+          return;
+        }
+
+        var cards = section.querySelectorAll('[data-qc-reference]');
+        var hasActiveCard = Array.prototype.some.call(cards, function (card) {
+          return !cardIsDeleted(card);
+        });
+
+        emptyMessage.hidden = hasActiveCard;
+      }
+
+      function findSection(element) {
+        if (!element) {
+          return null;
+        }
+
+        return element.closest('[data-controller~="qc-references"]') || element.closest('[data-controller="qc-references"]');
+      }
+
+      document.querySelectorAll('[data-controller~="qc-references"], [data-controller="qc-references"]').forEach(function (section) {
+        section.querySelectorAll('[data-qc-reference]').forEach(function (card) {
+          toggleCard(card, cardIsDeleted(card));
+        });
+        updateEmptyMessage(section);
+      });
+
+      document.addEventListener('click', function (e) {
+        var delBtn = e.target.closest('[data-reference-delete]');
+        var undoBtn = e.target.closest('[data-reference-restore]');
+
+        if (!delBtn && !undoBtn) {
+          return;
+        }
+
+        var card = (delBtn || undoBtn).closest('[data-qc-reference]');
+        if (!card) {
+          return;
+        }
+
+        e.preventDefault();
+
+        var section = findSection(card);
+        var delInput = card.querySelector('input[name$="-DELETE"]');
+
+        if (delBtn) {
+          setDeleteValue(delInput, true);
+          toggleCard(card, true);
+        } else {
+          setDeleteValue(delInput, false);
+          toggleCard(card, false);
+        }
+
+        updateEmptyMessage(section);
+      });
+    })();
   </script>
 {% endblock %}

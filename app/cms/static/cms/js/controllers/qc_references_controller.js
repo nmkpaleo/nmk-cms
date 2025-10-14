@@ -1,141 +1,203 @@
-(function (global, factory) {
-  if (typeof module === "object" && typeof module.exports === "object") {
-    module.exports = factory(require("@hotwired/stimulus"));
-  } else {
-    var controllerClass = factory(global.Stimulus || null);
-    if (controllerClass) {
-      global.QcReferencesController = controllerClass;
-      global.QCReferencesController = controllerClass;
-    }
-  }
-})(typeof window !== "undefined" ? window : this, function (Stimulus) {
+(function (global) {
+  const Stimulus = global && global.Stimulus;
+
   if (!Stimulus || !Stimulus.Controller) {
-    return null;
+    console.error('Stimulus Controller not found for QcReferencesController');
+    return;
   }
 
-  var Controller = Stimulus.Controller;
+  const { Controller } = Stimulus;
 
-  function parseInteger(value) {
-    var number = parseInt(value, 10);
-    return isNaN(number) ? 0 : number;
+  function toArray(list) {
+    return Array.prototype.slice.call(list || []);
   }
 
-  function replacePrefixTokens(html, prefix, index) {
-    if (typeof html !== "string") {
-      return "";
+  function parseIndex(value) {
+    const number = parseInt(value, 10);
+    return Number.isNaN(number) ? 0 : number;
+  }
+
+  function readDeleteValue(card) {
+    if (!card) {
+      return false;
     }
-    var pattern = new RegExp(prefix + "-__prefix__", "g");
-    return html.replace(pattern, prefix + "-" + index);
+
+    const deleteInput = card.querySelector('input[name$="-DELETE"]');
+    if (!deleteInput) {
+      return false;
+    }
+
+    if (deleteInput.type === 'checkbox') {
+      return Boolean(deleteInput.checked);
+    }
+
+    const value = (deleteInput.value || '').toLowerCase();
+    return value === 'on' || value === 'true' || value === '1';
   }
 
-  var QcReferencesController = class extends Controller {
+  function setDeleteValue(card, deleted) {
+    if (!card) {
+      return;
+    }
+
+    const deleteInput = card.querySelector('input[name$="-DELETE"]');
+    if (!deleteInput) {
+      return;
+    }
+
+    if (deleteInput.type === 'checkbox') {
+      deleteInput.checked = Boolean(deleted);
+      deleteInput.value = deleted ? deleteInput.value || 'on' : '';
+    } else {
+      deleteInput.value = deleted ? 'on' : '';
+    }
+  }
+
+  function toggleCardPresentation(card, deleted) {
+    if (!card) {
+      return;
+    }
+
+    card.toggleAttribute('data-reference-deleted', Boolean(deleted));
+
+    const actions = card.querySelector('[data-reference-actions]');
+    if (actions) {
+      actions.hidden = Boolean(deleted);
+    }
+
+    const body = card.querySelector('[data-reference-body]');
+    if (body) {
+      body.hidden = Boolean(deleted);
+    }
+
+    const deletedMessage = card.querySelector('[data-reference-deleted-message]');
+    if (deletedMessage) {
+      deletedMessage.hidden = !deleted;
+    }
+  }
+
+  function replacePrefix(markup, prefix, index) {
+    if (typeof markup !== 'string') {
+      return markup;
+    }
+
+    const pattern = new RegExp(`${prefix}-__prefix__`, 'g');
+    return markup.replace(pattern, `${prefix}-${index}`);
+  }
+
+  class QcReferencesController extends Controller {
     static get targets() {
-      return ["container", "template", "emptyMessage"];
+      return ['container', 'template', 'emptyMessage'];
     }
 
     connect() {
-      this.formElement = this.element.closest("form");
-      this.prefix = this.element.dataset.formsetPrefix || "reference";
-      this.totalFormsInput = this._findManagementInput("TOTAL_FORMS");
-      this.refreshEmptyState();
+      this.prefix = this.element.getAttribute('data-formset-prefix') || 'reference';
+      this.formElement = this.element.closest('form');
+      this.totalFormsInput = this._findManagementInput('TOTAL_FORMS');
+      this._applyInitialState();
+      this._updateEmptyMessage();
     }
 
     addReference(event) {
-      if (event) {
+      if (event && typeof event.preventDefault === 'function') {
         event.preventDefault();
       }
+
       if (!this.hasTemplateTarget || !this.hasContainerTarget) {
         return;
       }
-      var index = this._nextIndex();
-      var newElement = this._createReferenceElement(index);
-      if (!newElement) {
+
+      const nextIndex = this._nextIndex();
+      const markup = replacePrefix(this.templateTarget.innerHTML, this.prefix, nextIndex);
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = (markup || '').trim();
+      const card = wrapper.firstElementChild;
+
+      if (!card) {
         return;
       }
-      var orderValue = this._nextOrder();
-      this._setOrderValue(newElement, orderValue);
-      this._ensureRefId(newElement, index);
-      this.containerTarget.appendChild(newElement);
-      this._setTotalForms(index + 1);
-      this.refreshEmptyState();
-      this._focusFirstField(newElement);
+
+      setDeleteValue(card, false);
+      toggleCardPresentation(card, false);
+
+      this.containerTarget.appendChild(card);
+      this._setTotalForms(nextIndex + 1);
+      this._updateEmptyMessage();
+
+      const focusTarget = card.querySelector("input:not([type='hidden']), textarea, select");
+      if (focusTarget && typeof focusTarget.focus === 'function') {
+        focusTarget.focus();
+      }
     }
 
-    refreshEmptyState() {
+    deleteReference(event) {
+      if (event && typeof event.preventDefault === 'function') {
+        event.preventDefault();
+      }
+
+      const trigger = event ? event.currentTarget || event.target : null;
+      const card = trigger && typeof trigger.closest === 'function'
+        ? trigger.closest('[data-qc-reference]')
+        : null;
+
+      if (!card) {
+        return;
+      }
+
+      setDeleteValue(card, true);
+      toggleCardPresentation(card, true);
+      this._updateEmptyMessage();
+    }
+
+    restoreReference(event) {
+      if (event && typeof event.preventDefault === 'function') {
+        event.preventDefault();
+      }
+
+      const trigger = event ? event.currentTarget || event.target : null;
+      const card = trigger && typeof trigger.closest === 'function'
+        ? trigger.closest('[data-qc-reference]')
+        : null;
+
+      if (!card) {
+        return;
+      }
+
+      setDeleteValue(card, false);
+      toggleCardPresentation(card, false);
+      this._updateEmptyMessage();
+    }
+
+    _applyInitialState() {
+      this._cards().forEach((card) => {
+        const deleted = readDeleteValue(card);
+        toggleCardPresentation(card, deleted);
+      });
+    }
+
+    _updateEmptyMessage() {
       if (!this.hasEmptyMessageTarget) {
         return;
       }
-      var hasReferences =
-        this.hasContainerTarget &&
-        this.containerTarget.querySelector("[data-qc-reference]");
-      this.emptyMessageTarget.hidden = Boolean(hasReferences);
+
+      const hasActive = this._cards().some((card) => !readDeleteValue(card));
+      this.emptyMessageTarget.hidden = hasActive;
     }
 
-    _findManagementInput(suffix) {
-      if (!this.formElement) {
-        return null;
+    _cards() {
+      if (!this.hasContainerTarget) {
+        return [];
       }
-      return this.formElement.querySelector(
-        'input[name="' + this.prefix + "-" + suffix + '"]'
-      );
+
+      return toArray(this.containerTarget.querySelectorAll('[data-qc-reference]'));
     }
 
     _nextIndex() {
-      if (!this.totalFormsInput) {
-        return this._countReferences();
+      if (this.totalFormsInput) {
+        return parseIndex(this.totalFormsInput.value);
       }
-      return parseInteger(this.totalFormsInput.value);
-    }
 
-    _nextOrder() {
-      if (!this.hasContainerTarget) {
-        return this._nextIndex();
-      }
-      var maxOrder = -1;
-      this.containerTarget
-        .querySelectorAll('input[name$="-order"]')
-        .forEach(function (input) {
-          var value = parseInteger(input.value);
-          if (value > maxOrder) {
-            maxOrder = value;
-          }
-        });
-      return maxOrder + 1;
-    }
-
-    _createReferenceElement(index) {
-      var templateHtml = this.templateTarget.innerHTML;
-      if (!templateHtml) {
-        return null;
-      }
-      var markup = replacePrefixTokens(templateHtml, this.prefix, index);
-      var wrapper = document.createElement("div");
-      wrapper.innerHTML = markup.trim();
-      return wrapper.firstElementChild;
-    }
-
-    _setOrderValue(element, value) {
-      if (!element) {
-        return;
-      }
-      var orderInput = element.querySelector('input[name$="-order"]');
-      if (orderInput) {
-        orderInput.value = String(value);
-      }
-    }
-
-    _ensureRefId(element, index) {
-      if (!element) {
-        return;
-      }
-      var refInput = element.querySelector('input[name$="-ref_id"]');
-      if (!refInput) {
-        return;
-      }
-      var current = (refInput.value || "").trim();
-      if (!current) {
-        refInput.value = "new-ref-" + Date.now() + "-" + index;
-      }
+      return this._cards().length;
     }
 
     _setTotalForms(value) {
@@ -144,23 +206,14 @@
       }
     }
 
-    _countReferences() {
-      if (!this.hasContainerTarget) {
-        return 0;
+    _findManagementInput(suffix) {
+      if (!this.formElement) {
+        return null;
       }
-      return this.containerTarget.querySelectorAll("[data-qc-reference]").length;
-    }
 
-    _focusFirstField(element) {
-      if (!element) {
-        return;
-      }
-      var field = element.querySelector("input, textarea, select");
-      if (field && typeof field.focus === "function") {
-        field.focus();
-      }
+      return this.formElement.querySelector(`input[name="${this.prefix}-${suffix}"]`);
     }
-  };
+  }
 
-  return QcReferencesController;
-});
+  global.QcReferencesController = QcReferencesController;
+})(typeof window !== 'undefined' ? window : this);
