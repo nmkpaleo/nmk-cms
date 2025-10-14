@@ -1,17 +1,11 @@
-(function (global, factory) {
-  if (typeof module === "object" && typeof module.exports === "object") {
-    module.exports = factory(global, require("@hotwired/stimulus"));
-  } else {
-    factory(global, global.Stimulus);
-  }
-})(typeof window !== "undefined" ? window : this, function (global, Stimulus) {
-  function parseInteger(value) {
-    var number = parseInt(value, 10);
-    return isNaN(number) ? 0 : number;
-  }
-
+(function (global) {
   function toArray(list) {
     return Array.prototype.slice.call(list || []);
+  }
+
+  function parseInteger(value) {
+    const number = parseInt(value, 10);
+    return Number.isNaN(number) ? 0 : number;
   }
 
   function readDeleteValue(card) {
@@ -19,23 +13,17 @@
       return false;
     }
 
-    if (card.dataset) {
-      if (card.dataset.referenceDeleted === "true" || card.dataset.deleted === "true") {
-        return true;
-      }
-    }
-
-    var deleteInput = card.querySelector('input[name$="-DELETE"]');
+    const deleteInput = card.querySelector('input[name$="-DELETE"]');
     if (!deleteInput) {
       return false;
     }
 
-    if (deleteInput.type === "checkbox") {
+    if (deleteInput.type === 'checkbox') {
       return Boolean(deleteInput.checked);
     }
 
-    var value = (deleteInput.value || "").toLowerCase();
-    return value === "on" || value === "true" || value === "1";
+    const value = (deleteInput.value || '').toLowerCase();
+    return value === 'on' || value === 'true' || value === '1';
   }
 
   function setDeleteValue(card, deleted) {
@@ -43,20 +31,16 @@
       return;
     }
 
-    var deleteInput = card.querySelector('input[name$="-DELETE"]');
+    const deleteInput = card.querySelector('input[name$="-DELETE"]');
     if (!deleteInput) {
       return;
     }
 
-    if (deleteInput.type === "checkbox") {
+    if (deleteInput.type === 'checkbox') {
       deleteInput.checked = Boolean(deleted);
-      if (!deleted) {
-        deleteInput.value = "";
-      } else if (!deleteInput.value) {
-        deleteInput.value = "on";
-      }
+      deleteInput.value = deleted ? deleteInput.value || 'on' : '';
     } else {
-      deleteInput.value = deleted ? "on" : "";
+      deleteInput.value = deleted ? 'on' : '';
     }
   }
 
@@ -65,28 +49,19 @@
       return;
     }
 
-    var body = card.querySelector("[data-reference-body]");
-    if (body) {
-      body.hidden = Boolean(deleted);
-    }
-
-    var actions = card.querySelector("[data-reference-actions]");
+    const actions = card.querySelector('[data-reference-actions]');
     if (actions) {
       actions.hidden = Boolean(deleted);
     }
 
-    var deletedMessage = card.querySelector("[data-reference-deleted-message]");
-    if (deletedMessage) {
-      deletedMessage.hidden = !deleted;
+    const body = card.querySelector('[data-reference-body]');
+    if (body) {
+      body.hidden = Boolean(deleted);
     }
 
-    if (card.dataset) {
-      if (deleted) {
-        card.dataset.referenceDeleted = "true";
-      } else {
-        delete card.dataset.referenceDeleted;
-        delete card.dataset.deleted;
-      }
+    const deletedMessage = card.querySelector('[data-reference-deleted-message]');
+    if (deletedMessage) {
+      deletedMessage.hidden = !deleted;
     }
   }
 
@@ -95,19 +70,19 @@
       return;
     }
 
-    var field = element.querySelector("input:not([type='hidden']), textarea, select");
-    if (field && typeof field.focus === "function") {
+    const field = element.querySelector("input:not([type='hidden']), textarea, select");
+    if (field && typeof field.focus === 'function') {
       field.focus();
     }
   }
 
   function replacePrefix(markup, prefix, index) {
-    if (typeof markup !== "string") {
+    if (typeof markup !== 'string') {
       return markup;
     }
 
-    var pattern = new RegExp(prefix + "-__prefix__", "g");
-    return markup.replace(pattern, prefix + "-" + index);
+    const pattern = new RegExp(`${prefix}-__prefix__`, 'g');
+    return markup.replace(pattern, `${prefix}-${index}`);
   }
 
   function nextOrderValue(container) {
@@ -115,9 +90,9 @@
       return 0;
     }
 
-    var max = -1;
-    container.querySelectorAll('input[name$="-order"]').forEach(function (input) {
-      var value = parseInteger(input.value);
+    let max = -1;
+    container.querySelectorAll('input[name$="-order"]').forEach((input) => {
+      const value = parseInteger(input.value);
       if (value > max) {
         max = value;
       }
@@ -131,28 +106,28 @@
       return;
     }
 
-    var orderInput = card.querySelector('input[name$="-order"]');
+    const orderInput = card.querySelector('input[name$="-order"]');
     if (orderInput) {
       orderInput.value = String(value);
     }
   }
 
-  function attachController(StimulusInstance) {
+  function buildController(StimulusInstance) {
     if (!StimulusInstance || !StimulusInstance.Controller) {
       return null;
     }
 
-    var Controller = StimulusInstance.Controller;
+    const { Controller } = StimulusInstance;
 
     class QcReferencesController extends Controller {
       static get targets() {
-        return ["container", "template", "emptyMessage"];
+        return ['container', 'template', 'emptyMessage'];
       }
 
       connect() {
-        this.formElement = this.element.closest("form");
-        this.prefix = this.element.dataset ? this.element.dataset.formsetPrefix || "reference" : "reference";
-        this.totalFormsInput = this.findManagementInput("TOTAL_FORMS");
+        this.formElement = this.element.closest('form');
+        this.prefix = this.element.dataset.formsetPrefix || 'reference';
+        this.totalFormsInput = this.findManagementInput('TOTAL_FORMS');
         this.applyInitialState();
         this.updateEmptyMessage();
       }
@@ -162,7 +137,7 @@
           return null;
         }
 
-        return this.formElement.querySelector('input[name="' + this.prefix + "-" + suffix + '"]');
+        return this.formElement.querySelector(`input[name="${this.prefix}-${suffix}"]`);
       }
 
       references() {
@@ -170,13 +145,12 @@
           return [];
         }
 
-        return toArray(this.containerTarget.querySelectorAll("[data-qc-reference]"));
+        return toArray(this.containerTarget.querySelectorAll('[data-qc-reference]'));
       }
 
       applyInitialState() {
-        var cards = this.references();
-        cards.forEach(function (card) {
-          var deleted = readDeleteValue(card);
+        this.references().forEach((card) => {
+          const deleted = readDeleteValue(card);
           updateCardPresentation(card, deleted);
         });
       }
@@ -186,10 +160,7 @@
           return;
         }
 
-        var hasActive = this.references().some(function (card) {
-          return !readDeleteValue(card);
-        });
-
+        const hasActive = this.references().some((card) => !readDeleteValue(card));
         this.emptyMessageTarget.hidden = hasActive;
       }
 
@@ -208,7 +179,7 @@
       }
 
       addReference(event) {
-        if (event && typeof event.preventDefault === "function") {
+        if (event && typeof event.preventDefault === 'function') {
           event.preventDefault();
         }
 
@@ -216,12 +187,13 @@
           return;
         }
 
-        var index = this.nextIndex();
-        var orderValue = nextOrderValue(this.containerTarget);
-        var markup = replacePrefix(this.templateTarget.innerHTML, this.prefix, index);
-        var wrapper = document.createElement("div");
+        const index = this.nextIndex();
+        const orderValue = nextOrderValue(this.containerTarget);
+        const markup = replacePrefix(this.templateTarget.innerHTML, this.prefix, index);
+        const wrapper = document.createElement('div');
         wrapper.innerHTML = markup.trim();
-        var card = wrapper.firstElementChild;
+        const card = wrapper.firstElementChild;
+
         if (!card) {
           return;
         }
@@ -237,12 +209,15 @@
       }
 
       deleteReference(event) {
-        if (event && typeof event.preventDefault === "function") {
+        if (event && typeof event.preventDefault === 'function') {
           event.preventDefault();
         }
 
-        var target = event && event.target ? event.target : null;
-        var card = target && target.closest ? target.closest("[data-qc-reference]") : null;
+        const trigger = event ? event.currentTarget || event.target : null;
+        const card = trigger && typeof trigger.closest === 'function'
+          ? trigger.closest('[data-qc-reference]')
+          : null;
+
         if (!card) {
           return;
         }
@@ -253,12 +228,15 @@
       }
 
       restoreReference(event) {
-        if (event && typeof event.preventDefault === "function") {
+        if (event && typeof event.preventDefault === 'function') {
           event.preventDefault();
         }
 
-        var target = event && event.target ? event.target : null;
-        var card = target && target.closest ? target.closest("[data-qc-reference]") : null;
+        const trigger = event ? event.currentTarget || event.target : null;
+        const card = trigger && typeof trigger.closest === 'function'
+          ? trigger.closest('[data-qc-reference]')
+          : null;
+
         if (!card) {
           return;
         }
@@ -270,23 +248,20 @@
     }
 
     global.QcReferencesController = QcReferencesController;
-    global.QCReferencesController = QcReferencesController;
     return QcReferencesController;
   }
 
-  var controller = attachController(Stimulus);
+  const controller = buildController(global && global.Stimulus);
 
-  if (!controller && global && typeof global.addEventListener === "function") {
-    var tryAttach = function () {
-      if (attachController(global.Stimulus)) {
-        global.removeEventListener("DOMContentLoaded", tryAttach);
-        global.removeEventListener("load", tryAttach);
+  if (!controller && global && typeof global.addEventListener === 'function') {
+    const tryAttach = () => {
+      if (buildController(global && global.Stimulus)) {
+        global.removeEventListener('DOMContentLoaded', tryAttach);
+        global.removeEventListener('load', tryAttach);
       }
     };
 
-    global.addEventListener("DOMContentLoaded", tryAttach);
-    global.addEventListener("load", tryAttach);
+    global.addEventListener('DOMContentLoaded', tryAttach);
+    global.addEventListener('load', tryAttach);
   }
-
-  return controller;
-});
+})(typeof window !== 'undefined' ? window : this);
