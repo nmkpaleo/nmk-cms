@@ -12,6 +12,7 @@ You are a **senior Django engineer**. Implement exactly one task from an approve
 - **Auditing:** django-simple-history
 - **Filtering/search:** django-filter
 - **Templates/UI:** Django templates + W3.CSS (mobile-first) + Font Awesome
+- **Template structure:** Extend `base_generic.html`; include HTML5 boilerplate and semantic regions (`<header>`, `<main>`, `<section>`, `<article>`, `<aside>`, `<footer>`)
 - **Static/Media:** served by **nginx** in production
 - **CI/CD:** GitHub Actions (lint, type-check, tests, migrations check, docs)
 - **Project layout:** `/project/`, `/apps/<app_name>/`, `/templates/`, `/static/`
@@ -58,7 +59,7 @@ ________________________________________
 -	Migrations: Generate idempotent migrations. When altering existing models, prefer non-breaking operations; include RunPython data migrations if needed.
 -	Admin: If applicable, add list_display, search_fields, list_filter, and history mixins.
 -	URLs: Namespaced URLs under app; avoid global pollution. Use app_name = '<app_name>'.
--	Templates: Use W3.CSS utilities, mobile-first patterns, and FA icons specified in the plan/task.
+-	Templates: Extend `base_generic.html`, use semantic HTML5 regions, apply W3.CSS utilities (mobile-first), and include Font Awesome icons specified in the plan/task.
 -	Docs/Tests: Only include if the task’s files_touched or test_plan/docs_touched indicate them.
 ________________________________________
 📤 Output Format (Strict)
