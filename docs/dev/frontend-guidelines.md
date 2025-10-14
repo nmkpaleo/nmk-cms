@@ -120,3 +120,161 @@ _Last updated: 2025-10-14_
 - Centralize frequently reused filter accordion markup into an include to reduce duplication across list templates.
 - Split the current monolithic `style.css` into domain-specific bundles (public landing, CMS shell, forms, import flows) to simplify future audits.
 - Document the expected CSS hooks for dynamically injected components (e.g., Select2, drag handles) within this guideline to aid future refactors.
+
+### Template Context Matrix (2025-02)
+The tables above capture high-level intent. This matrix inventories the concrete context requirements, reusable fragments, and authentication gates for every CMS template before refactoring. Unless otherwise noted, templates extend `base_generic.html` and inherit its HTML5 structure and W3.CSS baseline.
+
+#### List & Search Templates
+_Default context_: Django `ListView`/`FilterView` supplies `object_list` (e.g. `accessions`, `drawers`), `page_obj`, `paginator`, `is_paginated`, and `filter` (with `filter.form`) where applicable.
+
+- **`cms/accession_list.html`**
+  - Blocks: `title`, `content`, `script`
+  - View: `AccessionListView` (`FilterView`)
+  - Additional context: `user` for permission-aware columns; `accessions` preloaded with taxa/element summaries.
+  - Reusable pieces: Inline accordion pattern for filters; no external includes.
+  - Auth: Public read. Non-staff see only `is_published` rows via queryset guard.
+- **`cms/drawerregister_list.html`**
+  - Blocks: `title`, `content`, `script`
+  - View: `DrawerRegisterListView` (`LoginRequiredMixin`, `DrawerRegisterAccessMixin`, `FilterView`)
+  - Additional context: `can_edit` toggles reorder controls and drag handles.
+  - Reusable pieces: Drag-and-drop script posts to `drawerregister_reorder` endpoint.
+  - Auth: Staff/intern roles enforced by mixin; reorder requires elevated groups.
+- **`cms/fieldslip_list.html`**
+  - Blocks: `title`, `content`, `script`
+  - View: `FieldSlipListView` (`LoginRequiredMixin`, `UserPassesTestMixin`, `FilterView`)
+  - Additional context: none beyond filter + list; responsive column toggles rely on DOM IDs.
+  - Auth: Restricted to Collection Managers via `test_func`.
+- **`cms/locality_list.html`**
+  - Blocks: `title`, `content`, `script`
+  - View: `LocalityListView` (`FilterView`)
+  - Additional context: `localities` alias populated by view; template expects filter fields `name` and `abbreviation`.
+  - Auth: Public read.
+- **`cms/place_list.html`**
+  - Blocks: `title`, `content`, `script`
+  - View: `PlaceListView` (`FilterView`)
+  - Additional context: Filter requires `locality`, `name`, `place_type` fields.
+  - Auth: Public read.
+- **`cms/preparation_list.html`**
+  - Blocks: `title`, `content`, `script`
+  - View: `PreparationListView` (`LoginRequiredMixin`, `PreparationAccessMixin`, `FilterView`)
+  - Additional context: Queryset annotation exposes `accession_label` used in template.
+  - Auth: Curators, Collection Managers, and superusers via mixin.
+- **`cms/reference_list.html`**
+  - Blocks: `title`, `content`, `pagination`, `script`
+  - View: `ReferenceListView` (`FilterView`)
+  - Additional context: Template consumes `page_obj` for manual pagination block.
+  - Auth: Public read.
+- **`cms/storage_list.html`**
+  - Blocks: `title`, `content`, `script`
+  - View: `StorageListView` (`LoginRequiredMixin`, `CollectionManagerAccessMixin`, `FilterView`)
+  - Additional context: `storages` alias includes counts and parent areas for display.
+  - Auth: Collection Managers / superusers.
+- **`cms/qc/media_queue_list.html`**
+  - Blocks: `title`, `content`
+  - View: `MediaQCQueueView` variants (`LoginRequiredMixin`, `UserPassesTestMixin`, `ListView`)
+  - Additional context: `queue_title`, `queue_description`, `queue_action_label`, `queue_empty_message` strings; template reads `media_list` and `page_obj`.
+  - Reusable pieces: Shared by multiple queue subclasses with differing filters.
+  - Auth: Intern/expert gating controlled per subclass `allowed_roles`.
+
+#### Detail Templates
+_Default context_: Django `DetailView` supplies `object` (aliased per view) and `user`.
+
+- **`cms/accession_detail.html`**
+  - Blocks: `title`, `content`, `extra_scripts`
+  - View: `AccessionDetailView` (public with queryset guard)
+  - Additional context: `related_fieldslips`, `references`, `geologies`, `comments`, `accession_rows`, `first_identifications`, `identification_counts`, `taxonomy`, `add_fieldslip_form`.
+  - Reusable pieces: Includes `cms/partials/accession_preview_panel.html`.
+  - Auth: Public read; edit links limited to Collection Managers/superusers.
+- **`cms/accession_row_detail.html`**
+  - Blocks: `title`, `content`
+  - View: `AccessionRowDetailView` (`DetailView`)
+  - Additional context: `natureofspecimens`, `identifications`, `can_edit`, `can_manage`, `show_inventory_status`.
+  - Auth: Public view; management actions hidden unless Collection Manager/superuser.
+- **`cms/drawerregister_detail.html`**
+  - Blocks: `title`, `content`
+  - View: `DrawerRegisterDetailView` (`LoginRequiredMixin`, `DrawerRegisterAccessMixin`, `DetailView`)
+  - Additional context: `history_entries`, `can_edit`.
+  - Auth: Drawer access mixin ensures proper roles.
+- **`cms/fieldslip_detail.html`**
+  - Blocks: `title`, `content`
+  - View: `FieldSlipDetailView`
+  - Additional context: none beyond `fieldslip` object; template accesses media fields for aerial photo.
+  - Auth: Public read.
+- **`cms/locality_detail.html`**
+  - Blocks: `title`, `content`
+  - View: `LocalityDetailView`
+  - Additional context: `accessions`, `page_obj`, `is_paginated` for the related accession list.
+  - Auth: Public read.
+- **`cms/place_detail.html`**
+  - Blocks: `title`, `content`
+  - View: `PlaceDetailView`
+  - Additional context: `children` queryset of related places in addition to the `place` object.
+  - Auth: Public read.
+- **`cms/preparation_detail.html`**
+  - Blocks: `title`, `content`
+  - View: `PreparationDetailView` (`LoginRequiredMixin`, `DetailView`)
+  - Additional context: `history_entries`, `can_edit`; template pulls related media directly via `preparation.preparationmedia_set`.
+  - Auth: Curators, Preparators, Collection Managers based on `can_edit` logic; list access enforced by mixin.
+- **`cms/reference_detail.html`**
+  - Blocks: `title`, `content`
+  - View: `ReferenceDetailView`
+  - Additional context: `accession_entries` (accession/page tuples) and optional `doi_url`.
+  - Auth: Public read.
+- **`cms/storage_detail.html`**
+  - Blocks: `title`, `content`
+  - View: `StorageDetailView` (`LoginRequiredMixin`, `CollectionManagerAccessMixin`, `DetailView`)
+  - Additional context: `specimen_page_obj`, `specimens`, `specimen_count`, `children`, `history_entries`, `can_edit`.
+  - Auth: Collection Managers / superusers.
+
+#### Dashboard Template
+- **`cms/dashboard.html`**
+  - Blocks: `title`, `content`
+  - View: `dashboard` function view
+  - Context: `is_preparator`, `my_preparations`, `priority_tasks`, `is_curator`, `completed_preparations`, `is_collection_manager`, `has_active_series`, `unassigned_accessions`, `latest_accessions`, `is_intern`, `my_drawers`, `qc_sections`, `qc_extra_links`, `no_role`.
+  - Reusable pieces: Includes `cms/qc/dashboard_queue.html`; relies on timer JS for intern scan tracking.
+  - Auth: Expects authenticated users; role flags derived from group membership.
+
+#### Form & Action Templates
+_Default context_: Forms expose `form`, `form.media`, CSRF token, and `request`.
+
+- **`cms/accession_batch_form.html`** — Blocks `title`, `content`; expects `form`, `series_remaining`, `series_range`, plus `title`, `method`, `action` strings from `generate_accession_batch` (`@staff_member_required`).
+- **`cms/accession_form.html`** — Blocks `title`, `content`; requires `form` and `request.path`. Used by `accession_create` and `accession_edit` (edit requires Collection Manager login).
+- **`cms/accession_row_form.html`** — Blocks `title`, `content`; expects `form`, `accessionrow`, `request.path`; served by `AccessionRowUpdateView` (login + Collection Manager check).
+- **`cms/accession_wizard.html`** — Blocks `title`, `head`, `content`, `extra_scripts`; uses `wizard` context from `AccessionWizard` (steps metadata, `wizard.management_form`, per-step `wizard.form`, `wizard.steps`).
+- **`cms/add_accession_comment.html`** — Blocks `title`, `content`; expects `form`, `accession`; guarded by `@login_required` + Collection Manager test.
+- **`cms/add_accession_geology.html`** — Blocks `title`, `content`; expects `form`, `accession`; guarded by `@login_required` + Collection Manager test.
+- **`cms/add_accession_reference.html`** — Blocks `title`, `content`; expects `form`, `accession`; guarded by `@login_required` + Collection Manager test.
+- **`cms/add_accession_row.html`** — Blocks `title`, `content`; expects `form`, `accession`; view enforces Collection Manager login before saving.
+- **`cms/add_accession_row_identification.html`** — Blocks `title`, `content`; expects `form`, `accession_row`; view restricted to Collection Managers (`@login_required`, `user_passes_test`).
+- **`cms/add_accession_row_specimen.html`** — Blocks `title`, `content`; expects `form`, `accession_row`; same auth guard as identification.
+- **`cms/drawerregister_form.html`** — Blocks `title`, `content`; requires `form`, `request.path`; used by `DrawerRegisterCreateView`/`UpdateView` (login + drawer access mixin).
+- **`cms/fieldslip_form.html`** — Blocks `title`, `content`; expects `form`; used by `fieldslip_create`/`fieldslip_edit` (functions without decorators, but exposed in staff navigation; consider restricting in refactor).
+- **`cms/fieldslip_import.html`** — Blocks `title`, `content`; no bound form object—relies on `<input type="file" name="import_file">`; view `fieldslip_import` handles POST.
+- **`cms/locality_form.html`** — Blocks `title`, `content`; expects `form`; `locality_create`/`locality_edit` functions serve it.
+- **`cms/place_form.html`** — Blocks `title`, `content`; expects `form`; `place_create`/`place_edit` functions serve it.
+- **`cms/preparation_approve.html`** — Blocks `title`, `content`; expects `form` from `PreparationApproveView` (`LoginRequiredMixin`, curator gate).
+- **`cms/preparation_confirm_delete.html`** — Blocks `title`, `content`; expects `preparation` object plus default delete view context; served by `PreparationDeleteView` (login + curator guard).
+- **`cms/preparation_form.html`** — Blocks `title`, `content`; expects `form`; used by `PreparationCreateView`/`UpdateView` (login, group-sensitive validation).
+- **`cms/preparation_media_upload.html`** — Blocks `title`, `content`; expects `form`, `preparation`; `PreparationMediaUploadView` enforces curator/manager auth before upload.
+- **`cms/reference_form.html`** — Blocks `title`, `content`; expects `form`; used by `reference_create`/`reference_edit` (function-based views, typically staff-only via navigation).
+- **`cms/storage_form.html`** — Blocks `title`, `content`; expects `form`, `request.path`; served by `StorageCreateView`/`StorageUpdateView` (`LoginRequiredMixin`, `CollectionManagerAccessMixin`).
+- **`cms/upload_media.html`** — Blocks `title`, `content`; expects `form`, `accession`; `upload_media` view handles POST (no decorator today—future refactor should enforce auth).
+
+#### QC Wizard Templates
+- **`cms/qc/wizard_base.html`** — Blocks `title`, `wizard_title`, `content`, `wizard_heading`, `wizard_subheading`, `wizard_extra_fields`, `wizard_actions`, `extra_scripts`; requires `media`, `accession_form`, `fieldslip_formset`, `row_formset`, `ident_formset`, `specimen_formset`, `reference_formset`, `row_contexts`, `storage_suggestions`, `storage_datalist_id`, `qc_history_logs`, `qc_preview`, `qc_diff`, `form_media`, plus optional `qc_conflicts`, `qc_acknowledged_warnings`.
+- **`cms/qc/intern_wizard.html`** — Extends wizard base; fills blocks `wizard_title`, `wizard_heading`, `wizard_subheading`, `wizard_extra_fields`, `wizard_actions`. Requires intern/expert-specific context (`qc_comment`, `qc_comments`, `latest_qc_comment`, `is_expert`, `qc_conflicts`, `qc_diff`).
+- **`cms/qc/expert_wizard.html`** — Extends wizard base; similar requirements with expert-only actions (`qc_conflicts`, `qc_comment`, `qc_comments`).
+- **`cms/qc/rows_step.html`** — Included by wizard steps; expects `row_formset`, `row_contexts`, `storage_suggestions`, `storage_datalist_id`.
+- **`cms/qc/summary_step.html`** — Summaries diff output; requires `qc_diff`, `qc_warnings`/`warnings_map` data from wizard manager.
+- **`cms/qc/dashboard_queue.html`** — Partial used by dashboard; expects `qc_sections` (list of dicts with `key`, `label`, `entries`, `has_more`, `action_url_name`, `cta_label`, `empty_message`, `view_all_url`) and optional `qc_extra_links` (label/url pairs).
+- **`cms/qc/partials/chip.html`** — Chip component for inline formsets; expects `chip_form`, `chip_type`, `field` iteration, `hidden` flag.
+- **`cms/qc/partials/reference_card.html`** — Requires `ref_form` bound fields (`first_author`, `title`, `year`, `page`) plus `hidden` toggle.
+- **`cms/qc/partials/row_card.html`** — Requires `row_form`, `display_index`, `row_id`, `hidden`; consumes form field HTML names/IDs for JS ordering.
+
+#### History & Shared Fragments
+- **`cms/qc/history.html`** — Blocks `title`, `content`; view `MediaQCHistoryView` (login + role guard) supplies `qc_logs`, optional `filter_media` for heading.
+- **`cms/qc/partials/history_list.html`** — Shared log renderer; expects `logs` (iterable of `MediaQCLog`), optional flags `compact`, `show_empty`, plus nested `comments` on each log.
+- **`cms/partials/accession_preview_panel.html`** — Partial used on accession detail and QC wizard; expects `accession`, `accession_rows`, `first_identifications`, `taxonomy`, `geologies`, `references`, `media`, `slip` collections, `preview_mode` toggle, and optionally `matched_taxon` metadata.
+- **History tables inside detail templates** — `cms/drawerregister_detail.html`, `cms/preparation_detail.html`, and `cms/storage_detail.html` each consume `history_entries` produced by `build_history_entries` and expect entries to expose `.log` (with `history_date`, `history_type`, `history_user`, `history_change_reason`) plus `.changes` iterables for field diffs.
+
+This matrix should be kept in sync with view changes so future refactors can rely on an authoritative source of template dependencies.

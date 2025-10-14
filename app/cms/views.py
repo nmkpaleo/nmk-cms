@@ -1,3 +1,9 @@
+"""CMS view logic.
+
+Template context inventory and authentication coverage are catalogued in
+``docs/dev/frontend-guidelines.md`` to aid upcoming template refactors.
+"""
+
 import copy
 import csv
 import json
