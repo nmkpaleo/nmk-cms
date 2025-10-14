@@ -1,9 +1,18 @@
 (function (global) {
+  const Stimulus = global && global.Stimulus;
+
+  if (!Stimulus || !Stimulus.Controller) {
+    console.error('Stimulus Controller not found for QcReferencesController');
+    return;
+  }
+
+  const { Controller } = Stimulus;
+
   function toArray(list) {
     return Array.prototype.slice.call(list || []);
   }
 
-  function parseInteger(value) {
+  function parseIndex(value) {
     const number = parseInt(value, 10);
     return Number.isNaN(number) ? 0 : number;
   }
@@ -44,10 +53,12 @@
     }
   }
 
-  function updateCardPresentation(card, deleted) {
+  function toggleCardPresentation(card, deleted) {
     if (!card) {
       return;
     }
+
+    card.toggleAttribute('data-reference-deleted', Boolean(deleted));
 
     const actions = card.querySelector('[data-reference-actions]');
     if (actions) {
@@ -65,17 +76,6 @@
     }
   }
 
-  function focusFirstField(element) {
-    if (!element) {
-      return;
-    }
-
-    const field = element.querySelector("input:not([type='hidden']), textarea, select");
-    if (field && typeof field.focus === 'function') {
-      field.focus();
-    }
-  }
-
   function replacePrefix(markup, prefix, index) {
     if (typeof markup !== 'string') {
       return markup;
@@ -85,183 +85,135 @@
     return markup.replace(pattern, `${prefix}-${index}`);
   }
 
-  function nextOrderValue(container) {
-    if (!container) {
-      return 0;
+  class QcReferencesController extends Controller {
+    static get targets() {
+      return ['container', 'template', 'emptyMessage'];
     }
 
-    let max = -1;
-    container.querySelectorAll('input[name$="-order"]').forEach((input) => {
-      const value = parseInteger(input.value);
-      if (value > max) {
-        max = value;
-      }
-    });
+    connect() {
+      this.prefix = this.element.getAttribute('data-formset-prefix') || 'reference';
+      this.formElement = this.element.closest('form');
+      this.totalFormsInput = this._findManagementInput('TOTAL_FORMS');
+      this._applyInitialState();
+      this._updateEmptyMessage();
+    }
 
-    return max + 1;
+    addReference(event) {
+      if (event && typeof event.preventDefault === 'function') {
+        event.preventDefault();
+      }
+
+      if (!this.hasTemplateTarget || !this.hasContainerTarget) {
+        return;
+      }
+
+      const nextIndex = this._nextIndex();
+      const markup = replacePrefix(this.templateTarget.innerHTML, this.prefix, nextIndex);
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = (markup || '').trim();
+      const card = wrapper.firstElementChild;
+
+      if (!card) {
+        return;
+      }
+
+      setDeleteValue(card, false);
+      toggleCardPresentation(card, false);
+
+      this.containerTarget.appendChild(card);
+      this._setTotalForms(nextIndex + 1);
+      this._updateEmptyMessage();
+
+      const focusTarget = card.querySelector("input:not([type='hidden']), textarea, select");
+      if (focusTarget && typeof focusTarget.focus === 'function') {
+        focusTarget.focus();
+      }
+    }
+
+    deleteReference(event) {
+      if (event && typeof event.preventDefault === 'function') {
+        event.preventDefault();
+      }
+
+      const trigger = event ? event.currentTarget || event.target : null;
+      const card = trigger && typeof trigger.closest === 'function'
+        ? trigger.closest('[data-qc-reference]')
+        : null;
+
+      if (!card) {
+        return;
+      }
+
+      setDeleteValue(card, true);
+      toggleCardPresentation(card, true);
+      this._updateEmptyMessage();
+    }
+
+    restoreReference(event) {
+      if (event && typeof event.preventDefault === 'function') {
+        event.preventDefault();
+      }
+
+      const trigger = event ? event.currentTarget || event.target : null;
+      const card = trigger && typeof trigger.closest === 'function'
+        ? trigger.closest('[data-qc-reference]')
+        : null;
+
+      if (!card) {
+        return;
+      }
+
+      setDeleteValue(card, false);
+      toggleCardPresentation(card, false);
+      this._updateEmptyMessage();
+    }
+
+    _applyInitialState() {
+      this._cards().forEach((card) => {
+        const deleted = readDeleteValue(card);
+        toggleCardPresentation(card, deleted);
+      });
+    }
+
+    _updateEmptyMessage() {
+      if (!this.hasEmptyMessageTarget) {
+        return;
+      }
+
+      const hasActive = this._cards().some((card) => !readDeleteValue(card));
+      this.emptyMessageTarget.hidden = hasActive;
+    }
+
+    _cards() {
+      if (!this.hasContainerTarget) {
+        return [];
+      }
+
+      return toArray(this.containerTarget.querySelectorAll('[data-qc-reference]'));
+    }
+
+    _nextIndex() {
+      if (this.totalFormsInput) {
+        return parseIndex(this.totalFormsInput.value);
+      }
+
+      return this._cards().length;
+    }
+
+    _setTotalForms(value) {
+      if (this.totalFormsInput) {
+        this.totalFormsInput.value = String(value);
+      }
+    }
+
+    _findManagementInput(suffix) {
+      if (!this.formElement) {
+        return null;
+      }
+
+      return this.formElement.querySelector(`input[name="${this.prefix}-${suffix}"]`);
+    }
   }
 
-  function setOrderValue(card, value) {
-    if (!card) {
-      return;
-    }
-
-    const orderInput = card.querySelector('input[name$="-order"]');
-    if (orderInput) {
-      orderInput.value = String(value);
-    }
-  }
-
-  function buildController(StimulusInstance) {
-    if (!StimulusInstance || !StimulusInstance.Controller) {
-      return null;
-    }
-
-    const { Controller } = StimulusInstance;
-
-    class QcReferencesController extends Controller {
-      static get targets() {
-        return ['container', 'template', 'emptyMessage'];
-      }
-
-      connect() {
-        this.formElement = this.element.closest('form');
-        this.prefix = this.element.dataset.formsetPrefix || 'reference';
-        this.totalFormsInput = this.findManagementInput('TOTAL_FORMS');
-        this.applyInitialState();
-        this.updateEmptyMessage();
-      }
-
-      findManagementInput(suffix) {
-        if (!this.formElement) {
-          return null;
-        }
-
-        return this.formElement.querySelector(`input[name="${this.prefix}-${suffix}"]`);
-      }
-
-      references() {
-        if (!this.hasContainerTarget) {
-          return [];
-        }
-
-        return toArray(this.containerTarget.querySelectorAll('[data-qc-reference]'));
-      }
-
-      applyInitialState() {
-        this.references().forEach((card) => {
-          const deleted = readDeleteValue(card);
-          updateCardPresentation(card, deleted);
-        });
-      }
-
-      updateEmptyMessage() {
-        if (!this.hasEmptyMessageTarget) {
-          return;
-        }
-
-        const hasActive = this.references().some((card) => !readDeleteValue(card));
-        this.emptyMessageTarget.hidden = hasActive;
-      }
-
-      nextIndex() {
-        if (this.totalFormsInput) {
-          return parseInteger(this.totalFormsInput.value);
-        }
-
-        return this.references().length;
-      }
-
-      setTotalForms(value) {
-        if (this.totalFormsInput) {
-          this.totalFormsInput.value = String(value);
-        }
-      }
-
-      addReference(event) {
-        if (event && typeof event.preventDefault === 'function') {
-          event.preventDefault();
-        }
-
-        if (!this.hasTemplateTarget || !this.hasContainerTarget) {
-          return;
-        }
-
-        const index = this.nextIndex();
-        const orderValue = nextOrderValue(this.containerTarget);
-        const markup = replacePrefix(this.templateTarget.innerHTML, this.prefix, index);
-        const wrapper = document.createElement('div');
-        wrapper.innerHTML = markup.trim();
-        const card = wrapper.firstElementChild;
-
-        if (!card) {
-          return;
-        }
-
-        setDeleteValue(card, false);
-        updateCardPresentation(card, false);
-        setOrderValue(card, orderValue);
-
-        this.containerTarget.appendChild(card);
-        this.setTotalForms(index + 1);
-        this.updateEmptyMessage();
-        focusFirstField(card);
-      }
-
-      deleteReference(event) {
-        if (event && typeof event.preventDefault === 'function') {
-          event.preventDefault();
-        }
-
-        const trigger = event ? event.currentTarget || event.target : null;
-        const card = trigger && typeof trigger.closest === 'function'
-          ? trigger.closest('[data-qc-reference]')
-          : null;
-
-        if (!card) {
-          return;
-        }
-
-        setDeleteValue(card, true);
-        updateCardPresentation(card, true);
-        this.updateEmptyMessage();
-      }
-
-      restoreReference(event) {
-        if (event && typeof event.preventDefault === 'function') {
-          event.preventDefault();
-        }
-
-        const trigger = event ? event.currentTarget || event.target : null;
-        const card = trigger && typeof trigger.closest === 'function'
-          ? trigger.closest('[data-qc-reference]')
-          : null;
-
-        if (!card) {
-          return;
-        }
-
-        setDeleteValue(card, false);
-        updateCardPresentation(card, false);
-        this.updateEmptyMessage();
-      }
-    }
-
-    global.QcReferencesController = QcReferencesController;
-    return QcReferencesController;
-  }
-
-  const controller = buildController(global && global.Stimulus);
-
-  if (!controller && global && typeof global.addEventListener === 'function') {
-    const tryAttach = () => {
-      if (buildController(global && global.Stimulus)) {
-        global.removeEventListener('DOMContentLoaded', tryAttach);
-        global.removeEventListener('load', tryAttach);
-      }
-    };
-
-    global.addEventListener('DOMContentLoaded', tryAttach);
-    global.addEventListener('load', tryAttach);
-  }
+  global.QcReferencesController = QcReferencesController;
 })(typeof window !== 'undefined' ? window : this);
