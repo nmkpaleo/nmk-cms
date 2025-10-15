@@ -1,18 +1,23 @@
 import copy
-from unittest.mock import patch
-from datetime import datetime, timedelta
+from datetime import timedelta
+from decimal import Decimal
 import json
+import shutil
+from datetime import datetime, timedelta
+from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.test import TestCase
-from django.urls import reverse
-from django.utils.timezone import now
-from django.utils import timezone as django_timezone
 from django.core.exceptions import ValidationError
+from django.contrib.messages import get_messages
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.conf import settings
+from django.core.management import call_command
+from django.test import TestCase, override_settings
+from django.urls import reverse
+from django.utils import timezone as django_timezone
+from django.utils.timezone import now
 from pathlib import Path
 
 from cms.models import (
@@ -41,6 +46,7 @@ from cms.models import (
     NatureOfSpecimen,
     MediaQCLog,
     MediaQCComment,
+    LLMUsageRecord,
     Element,
     Person,
 )
@@ -56,8 +62,30 @@ from cms.ocr_processing import (
     describe_accession_conflicts,
     UNKNOWN_FIELD_NUMBER_PREFIX,
     _apply_rows,
+    MAX_OCR_ROWS_PER_ACCESSION,
 )
 from cms.qc import diff_media_payload
+
+
+DEFAULT_USAGE_PAYLOAD = {
+    "model": "gpt-4o",
+    "request_id": "req-test",
+    "prompt_tokens": 100,
+    "completion_tokens": 200,
+    "total_tokens": 300,
+    "prompt_cost_usd": 0.0005,
+    "completion_cost_usd": 0.003,
+    "total_cost_usd": 0.0035,
+}
+
+
+def with_usage(payload: dict, *, usage_overrides: dict | None = None) -> dict:
+    data = copy.deepcopy(payload)
+    usage_payload = copy.deepcopy(DEFAULT_USAGE_PAYLOAD)
+    if usage_overrides:
+        usage_payload.update(usage_overrides)
+    data["usage"] = usage_payload
+    return data
 
 
 class MediaQCDiffTests(TestCase):
@@ -156,6 +184,214 @@ class MediaQCDiffTests(TestCase):
         diff = diff_media_payload(original, updated)
         warnings = {warning["code"] for warning in diff["warnings"]}
         self.assertIn("unlinked_identifications", warnings)
+
+
+class DashboardQueueTests(TestCase):
+    def setUp(self):
+        self.User = get_user_model()
+        self.intern_group = Group.objects.create(name="Interns")
+        self.curator_group = Group.objects.create(name="Curators")
+        self.collection_manager_group = Group.objects.create(name="Collection Managers")
+
+        self.creator = self.User.objects.create_user(username="creator", password="pass")
+        patcher = patch("cms.models.get_current_user", return_value=self.creator)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+        self.media_pending_intern = Media.objects.create(
+            file_name="pending-intern",
+            qc_status=Media.QCStatus.PENDING_INTERN,
+            ocr_status=Media.OCRStatus.COMPLETED,
+            media_location="uploads/ocr/pending-intern.png",
+        )
+        self.media_pending_expert = Media.objects.create(
+            file_name="pending-expert",
+            qc_status=Media.QCStatus.PENDING_EXPERT,
+        )
+        self.media_returned = Media.objects.create(
+            file_name="returned",
+            qc_status=Media.QCStatus.REJECTED,
+            rows_rearranged=True,
+        )
+        log = MediaQCLog.objects.create(
+            media=self.media_returned,
+            change_type=MediaQCLog.ChangeType.STATUS,
+            field_name="qc_status",
+            old_value={"qc_status": Media.QCStatus.PENDING_EXPERT},
+            new_value={"qc_status": Media.QCStatus.REJECTED},
+        )
+        MediaQCComment.objects.create(log=log, comment="Needs fixes")
+
+    def _create_user(self, username: str, groups: tuple[Group, ...] = ()):
+        user = self.User.objects.create_user(username=username, password="pass")
+        for group in groups:
+            user.groups.add(group)
+        return user
+
+    def test_dashboard_sections_for_intern(self):
+        user = self._create_user("intern", groups=(self.intern_group,))
+        self.client.force_login(user)
+        response = self.client.get(reverse("dashboard"))
+        self.assertEqual(response.status_code, 200)
+        sections = response.context["qc_sections"]
+        labels = {section["label"] for section in sections}
+        self.assertIn("Pending intern review", labels)
+        self.assertIn("Returned for fixes", labels)
+        self.assertNotIn("Needs expert attention", labels)
+        returned_section = next(section for section in sections if section["key"] == "returned")
+        self.assertEqual([media.pk for media in returned_section["entries"]], [self.media_returned.pk])
+        self.assertEqual(response.context["qc_extra_links"], [])
+
+    def test_dashboard_sections_for_expert(self):
+        user = self._create_user("expert", groups=(self.curator_group,))
+        self.client.force_login(user)
+        response = self.client.get(reverse("dashboard"))
+        self.assertEqual(response.status_code, 200)
+        sections = response.context["qc_sections"]
+        labels = {section["label"] for section in sections}
+        self.assertIn("Pending intern review", labels)
+        self.assertIn("Needs expert attention", labels)
+        self.assertIn("Returned for fixes", labels)
+        keys = [section["key"] for section in sections]
+        self.assertLess(keys.index("pending_expert"), keys.index("pending_intern"))
+        extra_labels = {extra["label"] for extra in response.context["qc_extra_links"]}
+        self.assertIn("Media with rearranged rows", extra_labels)
+        self.assertIn("Media with QC comments", extra_labels)
+
+    def test_expert_can_open_intern_qc_wizard(self):
+        user = self._create_user("expert-access", groups=(self.curator_group,))
+        self.client.force_login(user)
+        response = self.client.get(
+            reverse("media_intern_qc", args=[self.media_pending_intern.uuid])
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Approve &amp; Accession")
+        self.assertContains(response, "Save &amp; Continue")
+        self.assertNotContains(response, "Submit for Expert Review")
+
+    def test_intern_wizard_hides_expert_actions_for_interns(self):
+        user = self._create_user("intern-access", groups=(self.intern_group,))
+        self.client.force_login(user)
+        response = self.client.get(
+            reverse("media_intern_qc", args=[self.media_pending_intern.uuid])
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Save &amp; Continue")
+        self.assertNotContains(response, "Approve &amp; Accession")
+        self.assertContains(response, "Submit for Expert Review")
+
+    def test_dashboard_for_user_without_role(self):
+        user = self._create_user("visitor")
+        self.client.force_login(user)
+        response = self.client.get(reverse("dashboard"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["no_role"])
+        self.assertEqual(response.context["qc_sections"], [])
+
+    def test_rows_rearranged_requires_expert(self):
+        user = self._create_user("intern-only", groups=(self.intern_group,))
+        self.client.force_login(user)
+        response = self.client.get(reverse("media_qc_rows_rearranged"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_rows_rearranged_list_for_expert(self):
+        user = self._create_user("manager", groups=(self.collection_manager_group,))
+        self.client.force_login(user)
+        response = self.client.get(reverse("media_qc_rows_rearranged"))
+        self.assertContains(response, self.media_returned.file_name)
+
+    def test_with_comments_queue_filters_correctly(self):
+        user = self._create_user("manager-two", groups=(self.collection_manager_group,))
+        self.client.force_login(user)
+        response = self.client.get(reverse("media_qc_with_comments"))
+        self.assertContains(response, self.media_returned.file_name)
+        self.assertNotContains(response, self.media_pending_expert.file_name)
+
+    def test_pending_intern_queue_access(self):
+        intern_user = self._create_user("queue-intern", groups=(self.intern_group,))
+        self.client.force_login(intern_user)
+        response = self.client.get(reverse("media_qc_pending_intern"))
+        self.assertContains(response, self.media_pending_intern.file_name)
+
+    def test_pending_intern_queue_access_for_expert(self):
+        expert_user = self._create_user("queue-expert", groups=(self.curator_group,))
+        self.client.force_login(expert_user)
+        response = self.client.get(reverse("media_qc_pending_intern"))
+        self.assertContains(response, self.media_pending_intern.file_name)
+
+    def test_pending_intern_queue_excludes_non_ocr_ready_media(self):
+        Media.objects.create(
+            file_name="pending-ocr-incomplete",
+            qc_status=Media.QCStatus.PENDING_INTERN,
+            ocr_status=Media.OCRStatus.PENDING,
+            media_location="uploads/ocr/pending-ocr-incomplete.png",
+        )
+        Media.objects.create(
+            file_name="pending-upload",
+            qc_status=Media.QCStatus.PENDING_INTERN,
+            ocr_status=Media.OCRStatus.COMPLETED,
+            media_location="uploads/pending/pending-upload.png",
+        )
+
+        intern_user = self._create_user("queue-filter", groups=(self.intern_group,))
+        self.client.force_login(intern_user)
+
+        dashboard_response = self.client.get(reverse("dashboard"))
+        sections = {section["key"]: section for section in dashboard_response.context["qc_sections"]}
+        pending_entries = {media.file_name for media in sections["pending_intern"]["entries"]}
+
+        self.assertIn(self.media_pending_intern.file_name, pending_entries)
+        self.assertNotIn("pending-ocr-incomplete", pending_entries)
+        self.assertNotIn("pending-upload", pending_entries)
+
+        queue_response = self.client.get(reverse("media_qc_pending_intern"))
+        self.assertContains(queue_response, self.media_pending_intern.file_name)
+        self.assertNotContains(queue_response, "pending-ocr-incomplete")
+        self.assertNotContains(queue_response, "pending-upload")
+
+    def test_returned_queue_for_intern(self):
+        intern_user = self._create_user("queue-returned", groups=(self.intern_group,))
+        self.client.force_login(intern_user)
+        response = self.client.get(reverse("media_qc_returned"))
+        self.assertContains(response, self.media_returned.file_name)
+
+
+class MediaNotificationTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username="notifier", password="pass")
+        patcher = patch("cms.models.get_current_user", return_value=self.user)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_transition_triggers_notification(self):
+        media = Media.objects.create(
+            file_name="notif",
+            qc_status=Media.QCStatus.PENDING_INTERN,
+            ocr_status=Media.OCRStatus.COMPLETED,
+            media_location="uploads/ocr/notif.png",
+        )
+        with patch("cms.models.notify_media_qc_transition") as mock_notify:
+            media.transition_qc(Media.QCStatus.PENDING_EXPERT, user=self.user, note="Ready")
+
+        mock_notify.assert_called_once()
+        args, kwargs = mock_notify.call_args
+        self.assertEqual(args[0], media)
+        self.assertEqual(args[1], Media.QCStatus.PENDING_INTERN)
+        self.assertEqual(args[2], Media.QCStatus.PENDING_EXPERT)
+        self.assertEqual(kwargs["user"], self.user)
+        self.assertEqual(kwargs["note"], "Ready")
+
+    def test_transition_same_status_skips_notification(self):
+        media = Media.objects.create(
+            file_name="notif-skip",
+            qc_status=Media.QCStatus.PENDING_INTERN,
+            ocr_status=Media.OCRStatus.COMPLETED,
+            media_location="uploads/ocr/notif-skip.png",
+        )
+        with patch("cms.models.notify_media_qc_transition") as mock_notify:
+            media.transition_qc(Media.QCStatus.PENDING_INTERN, user=self.user)
+
+        mock_notify.assert_not_called()
 
 class UploadProcessingTests(TestCase):
     """Tests for handling scan uploads using filename timestamps."""
@@ -1121,9 +1357,10 @@ class ScanningTests(TestCase):
         pending_media = []
         for idx in range(11):
             media = Media.objects.create(
-                media_location=f"uploads/pending/sample-{idx}.jpg",
+                media_location=f"uploads/ocr/sample-{idx}.jpg",
                 file_name=f"Pending Sample {idx}",
                 qc_status=Media.QCStatus.PENDING_INTERN,
+                ocr_status=Media.OCRStatus.COMPLETED,
             )
             Media.objects.filter(pk=media.pk).update(
                 modified_on=now_time - timedelta(minutes=idx)
@@ -1644,6 +1881,12 @@ class UploadScanViewTests(TestCase):
         self.user = User.objects.create_user(username="cm", password="pass", is_staff=True)
         Group.objects.create(name="Collection Managers").user_set.add(self.user)
         self.url = reverse("admin-upload-scan")
+        self.uploads_root = Path(settings.MEDIA_ROOT) / "uploads"
+        self.addCleanup(self._cleanup_uploads)
+
+    def _cleanup_uploads(self):
+        if self.uploads_root.exists():
+            shutil.rmtree(self.uploads_root)
 
     def test_login_required(self):
         response = self.client.get(self.url)
@@ -1682,8 +1925,45 @@ class UploadScanViewTests(TestCase):
         self.assertTrue(rejected.exists())
         self.assertFalse(Media.objects.filter(media_location="uploads/rejected/badname.png").exists())
         rejected.unlink()
-        import shutil
         shutil.rmtree(rejected.parent.parent)
+
+    @override_settings(SCAN_UPLOAD_MAX_BYTES=10)
+    def test_upload_rejects_oversized_file(self):
+        self.client.login(username="cm", password="pass")
+        upload = SimpleUploadedFile("2025-01-01T010203.png", b"x" * 11, content_type="image/png")
+        response = self.client.post(self.url, {"files": upload})
+        self.assertEqual(response.status_code, 200)
+        self.assertFormError(
+            response,
+            "form",
+            "files",
+            [
+                "2025-01-01T010203.png is 11 bytes, which exceeds the 10 bytes limit per file.",
+            ],
+        )
+        incoming = self.uploads_root / "incoming"
+        if incoming.exists():
+            self.assertFalse(any(incoming.iterdir()))
+
+    @override_settings(SCAN_UPLOAD_MAX_BYTES=15)
+    def test_upload_accepts_large_batch_when_each_file_is_valid(self):
+        self.client.login(username="cm", password="pass")
+        upload_one = SimpleUploadedFile("2025-01-01T010203.png", b"a" * 10, content_type="image/png")
+        upload_two = SimpleUploadedFile("2025-01-01T010204.png", b"b" * 10, content_type="image/png")
+        response = self.client.post(self.url, {"files": [upload_one, upload_two]}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        messages = [str(message) for message in get_messages(response.wsgi_request)]
+        self.assertEqual(
+            messages,
+            [
+                "Uploaded 2025-01-01T010203.png (1 of 2)",
+                "Uploaded 2025-01-01T010204.png (2 of 2)",
+            ],
+        )
+        pending = Path(settings.MEDIA_ROOT) / "uploads" / "pending"
+        self.assertTrue(pending.exists())
+        saved_files = {item.name for item in pending.iterdir()}
+        self.assertSetEqual(saved_files, {"2025-01-01T010203.png", "2025-01-01T010204.png"})
 
 
 class OcrViewTests(TestCase):
@@ -1694,6 +1974,7 @@ class OcrViewTests(TestCase):
         self.user = User.objects.create_user(username="cm", password="pass", is_staff=True)
         Group.objects.create(name="Collection Managers").user_set.add(self.user)
         self.url = reverse("admin-do-ocr")
+        self.loop_url = f"{self.url}?loop=1"
         patcher = patch("cms.models.get_current_user", return_value=self.user)
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -1707,8 +1988,49 @@ class OcrViewTests(TestCase):
         response = self.client.get(reverse("admin:index"))
         self.assertContains(response, self.url)
 
+    @patch("cms.views._count_pending_scans", return_value=42)
+    def test_do_ocr_prompt_displays_options(self, mock_count):
+        self.client.login(username="cm", password="pass")
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Process pending scans")
+        self.assertContains(response, "Process all pending scans (42)")
+        self.assertContains(response, 'value="100"')
+        self.assertContains(response, 'value="1000"')
+
+    @patch("cms.views._count_pending_scans", return_value=10)
+    def test_do_ocr_prompt_rejects_invalid_choice(self, mock_count):
+        self.client.login(username="cm", password="pass")
+        response = self.client.post(self.url, {"scan_limit": "invalid"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Please choose one of the available options.")
+
+    @patch("cms.views._count_pending_scans", return_value=50)
+    def test_do_ocr_prompt_redirects_with_limit(self, mock_count):
+        self.client.login(username="cm", password="pass")
+        response = self.client.post(self.url, {"scan_limit": "200"})
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response["Location"].endswith("?loop=1&limit=200"))
+
+    @patch("cms.views._count_pending_scans", return_value=12)
+    def test_do_ocr_prompt_redirects_for_all(self, mock_count):
+        self.client.login(username="cm", password="pass")
+        response = self.client.post(self.url, {"scan_limit": "all"})
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response["Location"].endswith("?loop=1"))
+        self.assertNotIn("limit=", response["Location"])
+
+    @patch("cms.views._count_pending_scans", return_value=0)
+    def test_do_ocr_prompt_handles_no_pending(self, mock_count):
+        self.client.login(username="cm", password="pass")
+        response = self.client.post(self.url, {"scan_limit": "all"}, follow=True)
+        self.assertContains(response, "No pending scans to process.")
+
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
-    @patch("cms.ocr_processing.chatgpt_ocr", return_value={"foo": "bar"})
+    @patch(
+        "cms.ocr_processing.chatgpt_ocr",
+        return_value=with_usage({"foo": "bar"}, usage_overrides={"remaining_quota_usd": 11.0}),
+    )
     def test_ocr_moves_file_and_saves_json(self, mock_ocr, mock_detect):
         self.client.login(username="cm", password="pass")
         pending = Path(settings.MEDIA_ROOT) / "uploads" / "pending"
@@ -1725,21 +2047,145 @@ class OcrViewTests(TestCase):
         self.assertEqual(media.ocr_status, Media.OCRStatus.COMPLETED)
         self.assertEqual(media.media_location.name, f"uploads/ocr/{filename}")
         self.assertEqual(media.ocr_data["foo"], "bar")
+        usage_data = media.ocr_data["usage"]
+        for key, value in DEFAULT_USAGE_PAYLOAD.items():
+            self.assertEqual(usage_data[key], value)
+        self.assertIn("processing_seconds", usage_data)
+        self.assertGreaterEqual(usage_data["processing_seconds"], 0)
+        usage_record = media.llm_usage_record
+        self.assertEqual(usage_record.model_name, DEFAULT_USAGE_PAYLOAD["model"])
+        self.assertEqual(usage_record.prompt_tokens, DEFAULT_USAGE_PAYLOAD["prompt_tokens"])
+        self.assertEqual(usage_record.completion_tokens, DEFAULT_USAGE_PAYLOAD["completion_tokens"])
+        self.assertEqual(usage_record.total_tokens, DEFAULT_USAGE_PAYLOAD["total_tokens"])
+        self.assertEqual(
+            usage_record.cost_usd,
+            Decimal(str(DEFAULT_USAGE_PAYLOAD["total_cost_usd"])),
+        )
+        self.assertEqual(usage_record.response_id, DEFAULT_USAGE_PAYLOAD["request_id"])
+        self.assertEqual(usage_record.remaining_quota_usd, Decimal("11.0"))
+        self.assertIsNotNone(usage_record.processing_seconds)
+        self.assertGreaterEqual(float(usage_record.processing_seconds), 0.0)
         import shutil
         shutil.rmtree(pending.parent)
 
-    @patch("cms.views.process_pending_scans", return_value=(0, 1, 1, ["test.png: boom"]))
-    def test_do_ocr_shows_error_details(self, mock_process):
+    @patch("cms.views._count_pending_scans", return_value=5)
+    @patch(
+        "cms.views.process_pending_scans",
+        return_value=(0, 1, 1, ["test.png: boom"], None, ["test.png"], False),
+    )
+    def test_do_ocr_shows_error_details(self, mock_process, mock_count):
         self.client.login(username="cm", password="pass")
-        response = self.client.get(self.url, follow=True)
-        self.assertContains(response, "0/1 scans OCR&#x27;d")
-        self.assertContains(response, "OCR failed for 1 scans: test.png: boom")
+        response = self.client.post(self.url, {"scan_limit": "all"}, follow=True)
+        self.assertContains(response, "Processed 0 of 1 scans this run. Latest scan: test.png.")
+        self.assertContains(response, "OCR failed for 1 scans: test.png")
 
-    @patch("cms.views.process_pending_scans", return_value=(3, 0, 5, []))
-    def test_do_ocr_reports_progress(self, mock_process):
+    @patch("cms.views._count_pending_scans", return_value=2)
+    @patch(
+        "cms.views.process_pending_scans",
+        return_value=(3, 0, 5, [], None, ["scan-5.png"], False),
+    )
+    def test_do_ocr_reports_progress(self, mock_process, mock_count):
         self.client.login(username="cm", password="pass")
-        response = self.client.get(self.url, follow=True)
-        self.assertContains(response, "3/5 scans OCR&#x27;d")
+        response = self.client.post(self.url, {"scan_limit": "all"}, follow=True)
+        self.assertContains(response, "Processed 3 of 5 scans this run. Latest scan: scan-5.png.")
+
+    @patch("cms.views._count_pending_scans", return_value=5)
+    @patch(
+        "cms.views.process_pending_scans",
+        return_value=(0, 0, 0, ["insufficient_quota"], None, [], True),
+    )
+    def test_do_ocr_aborts_on_insufficient_quota(self, mock_process, mock_count):
+        self.client.login(username="cm", password="pass")
+        response = self.client.post(self.url, {"scan_limit": "all"}, follow=True)
+        self.assertContains(response, "OpenAI quota has been exhausted")
+        messages = [str(message) for message in get_messages(response.wsgi_request)]
+        self.assertTrue(any("OpenAI quota" in message for message in messages))
+
+    @patch("cms.views._count_pending_scans", return_value=4)
+    @patch("cms.views.process_pending_scans", return_value=(1, 0, 1, [], None, ["scan-1.png"], False))
+    def test_loop_mode_auto_refreshes(self, mock_process, mock_count):
+        self.client.login(username="cm", password="pass")
+        response = self.client.get(self.loop_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Refresh"], f"0;url={self.loop_url}")
+        body = response.content.decode()
+        self.assertIn("Continuing OCR… scan 1 of 5 (Latest: scan-1.png).", body)
+        session = self.client.session
+        self.assertEqual(session["ocr_loop_stats"]["successes"], 1)
+        self.assertEqual(session["ocr_loop_stats"]["attempted"], 1)
+        self.assertEqual(session["ocr_loop_stats"]["latest_filename"], "scan-1.png")
+
+    @patch("cms.views._count_pending_scans", return_value=99)
+    @patch("cms.views.process_pending_scans", return_value=(1, 0, 1, [], None, ["scan-1.png"], False))
+    def test_loop_mode_uses_limit_for_expected_total(self, mock_process, mock_count):
+        self.client.login(username="cm", password="pass")
+        url = f"{self.loop_url}&limit=100"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Continuing OCR… scan 1 of 100 (Latest: scan-1.png).", response.content.decode())
+        self.assertEqual(response["Refresh"], f"0;url={url}")
+
+    @patch("cms.views._count_pending_scans")
+    @patch("cms.views.process_pending_scans")
+    def test_loop_mode_finalizes_and_reports(self, mock_process, mock_count):
+        self.client.login(username="cm", password="pass")
+        mock_process.side_effect = [
+            (1, 0, 1, [], None, ["scan-1.png"], False),
+            (1, 0, 1, [], None, ["scan-2.png"], False),
+        ]
+        mock_count.side_effect = [2, 0]
+
+        first = self.client.get(self.loop_url)
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(first["Refresh"], f"0;url={self.loop_url}")
+
+        final = self.client.get(self.loop_url, follow=True)
+        self.assertContains(final, "Processed 2 of 2 scans this run. Latest scan: scan-2.png.")
+        self.assertIsNone(self.client.session.get("ocr_loop_stats"))
+
+    @patch("cms.views._count_pending_scans")
+    @patch("cms.views.process_pending_scans")
+    def test_loop_mode_respects_limit(self, mock_process, mock_count):
+        self.client.login(username="cm", password="pass")
+        mock_process.side_effect = [
+            (1, 0, 1, [], None, ["scan-1.png"], False),
+            (1, 0, 1, [], None, ["scan-2.png"], False),
+        ]
+        mock_count.side_effect = [5, 4]
+
+        url = f"{self.loop_url}&limit=2"
+        first = self.client.get(url)
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(first["Refresh"], f"0;url={url}")
+
+        final = self.client.get(url, follow=True)
+        self.assertContains(final, "Processed 2 of 2 scans this run. Latest scan: scan-2.png.")
+        self.assertIsNone(self.client.session.get("ocr_loop_stats"))
+
+    @patch("cms.views._count_pending_scans", return_value=5)
+    @patch(
+        "cms.views.process_pending_scans",
+        return_value=(0, 1, 1, ["jam.png: timeout"], "jam.png", ["jam.png"], False),
+    )
+    def test_loop_mode_stops_on_jam(self, mock_process, mock_count):
+        self.client.login(username="cm", password="pass")
+        response = self.client.get(self.loop_url, follow=True)
+        self.assertContains(response, "OCR failed for 1 scans: jam.png")
+        self.assertContains(
+            response,
+            "OCR halted because scan jam.png timed out after three attempts. Please investigate before retrying.",
+        )
+
+    @patch("cms.views._count_pending_scans", return_value=5)
+    @patch(
+        "cms.views.process_pending_scans",
+        return_value=(0, 0, 0, ["insufficient_quota"], None, [], True),
+    )
+    def test_loop_mode_aborts_on_insufficient_quota(self, mock_process, mock_count):
+        self.client.login(username="cm", password="pass")
+        response = self.client.get(self.loop_url, follow=True)
+        self.assertContains(response, "OpenAI quota has been exhausted")
+        self.assertIsNone(self.client.session.get("ocr_loop_stats"))
 
 
 class ProcessPendingScansTests(TestCase):
@@ -1762,12 +2208,15 @@ class ProcessPendingScansTests(TestCase):
         file_path.write_bytes(b"data")
         Media.objects.create(media_location=f"uploads/pending/{filename}")
         with self.assertLogs("cms.ocr_processing", level="ERROR") as cm:
-            successes, failures, total, errors = process_pending_scans()
+            successes, failures, total, errors, jammed, processed, insufficient = process_pending_scans()
         self.assertEqual(successes, 0)
         self.assertEqual(failures, 1)
         self.assertEqual(total, 1)
         self.assertTrue(any("boom" in e for e in errors))
         self.assertTrue(any("boom" in m for m in cm.output))
+        self.assertIsNone(jammed)
+        self.assertEqual(processed, [filename])
+        self.assertFalse(insufficient)
         media = Media.objects.get()
         self.assertEqual(media.ocr_status, Media.OCRStatus.FAILED)
         self.assertEqual(media.ocr_data["error"], "boom")
@@ -1775,10 +2224,90 @@ class ProcessPendingScansTests(TestCase):
         failed_file = Path(settings.MEDIA_ROOT) / "uploads" / "failed" / filename
         self.assertTrue(failed_file.exists())
 
+    @patch("cms.ocr_processing.time.sleep")
+    @patch("cms.ocr_processing.detect_card_type", side_effect=TimeoutError("timeout"))
+    def test_timeout_retries_and_stops_queue(self, mock_sleep, mock_detect):
+        filename1 = "jam.png"
+        filename2 = "next.png"
+        (self.pending / filename1).write_bytes(b"data")
+        (self.pending / filename2).write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename1}")
+        Media.objects.create(media_location=f"uploads/pending/{filename2}")
+
+        successes, failures, total, errors, jammed, processed, insufficient = process_pending_scans(limit=5)
+
+        self.assertEqual(successes, 0)
+        self.assertEqual(failures, 1)
+        self.assertEqual(total, 1)
+        self.assertEqual(jammed, filename1)
+        self.assertTrue(any("timeout" in e for e in errors))
+        self.assertEqual(mock_detect.call_count, 3)
+        self.assertGreaterEqual(mock_sleep.call_count, 2)
+        self.assertTrue((self.pending / filename2).exists())
+        failed_file = Path(settings.MEDIA_ROOT) / "uploads" / "failed" / filename1
+        self.assertTrue(failed_file.exists())
+        self.assertEqual(processed, [filename1])
+        self.assertFalse(insufficient)
+
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch(
         "cms.ocr_processing.chatgpt_ocr",
-        return_value={
+        side_effect=Exception("You exceeded your current quota, please check your plan."),
+    )
+    def test_insufficient_quota_leaves_scan_pending(self, mock_chat, mock_detect):
+        filename = "quota.png"
+        file_path = self.pending / filename
+        file_path.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename}")
+
+        successes, failures, total, errors, jammed, processed, insufficient = process_pending_scans()
+
+        self.assertEqual(successes, 0)
+        self.assertEqual(failures, 0)
+        self.assertEqual(total, 0)
+        self.assertEqual(errors, ["insufficient_quota"])
+        self.assertIsNone(jammed)
+        self.assertEqual(processed, [])
+        self.assertTrue(insufficient)
+        self.assertTrue((self.pending / filename).exists())
+        media = Media.objects.get()
+        self.assertEqual(media.media_location.name, f"uploads/pending/{filename}")
+        self.assertEqual(media.ocr_status, Media.OCRStatus.PENDING)
+
+
+class ChatGPTUsageReportViewTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username="staff", password="pass", is_staff=True
+        )
+        patcher = patch("cms.models.get_current_user", return_value=self.user)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.url = reverse("admin-chatgpt-usage")
+
+    def test_estimated_scans_displayed(self):
+        self.client.login(username="staff", password="pass")
+        media = Media.objects.create(media_location="uploads/ocr/sample.png")
+        LLMUsageRecord.objects.create(
+            media=media,
+            model_name="gpt-4o",
+            prompt_tokens=100,
+            completion_tokens=50,
+            total_tokens=150,
+            cost_usd=Decimal("0.75"),
+            processing_seconds=Decimal("12.5"),
+            remaining_quota_usd=Decimal("25.00"),
+        )
+
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "~33 scans")
+        self.assertContains(response, "avg $0.7500")
+    @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
+    @patch(
+        "cms.ocr_processing.chatgpt_ocr",
+        return_value=with_usage({
             "accessions": [
                 {
                     "collection_abbreviation": {"interpreted": "KNM"},
@@ -1802,7 +2331,7 @@ class ProcessPendingScansTests(TestCase):
                     ],
                 }
             ]
-        },
+        }),
     )
     def test_creates_accession_and_links_media(self, mock_ocr, mock_detect):
         Collection.objects.create(abbreviation="KNM", description="Kenya")
@@ -1810,8 +2339,10 @@ class ProcessPendingScansTests(TestCase):
         file_path = self.pending / filename
         file_path.write_bytes(b"data")
         Media.objects.create(media_location=f"uploads/pending/{filename}")
-        successes, failures, total, errors = process_pending_scans()
+        successes, failures, total, errors, jammed, processed, insufficient = process_pending_scans()
         self.assertEqual((successes, failures, total), (1, 0, 1))
+        self.assertIsNone(jammed)
+        self.assertEqual(processed, [filename])
         self.assertEqual(Accession.objects.count(), 0)
         media = Media.objects.get()
         self.assertEqual(media.ocr_status, Media.OCRStatus.COMPLETED)
@@ -1839,6 +2370,14 @@ class ProcessPendingScansTests(TestCase):
         media.refresh_from_db()
         self.assertEqual(media.accession, accession)
         self.assertEqual(media.qc_status, Media.QCStatus.APPROVED)
+        usage_data = media.ocr_data["usage"]
+        for key, value in DEFAULT_USAGE_PAYLOAD.items():
+            self.assertEqual(usage_data[key], value)
+        self.assertIn("processing_seconds", usage_data)
+        self.assertGreaterEqual(usage_data["processing_seconds"], 0)
+        usage_record = media.llm_usage_record
+        self.assertEqual(usage_record.total_tokens, DEFAULT_USAGE_PAYLOAD["total_tokens"])
+        self.assertIsNotNone(usage_record.processing_seconds)
         self.assertIn("_processed_accessions", media.ocr_data)
         repeat = media.transition_qc(Media.QCStatus.APPROVED, user=self.user)
         self.assertEqual(repeat["created"], [])
@@ -1847,7 +2386,7 @@ class ProcessPendingScansTests(TestCase):
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch(
         "cms.ocr_processing.chatgpt_ocr",
-        return_value={
+        return_value=with_usage({
             "accessions": [
                 {
                     "collection_abbreviation": {"interpreted": "KNM"},
@@ -1865,7 +2404,7 @@ class ProcessPendingScansTests(TestCase):
                     ],
                 }
             ]
-        },
+        }),
     )
     def test_reuses_existing_reference(self, mock_ocr, mock_detect):
         Collection.objects.create(abbreviation="KNM", description="Kenya")
@@ -1894,7 +2433,7 @@ class ProcessPendingScansTests(TestCase):
     def test_reference_reused_across_scans_with_variants(self, mock_ocr, mock_detect):
         Collection.objects.create(abbreviation="KNM", description="Kenya")
         mock_ocr.side_effect = [
-            {
+            with_usage({
                 "accessions": [
                     {
                         "collection_abbreviation": {"interpreted": "KNM"},
@@ -1911,8 +2450,8 @@ class ProcessPendingScansTests(TestCase):
                         ],
                     }
                 ]
-            },
-            {
+            }),
+            with_usage({
                 "accessions": [
                     {
                         "collection_abbreviation": {"interpreted": "KNM"},
@@ -1929,7 +2468,7 @@ class ProcessPendingScansTests(TestCase):
                         ],
                     }
                 ]
-            },
+            }),
         ]
 
         filename1 = "acc_ref1.png"
@@ -1960,7 +2499,7 @@ class ProcessPendingScansTests(TestCase):
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch(
         "cms.ocr_processing.chatgpt_ocr",
-        return_value={
+        return_value=with_usage({
             "accessions": [
                 {
                     "collection_abbreviation": {"interpreted": "KNM"},
@@ -1971,7 +2510,7 @@ class ProcessPendingScansTests(TestCase):
                     "additional_notes": [],
                 }
             ]
-        },
+        }),
     )
     def test_existing_accession_reports_conflict(self, mock_ocr, mock_detect):
         collection = Collection.objects.create(abbreviation="KNM", description="Kenya")
@@ -1981,8 +2520,10 @@ class ProcessPendingScansTests(TestCase):
         file_path = self.pending / filename
         file_path.write_bytes(b"data")
         Media.objects.create(media_location=f"uploads/pending/{filename}")
-        successes, failures, total, errors = process_pending_scans()
+        successes, failures, total, errors, jammed, processed, insufficient = process_pending_scans()
         self.assertEqual((successes, failures, total), (1, 0, 1))
+        self.assertIsNone(jammed)
+        self.assertEqual(processed, [filename])
         media = Media.objects.get()
         with self.assertRaises(ValidationError) as exc:
             media.transition_qc(Media.QCStatus.APPROVED, user=self.user)
@@ -2094,7 +2635,7 @@ class ProcessPendingScansTests(TestCase):
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch(
         "cms.ocr_processing.chatgpt_ocr",
-        return_value={
+        return_value=with_usage({
             "accessions": [
                 {
                     "collection_abbreviation": {"interpreted": "KNM"},
@@ -2122,7 +2663,7 @@ class ProcessPendingScansTests(TestCase):
                     ],
                 }
             ]
-        },
+        }),
     )
     def test_creates_field_slip_and_links(self, mock_ocr, mock_detect):
         Collection.objects.create(abbreviation="KNM", description="Kenya")
@@ -2151,7 +2692,7 @@ class ProcessPendingScansTests(TestCase):
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch(
         "cms.ocr_processing.chatgpt_ocr",
-        return_value={
+        return_value=with_usage({
             "accessions": [
                 {
                     "collection_abbreviation": {"interpreted": "KNM"},
@@ -2169,7 +2710,7 @@ class ProcessPendingScansTests(TestCase):
                     ],
                 }
             ]
-        },
+        }),
     )
     def test_reuses_existing_field_slip(self, mock_ocr, mock_detect):
         Collection.objects.create(abbreviation="KNM", description="Kenya")
@@ -2193,7 +2734,7 @@ class ProcessPendingScansTests(TestCase):
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch(
         "cms.ocr_processing.chatgpt_ocr",
-        return_value={
+        return_value=with_usage({
             "accessions": [
                 {
                     "collection_abbreviation": {"interpreted": "KNM"},
@@ -2211,7 +2752,7 @@ class ProcessPendingScansTests(TestCase):
                     ],
                 }
             ]
-        },
+        }),
     )
     def test_creates_field_slip_when_field_number_missing(
         self, mock_ocr, mock_detect
@@ -2244,7 +2785,7 @@ class ProcessPendingScansTests(TestCase):
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch(
         "cms.ocr_processing.chatgpt_ocr",
-        return_value={
+        return_value=with_usage({
             "accessions": [
                 {
                     "collection_abbreviation": {"interpreted": "KNM"},
@@ -2258,7 +2799,7 @@ class ProcessPendingScansTests(TestCase):
                     ],
                 }
             ]
-        },
+        }),
     )
     def test_creates_rows_and_storage(self, mock_ocr, mock_detect):
         Collection.objects.create(abbreviation="KNM", description="Kenya")
@@ -2281,7 +2822,7 @@ class ProcessPendingScansTests(TestCase):
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch(
         "cms.ocr_processing.chatgpt_ocr",
-        return_value={
+        return_value=with_usage({
             "accessions": [
                 {
                     "collection_abbreviation": {"interpreted": "KNM"},
@@ -2299,7 +2840,7 @@ class ProcessPendingScansTests(TestCase):
                     ],
                 }
             ]
-        },
+        }),
     )
     def test_reuses_existing_row(self, mock_ocr, mock_detect):
         Collection.objects.create(abbreviation="KNM", description="Kenya")
@@ -2315,7 +2856,7 @@ class ProcessPendingScansTests(TestCase):
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch(
         "cms.ocr_processing.chatgpt_ocr",
-        return_value={
+        return_value=with_usage({
             "accessions": [
                 {
                     "collection_abbreviation": {"interpreted": "KNM"},
@@ -2326,7 +2867,7 @@ class ProcessPendingScansTests(TestCase):
                     ],
                 }
             ]
-        },
+        }),
     )
     def test_preserves_dash_suffix(self, mock_ocr, mock_detect):
         Collection.objects.create(abbreviation="KNM", description="Kenya")
@@ -2343,7 +2884,7 @@ class ProcessPendingScansTests(TestCase):
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch(
         "cms.ocr_processing.chatgpt_ocr",
-        return_value={
+        return_value=with_usage({
             "accessions": [
                 {
                     "collection_abbreviation": {"interpreted": "KNM"},
@@ -2362,7 +2903,7 @@ class ProcessPendingScansTests(TestCase):
                     ],
                 }
             ]
-        },
+        }),
     )
     def test_creates_identifications_for_rows(self, mock_ocr, mock_detect):
         Collection.objects.create(abbreviation="KNM", description="Kenya")
@@ -2384,7 +2925,7 @@ class ProcessPendingScansTests(TestCase):
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch(
         "cms.ocr_processing.chatgpt_ocr",
-        return_value={
+        return_value=with_usage({
             "accessions": [
                 {
                     "collection_abbreviation": {"interpreted": "KNM"},
@@ -2407,7 +2948,7 @@ class ProcessPendingScansTests(TestCase):
                     ],
                 }
             ]
-        },
+        }),
     )
     def test_creates_natures_for_rows(self, mock_ocr, mock_detect):
         Collection.objects.create(abbreviation="KNM", description="Kenya")
@@ -2429,6 +2970,50 @@ class ProcessPendingScansTests(TestCase):
         self.assertEqual(nature.portion, "proximal")
         self.assertEqual(nature.fragments, 1)
 
+    @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
+    @patch(
+        "cms.ocr_processing.chatgpt_ocr",
+        return_value=with_usage({
+            "accessions": [
+                {
+                    "collection_abbreviation": {"interpreted": "KNM"},
+                    "specimen_prefix_abbreviation": {"interpreted": "AB"},
+                    "specimen_no": {"interpreted": 123},
+                    "rows": [
+                        {
+                            "specimen_suffix": {"interpreted": f"S{i:03d}"},
+                        }
+                        for i in range(MAX_OCR_ROWS_PER_ACCESSION + 5)
+                    ],
+                }
+            ]
+        }),
+    )
+    def test_limits_rows_to_maximum(self, mock_ocr, mock_detect):
+        Collection.objects.create(abbreviation="KNM", description="Kenya")
+        Locality.objects.create(abbreviation="AB", name="Area 1")
+        filename = "acc_row_limit.png"
+        file_path = self.pending / filename
+        file_path.write_bytes(b"data")
+        Media.objects.create(media_location=f"uploads/pending/{filename}")
+
+        with self.assertLogs("cms.ocr_processing", level="WARNING") as cm:
+            process_pending_scans()
+
+        self.assertTrue(
+            any("Truncated OCR rows" in message for message in cm.output),
+            cm.output,
+        )
+
+        media = Media.objects.get()
+        result = media.transition_qc(Media.QCStatus.APPROVED, user=self.user)
+        self.assertEqual(len(result["created"]), 1)
+        accession = Accession.objects.get()
+        rows = accession.accessionrow_set.order_by("specimen_suffix")
+        self.assertEqual(rows.count(), MAX_OCR_ROWS_PER_ACCESSION)
+        suffixes = list(rows.values_list("specimen_suffix", flat=True))
+        self.assertIn("S000", suffixes)
+        self.assertNotIn(f"S{MAX_OCR_ROWS_PER_ACCESSION:03d}", suffixes)
 
 class MediaTransitionTests(TestCase):
     def setUp(self):
@@ -2503,8 +3088,9 @@ class MediaExpertQCWizardTests(TestCase):
         self.locality = Locality.objects.create(abbreviation="AB", name="Area 1")
 
         self.media = Media.objects.create(
-            media_location="uploads/pending/expert.png",
+            media_location="uploads/ocr/expert.png",
             qc_status=Media.QCStatus.PENDING_EXPERT,
+            ocr_status=Media.OCRStatus.COMPLETED,
             ocr_data={
                 "card_type": "accession_card",
                 "accessions": [
@@ -2524,6 +3110,30 @@ class MediaExpertQCWizardTests(TestCase):
         )
 
         self.client.force_login(self.expert)
+
+    def test_context_includes_recent_history(self):
+        log = MediaQCLog.objects.create(
+            media=self.media,
+            change_type=MediaQCLog.ChangeType.STATUS,
+            field_name="qc_status",
+            old_value={"qc_status": Media.QCStatus.PENDING_EXPERT},
+            new_value={"qc_status": Media.QCStatus.APPROVED},
+            description="Approved after review.",
+            changed_by=self.expert,
+        )
+        MediaQCComment.objects.create(
+            log=log,
+            comment="Resolved outstanding warnings.",
+            created_by=self.expert,
+        )
+
+        response = self.client.get(reverse("media_expert_qc", args=[self.media.uuid]))
+        self.assertEqual(response.status_code, 200)
+        history = response.context["qc_history_logs"]
+        self.assertTrue(history)
+        self.assertEqual(history[0], log)
+        comments = list(history[0].comments.all())
+        self.assertEqual(comments[0].comment, "Resolved outstanding warnings.")
 
     def add_unlinked_identification_warning(self):
         data = copy.deepcopy(self.media.ocr_data)
@@ -3213,6 +3823,70 @@ class ApplyRowsFallbackTests(TestCase):
             self.assertEqual(specimen.portion, "Proximal")
 
 
+class MediaQCHistoryViewTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.staff = User.objects.create_user(
+            username="staff", password="pass", is_staff=True
+        )
+        self.other = User.objects.create_user(username="viewer", password="pass")
+
+        patcher = patch("cms.models.get_current_user", return_value=self.staff)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+        self.media = Media.objects.create(
+            media_location="uploads/history.png",
+            file_name="history.png",
+        )
+        self.log = MediaQCLog.objects.create(
+            media=self.media,
+            change_type=MediaQCLog.ChangeType.STATUS,
+            field_name="qc_status",
+            old_value={"qc_status": Media.QCStatus.PENDING_INTERN},
+            new_value={"qc_status": Media.QCStatus.PENDING_EXPERT},
+            description="Status advanced to expert review.",
+            changed_by=self.staff,
+        )
+        self.comment = MediaQCComment.objects.create(
+            log=self.log,
+            comment="Looks good.",
+            created_by=self.staff,
+        )
+
+    def test_requires_staff_user(self):
+        self.client.force_login(self.other)
+        response = self.client.get(reverse("media_qc_history"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_staff_can_view_history(self):
+        self.client.force_login(self.staff)
+        response = self.client.get(reverse("media_qc_history"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Status advanced to expert review.")
+        self.assertContains(response, "Looks good.")
+        self.assertIn(self.log, list(response.context["page_obj"].object_list))
+
+    def test_history_can_filter_by_media(self):
+        other_media = Media.objects.create(media_location="uploads/other.png")
+        MediaQCLog.objects.create(
+            media=other_media,
+            change_type=MediaQCLog.ChangeType.STATUS,
+            field_name="qc_status",
+            new_value={"qc_status": Media.QCStatus.PENDING_INTERN},
+            changed_by=self.staff,
+        )
+
+        self.client.force_login(self.staff)
+        response = self.client.get(
+            reverse("media_qc_history"), {"media": str(self.media.uuid)}
+        )
+        self.assertEqual(response.status_code, 200)
+        page_logs = list(response.context["page_obj"].object_list)
+        self.assertEqual(page_logs, [self.log])
+        self.assertEqual(response.context["filter_media"], self.media)
+
+
 class MediaInternQCWizardTests(TestCase):
     def setUp(self):
         User = get_user_model()
@@ -3416,6 +4090,31 @@ class MediaInternQCWizardTests(TestCase):
         fieldslip_forms = response.context["fieldslip_formset"].forms
         self.assertEqual(len(fieldslip_forms), 1)
         self.assertEqual(fieldslip_forms[0]["field_number"].value(), "FS-1")
+
+    def test_context_includes_recent_history(self):
+        log = MediaQCLog.objects.create(
+            media=self.media,
+            change_type=MediaQCLog.ChangeType.STATUS,
+            field_name="qc_status",
+            old_value={"qc_status": Media.QCStatus.PENDING_INTERN},
+            new_value={"qc_status": Media.QCStatus.PENDING_EXPERT},
+            description="Escalated for expert review.",
+            changed_by=self.intern,
+        )
+        MediaQCComment.objects.create(
+            log=log,
+            comment="Please double-check storage.",
+            created_by=self.intern,
+        )
+
+        self.client.login(username="intern", password="pass")
+        response = self.client.get(self.get_url())
+        self.assertEqual(response.status_code, 200)
+        history = response.context["qc_history_logs"]
+        self.assertTrue(history)
+        self.assertEqual(history[0], log)
+        comments = list(history[0].comments.all())
+        self.assertEqual(comments[0].comment, "Please double-check storage.")
 
     def test_post_updates_media_and_logs(self):
         self.client.login(username="intern", password="pass")
@@ -3827,6 +4526,181 @@ class MediaInternQCWizardTests(TestCase):
         self.assertContains(response, "Earlier comments")
         self.assertContains(response, "First round of feedback")
         self.assertContains(response, expert.username)
+
+
+class LLMUsageRecordQuerySetTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username="usage", password="pass")
+        patcher = patch("cms.models.get_current_user", return_value=self.user)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_for_media_and_totals_by_day(self):
+        media_one = Media.objects.create(media_location="uploads/ocr/one.png")
+        media_two = Media.objects.create(media_location="uploads/ocr/two.png")
+
+        record_one = LLMUsageRecord.objects.create(
+            media=media_one,
+            model_name="gpt-4o",
+            prompt_tokens=10,
+            completion_tokens=20,
+            total_tokens=30,
+            cost_usd=Decimal("0.123456"),
+        )
+        record_two = LLMUsageRecord.objects.create(
+            media=media_two,
+            model_name="gpt-4o-mini",
+            prompt_tokens=5,
+            completion_tokens=5,
+            total_tokens=10,
+            cost_usd=Decimal("0.010000"),
+        )
+
+        older = django_timezone.now() - timedelta(days=1)
+        LLMUsageRecord.objects.filter(pk=record_one.pk).update(created_at=older, updated_at=older)
+        record_one.refresh_from_db()
+
+        self.assertEqual(list(LLMUsageRecord.objects.for_media(media_one)), [record_one])
+        self.assertEqual(
+            list(LLMUsageRecord.objects.for_media(media_one.pk)),
+            [record_one],
+        )
+
+        totals = list(LLMUsageRecord.objects.totals_by_day())
+        self.assertEqual(len(totals), 2)
+        self.assertEqual(totals[0]["day"], older.date())
+        self.assertEqual(totals[0]["total_tokens"], 30)
+        self.assertEqual(totals[0]["cost_usd"], Decimal("0.123456"))
+        self.assertEqual(totals[1]["total_tokens"], 10)
+        self.assertEqual(totals[1]["cost_usd"], Decimal("0.010000"))
+
+
+class BackfillLLMUsageCommandTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username="usage-cmd", password="pass")
+        patcher = patch("cms.models.get_current_user", return_value=self.user)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_command_creates_usage_records(self):
+        media = Media.objects.create(
+            media_location="uploads/ocr/cmd.png",
+            ocr_data={"usage": DEFAULT_USAGE_PAYLOAD},
+        )
+
+        call_command("backfill_llm_usage")
+
+        media.refresh_from_db()
+        usage_record = media.llm_usage_record
+        self.assertEqual(usage_record.prompt_tokens, DEFAULT_USAGE_PAYLOAD["prompt_tokens"])
+        self.assertEqual(
+            usage_record.cost_usd,
+            Decimal(str(DEFAULT_USAGE_PAYLOAD["total_cost_usd"])),
+        )
+
+    def test_dry_run_reports_without_changes(self):
+        Media.objects.create(
+            media_location="uploads/ocr/cmd.png",
+            ocr_data={"usage": DEFAULT_USAGE_PAYLOAD},
+        )
+
+        call_command("backfill_llm_usage", dry_run=True)
+
+        self.assertFalse(LLMUsageRecord.objects.exists())
+
+
+class ChatGPTUsageReportViewTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.staff_user = User.objects.create_user(
+            username="staff-usage", password="pass", is_staff=True
+        )
+        self.standard_user = User.objects.create_user(
+            username="standard-usage", password="pass", is_staff=False
+        )
+        self.url = reverse("admin-chatgpt-usage")
+
+        older = django_timezone.now() - timedelta(days=7)
+        newer = django_timezone.now() - timedelta(days=1)
+
+        media_one = Media.objects.create(media_location="uploads/ocr/report-one.png")
+        media_two = Media.objects.create(media_location="uploads/ocr/report-two.png")
+
+        record_one = LLMUsageRecord.objects.create(
+            media=media_one,
+            model_name="gpt-4o",
+            prompt_tokens=50,
+            completion_tokens=25,
+            total_tokens=75,
+            cost_usd=Decimal("0.75"),
+            processing_seconds=Decimal("1.50"),
+        )
+        record_two = LLMUsageRecord.objects.create(
+            media=media_two,
+            model_name="gpt-4o-mini",
+            prompt_tokens=40,
+            completion_tokens=40,
+            total_tokens=80,
+            cost_usd=Decimal("0.40"),
+            processing_seconds=Decimal("2.25"),
+            remaining_quota_usd=Decimal("7.50"),
+        )
+
+        LLMUsageRecord.objects.filter(pk=record_one.pk).update(
+            created_at=older, updated_at=older
+        )
+        LLMUsageRecord.objects.filter(pk=record_two.pk).update(
+            created_at=newer, updated_at=newer
+        )
+
+    def test_requires_staff_access(self):
+        self.client.force_login(self.standard_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/admin/login/", response.url)
+
+    @override_settings(LLM_USAGE_MONTHLY_BUDGET_USD=Decimal("10"))
+    def test_renders_with_aggregated_totals(self):
+        self.client.force_login(self.staff_user)
+
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+
+        daily_totals = response.context["daily_totals"]
+        weekly_totals = response.context["weekly_totals"]
+        cumulative_cost = response.context["cumulative_cost"]
+        budget_progress = response.context["budget_progress"]
+        total_processing_seconds = response.context["total_processing_seconds"]
+        avg_processing_seconds = response.context["avg_processing_seconds"]
+        scans_processed = response.context["scans_processed"]
+        remaining_quota = response.context["remaining_quota_usd"]
+
+        self.assertEqual(len(daily_totals), 2)
+        self.assertTrue(any(row["record_count"] == 1 for row in daily_totals))
+        self.assertEqual(len(weekly_totals), 2)
+        self.assertEqual(cumulative_cost, Decimal("1.15"))
+        self.assertAlmostEqual(float(budget_progress), 11.5)
+        self.assertEqual(total_processing_seconds, Decimal("3.75"))
+        self.assertAlmostEqual(float(avg_processing_seconds), 1.875)
+        self.assertEqual(scans_processed, 2)
+        self.assertEqual(remaining_quota, Decimal("7.50"))
+
+        self.assertContains(response, "Scans processed")
+        self.assertContains(response, "Processing time")
+        self.assertContains(response, "Remaining quota")
+
+    def test_hides_remaining_quota_when_unavailable(self):
+        LLMUsageRecord.objects.update(remaining_quota_usd=None)
+
+        self.client.force_login(self.staff_user)
+
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+
+        self.assertIsNone(response.context["remaining_quota_usd"])
+        self.assertNotContains(response, "Remaining quota")
 
 
 class AdminAutocompleteTests(TestCase):

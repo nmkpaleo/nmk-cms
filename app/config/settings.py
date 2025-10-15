@@ -13,11 +13,23 @@ https://docs.djangoproject.com/en/4.0/ref/settings/
 import os
 import sys
 import json
+from decimal import Decimal
 
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+# Per-model OpenAI pricing expressed as USD per token for prompt and completion
+# usage. The values default to the public rates as of May 2024 and can be
+# overridden via ``settings_local.py`` or environment variables if needed.
+OPENAI_PRICING = {
+    "gpt-4o": {"prompt": 0.000005, "completion": 0.000015},
+    "gpt-4o-mini": {"prompt": 0.00000015, "completion": 0.0000006},
+}
+
+LLM_USAGE_MONTHLY_BUDGET_USD = Decimal("120")
 
 try:
     with open(os.path.join(BASE_DIR, "config.json")) as config_file:
@@ -45,6 +57,9 @@ SECRET_KEY = get_var("SECRET_KEY", "development_key")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = bool(int(get_var("DEBUG", 1)))
 
+# Feature rollout flags
+MERGE_TOOL_FEATURE = bool(int(get_var("ENABLE_ADMIN_MERGE", 0)))
+
 ALLOWED_HOSTS = []
 ALLOWED_HOSTS_ENV = get_var("ALLOWED_HOSTS")
 if ALLOWED_HOSTS_ENV:
@@ -64,6 +79,7 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
+    "django.contrib.humanize",
     "django.contrib.sites",
     "django.contrib.staticfiles",
     "django_filters",
@@ -110,6 +126,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "cms.context_processors.merge_feature_flag",
             ],
         },
     },
@@ -237,6 +254,10 @@ MEDIA_ROOT = get_var("MEDIA_ROOT", os.path.join(BASE_DIR, "media"))
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000
+
+SCAN_UPLOAD_MAX_BYTES = int(get_var("SCAN_UPLOAD_MAX_BYTES", 5 * 1024 * 1024))
+SCAN_UPLOAD_BATCH_MAX_BYTES = int(get_var("SCAN_UPLOAD_BATCH_MAX_BYTES", 0))
+SCAN_UPLOAD_TIMEOUT_SECONDS = int(get_var("SCAN_UPLOAD_TIMEOUT_SECONDS", 60))
 
 # Email configuration
 EMAIL_BACKEND = get_var("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")

@@ -24,6 +24,9 @@ services:
     environment:
       - APP_DOMAIN=${APP_DOMAIN}
       - PMA_DOMAIN=${PMA_DOMAIN}
+      - SCAN_UPLOAD_MAX_BYTES=${SCAN_UPLOAD_MAX_BYTES:-5242880}
+      - SCAN_UPLOAD_BATCH_MAX_BYTES=${SCAN_UPLOAD_BATCH_MAX_BYTES:-0}
+      - SCAN_UPLOAD_TIMEOUT_SECONDS=${SCAN_UPLOAD_TIMEOUT_SECONDS:-60}
     labels:
       - "com.centurylinklabs.watchtower.enable=false"
     depends_on:

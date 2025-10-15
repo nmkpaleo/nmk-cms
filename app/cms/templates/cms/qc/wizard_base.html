@@ -331,15 +331,19 @@
     }
     .qc-summary-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 1rem;
-      margin-bottom: 1rem;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
     }
     .qc-summary-card {
       border: 1px solid #dcdcdc;
       border-radius: 4px;
-      padding: 0.75rem;
+      padding: 0.5rem 0.75rem;
       background-color: #f9fafc;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      min-height: 100%;
     }
     .qc-summary-card--changed {
       border-color: #4f46e5;
@@ -348,17 +352,19 @@
     .qc-summary-label {
       font-weight: 600;
       display: block;
-      color: #555;
+      color: #4b5563;
+      font-size: 0.75rem;
+      text-transform: uppercase;
     }
     .qc-summary-value {
-      font-size: 1.5rem;
+      font-size: 1.25rem;
       font-weight: 700;
       display: block;
-      margin-top: 0.25rem;
+      margin-top: 0;
     }
     .qc-summary-delta {
-      font-size: 0.85rem;
-      color: #555;
+      font-size: 0.75rem;
+      color: #6b7280;
     }
     .qc-warning-list {
       margin: 0.5rem 0 0;
@@ -383,6 +389,57 @@
     }
     .qc-preview-panel table {
       font-size: 0.85rem;
+    }
+    .qc-history-panel {
+      padding: 16px;
+      border-top: 1px solid #f1f1f1;
+    }
+    .qc-history-panel h3 {
+      margin-top: 0;
+      margin-bottom: 8px;
+    }
+    .qc-history-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .qc-history-entry + .qc-history-entry {
+      border-top: 1px solid #f1f1f1;
+      margin-top: 12px;
+      padding-top: 12px;
+    }
+    .qc-history-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 0.75rem;
+      color: #666;
+    }
+    .qc-history-summary {
+      font-size: 0.85rem;
+      margin-top: 4px;
+    }
+    .qc-history-description {
+      font-size: 0.85rem;
+      margin-top: 4px;
+    }
+    .qc-history-diff {
+      font-size: 0.75rem;
+      margin-top: 4px;
+      word-break: break-word;
+    }
+    .qc-history-comment {
+      font-size: 0.8rem;
+    }
+    .qc-history-comments--compact .qc-history-comment {
+      padding: 8px 12px;
+    }
+    .qc-history-comment-meta {
+      font-size: 0.7rem;
+      color: #555;
+    }
+    .qc-history-comment-body {
+      margin-top: 4px;
     }
     .qc-field-grid--compact {
       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -454,9 +511,15 @@
       {% if qc_preview %}
       <div class="qc-preview-panel">
         <h3 class="w3-margin-top w3-margin-bottom">Preview accession</h3>
-        {% include "cms/partials/accession_preview_panel.html" with accession=qc_preview.accession geologies=qc_preview.geologies accession_rows=qc_preview.accession_rows first_identifications=qc_preview.first_identifications identification_counts=qc_preview.identification_counts taxonomy=qc_preview.taxonomy references=qc_preview.references preview_mode=True %}
+        {% include "cms/partials/accession_preview_panel.html" with accession=qc_preview.accession geologies=qc_preview.geologies accession_rows=qc_preview.accession_rows first_identifications=qc_preview.first_identifications identification_counts=qc_preview.identification_counts taxonomy=qc_preview.taxonomy references=qc_preview.references fieldslips=qc_preview.fieldslips preview_mode=True %}
       </div>
       {% endif %}
+      <div class="qc-history-panel">
+        <h3 class="w3-margin-top w3-margin-bottom">QC history</h3>
+        <p class="w3-small w3-text-grey">Review prior status changes and discussion without leaving the wizard.</p>
+        {% include "cms/qc/partials/history_list.html" with logs=qc_history_logs compact=True show_empty=True %}
+        <p class="w3-small w3-margin-top"><a href="{% url 'media_qc_history' %}?media={{ media.uuid }}" class="w3-text-indigo">Open full history</a></p>
+      </div>
     </aside>
 
     <form method="post" class="qc-form w3-card w3-white w3-padding" data-controller="qc-rows">
@@ -547,6 +610,7 @@
             type="button"
             class="w3-button w3-tiny w3-blue w3-round"
             data-action="click->qc-references#addReference"
+            data-reference-add
           >
             Add reference
           </button>
@@ -771,5 +835,130 @@
       chip.setAttribute('aria-hidden', 'true');
       chip.style.display = 'none';
     });
+  </script>
+  <style>
+    :where([hidden]) {
+      display: none !important;
+    }
+  </style>
+  <script>
+    (function () {
+      function setDeleteValue(input, on) {
+        if (!input) {
+          return;
+        }
+
+        if (input.type === 'checkbox') {
+          input.checked = !!on;
+        } else {
+          input.value = on ? 'on' : '';
+        }
+      }
+
+      function toggleCard(card, deleted) {
+        if (!card) {
+          return;
+        }
+
+        var actions = card.querySelector('[data-reference-actions]');
+        var body = card.querySelector('[data-reference-body]');
+        var msg = card.querySelector('[data-reference-deleted-message]');
+
+        if (actions) {
+          actions.hidden = deleted;
+        }
+
+        if (body) {
+          body.hidden = deleted;
+        }
+
+        if (msg) {
+          msg.hidden = !deleted;
+        }
+      }
+
+      function cardIsDeleted(card) {
+        var delInput = card && card.querySelector('input[name$="-DELETE"]');
+        if (!delInput) {
+          if (!card) {
+            return false;
+          }
+
+          if (typeof card.dataset !== 'undefined' && card.dataset.referenceDeleted === 'true') {
+            return true;
+          }
+
+          return card.hasAttribute('data-reference-deleted');
+        }
+
+        if (delInput.type === 'checkbox') {
+          return delInput.checked;
+        }
+
+        return delInput.value === 'on';
+      }
+
+      function updateEmptyMessage(section) {
+        if (!section) {
+          return;
+        }
+
+        var emptyMessage = section.querySelector('[data-qc-references-target="emptyMessage"]');
+        if (!emptyMessage) {
+          return;
+        }
+
+        var cards = section.querySelectorAll('[data-qc-reference]');
+        var hasActiveCard = Array.prototype.some.call(cards, function (card) {
+          return !cardIsDeleted(card);
+        });
+
+        emptyMessage.hidden = hasActiveCard;
+      }
+
+      function findSection(element) {
+        if (!element) {
+          return null;
+        }
+
+        return element.closest('[data-controller~="qc-references"]') || element.closest('[data-controller="qc-references"]');
+      }
+
+      document.querySelectorAll('[data-controller~="qc-references"], [data-controller="qc-references"]').forEach(function (section) {
+        section.querySelectorAll('[data-qc-reference]').forEach(function (card) {
+          toggleCard(card, cardIsDeleted(card));
+        });
+        updateEmptyMessage(section);
+      });
+
+      document.addEventListener('click', function (e) {
+        var delBtn = e.target.closest('[data-reference-delete]');
+        var undoBtn = e.target.closest('[data-reference-restore]');
+
+        if (!delBtn && !undoBtn) {
+          return;
+        }
+
+        var card = (delBtn || undoBtn).closest('[data-qc-reference]');
+        if (!card) {
+          return;
+        }
+
+        e.preventDefault();
+
+        var section = findSection(card);
+        var delInput = card.querySelector('input[name$="-DELETE"]');
+
+        if (delBtn) {
+          setDeleteValue(delInput, true);
+          toggleCard(card, true);
+        } else {
+          setDeleteValue(delInput, false);
+          toggleCard(card, false);
+        }
+
+        updateEmptyMessage(section);
+      });
+    })();
   </script>
 {% endblock %}

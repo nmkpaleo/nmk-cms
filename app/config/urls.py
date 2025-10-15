@@ -18,11 +18,21 @@ from django.contrib import admin
 from django.conf import settings
 from django.conf.urls.static import static
 from django.urls import include, path
-from cms.views import fieldslip_create, FieldSlipDetailView, base_generic, index, FieldSlipListView, upload_scan, do_ocr
+from cms.views import (
+    fieldslip_create,
+    FieldSlipDetailView,
+    base_generic,
+    index,
+    FieldSlipListView,
+    upload_scan,
+    do_ocr,
+    chatgpt_usage_report,
+)
 
 urlpatterns = [
     path('admin/upload-scan/', upload_scan, name='admin-upload-scan'),
     path('admin/do-ocr/', do_ocr, name='admin-do-ocr'),
+    path('admin/chatgpt-usage/', chatgpt_usage_report, name='admin-chatgpt-usage'),
     path('admin/', admin.site.urls),
 
     path('', include('cms.urls')),

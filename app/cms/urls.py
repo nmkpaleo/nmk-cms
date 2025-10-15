@@ -1,6 +1,7 @@
 from django.urls import include, path
 from django.conf.urls.static import static
 from django.conf import settings
+from django.contrib.admin.views.decorators import staff_member_required as staff_login_required
 from django_filters.views import FilterView
 from cms.models import Accession
 from cms.views import (
@@ -48,6 +49,12 @@ from cms.views import (
     PreparationDeleteView,
     PreparationApproveView,
     dashboard,
+    MediaPendingInternQueueView,
+    MediaNeedsExpertAttentionQueueView,
+    MediaReturnedForFixesQueueView,
+    MediaRowsRearrangedQueueView,
+    MediaWithCommentsQueueView,
+    MediaQCHistoryView,
     inventory_start, inventory_update, inventory_reset, inventory_clear, inventory_log_unexpected,
     DrawerRegisterListView, DrawerRegisterDetailView, DrawerRegisterCreateView, DrawerRegisterUpdateView, start_scan, stop_scan,
     inventory_start,
@@ -64,16 +71,22 @@ from cms.views import (
     StorageDetailView,
     StorageCreateView,
     StorageUpdateView,
+    MergeCandidateAdminView,
+    MergeCandidateAPIView,
 )
 from .views import PreparationMediaUploadView
 from .views import FieldSlipAutocomplete, ReferenceAutocomplete
 
 from cms.forms import (AccessionForm,
+
                        AccessionNumberSelectForm,
                        SpecimenCompositeForm)
 from cms.views import AccessionWizard
+from cms.views import media_report_view
+
 
 urlpatterns = [
+    path('reports/media/', media_report_view, name='media_report'),
     path('inventory/', inventory_start, name='inventory_start'),
     path('inventory/update/', inventory_update, name='inventory_update'),
     path('inventory/reset/', inventory_reset, name='inventory_reset'),
@@ -81,6 +94,12 @@ urlpatterns = [
     path('inventory/log-unexpected/', inventory_log_unexpected, name='inventory_log_unexpected'),
     path('qc/intern/<uuid:pk>/', MediaInternQCWizard, name='media_intern_qc'),
     path('qc/expert/<uuid:pk>/', MediaExpertQCWizard, name='media_expert_qc'),
+    path('qc/queue/pending-intern/', MediaPendingInternQueueView.as_view(), name='media_qc_pending_intern'),
+    path('qc/queue/pending-expert/', MediaNeedsExpertAttentionQueueView.as_view(), name='media_qc_pending_expert'),
+    path('qc/queue/returned/', MediaReturnedForFixesQueueView.as_view(), name='media_qc_returned'),
+    path('qc/queue/rows-rearranged/', MediaRowsRearrangedQueueView.as_view(), name='media_qc_rows_rearranged'),
+    path('qc/queue/with-comments/', MediaWithCommentsQueueView.as_view(), name='media_qc_with_comments'),
+    path('qc/history/', MediaQCHistoryView.as_view(), name='media_qc_history'),
     path('fieldslips/new/', fieldslip_create, name='fieldslip_create'),
     path('fieldslips/<int:pk>/', FieldSlipDetailView.as_view(), name='fieldslip_detail'),
     path('fieldslips/<int:pk>/edit/', fieldslip_edit, name='fieldslip_edit'),
@@ -157,6 +176,20 @@ urlpatterns += [
 urlpatterns += [
     path("autocomplete/fieldslip/", FieldSlipAutocomplete.as_view(), name="fieldslip-autocomplete"),
 ]
+
+if getattr(settings, "MERGE_TOOL_FEATURE", False):
+    urlpatterns += [
+        path(
+            "merge/",
+            staff_login_required(MergeCandidateAdminView.as_view()),
+            name="merge_candidates",
+        ),
+        path(
+            "merge/search/",
+            staff_login_required(MergeCandidateAPIView.as_view()),
+            name="merge_candidate_search",
+        ),
+    ]
 
 urlpatterns += [
     path("dashboard/", dashboard, name="dashboard"),

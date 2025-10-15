@@ -1,0 +1,156 @@
+{% extends "admin/change_form.html" %}
+{% load i18n static %}
+
+{% block content %}
+{% if not merge_tool_enabled %}
+<div class="merge-admin">
+  <div class="merge-admin__intro">
+    <p class="errornote">{% trans "The merge interface is currently disabled by configuration." %}</p>
+  </div>
+</div>
+{% else %}
+<div class="merge-admin" data-merge-admin data-search-url="{{ search_url }}" data-model-label="{{ model_label }}">
+  <h1 class="merge-admin__title">{{ title }}</h1>
+
+  <div class="merge-admin__intro">
+    <p>{% trans "Use this tool to review and merge duplicate records. Select a source and target, choose strategies for each field, then confirm the merge." %}</p>
+  </div>
+
+  <section class="merge-admin__selection">
+    <h2>{% trans "Current selection" %}</h2>
+    <div class="merge-admin__selection-grid">
+      <div class="merge-admin__selection-column">
+        <h3>{% trans "Target" %}</h3>
+        {% if target_summary %}
+          <p class="merge-admin__selection-label" data-merge-summary="target">{{ target_summary.label }} <span class="merge-admin__badge">ID {{ target_summary.pk }}</span></p>
+          {% if target_summary.preview %}
+            <ul class="merge-admin__preview">
+              {% for row in target_summary.preview %}
+                <li><strong>{{ row.field }}:</strong> {{ row.value }}</li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+        {% else %}
+          <p class="merge-admin__empty" data-merge-summary="target">{% trans "No target selected." %}</p>
+        {% endif %}
+      </div>
+      <div class="merge-admin__selection-column">
+        <h3>{% trans "Source" %}</h3>
+        {% if source_summary %}
+          <p class="merge-admin__selection-label" data-merge-summary="source">{{ source_summary.label }} <span class="merge-admin__badge">ID {{ source_summary.pk }}</span></p>
+          {% if source_summary.preview %}
+            <ul class="merge-admin__preview">
+              {% for row in source_summary.preview %}
+                <li><strong>{{ row.field }}:</strong> {{ row.value }}</li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+        {% else %}
+          <p class="merge-admin__empty" data-merge-summary="source">{% trans "No source selected." %}</p>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  {% if selected_objects %}
+  <section class="merge-admin__selection">
+    <h2>{% trans "Selected from list" %}</h2>
+    <div class="merge-admin__cards">
+      {% for item in selected_objects %}
+      <article class="merge-admin__card">
+        <header>
+          <h3>{{ item.label }}</h3>
+          <p class="merge-admin__badge">ID {{ item.pk }}</p>
+        </header>
+        {% if item.preview %}
+        <ul class="merge-admin__preview">
+          {% for row in item.preview %}
+          <li><strong>{{ row.field }}:</strong> {{ row.value }}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+        <div class="merge-admin__card-actions">
+          <button type="button" class="button" data-merge-set-role="target" data-merge-object-id="{{ item.pk }}">{% trans "Use as target" %}</button>
+          <button type="button" class="button" data-merge-set-role="source" data-merge-object-id="{{ item.pk }}">{% trans "Use as source" %}</button>
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="merge-admin__search">
+    <h2>{% trans "Search for candidates" %}</h2>
+    <form class="merge-admin__search-form" data-merge-search-form>
+      <div class="merge-admin__field">
+        <label for="merge-search-query">{% trans "Search term" %}</label>
+        <input type="search" id="merge-search-query" name="query" placeholder="{% trans 'e.g. specimen number or title' %}" required>
+      </div>
+      <div class="merge-admin__field">
+        <label for="merge-search-threshold">{% trans "Match threshold" %}</label>
+        <input type="number" id="merge-search-threshold" name="threshold" min="0" max="100" step="1" value="75">
+      </div>
+      <div class="merge-admin__actions">
+        <button type="submit" class="button button-primary">{% trans "Search" %}</button>
+      </div>
+    </form>
+    <div class="merge-admin__results" data-merge-results></div>
+  </section>
+
+  <form method="post" novalidate class="merge-admin__form">
+    {% csrf_token %}
+    {{ form.selected_ids }}
+    {{ form.source }}
+    {{ form.target }}
+
+    {% if form.non_field_errors %}
+      <div class="merge-admin__errors">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <div class="merge-admin__table-wrapper">
+      <table class="merge-admin__table">
+        <thead>
+          <tr>
+            <th>{% trans "Field" %}</th>
+            <th>{% trans "Source value" %}</th>
+            <th>{% trans "Target value" %}</th>
+            <th>{% trans "Strategy" %}</th>
+            <th>{% trans "Manual value" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for row in field_rows %}
+          <tr>
+            <th scope="row">{{ row.label }}</th>
+            <td class="merge-admin__value">{{ row.source }}</td>
+            <td class="merge-admin__value">{{ row.target }}</td>
+            <td>
+              <div class="merge-admin__field-control" data-merge-strategy-container>
+                {{ row.strategy }}
+              </div>
+              {% if row.strategy.errors %}
+                <div class="merge-admin__field-error">{{ row.strategy.errors }}</div>
+              {% endif %}
+            </td>
+            <td>
+              <div class="merge-admin__field-control" data-merge-manual-field="{{ row.name }}" hidden>
+                {{ row.manual }}
+              </div>
+              {% if row.manual.errors %}
+                <div class="merge-admin__field-error">{{ row.manual.errors }}</div>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="submit-row">
+      <button type="submit" class="button button-primary">{% trans "Merge records" %}</button>
+      <a href="{{ changelist_url }}" class="button cancel-link">{% trans "Cancel" %}</a>
+    </div>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

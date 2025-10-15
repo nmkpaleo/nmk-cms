@@ -1,0 +1,18 @@
+{% extends "base_generic.html" %}
+
+{% block title %}Media QC History{% endblock %}
+
+{% block content %}
+  <div class="w3-container">
+    <h2 class="w3-margin-top">Media QC History</h2>
+    {% if filter_media %}
+      <p class="w3-text-grey">Showing activity for <strong>{{ filter_media.file_name|default:filter_media.uuid }}</strong>. <a href="{% url 'media_qc_history' %}">Show all history</a></p>
+    {% else %}
+      <p class="w3-text-grey">Review the audit trail of QC status changes, OCR updates, and discussion across all media.</p>
+    {% endif %}
+
+    <div class="w3-card w3-white w3-padding">
+      {% include "cms/qc/partials/history_list.html" with logs=qc_logs show_empty=True %}
+    </div>
+  </div>
+{% endblock %}

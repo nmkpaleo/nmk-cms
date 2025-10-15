@@ -190,6 +190,82 @@
 
     <hr class="accession_hr">
 
+    {% if preview_mode %}
+      <style>
+        .fieldslip-meta-grid {
+          display: grid;
+          gap: 0.25rem 0.5rem;
+          grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        }
+        .fieldslip-meta-grid strong {
+          font-weight: 600;
+        }
+      </style>
+      <table>
+        <caption><b><u>Field Slips</u></b></caption>
+        <thead>
+          <tr>
+            <th>Field Number</th>
+            <th>Verbatim Locality</th>
+            <th>Verbatim Taxon</th>
+            <th>Verbatim Element</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if fieldslips %}
+            {% for slip in fieldslips %}
+              <tr>
+                <td>{{ slip.field_number|default:"—" }}</td>
+                <td>{{ slip.verbatim_locality|default:"—" }}</td>
+                <td>{{ slip.verbatim_taxon|default:"—" }}</td>
+                <td>{{ slip.verbatim_element|default:"—" }}</td>
+              </tr>
+              {% if slip.horizon_formation or slip.horizon_member or slip.horizon_bed or slip.horizon_chronostratigraphy or slip.verbatim_latitude or slip.verbatim_longitude or slip.verbatim_elevation or slip.aerial_photo %}
+                <tr>
+                  <td colspan="4">
+                    <small class="fieldslip-meta-grid">
+                      {% if slip.horizon_formation or slip.horizon_member or slip.horizon_bed or slip.horizon_chronostratigraphy %}
+                        <div>
+                          <strong>Verbatim horizon:</strong>
+                          <span>
+                            {% if slip.horizon_formation %}{{ slip.horizon_formation }}{% endif %}
+                            {% if slip.horizon_member %}{% if slip.horizon_formation %}, {% endif %}{{ slip.horizon_member }}{% endif %}
+                            {% if slip.horizon_bed %}{% if slip.horizon_formation or slip.horizon_member %}, {% endif %}{{ slip.horizon_bed }}{% endif %}
+                            {% if slip.horizon_chronostratigraphy %}{% if slip.horizon_formation or slip.horizon_member or slip.horizon_bed %}, {% endif %}{{ slip.horizon_chronostratigraphy }}{% endif %}
+                          </span>
+                        </div>
+                      {% endif %}
+                      {% if slip.verbatim_latitude or slip.verbatim_longitude or slip.verbatim_elevation %}
+                        <div>
+                          <strong>Coordinates:</strong>
+                          <span>
+                            {% if slip.verbatim_latitude %}Lat {{ slip.verbatim_latitude }}{% endif %}
+                            {% if slip.verbatim_longitude %}{% if slip.verbatim_latitude %}, {% endif %}Lon {{ slip.verbatim_longitude }}{% endif %}
+                            {% if slip.verbatim_elevation %}{% if slip.verbatim_latitude or slip.verbatim_longitude %}, {% endif %}Elev {{ slip.verbatim_elevation }}{% endif %}
+                          </span>
+                        </div>
+                      {% endif %}
+                      {% if slip.aerial_photo %}
+                        <div>
+                          <strong>Aerial photo:</strong> {{ slip.aerial_photo }}
+                        </div>
+                      {% endif %}
+                    </small>
+                  </td>
+                </tr>
+              {% endif %}
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="4">No Field Slips linked to this accession.</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+
+      <hr class="accession_hr">
+    {% endif %}
+
     {% if not preview_mode and user.is_authenticated and user|has_group:"Collection Managers" %}
       <a href="{% url 'accession_upload_media' accession.id %}">➕ Upload Media</a>
     {% endif %}

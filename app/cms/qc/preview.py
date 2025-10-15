@@ -36,6 +36,23 @@ class PreviewNature:
     fragments: Optional[str]
 
 
+@dataclass
+class PreviewFieldSlip:
+    id: str
+    field_number: Optional[str]
+    verbatim_locality: Optional[str]
+    verbatim_taxon: Optional[str]
+    verbatim_element: Optional[str]
+    horizon_formation: Optional[str]
+    horizon_member: Optional[str]
+    horizon_bed: Optional[str]
+    horizon_chronostratigraphy: Optional[str]
+    aerial_photo: Optional[str]
+    verbatim_latitude: Optional[str]
+    verbatim_longitude: Optional[str]
+    verbatim_elevation: Optional[str]
+
+
 class PreviewNatureManager:
     def __init__(self, items: Iterable[PreviewNature]):
         self._items = list(items)
@@ -161,6 +178,38 @@ def _build_preview_rows(payload: dict) -> tuple[List[PreviewAccessionRow], Dict[
     return rows, first_identifications, identification_counts, taxonomy_map
 
 
+def _build_preview_fieldslips(payload: dict) -> List[PreviewFieldSlip]:
+    field_slips_payload = payload.get("field_slips") or []
+    field_slips: List[PreviewFieldSlip] = []
+
+    for index, entry in enumerate(field_slips_payload):
+        if not isinstance(entry, dict):
+            continue
+
+        slip_id = str(entry.get("_field_slip_id") or f"field-slip-{index}")
+        horizon_payload = entry.get("verbatim_horizon") or {}
+
+        field_slips.append(
+            PreviewFieldSlip(
+                id=slip_id,
+                field_number=interpreted_value(entry.get("field_number")),
+                verbatim_locality=interpreted_value(entry.get("verbatim_locality")),
+                verbatim_taxon=interpreted_value(entry.get("verbatim_taxon")),
+                verbatim_element=interpreted_value(entry.get("verbatim_element")),
+                horizon_formation=interpreted_value((horizon_payload or {}).get("formation")),
+                horizon_member=interpreted_value((horizon_payload or {}).get("member")),
+                horizon_bed=interpreted_value((horizon_payload or {}).get("bed_or_horizon")),
+                horizon_chronostratigraphy=interpreted_value((horizon_payload or {}).get("chronostratigraphy")),
+                aerial_photo=interpreted_value(entry.get("aerial_photo")),
+                verbatim_latitude=interpreted_value(entry.get("verbatim_latitude")),
+                verbatim_longitude=interpreted_value(entry.get("verbatim_longitude")),
+                verbatim_elevation=interpreted_value(entry.get("verbatim_elevation")),
+            )
+        )
+
+    return field_slips
+
+
 def _build_preview_references(payload: dict) -> List[object]:
     references_payload = payload.get("references") or []
     references: List[object] = []
@@ -253,6 +302,7 @@ def build_preview_accession(
         accession_payload
     )
     references = _build_preview_references(accession_payload)
+    field_slips = _build_preview_fieldslips(accession_payload)
 
     return {
         "accession": accession_obj,
@@ -262,4 +312,5 @@ def build_preview_accession(
         "identification_counts": identification_counts,
         "taxonomy": taxonomy_map,
         "references": references,
+        "fieldslips": field_slips,
     }

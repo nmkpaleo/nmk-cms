@@ -1,8 +1,10 @@
 from django import forms
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django_select2 import forms as s2forms
 from django_select2.forms import ModelSelect2TagWidget, ModelSelect2Widget, Select2Widget
 from django.contrib.auth.models import User
+from django.template.defaultfilters import filesizeformat
 
 from .models import (
     Accession,
@@ -516,8 +518,46 @@ class MultiFileInput(forms.ClearableFileInput):
     allow_multiple_selected = True
 
 
+class MultiFileField(forms.Field):
+    widget = MultiFileInput
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("required", False)
+        super().__init__(*args, **kwargs)
+
+    def clean(self, value):
+        if not value:
+            return []
+        if isinstance(value, (list, tuple)):
+            return [item for item in value if item]
+        return [value]
+
+
 class ScanUploadForm(forms.Form):
-    files = forms.FileField(widget=MultiFileInput(), label="Scan files")
+    files = MultiFileField(label="Scan files")
+
+    def __init__(self, *args, **kwargs):
+        self.max_upload_bytes = kwargs.pop("max_upload_bytes", settings.SCAN_UPLOAD_MAX_BYTES)
+        super().__init__(*args, **kwargs)
+
+    def clean_files(self):
+        uploaded_files = self.cleaned_data.get("files", [])
+        if not uploaded_files:
+            raise forms.ValidationError("No file was submitted. Check the encoding type on the form.")
+
+        limit_display = filesizeformat(self.max_upload_bytes)
+        errors = []
+
+        for uploaded in uploaded_files:
+            if uploaded.size > self.max_upload_bytes:
+                errors.append(
+                    f"{uploaded.name} is {filesizeformat(uploaded.size)}, which exceeds the {limit_display} limit per file."
+                )
+
+        if errors:
+            raise forms.ValidationError(errors)
+
+        return uploaded_files
 
 class AddAccessionRowForm(forms.ModelForm):
     specimen_suffix = forms.ChoiceField(choices=[], required=False)

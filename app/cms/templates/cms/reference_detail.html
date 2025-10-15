@@ -51,6 +51,7 @@
                         <caption class="w3-large"><strong>Accession details</strong></caption>
                         <thead>
                             <tr>
+                                <th>Accession</th>
                                 <th>Collection</th>
                                 <th>Specimen Prefix</th>
                                 <th>Specimen Number</th>
@@ -65,6 +66,9 @@
                         <tbody>
                             {% for accession, page in accession_entries %}
                             <tr>
+                                <td>
+                                    <a href="{% url 'accession_detail' accession.pk %}">{{ accession }}</a>
+                                </td>
                                 <td>{{ accession.collection.abbreviation }}</td>
                                 <td>{{ accession.specimen_prefix.abbreviation }}</td>
                                 <td><a href="{% url 'accession_detail' accession.pk %}">{{ accession.specimen_no }}</a></td>
@@ -89,7 +93,7 @@
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="{% if user.is_superuser or user|has_group:"Collection Managers" %}7{% else %}6{% endif %}" class="w3-center">No accessions found.</td>
+                                <td colspan="{% if user.is_superuser or user|has_group:"Collection Managers" %}8{% else %}7{% endif %}" class="w3-center">No accessions found.</td>
                             </tr>
                             {% endfor %}
                         </tbody>

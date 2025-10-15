@@ -11,7 +11,11 @@
     <!-- Add jQuery (Required for Select2) -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
 
-    {{ form.media.css }}
+    {% if form_media %}
+      {{ form_media.css }}
+    {% elif form %}
+      {{ form.media.css }}
+    {% endif %}
     {% block script %}{% endblock %}
     <!-- Add additional CSS in static file -->
     {% load static %}
@@ -46,6 +50,7 @@
               <li><a href="{% url 'locality_list' %}">Localities</a></li>
               <li><a href="{% url 'place_list' %}">Places</a></li>
               <li><a href="{% url 'reference_list' %}">References</a></li>
+              <li><a href="{% url 'media_report' %}">Reports</a></li>
               
               {% if user.is_superuser or user|has_group:"Collection Managers" %}
                 <li><a href="{% url 'fieldslip_list' %}">Field Slips</a></li>
@@ -58,6 +63,12 @@
               {% if user.is_superuser or user|has_group:"Collection Managers" %}
                 <li><a href="{% url 'drawerregister_list' %}">Drawers</a></li>
                 <li><a href="{% url 'storage_list' %}">Storages</a></li>
+              {% endif %}
+
+              {% if user.is_authenticated %}
+                {% if user.is_staff or user.is_superuser %}
+                  <li><a href="{% url 'media_qc_history' %}">QC History</a></li>
+                {% endif %}
               {% endif %}
 
               {% if user.is_authenticated %}
@@ -126,7 +137,11 @@
     <script src="{% static 'javascript.js' %}"></script>
 
     {% block extra_scripts %}
-      {{ form.media.js }}
+      {% if form_media %}
+        {{ form_media.js }}
+      {% elif form %}
+        {{ form.media.js }}
+      {% endif %}
     {% endblock %}
 
   </body>

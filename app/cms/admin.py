@@ -1,5 +1,9 @@
+from typing import Any
+
 from django.contrib import admin
+from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
 from django.db.models import Count, OuterRef, Exists
+from django.conf import settings
 
 from import_export.admin import ImportExportModelAdmin
 from import_export import resources, fields
@@ -8,6 +12,8 @@ from import_export.widgets import ForeignKeyWidget, DateWidget
 from simple_history.admin import SimpleHistoryAdmin
 
 from .forms import AccessionNumberSeriesAdminForm, DrawerRegisterForm
+from .admin_merge import MergeAdminMixin
+from .merge import merge_records
 
 from .models import (
     AccessionNumberSeries,
@@ -19,6 +25,7 @@ from .models import (
     Media,
     MediaQCLog,
     MediaQCComment,
+    LLMUsageRecord,
     SpecimenGeology,
     GeologicalContext,
     AccessionReference,
@@ -39,6 +46,7 @@ from .models import (
     DrawerRegister,
     Scanning,
     UnexpectedSpecimen,
+    MergeLog,
 )
 from .resources import *
 
@@ -61,6 +69,155 @@ from cms.models import Accession
 User = get_user_model()
 
 import pprint
+
+
+class MergeAdminActionMixin:
+    """Provides a reusable action for invoking the merge engine manually."""
+
+    actions = ["merge_records_action"]
+
+    def merge_records_action(
+        self,
+        request,
+        queryset,
+        *,
+        target=None,
+        strategy_map=None,
+        dry_run=False,
+        archive=True,
+    ):
+        if not getattr(settings, "MERGE_TOOL_FEATURE", False):
+            if request is not None:
+                self.message_user(
+                    request,
+                    "The merge tool is currently disabled; no records were merged.",
+                    level=logging.WARNING,
+                )
+            return
+
+        selected = list(queryset)
+
+        if target is None:
+            if request is None:
+                raise ValueError(
+                    "Provide a `target` instance when calling this action manually from the shell."
+                )
+            if len(selected) < 2:
+                self.message_user(
+                    request,
+                    "Select at least two records to merge.",
+                    level=logging.WARNING,
+                )
+                return
+
+            target_id = request.POST.get("merge_target")
+            if not target_id:
+                opts = self.model._meta
+                changelist_url = reverse(
+                    f"admin:{opts.app_label}_{opts.model_name}_changelist"
+                )
+
+                serializer = getattr(self, "_serialise_instance", None)
+                preview_columns: list[str] = []
+                serialised_rows: list[dict[str, Any]] = []
+                if callable(serializer):
+                    for obj in selected:
+                        summary = serializer(obj)
+                        preview_items = (summary or {}).get("preview", []) or []
+                        preview_map: dict[str, Any] = {}
+                        for item in preview_items:
+                            label = item.get("field")
+                            if not label:
+                                continue
+                            if label not in preview_columns:
+                                preview_columns.append(label)
+                            preview_map[label] = item.get("value")
+                        serialised_rows.append(
+                            {
+                                "object": obj,
+                                "label": (summary or {}).get("label", str(obj)),
+                                "preview_map": preview_map,
+                            }
+                        )
+
+                if not serialised_rows:
+                    object_rows = [
+                        {
+                            "object": obj,
+                            "label": str(obj),
+                            "preview_values": [],
+                        }
+                        for obj in selected
+                    ]
+                else:
+                    object_rows = []
+                    for row in serialised_rows:
+                        preview_values = [
+                            row["preview_map"].get(column, "—") for column in preview_columns
+                        ]
+                        object_rows.append(
+                            {
+                                "object": row["object"],
+                                "label": row["label"],
+                                "preview_values": preview_values,
+                            }
+                        )
+
+                context = {
+                    "title": "Choose a target record",
+                    "action_checkbox_name": ACTION_CHECKBOX_NAME,
+                    "opts": opts,
+                    "objects": selected,
+                    "object_rows": object_rows,
+                    "preview_columns": preview_columns,
+                    "action_name": "merge_records_action",
+                    "merge_target_field": "merge_target",
+                    "changelist_url": changelist_url,
+                    "select_across": request.POST.get("select_across"),
+                }
+                return render(
+                    request,
+                    "admin/cms/merge/manual_action_confirm.html",
+                    context,
+                )
+
+            try:
+                target = next(
+                    obj for obj in selected if str(obj.pk) == str(target_id)
+                )
+            except StopIteration:
+                try:
+                    target = queryset.model._default_manager.get(pk=target_id)
+                except queryset.model.DoesNotExist:
+                    self.message_user(
+                        request,
+                        "Selected target is no longer available.",
+                        level=logging.ERROR,
+                    )
+                    return
+                selected.append(target)
+
+        user = getattr(request, "user", None) if request is not None else None
+        sources = [obj for obj in selected if obj.pk != getattr(target, "pk", None)]
+        for source in sources:
+            merge_records(
+                source,
+                target,
+                strategy_map or {},
+                user=user,
+                dry_run=dry_run,
+                archive=archive,
+            )
+
+        if request is not None:
+            self.message_user(
+                request,
+                f"Merged {len(sources)} record(s) into {target}",
+                level=logging.INFO,
+            )
+
+    merge_records_action.short_description = "Merge selected records (manual invocation)"
+    merge_records_action.allowed_permissions = ("change",)
 
 
 class HistoricalImportExportAdmin(SimpleHistoryAdmin, ImportExportModelAdmin):
@@ -238,7 +395,7 @@ class ElementAdmin(HistoricalImportExportAdmin):
     ordering = ('name',)
 
 # FieldSlip Model
-class FieldSlipAdmin(HistoricalImportExportAdmin):
+class FieldSlipAdmin(MergeAdminActionMixin, MergeAdminMixin, HistoricalImportExportAdmin):
     resource_class = FieldSlipResource
     list_display = ('field_number', 'discoverer', 'collector', 'collection_date', 'verbatim_locality', 'verbatim_taxon', 'verbatim_element')
     search_fields = ('field_number', 'discoverer', 'collector', 'verbatim_locality')
@@ -336,6 +493,26 @@ class MediaQCLogInline(admin.TabularInline):
     comments_display.short_description = "Comments"
 
 
+class LLMUsageRecordInline(admin.StackedInline):
+    model = LLMUsageRecord
+    can_delete = False
+    extra = 0
+    fields = (
+        "model_name",
+        "prompt_tokens",
+        "completion_tokens",
+        "total_tokens",
+        "cost_usd",
+        "response_id",
+        "created_at",
+        "updated_at",
+    )
+    readonly_fields = fields
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
 class MediaAdmin(HistoricalImportExportAdmin):
     list_display = (
         'file_name',
@@ -376,7 +553,7 @@ class MediaAdmin(HistoricalImportExportAdmin):
     ]
     list_filter = ('type', 'format', 'qc_status', 'rows_rearranged')
     ordering = ('file_name',)
-    inlines = [MediaQCLogInline]
+    inlines = [MediaQCLogInline, LLMUsageRecordInline]
     fieldsets = (
         (
             None,
@@ -471,6 +648,42 @@ class MediaQCLogAdmin(admin.ModelAdmin):
         formset.save_m2m()
 
 
+@admin.register(LLMUsageRecord)
+class LLMUsageRecordAdmin(admin.ModelAdmin):
+    list_display = (
+        "media",
+        "model_name",
+        "prompt_tokens",
+        "completion_tokens",
+        "total_tokens",
+        "cost_usd",
+        "created_at",
+    )
+    search_fields = (
+        "media__file_name",
+        "media__uuid",
+        "media__id",
+        "model_name",
+        "response_id",
+    )
+    list_filter = ("model_name", "created_at")
+    readonly_fields = (
+        "media",
+        "model_name",
+        "prompt_tokens",
+        "completion_tokens",
+        "total_tokens",
+        "cost_usd",
+        "response_id",
+        "created_at",
+        "updated_at",
+    )
+    ordering = ("-created_at",)
+
+    def has_add_permission(self, request):
+        return False
+
+
 # NatureOfSpecimen Model
 class NatureOfSpecimenAdmin(HistoricalImportExportAdmin):
     resource_class = NatureOfSpecimenResource
@@ -485,7 +698,7 @@ class PersonAdmin(HistoricalImportExportAdmin):
     search_fields = ('first_name', 'last_name', 'orcid')
 
 # Reference Model
-class ReferenceAdmin(HistoricalImportExportAdmin):
+class ReferenceAdmin(MergeAdminActionMixin, MergeAdminMixin, HistoricalImportExportAdmin):
     resource_class = ReferenceResource
     list_display = ('citation', 'doi')
     search_fields = ('citation', 'doi')
@@ -497,7 +710,7 @@ class SpecimenGeologyAdmin(HistoricalImportExportAdmin):
     ordering = ('accession',)
 
 # Storage Model
-class StorageAdmin(HistoricalImportExportAdmin):
+class StorageAdmin(MergeAdminActionMixin, MergeAdminMixin, HistoricalImportExportAdmin):
     resource_class = StorageResource
     list_display = ('area', 'parent_area')
     search_fields = ('area', 'parent_area__area')
@@ -681,7 +894,7 @@ class ScanningAdmin(admin.ModelAdmin):
 # ----------------------------------------------------------------------
 # Flat file import integration
 # ----------------------------------------------------------------------
-from django.urls import path
+from django.urls import path, reverse
 from django.contrib import messages
 from django.shortcuts import render, redirect
 from django import forms
@@ -728,3 +941,31 @@ def get_urls():
 
 
 admin.site.get_urls = get_urls
+@admin.register(MergeLog)
+class MergeLogAdmin(admin.ModelAdmin):
+    list_display = (
+        "model_label",
+        "source_pk",
+        "target_pk",
+        "performed_by",
+        "executed_at",
+    )
+    list_filter = ("model_label", "performed_by")
+    search_fields = ("source_pk", "target_pk", "model_label")
+    readonly_fields = (
+        "model_label",
+        "source_pk",
+        "target_pk",
+        "resolved_values",
+        "strategy_map",
+        "source_snapshot",
+        "target_before",
+        "target_after",
+        "performed_by",
+        "executed_at",
+        "created_on",
+        "modified_on",
+        "created_by",
+        "modified_by",
+    )
+
