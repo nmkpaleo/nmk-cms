@@ -102,6 +102,16 @@ from cms.models import (
     MediaQCComment,
     LLMUsageRecord,
 )
+from django.shortcuts import render
+from .models import Media
+import plotly.express as px
+import pandas as pd
+from plotly.io import to_html
+import plotly.graph_objects as go
+from datetime import datetime, timedelta
+from django.utils import timezone
+
+
 
 from cms.merge import MERGE_REGISTRY, MergeMixin
 from cms.merge.fuzzy import score_candidates
@@ -121,6 +131,116 @@ from formtools.wizard.views import SessionWizardView
 
 _ident_payload_has_meaningful_data = qc_ident_payload_has_meaningful_data
 _interpreted_value = qc_interpreted_value
+
+def media_report_view(request):
+    # Fetch OCR status data
+    data = Media.objects.values('ocr_status', 'created_on')
+    df = pd.DataFrame.from_records(data)
+
+    # Handle empty dataset
+    if df.empty or 'ocr_status' not in df.columns:
+        context = {
+            'chart_html': None,
+            'daily_chart_html': None,
+            'summary': None,
+            'message': 'No media data available for reporting yet.'
+        }
+        return render(request, 'reports/media_report.html', context)
+
+    # ======== OCR STATUS SUMMARY =========
+    counts = df['ocr_status'].value_counts().reset_index()
+    counts.columns = ['OCR Status', 'Count']
+
+    #  labels
+    status_labels = {
+        'pending': 'Pending OCR',
+        'completed': 'Completed',
+        'failed': 'Failed',
+    }
+    counts['OCR Status'] = counts['OCR Status'].map(lambda x: status_labels.get(x.lower(), x.title()))
+
+    total_files = counts['Count'].sum()
+    completed = counts.loc[counts['OCR Status'] == 'Completed', 'Count'].sum()
+    completion_rate = (completed / total_files * 100) if total_files > 0 else 0
+
+    # Build OCR summary chart
+    fig1 = px.bar(
+        counts,
+        x='OCR Status',
+        y='Count',
+        title="OCR Status Summary of Media Files",
+        color='OCR Status',
+        text='Count',
+        color_discrete_sequence=px.colors.qualitative.Vivid
+    )
+    fig1.update_traces(textposition='outside')
+    fig1.update_layout(
+        plot_bgcolor='#ffffff',
+        paper_bgcolor='#ffffff',
+        title_font_size=22,
+        title_font_color='#2c3e50',
+        font=dict(size=14),
+        xaxis_title="OCR Status",
+        yaxis_title="Number of Files",
+        xaxis_tickangle=-15,
+        showlegend=False
+    )
+    chart_html = to_html(fig1, full_html=False, include_plotlyjs='cdn')
+
+    # ======== DAILY UPLOAD PROGRESS (MON-SUN) =========
+    if 'created_on' in df.columns:
+        df['created_on'] = pd.to_datetime(df['created_on'], errors='coerce')
+        df = df.dropna(subset=['created_on'])
+        df['day_of_week'] = df['created_on'].dt.day_name()
+
+        # Ensure week order
+        week_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+        daily_counts = df['day_of_week'].value_counts().reindex(week_order, fill_value=0)
+
+        # Force integers only
+        daily_counts = daily_counts.astype(int)
+
+        # Build line/bar chart for daily uploads
+        fig2 = go.Figure(data=go.Bar(
+            x=daily_counts.index,
+            y=daily_counts.values,
+            text=daily_counts.values,
+            textposition='outside',
+            marker_color='rgba(46, 204, 113, 0.8)'
+        ))
+
+        fig2.update_layout(
+            title="Weekly Upload Progress (Monday - Sunday)",
+            xaxis_title="Day of Week",
+            yaxis_title="Number of Uploads",
+            plot_bgcolor='#ffffff',
+            paper_bgcolor='#ffffff',
+            font=dict(size=14),
+            showlegend=False,
+            yaxis=dict(dtick=1),  # ensure whole numbers
+            margin=dict(l=40, r=40, t=60, b=40)
+        )
+        daily_chart_html = to_html(fig2, full_html=False, include_plotlyjs=False)
+    else:
+        daily_chart_html = None
+
+    context = {
+        'chart_html': chart_html,
+        'daily_chart_html': daily_chart_html,
+        'summary': {
+            'total': total_files,
+            'completed': completed,
+            'completion_rate': round(completion_rate, 2)
+        },
+    }
+    return render(request, 'reports/media_report.html', context)
+
+
+
+
+
+
+
 
 class FieldSlipAutocomplete(autocomplete.Select2QuerySetView):
     def get_queryset(self):

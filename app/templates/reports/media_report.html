@@ -1,0 +1,40 @@
+{% extends "base_generic.html" %}
+{% load static user_tags %}
+
+{% block title %}Media OCR Report{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'css/reports.css' %}">
+
+<div class="container mt-4 mb-5">
+
+    <h2 class="text-center mb-4">OCR Processing Summary</h2>
+
+    {% if summary %}
+    <div class="summary">
+        <h5><strong>Total Media Files:</strong> {{ summary.total }}</h5>
+        <h5><strong>Completed OCR:</strong> {{ summary.completed }}</h5>
+        <h5><strong>Completion Rate:</strong> {{ summary.completion_rate }}%</h5>
+    </div>
+    {% endif %}
+
+    <div class="chart-container">
+        {% if chart_html %}
+            {{ chart_html|safe }}
+        {% else %}
+            <p class="message">{{ message|default:"No media data available for reporting yet." }}</p>
+        {% endif %}
+    </div>
+
+    {% if daily_chart_html %}
+    <div class="chart-container">
+        {{ daily_chart_html|safe }}
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+{% endblock %}

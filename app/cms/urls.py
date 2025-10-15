@@ -78,11 +78,15 @@ from .views import PreparationMediaUploadView
 from .views import FieldSlipAutocomplete, ReferenceAutocomplete
 
 from cms.forms import (AccessionForm,
+
                        AccessionNumberSelectForm,
                        SpecimenCompositeForm)
 from cms.views import AccessionWizard
+from cms.views import media_report_view
+
 
 urlpatterns = [
+    path('reports/media/', media_report_view, name='media_report'),
     path('inventory/', inventory_start, name='inventory_start'),
     path('inventory/update/', inventory_update, name='inventory_update'),
     path('inventory/reset/', inventory_reset, name='inventory_reset'),
