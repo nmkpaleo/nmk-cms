@@ -1,9 +1,14 @@
 from typing import Any
 
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
 from django.db.models import Count, OuterRef, Exists
 from django.conf import settings
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.shortcuts import redirect
+from django.template.response import TemplateResponse
+from django.urls import reverse
+from django.utils.translation import gettext_lazy as _
 
 from import_export.admin import ImportExportModelAdmin
 from import_export import resources, fields
@@ -22,6 +27,7 @@ from .models import (
     Person,
     Identification,
     Taxon,
+    TaxonomyImport,
     Media,
     MediaQCLog,
     MediaQCComment,
@@ -53,22 +59,189 @@ from .resources import *
 import logging
 
 from django import forms
-from django.core.exceptions import ValidationError
 from django.utils.html import format_html, format_html_join
 from django.utils.timezone import now, localtime
 from django.contrib.auth import get_user_model
+
+from .taxonomy import NowTaxonomySyncService
 
 # Configure the logger
 logging.basicConfig(level=logging.INFO)  # You can adjust the level as needed (DEBUG, WARNING, ERROR, etc.)
 logger = logging.getLogger(__name__)  # Creates a logger specific to the current module
 
-from django.contrib import admin
-from django.db.models import Count, OuterRef, Exists
 from cms.models import Accession
 
 User = get_user_model()
 
 import pprint
+
+
+def _sync_permission_codename() -> str:
+    return f"{Taxon._meta.app_label}.can_sync"
+
+
+def _user_can_sync_taxa(user) -> bool:
+    return bool(user and user.is_active and user.has_perm(_sync_permission_codename()))
+
+
+def _serialize_changeset(update) -> list[dict[str, str]]:
+    changes = []
+    for field, new_value in update.changes.items():
+        if field == "accepted_taxon":
+            old_value = update.instance.accepted_taxon.name if update.instance.accepted_taxon else ""
+            new_display = getattr(update.record, "accepted_name", "")
+        else:
+            old_value = getattr(update.instance, field, "")
+            new_display = new_value
+        changes.append(
+            {
+                "label": field.replace("_", " ").title(),
+                "old": old_value or "—",
+                "new": new_display or "—",
+            }
+        )
+    return changes
+
+
+def _serialize_preview_for_template(preview):
+    return {
+        "accepted_creates": [
+            {
+                "name": record.name,
+                "rank": record.rank,
+                "author_year": record.author_year,
+                "external_id": record.external_id,
+            }
+            for record in preview.accepted_to_create
+        ],
+        "accepted_updates": [
+            {
+                "name": update.record.name,
+                "external_id": update.record.external_id,
+                "changes": _serialize_changeset(update),
+            }
+            for update in preview.accepted_to_update
+        ],
+        "synonym_creates": [
+            {
+                "name": record.name,
+                "accepted_name": record.accepted_name,
+                "external_id": record.external_id,
+            }
+            for record in preview.synonyms_to_create
+        ],
+        "synonym_updates": [
+            {
+                "name": update.record.name,
+                "accepted_name": update.record.accepted_name,
+                "external_id": update.record.external_id,
+                "changes": _serialize_changeset(update),
+            }
+            for update in preview.synonyms_to_update
+        ],
+        "deactivations": [
+            {
+                "name": taxon.name or taxon.taxon_name,
+                "external_id": taxon.external_id,
+            }
+            for taxon in preview.to_deactivate
+        ],
+        "issues": [
+            {
+                "code": issue.code,
+                "message": issue.message,
+                "context": issue.context,
+            }
+            for issue in preview.issues
+        ],
+    }
+
+
+def _taxonomy_sync_preview_view(request):
+    if not _user_can_sync_taxa(request.user):
+        raise PermissionDenied
+
+    service = NowTaxonomySyncService()
+
+    try:
+        preview = service.preview()
+    except Exception as exc:  # pragma: no cover - defensive guard for runtime errors
+        messages.error(
+            request,
+            _("Unable to fetch taxonomy data: %(error)s") % {"error": exc},
+        )
+        return redirect(
+            f"admin:{Taxon._meta.app_label}_{Taxon._meta.model_name}_changelist"
+        )
+
+    preview_data = _serialize_preview_for_template(preview)
+
+    context = {
+        **admin.site.each_context(request),
+        "opts": Taxon._meta,
+        "title": _("Sync Taxa Now"),
+        "preview": preview,
+        "preview_data": preview_data,
+        "counts": preview.counts,
+        "source_version": preview.source_version,
+        "apply_url": reverse("cms:taxonomy_sync_apply"),
+        "back_url": reverse(
+            f"admin:{Taxon._meta.app_label}_{Taxon._meta.model_name}_changelist"
+        ),
+    }
+    return TemplateResponse(request, "admin/taxonomy/sync_preview.html", context)
+
+
+def _taxonomy_sync_apply_view(request):
+    if not _user_can_sync_taxa(request.user):
+        raise PermissionDenied
+
+    if request.method != "POST":
+        return redirect("cms:taxonomy_sync_preview")
+
+    service = NowTaxonomySyncService()
+
+    try:
+        result = service.sync(apply=True)
+    except Exception as exc:  # pragma: no cover - defensive guard for runtime errors
+        messages.error(
+            request,
+            _("Unable to apply taxonomy sync: %(error)s") % {"error": exc},
+        )
+        return redirect("cms:taxonomy_sync_preview")
+
+    import_log = result.import_log
+    log_url = None
+    if import_log:
+        log_url = reverse(
+            f"admin:{import_log._meta.app_label}_{import_log._meta.model_name}_change",
+            args=[import_log.pk],
+        )
+
+    preview = result.preview
+    context = {
+        **admin.site.each_context(request),
+        "opts": Taxon._meta,
+        "title": _("Sync Taxa Now"),
+        "result": result,
+        "preview": preview,
+        "preview_data": _serialize_preview_for_template(preview),
+        "counts": preview.counts,
+        "source_version": preview.source_version,
+        "import_log": import_log,
+        "log_url": log_url,
+        "back_url": reverse(
+            f"admin:{Taxon._meta.app_label}_{Taxon._meta.model_name}_changelist"
+        ),
+        "preview_url": reverse("cms:taxonomy_sync_preview"),
+        "success": bool(import_log and import_log.ok),
+    }
+
+    return TemplateResponse(request, "admin/taxonomy/sync_result.html", context)
+
+
+taxonomy_sync_preview_view = admin.site.admin_view(_taxonomy_sync_preview_view)
+taxonomy_sync_apply_view = admin.site.admin_view(_taxonomy_sync_apply_view)
 
 
 class MergeAdminActionMixin:
@@ -740,6 +913,22 @@ class TaxonAdmin(HistoricalImportExportAdmin):
     def formatted_subspecies(self, obj):
         return obj.infraspecific_epithet if obj.infraspecific_epithet else "-"
     formatted_subspecies.short_description = 'Subspecies'
+
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        has_permission = _user_can_sync_taxa(request.user)
+        extra_context["has_sync_permission"] = has_permission
+        if has_permission:
+            extra_context["sync_taxa_url"] = reverse("cms:taxonomy_sync_preview")
+        return super().changelist_view(request, extra_context=extra_context)
+
+
+@admin.register(TaxonomyImport)
+class TaxonomyImportAdmin(HistoricalImportExportAdmin):
+    list_display = ("id", "source", "source_version", "started_at", "finished_at", "ok")
+    list_filter = ("source", "ok", "started_at", "finished_at")
+    search_fields = ("source_version",)
+    readonly_fields = ("report_json",)
 
 # User Model
 class UserAdmin(HistoricalImportExportAdmin):
