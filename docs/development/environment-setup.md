@@ -46,7 +46,7 @@ Follow the steps for your operating system. The commands below use sample values
 Run these commands in a working folder:
 
 ```bash
-git clone https://github.com/your-org/nmk-cms.git
+git clone https://github.com/nmkpaleo/nmk-cms.git
 cd nmk-cms
 ```
 
@@ -58,20 +58,32 @@ Copy the template below into a new `.env` file at the project root. Adjust the p
 
 ```bash
 cat <<'ENV' > .env
+COMPOSE_FILE=docker-compose.yml
+DEBUG=1
+ALLOWED_HOSTS=*
+SITE_DOMAIN=localhost:8000
+SITE_NAME=NMK CMS
+EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
+DJANGO_SUPERUSER_USERNAME=admin
+DJANGO_SUPERUSER_PASSWORD=admin
+DJANGO_SUPERUSER_EMAIL=admin@example.com
+ORCID_CLIENT_ID=changeme
+ORCID_SECRET=changeme
 DB_HOST=db
-DB_NAME=nmk
-DB_USER=nmk
-DB_PASS=nmk
+DB_PORT=3306
+DB_NAME=nmk_dev
+DB_USER=nmk_dev
+DB_PASS=changeme
 DB_ROOT_PASS=changeme
-SECRET_KEY=replace-me
-APP_DOMAIN=localhost
-PMA_DOMAIN=localhost
-PMA_UPLOAD_LIMIT=64M
-PMA_MEMORY_LIMIT=512M
+#SECRET_KEY=changeme
+#APP_DOMAIN=localhost
+#PMA_DOMAIN=localhost
+#PMA_UPLOAD_LIMIT=10M
+#PMA_MEMORY_LIMIT=512M
 SCAN_UPLOAD_MAX_BYTES=5242880
 SCAN_UPLOAD_BATCH_MAX_BYTES=0
 SCAN_UPLOAD_TIMEOUT_SECONDS=60
-DOCKER_PROD_IMAGE=your-dockerhub-user/nmk-cms:latest
+#DOCKER_PROD_IMAGE=palaeontologyhelsinki/nmk-cms:latest
 ENV
 ```
 
