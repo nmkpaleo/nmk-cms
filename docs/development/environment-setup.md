@@ -80,9 +80,9 @@ DB_ROOT_PASS=changeme
 #PMA_DOMAIN=localhost
 #PMA_UPLOAD_LIMIT=10M
 #PMA_MEMORY_LIMIT=512M
-SCAN_UPLOAD_MAX_BYTES=5242880
-SCAN_UPLOAD_BATCH_MAX_BYTES=0
-SCAN_UPLOAD_TIMEOUT_SECONDS=60
+#SCAN_UPLOAD_MAX_BYTES=5242880
+#SCAN_UPLOAD_BATCH_MAX_BYTES=0
+#SCAN_UPLOAD_TIMEOUT_SECONDS=60
 #DOCKER_PROD_IMAGE=palaeontologyhelsinki/nmk-cms:latest
 ENV
 ```
@@ -118,7 +118,6 @@ docker compose down
 | Run migrations | `docker compose exec web python manage.py migrate` |
 | Create a superuser | `docker compose exec web python manage.py createsuperuser` |
 | Tail application logs | `docker compose logs -f web` |
-| Run tests | `docker compose exec web pytest` |
 
 ## 3. Prepare a Local Production Server
 
@@ -146,20 +145,32 @@ You can either clone the repository or copy over the `docker-compose.prod.yml`, 
 Create `/opt/nmk-cms/.env` with values that match your server. At minimum set:
 
 ```bash
+COMPOSE_FILE=docker-compose.prod.yml
+DEBUG=0
+ALLOWED_HOSTS=*
+SITE_DOMAIN=localhost:8000
+SITE_NAME=NMK CMS
+EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
+DJANGO_SUPERUSER_USERNAME=admin
+DJANGO_SUPERUSER_PASSWORD=admin
+DJANGO_SUPERUSER_EMAIL=admin@example.com
+ORCID_CLIENT_ID=changeme
+ORCID_SECRET=changeme
 DB_HOST=db
-DB_NAME=nmk
-DB_USER=nmk
-DB_PASS=secure-password
-DB_ROOT_PASS=even-more-secure
-SECRET_KEY=long-django-secret
-APP_DOMAIN=yourdomain.local
-PMA_DOMAIN=admin.yourdomain.local
-PMA_UPLOAD_LIMIT=64M
+DB_PORT=3306
+DB_NAME=changeme
+DB_USER=changeme
+DB_PASS=changeme
+DB_ROOT_PASS=changeme
+SECRET_KEY=changeme
+APP_DOMAIN=localhost
+PMA_DOMAIN=localhost
+PMA_UPLOAD_LIMIT=10M
 PMA_MEMORY_LIMIT=512M
 SCAN_UPLOAD_MAX_BYTES=5242880
 SCAN_UPLOAD_BATCH_MAX_BYTES=0
 SCAN_UPLOAD_TIMEOUT_SECONDS=60
-DOCKER_PROD_IMAGE=your-dockerhub-user/nmk-cms:latest
+DOCKER_PROD_IMAGE=palaeontologyhelsinki/nmk-cms:latest
 ```
 
 Ensure `app/scripts/entrypoint.prod.sh` keeps LF endings. You can run `dos2unix app/scripts/entrypoint.prod.sh` before copying the file, or check with `file app/scripts/entrypoint.prod.sh`.
