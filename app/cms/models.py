@@ -15,7 +15,9 @@ from simple_history.models import HistoricalRecords
 import os # For file handling in media class
 from django.core.exceptions import ValidationError
 import string # For generating specimen number
+from typing import Any, Dict, Optional
 import uuid
+from django.utils.translation import gettext_lazy as _
 User = get_user_model()
 
 from .merge import MergeMixin, MergeStrategy
@@ -985,6 +987,14 @@ class Identification(BaseModel):
         null=True,
         help_text="Determined taxon name.",
     )
+    taxon_record = models.ForeignKey(
+        "Taxon",
+        on_delete=models.SET_NULL,
+        related_name="identifications",
+        null=True,
+        blank=True,
+        help_text=_("Linked taxon from the controlled taxonomy."),
+    )
     reference = models.ForeignKey(
         Reference,
         on_delete=models.SET_NULL,
@@ -1026,21 +1036,107 @@ class Identification(BaseModel):
     def __str__(self):
         return f"Identification for AccessionRow {self.accession_row}"
 
+    def clean(self):
+        super().clean()
+        if self.taxon_record and self.taxon_record.status != TaxonStatus.ACCEPTED:
+            raise ValidationError(
+                {"taxon_record": _("Identifications must reference an accepted taxon.")}
+            )
+
 
 # Taxon Model
 
-TAXON_RANK_CHOICES = [
-    ('kingdom', 'Kingdom'),
-    ('phylum', 'Phylum'),
-    ('class', 'Class'),
-    ('order', 'Order'),
-    ('family', 'Family'),
-    ('genus', 'Genus'),
-    ('species', 'Species'),
-    ('subspecies', 'Subspecies'),
-]
+class TaxonExternalSource(models.TextChoices):
+    NOW = "NOW", _("NOW")
+    PBDB = "PBDB", _("PBDB")
+    LEGACY = "LEGACY", _("Legacy")
+
+
+class TaxonStatus(models.TextChoices):
+    ACCEPTED = "accepted", _("Accepted")
+    SYNONYM = "synonym", _("Synonym")
+    INVALID = "invalid", _("Invalid")
+
+
+class TaxonRank(models.TextChoices):
+    KINGDOM = "kingdom", _("Kingdom")
+    PHYLUM = "phylum", _("Phylum")
+    CLASS = "class", _("Class")
+    ORDER = "order", _("Order")
+    SUPERFAMILY = "superfamily", _("Superfamily")
+    FAMILY = "family", _("Family")
+    SUBFAMILY = "subfamily", _("Subfamily")
+    TRIBE = "tribe", _("Tribe")
+    GENUS = "genus", _("Genus")
+    SPECIES = "species", _("Species")
+    SUBSPECIES = "subspecies", _("Subspecies")
+
+
+TAXON_RANK_CHOICES = TaxonRank.choices
 
 class Taxon(BaseModel):
+    external_source = models.CharField(
+        max_length=16,
+        choices=TaxonExternalSource.choices,
+        default=TaxonExternalSource.LEGACY,
+        help_text=_("External source that provided this taxon."),
+    )
+    external_id = models.CharField(
+        max_length=191,
+        blank=True,
+        null=True,
+        help_text=_("Stable identifier supplied by the external source."),
+    )
+    name = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text=_("Full scientific name for the taxon."),
+    )
+    rank = models.CharField(
+        max_length=32,
+        choices=TaxonRank.choices,
+        blank=True,
+        null=True,
+        help_text=_("Taxonomic rank represented by this record."),
+    )
+    author_year = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text=_("Authorship information associated with the name."),
+    )
+    status = models.CharField(
+        max_length=16,
+        choices=TaxonStatus.choices,
+        default=TaxonStatus.ACCEPTED,
+        help_text=_("Curation status for the taxon record."),
+    )
+    accepted_taxon = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="synonyms",
+        limit_choices_to={"status": TaxonStatus.ACCEPTED},
+        help_text=_("Accepted taxon referenced when this record is a synonym."),
+    )
+    parent = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="children",
+        help_text=_("Immediate parent in the taxonomic hierarchy, when available."),
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text=_("Indicates whether the taxon should be treated as active."),
+    )
+    source_version = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text=_("Version or commit identifier for the external source."),
+    )
     taxon_rank = models.CharField(
         max_length=50,
         choices=TAXON_RANK_CHOICES,
@@ -1114,14 +1210,39 @@ class Taxon(BaseModel):
     history = HistoricalRecords()
 
     class Meta:
-        ordering = ['class_name', 'order', 'family', 'genus', 'species']
-        verbose_name = 'Taxon'
-        verbose_name_plural = 'Taxa'
+        ordering = ["class_name", "order", "family", "genus", "species"]
+        verbose_name = "Taxon"
+        verbose_name_plural = "Taxa"
         constraints = [
             models.UniqueConstraint(
-                fields=['taxon_rank', 'taxon_name', 'scientific_name_authorship'],
-                name='unique_taxon_rank_name_authorship'
-            )
+                fields=["taxon_rank", "taxon_name", "scientific_name_authorship"],
+                name="unique_taxon_rank_name_authorship",
+            ),
+            models.UniqueConstraint(
+                fields=["external_source", "external_id"],
+                name="unique_taxon_external_source_id",
+                condition=(
+                    models.Q(external_source__isnull=False, external_id__isnull=False)
+                    & ~models.Q(external_id="")
+                ),
+            ),
+            models.CheckConstraint(
+                check=(
+                    models.Q(status=TaxonStatus.ACCEPTED, accepted_taxon__isnull=True)
+                    | models.Q(status=TaxonStatus.SYNONYM, accepted_taxon__isnull=False)
+                    | models.Q(status=TaxonStatus.INVALID)
+                ),
+                name="taxon_status_consistency",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["external_source", "external_id"], name="taxon_external_idx"),
+            models.Index(fields=["status"], name="taxon_status_idx"),
+            models.Index(fields=["rank"], name="taxon_rank_idx"),
+            models.Index(fields=["is_active"], name="taxon_active_idx"),
+        ]
+        permissions = [
+            ("can_sync", "Can sync external taxonomy data"),
         ]
 
     def clean(self):
@@ -1130,16 +1251,105 @@ class Taxon(BaseModel):
             raise ValidationError("Genus and species must have a family.")
         if not self.genus and self.species:
             raise ValidationError("Species must have a genus.")
+        if self.status == TaxonStatus.ACCEPTED and self.accepted_taxon_id:
+            raise ValidationError({"accepted_taxon": _("Accepted taxa cannot reference another accepted taxon.")})
+        if self.status == TaxonStatus.SYNONYM:
+            if not self.accepted_taxon_id:
+                raise ValidationError({"accepted_taxon": _("Synonym records must reference an accepted taxon.")})
+            if self.accepted_taxon_id == self.pk:
+                raise ValidationError({"accepted_taxon": _("A taxon cannot be a synonym of itself.")})
+            if self.accepted_taxon and self.accepted_taxon.status != TaxonStatus.ACCEPTED:
+                raise ValidationError({"accepted_taxon": _("Synonyms must reference an accepted taxon.")})
+        if self.status != TaxonStatus.SYNONYM and self.accepted_taxon_id:
+            raise ValidationError({"accepted_taxon": _("Only synonym records may reference an accepted taxon.")})
+        if self.parent_id == self.pk:
+            raise ValidationError({"parent": _("A taxon cannot be its own parent.")})
 
     def get_absolute_url(self):
         return reverse('taxon-detail', args=[str(self.id)])
 
     def __str__(self):
+        if self.name:
+            return self.name
         if self.genus and self.species:
             if self.infraspecific_epithet:
                 return f"{self.genus} {self.species} {self.infraspecific_epithet}"
             return f"{self.genus} {self.species}"
         return self.taxon_name
+
+    @property
+    def is_synonym(self) -> bool:
+        return self.status == TaxonStatus.SYNONYM
+
+    @property
+    def is_accepted(self) -> bool:
+        return self.status == TaxonStatus.ACCEPTED
+
+
+class TaxonomyImport(BaseModel):
+    class Source(models.TextChoices):
+        NOW = "NOW", _("NOW")
+
+    source = models.CharField(
+        max_length=16,
+        choices=Source.choices,
+        default=Source.NOW,
+        help_text=_("External taxonomy source for this import."),
+    )
+    started_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text=_("Timestamp when the import process started."),
+    )
+    finished_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=_("Timestamp when the import process finished."),
+    )
+    source_version = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text=_("Identifier or commit hash describing the imported data."),
+    )
+    counts = models.JSONField(
+        default=dict,
+        help_text=_("Summary counts for created, updated, deactivated, and related metrics."),
+    )
+    report_json = models.JSONField(
+        default=dict,
+        help_text=_("Detailed diff or issue information captured during the import."),
+    )
+    ok = models.BooleanField(
+        default=False,
+        help_text=_("Indicates whether the import completed successfully."),
+    )
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ["-started_at"]
+        verbose_name = _("Taxonomy Import")
+        verbose_name_plural = _("Taxonomy Imports")
+
+    def __str__(self) -> str:
+        label = self.get_source_display()
+        if self.source_version:
+            return f"{label} import {self.source_version}"
+        return f"{label} import"
+
+    def mark_finished(
+        self,
+        *,
+        ok: Optional[bool] = None,
+        counts: Optional[Dict[str, Any]] = None,
+        report: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        if ok is not None:
+            self.ok = ok
+        if counts is not None:
+            self.counts = counts
+        if report is not None:
+            self.report_json = report
+        self.finished_at = timezone.now()
+        self.save(update_fields=["ok", "counts", "report_json", "finished_at", "modified_on", "modified_by"])
 
 
 class Media(BaseModel):
