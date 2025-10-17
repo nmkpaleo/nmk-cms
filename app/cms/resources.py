@@ -26,7 +26,8 @@ from .models import (
     User,
 )
 from import_export import resources, fields
-#from import_export.fields import Field
+
+# from import_export.fields import Field
 from import_export.widgets import (
     BooleanWidget,
     DateWidget,
@@ -62,89 +63,104 @@ class DayFirstDateTimeWidget(DateTimeWidget):
             return timezone.make_aware(dt)
         return dt
 
+
 class AccessionResource(resources.ModelResource):
     accession = fields.Field()
     collection = fields.Field(
-        column_name='collection',
-        attribute='collection',
-        widget=ForeignKeyWidget(Collection, 'abbreviation')
+        column_name="collection",
+        attribute="collection",
+        widget=ForeignKeyWidget(Collection, "abbreviation"),
     )
     specimen_prefix = fields.Field(
-        column_name='specimen_prefix',
-        attribute='specimen_prefix',
-        widget=ForeignKeyWidget(Locality, 'abbreviation')
+        column_name="specimen_prefix",
+        attribute="specimen_prefix",
+        widget=ForeignKeyWidget(Locality, "abbreviation"),
     )
-    specimen_no = fields.Field(
-        column_name='specimen_no',
-        attribute='specimen_no'
-    )
+    specimen_no = fields.Field(column_name="specimen_no", attribute="specimen_no")
     accessioned_by = fields.Field(
-        column_name='accessioned_by',
-        attribute='accessioned_by',
-        widget=ForeignKeyWidget(User, 'username')
+        column_name="accessioned_by",
+        attribute="accessioned_by",
+        widget=ForeignKeyWidget(User, "username"),
     )
 
     has_duplicates = fields.Field(
-        column_name='has_duplicates',
-        attribute='has_duplicates',
+        column_name="has_duplicates",
+        attribute="has_duplicates",
         widget=BooleanWidget(),
-        readonly=True  # 👈 this makes it export-only, not importable
+        readonly=True,  # 👈 this makes it export-only, not importable
     )
 
     class Meta:
         model = Accession
         skip_unchanged = True
         report_skipped = False
-        import_id_fields = ('collection', 'specimen_prefix', 'specimen_no', 'instance_number')
-        fields = ('collection', 'specimen_prefix', 'specimen_no',
-                  'instance_number', 'accessioned_by', 'accession')
-        export_order = ('accession', 'collection', 'specimen_prefix',
-                        'specimen_no', 'instance_number',
-                        'accessioned_by', 'has_duplicates') # Add 'has_duplicates' to export order
+        import_id_fields = (
+            "collection",
+            "specimen_prefix",
+            "specimen_no",
+            "instance_number",
+        )
+        fields = (
+            "collection",
+            "specimen_prefix",
+            "specimen_no",
+            "instance_number",
+            "accessioned_by",
+            "accession",
+        )
+        export_order = (
+            "accession",
+            "collection",
+            "specimen_prefix",
+            "specimen_no",
+            "instance_number",
+            "accessioned_by",
+            "has_duplicates",
+        )  # Add 'has_duplicates' to export order
 
     def dehydrate_accession(self, accession):
         museum = getattr(accession.collection, "abbreviation", "unknown")
         specimen_prefix = getattr(accession.specimen_prefix, "abbreviation", "unknown")
         specimen_no = getattr(accession, "specimen_no", "unknown")
-        return '%s-%s %s' % (museum, specimen_prefix, specimen_no)
-    
+        return "%s-%s %s" % (museum, specimen_prefix, specimen_no)
+
     def dehydrate_has_duplicates(self, obj):
-        return Accession.objects.filter(
-            specimen_no=obj.specimen_no,
-            specimen_prefix=obj.specimen_prefix
-        ).count() > 1
+        return (
+            Accession.objects.filter(
+                specimen_no=obj.specimen_no, specimen_prefix=obj.specimen_prefix
+            ).count()
+            > 1
+        )
+
 
 class AccessionReferenceResource(resources.ModelResource):
-    accession_id= fields.Field(
-        column_name='accession',
-        attribute='accession',
-        widget=ForeignKeyWidget(Accession, 'id')
+    accession_id = fields.Field(
+        column_name="accession",
+        attribute="accession",
+        widget=ForeignKeyWidget(Accession, "id"),
     )
 
     collection = fields.Field(
-        column_name='collection',
-        attribute='accession__collection',
-        widget=ForeignKeyWidget(Collection, 'abbreviation')
+        column_name="collection",
+        attribute="accession__collection",
+        widget=ForeignKeyWidget(Collection, "abbreviation"),
     )
     specimen_prefix = fields.Field(
-        column_name='specimen_prefix',
-        attribute='accession__specimen_prefix',
-        widget=ForeignKeyWidget(Locality, 'abbreviation')
+        column_name="specimen_prefix",
+        attribute="accession__specimen_prefix",
+        widget=ForeignKeyWidget(Locality, "abbreviation"),
     )
     specimen_no = fields.Field(
-        column_name='specimen_no',
-        attribute='accession__specimen_no',
+        column_name="specimen_no",
+        attribute="accession__specimen_no",
     )
     reference = fields.Field(
-        column_name='reference',
-        attribute='reference',
-        widget=ForeignKeyWidget(Reference, 'citation'),
+        column_name="reference",
+        attribute="reference",
+        widget=ForeignKeyWidget(Reference, "citation"),
     )
 
-    page = fields.Field(
-        column_name='page',
-        attribute='page'
-    )
+    page = fields.Field(column_name="page", attribute="page")
 
     def before_import(self, dataset, **kwargs):
         # mimic a 'dynamic field' - i.e. append field which exists on
@@ -155,10 +171,10 @@ class AccessionReferenceResource(resources.ModelResource):
     def before_import_row(self, row, **kwargs):
         # Add accession_id to the row
         # Validate required fields
-        collection = row.get('collection')
-        specimen_prefix = row.get('specimen_prefix')
-        specimen_no = row.get('specimen_no')
-       
+        collection = row.get("collection")
+        specimen_prefix = row.get("specimen_prefix")
+        specimen_no = row.get("specimen_no")
+
         # Raise error if required fields are missing
         if not collection or not specimen_prefix or not specimen_no:
             raise ValueError(
@@ -170,7 +186,7 @@ class AccessionReferenceResource(resources.ModelResource):
         accession_queryset = Accession.objects.filter(
             collection__abbreviation=collection,
             specimen_prefix__abbreviation=specimen_prefix,
-            specimen_no=specimen_no
+            specimen_no=specimen_no,
         )
 
         if accession_queryset.count() > 1:
@@ -183,48 +199,65 @@ class AccessionReferenceResource(resources.ModelResource):
         if not accession:
             raise ValueError("Failed to retrieve a valid Accession after query.")
         # Add accession_id to the row
-        row['accession'] = str(accession.id)
-        print("Import row number: ", kwargs.get('row_number'))
+        row["accession"] = str(accession.id)
+        print("Import row number: ", kwargs.get("row_number"))
         print(row)
 
     class Meta:
         model = AccessionReference
         skip_unchanged = True
         report_skipped = False
-        import_id_fields = ('accession', 'reference',)
-        fields = ('accession', 'collection', 'specimen_prefix', 'specimen_no',  'reference', 'page')
-        export_order = ('collection', 'specimen_prefix', 'specimen_no',  'reference', 'page')
+        import_id_fields = (
+            "accession",
+            "reference",
+        )
+        fields = (
+            "accession",
+            "collection",
+            "specimen_prefix",
+            "specimen_no",
+            "reference",
+            "page",
+        )
+        export_order = (
+            "collection",
+            "specimen_prefix",
+            "specimen_no",
+            "reference",
+            "page",
+        )
+
 
 class AccessionRowResource(resources.ModelResource):
-    accession_id= fields.Field(
-        column_name='accession',
-        attribute='accession',
-        widget=ForeignKeyWidget(Accession, 'id')
+    accession_id = fields.Field(
+        column_name="accession",
+        attribute="accession",
+        widget=ForeignKeyWidget(Accession, "id"),
     )
 
     collection = fields.Field(
-        column_name='collection',
-        attribute='accession__collection',
-        widget=ForeignKeyWidget(Collection, 'abbreviation')
+        column_name="collection",
+        attribute="accession__collection",
+        widget=ForeignKeyWidget(Collection, "abbreviation"),
     )
     specimen_prefix = fields.Field(
-        column_name='specimen_prefix',
-        attribute='accession__specimen_prefix',
-        widget=ForeignKeyWidget(Locality, 'abbreviation')
+        column_name="specimen_prefix",
+        attribute="accession__specimen_prefix",
+        widget=ForeignKeyWidget(Locality, "abbreviation"),
     )
     specimen_no = fields.Field(
-        column_name='specimen_no',
-        attribute='accession__specimen_no',
+        column_name="specimen_no",
+        attribute="accession__specimen_no",
     )
     specimen_suffix = fields.Field(
-        column_name='specimen_suffix',
-        attribute='specimen_suffix',
+        column_name="specimen_suffix",
+        attribute="specimen_suffix",
     )
 
     storage = fields.Field(
-        column_name='storage',
-        attribute='storage',
-        widget=ForeignKeyWidget(Storage, 'area'),
+        column_name="storage",
+        attribute="storage",
+        widget=ForeignKeyWidget(Storage, "area"),
     )
 
     def before_import(self, dataset, **kwargs):
@@ -237,11 +270,11 @@ class AccessionRowResource(resources.ModelResource):
     def before_import_row(self, row, **kwargs):
         # Add accession_id to the row
         # Validate required fields
-        collection = row.get('collection')
-        specimen_prefix = row.get('specimen_prefix')
-        specimen_no = row.get('specimen_no')
-        specimen_suffix=row.get('specimen_suffix')
-       
+        collection = row.get("collection")
+        specimen_prefix = row.get("specimen_prefix")
+        specimen_no = row.get("specimen_no")
+        specimen_suffix = row.get("specimen_suffix")
+
         # Raise error if required fields are missing
         if not collection or not specimen_prefix or not specimen_no:
             raise ValueError(
@@ -253,7 +286,7 @@ class AccessionRowResource(resources.ModelResource):
         accession_queryset = Accession.objects.filter(
             collection__abbreviation=collection,
             specimen_prefix__abbreviation=specimen_prefix,
-            specimen_no=specimen_no
+            specimen_no=specimen_no,
         )
 
         if accession_queryset.count() > 1:
@@ -266,54 +299,68 @@ class AccessionRowResource(resources.ModelResource):
         if not accession:
             raise ValueError("Failed to retrieve a valid Accession after query.")
         # Add accession_id to the row
-        row['accession'] = str(accession.id)
+        row["accession"] = str(accession.id)
 
-        row['kari'] = str(int(row.get('accession'))+10)
-#        row['accession'] = row.get('kari')
-        print("Import row number: ", kwargs.get('row_number'))
+        row["kari"] = str(int(row.get("accession")) + 10)
+        #        row['accession'] = row.get('kari')
+        print("Import row number: ", kwargs.get("row_number"))
         print(row)
 
     class Meta:
         model = AccessionRow
         skip_unchanged = True
         report_skipped = False
-        import_id_fields = ('accession_id', 'specimen_suffix',)
-        fields = ('accession', 'collection', 'specimen_prefix', 'specimen_no',  'specimen_suffix', 'storage')
-        export_order = ('collection', 'specimen_prefix', 'specimen_no',  'specimen_suffix', 'storage')
+        import_id_fields = (
+            "accession_id",
+            "specimen_suffix",
+        )
+        fields = (
+            "accession",
+            "collection",
+            "specimen_prefix",
+            "specimen_no",
+            "specimen_suffix",
+            "storage",
+        )
+        export_order = (
+            "collection",
+            "specimen_prefix",
+            "specimen_no",
+            "specimen_suffix",
+            "storage",
+        )
+
 
 class CollectionResource(resources.ModelResource):
     class Meta:
         model = Collection
         skip_unchanged = True
         report_skipped = False
-        import_id_fields = ('abbreviation',)
-        fields = ('abbreviation', 'description')
-        export_order = ('abbreviation', 'description')
+        import_id_fields = ("abbreviation",)
+        fields = ("abbreviation", "description")
+        export_order = ("abbreviation", "description")
+
 
 class ElementResource(resources.ModelResource):
     parent_element = fields.Field(
-        column_name='parent_element',
-        attribute='parent_element',
-        widget=ForeignKeyWidget(Element, 'name')
+        column_name="parent_element",
+        attribute="parent_element",
+        widget=ForeignKeyWidget(Element, "name"),
     )
-    name = fields.Field(
-        column_name='name',
-        attribute='name'
-    )
+    name = fields.Field(column_name="name", attribute="name")
 
     class Meta:
         model = Element
         skip_unchanged = True
         report_skipped = False
-        fields = ('parent_element', 'name')  # Fields to import/export
-        import_id_fields = ['name']  # Use `name` as the unique identifier
-
+        fields = ("parent_element", "name")  # Fields to import/export
+        import_id_fields = ["name"]  # Use `name` as the unique identifier
 
     def before_import_row(self, row, **kwargs):
         """
         Ensures the parent_element exists or creates it if not found.
         """
-        parent_name = row.get('parent_element')
+        parent_name = row.get("parent_element")
         if parent_name:
             # Try to find the parent element by name
             parent_element = Element.objects.filter(name=parent_name).first()
@@ -321,88 +368,111 @@ class ElementResource(resources.ModelResource):
                 # Create a new parent element if not found
                 parent_element = Element.objects.create(name=parent_name)
             # Update the row with the parent_element's ID
-#            row['parent_element'] = parent_element.name
+        #            row['parent_element'] = parent_element.name
         else:
             # If no parent_element is provided, set it to None
-            row['parent_element'] = None
+            row["parent_element"] = None
+
 
 class FieldSlipResource(resources.ModelResource):
     collection_date = fields.Field(
-        column_name='collection_date',
-        attribute='collection_date',
-        widget=DateWidget(format='%d/%m/%Y')
+        column_name="collection_date",
+        attribute="collection_date",
+        widget=DateWidget(format="%d/%m/%Y"),
     )
 
     class Meta:
         model = FieldSlip
         skip_unchanged = True
         report_skipped = False
-        import_id_fields = ('field_number', 'verbatim_locality')
-        fields = ('field_number', 'discoverer', 'collector', 'collection_date', 'verbatim_locality', 'verbatim_taxon', 'verbatim_element', 'verbatim_horizon', 'aerial_photo', 'verbatim_latitude', 'verbatim_longitude', 'verbatim_SRS', 'verbatim_coordinate_system', 'verbatim_elevation', 'verbatim_method')
+        import_id_fields = ("field_number", "verbatim_locality")
+        fields = (
+            "field_number",
+            "discoverer",
+            "collector",
+            "collection_date",
+            "verbatim_locality",
+            "verbatim_taxon",
+            "verbatim_element",
+            "verbatim_horizon",
+            "aerial_photo",
+            "verbatim_latitude",
+            "verbatim_longitude",
+            "verbatim_SRS",
+            "verbatim_coordinate_system",
+            "verbatim_elevation",
+            "verbatim_method",
+        )
+
 
 class IdentificationResource(resources.ModelResource):
-    accession_row_id= fields.Field(
-        column_name='accession_row',
-        attribute='accession_row',
-        widget=ForeignKeyWidget(AccessionRow, 'id')
+    accession_row_id = fields.Field(
+        column_name="accession_row",
+        attribute="accession_row",
+        widget=ForeignKeyWidget(AccessionRow, "id"),
     )
 
     collection = fields.Field(
-        column_name='collection',
-        attribute='accession_row__accession__collection',
-        widget=ForeignKeyWidget(Collection, 'abbreviation')
+        column_name="collection",
+        attribute="accession_row__accession__collection",
+        widget=ForeignKeyWidget(Collection, "abbreviation"),
     )
     specimen_prefix = fields.Field(
-        column_name='specimen_prefix',
-        attribute='accession_row__accession__specimen_prefix',
-        widget=ForeignKeyWidget(Locality, 'abbreviation')
+        column_name="specimen_prefix",
+        attribute="accession_row__accession__specimen_prefix",
+        widget=ForeignKeyWidget(Locality, "abbreviation"),
     )
     specimen_no = fields.Field(
-        column_name='specimen_no',
-        attribute='accession_row__accession__specimen_no',
+        column_name="specimen_no",
+        attribute="accession_row__accession__specimen_no",
     )
     specimen_suffix = fields.Field(
-        column_name='specimen_suffix',
-        attribute='accession_row__specimen_suffix',
+        column_name="specimen_suffix",
+        attribute="accession_row__specimen_suffix",
     )
 
     identified_by = fields.Field(
-        column_name='identified_by',
-        attribute='identified_by',
-        widget=ForeignKeyWidget(Person, 'last_name'),
+        column_name="identified_by",
+        attribute="identified_by",
+        widget=ForeignKeyWidget(Person, "last_name"),
     )
 
     taxon = fields.Field(
-        column_name='taxon',
-        attribute='taxon',
-        widget=ForeignKeyWidget(Taxon, 'taxon_name'),
+        column_name="taxon",
+        attribute="taxon",
+    )
+
+    taxon_record = fields.Field(
+        column_name="taxon_record",
+        attribute="taxon_record",
+        widget=ForeignKeyWidget(Taxon, "external_id"),
     )
 
     reference = fields.Field(
-        column_name='reference',
-        attribute='reference',
-        widget=ForeignKeyWidget(Reference, 'citation'),
+        column_name="reference",
+        attribute="reference",
+        widget=ForeignKeyWidget(Reference, "citation"),
     )
 
     date_identified = fields.Field(
-        column_name='date_identified',
-        attribute='date_identified',
-        widget=DateWidget(format='%Y-%m-%d'),
+        column_name="date_identified",
+        attribute="date_identified",
+        widget=DateWidget(format="%Y-%m-%d"),
     )
 
     identification_qualifier = fields.Field(
-        column_name='identification_qualifier',
-        attribute='identification_qualifier',
+        column_name="identification_qualifier",
+        attribute="identification_qualifier",
     )
 
     verbatim_identification = fields.Field(
-        column_name='verbatim_identification',
-        attribute='verbatim_identification',
+        column_name="verbatim_identification",
+        attribute="verbatim_identification",
     )
 
     identification_remarks = fields.Field(
-        column_name='identification_remarks',
-        attribute='identification_remarks',
+        column_name="identification_remarks",
+        attribute="identification_remarks",
     )
 
     def before_import(self, dataset, **kwargs):
@@ -414,13 +484,13 @@ class IdentificationResource(resources.ModelResource):
     def before_import_row(self, row, **kwargs):
         # Add accession_row_id to the row
         # Validate required fields
-        collection = row.get('collection')
-        specimen_prefix = row.get('specimen_prefix')
-        specimen_no = row.get('specimen_no')
-        specimen_suffix=row.get('specimen_suffix')
-        date_identified=row.get('date_identified')
+        collection = row.get("collection")
+        specimen_prefix = row.get("specimen_prefix")
+        specimen_no = row.get("specimen_no")
+        specimen_suffix = row.get("specimen_suffix")
+        date_identified = row.get("date_identified")
         if not date_identified:
-            row['date_identified'] = None
+            row["date_identified"] = None
 
         # Raise error if required fields are missing
         if not collection or not specimen_prefix or not specimen_no:
@@ -434,7 +504,7 @@ class IdentificationResource(resources.ModelResource):
             accession__collection__abbreviation=collection,
             accession__specimen_prefix__abbreviation=specimen_prefix,
             accession__specimen_no=specimen_no,
-			specimen_suffix=specimen_suffix
+            specimen_suffix=specimen_suffix,
         )
 
         if accession_row_queryset.count() > 1:
@@ -447,84 +517,112 @@ class IdentificationResource(resources.ModelResource):
         if not accession_row:
             raise ValueError("Failed to retrieve a valid Accession Row after query.")
         # Add accession_row_id to the row
-        row['accession_row'] = str(accession_row.id)
-        print("Import row number: ", kwargs.get('row_number'))
+        row["accession_row"] = str(accession_row.id)
+        print("Import row number: ", kwargs.get("row_number"))
         print(row)
 
     class Meta:
         model = Identification
         skip_unchanged = True
         report_skipped = False
-        import_id_fields = ('accession_row_id',)
-        fields = ('accession_row', 'collection', 'specimen_prefix', 'specimen_no', 'specimen_suffix', 'identified_by', 'taxon', 'reference', 'date_identified', 'identification_qualifier', 'verbatim_identification', 'identification_remarks')
-        export_order = ('collection', 'specimen_prefix', 'specimen_no', 'specimen_suffix', 'identified_by', 'taxon', 'reference', 'date_identified', 'identification_qualifier', 'verbatim_identification', 'identification_remarks')
+        import_id_fields = ("accession_row_id",)
+        fields = (
+            "accession_row",
+            "collection",
+            "specimen_prefix",
+            "specimen_no",
+            "specimen_suffix",
+            "identified_by",
+            "taxon",
+            "taxon_record",
+            "reference",
+            "date_identified",
+            "identification_qualifier",
+            "verbatim_identification",
+            "identification_remarks",
+        )
+        export_order = (
+            "collection",
+            "specimen_prefix",
+            "specimen_no",
+            "specimen_suffix",
+            "identified_by",
+            "taxon",
+            "taxon_record",
+            "reference",
+            "date_identified",
+            "identification_qualifier",
+            "verbatim_identification",
+            "identification_remarks",
+        )
+
 
 class LocalityResource(resources.ModelResource):
     class Meta:
         model = Locality
         skip_unchanged = True
         report_skipped = False
-        import_id_fields = ('abbreviation',)
-        fields = ('name', 'abbreviation')
-        export_order = ('abbreviation', 'name')
+        import_id_fields = ("abbreviation",)
+        fields = ("name", "abbreviation")
+        export_order = ("abbreviation", "name")
 
 
 class PlaceResource(resources.ModelResource):
     locality = fields.Field(
-        column_name='locality',
-        attribute='locality',
-        widget=ForeignKeyWidget(Locality, 'abbreviation')
+        column_name="locality",
+        attribute="locality",
+        widget=ForeignKeyWidget(Locality, "abbreviation"),
     )
     related_place = fields.Field(
-        column_name='related_place',
-        attribute='related_place',
-        widget=ForeignKeyWidget(Place, 'name')
+        column_name="related_place",
+        attribute="related_place",
+        widget=ForeignKeyWidget(Place, "name"),
     )
 
     class Meta:
         model = Place
         skip_unchanged = True
         report_skipped = False
-        import_id_fields = ('name', 'locality')
+        import_id_fields = ("name", "locality")
         fields = (
-            'name',
-            'place_type',
-            'locality',
-            'related_place',
-            'relation_type',
-            'description',
-            'comment',
-            'part_of_hierarchy',
+            "name",
+            "place_type",
+            "locality",
+            "related_place",
+            "relation_type",
+            "description",
+            "comment",
+            "part_of_hierarchy",
         )
         export_order = (
-            'name',
-            'place_type',
-            'locality',
-            'related_place',
-            'relation_type',
-            'description',
-            'comment',
-            'part_of_hierarchy',
+            "name",
+            "place_type",
+            "locality",
+            "related_place",
+            "relation_type",
+            "description",
+            "comment",
+            "part_of_hierarchy",
         )
-        readonly_fields = ('part_of_hierarchy',)
+        readonly_fields = ("part_of_hierarchy",)
 
     def before_import_row(self, row, row_number=None, **kwargs):
-        relation_type = row.get('relation_type')
+        relation_type = row.get("relation_type")
         if relation_type and relation_type not in PlaceRelation.values:
-            allowed = ', '.join(PlaceRelation.values)
+            allowed = ", ".join(PlaceRelation.values)
             raise ValueError(
                 f"Invalid relation_type '{relation_type}' in row {row_number}. "
                 f"Expected one of: {allowed}."
             )
-        place_type = row.get('place_type')
+        place_type = row.get("place_type")
         if place_type and place_type not in PlaceType.values:
-            allowed = ', '.join(PlaceType.values)
+            allowed = ", ".join(PlaceType.values)
             raise ValueError(
                 f"Invalid place_type '{place_type}' in row {row_number}. "
                 f"Expected one of: {allowed}."
             )
-        related_name = row.get('related_place')
-        locality_abbr = row.get('locality')
+        related_name = row.get("related_place")
+        locality_abbr = row.get("locality")
         if related_name:
             try:
                 related_obj = Place.objects.get(name=related_name)
@@ -543,7 +641,7 @@ class PlaceResource(resources.ModelResource):
                 place_obj = None
                 if locality_abbr:
                     place_obj = Place.objects.filter(
-                        name=row.get('name'), locality__abbreviation=locality_abbr
+                        name=row.get("name"), locality__abbreviation=locality_abbr
                     ).first()
                 if place_obj:
                     ancestor = related_obj
@@ -558,61 +656,62 @@ class PlaceResource(resources.ModelResource):
                             break
         return super().before_import_row(row, row_number=row_number, **kwargs)
 
+
 class NatureOfSpecimenResource(resources.ModelResource):
-    accession_row_id= fields.Field(
-        column_name='accession_row',
-        attribute='accession_row',
-        widget=ForeignKeyWidget(AccessionRow, 'id')
+    accession_row_id = fields.Field(
+        column_name="accession_row",
+        attribute="accession_row",
+        widget=ForeignKeyWidget(AccessionRow, "id"),
     )
 
     collection = fields.Field(
-        column_name='collection',
-        attribute='accession_row__accession__collection',
-        widget=ForeignKeyWidget(Collection, 'abbreviation')
+        column_name="collection",
+        attribute="accession_row__accession__collection",
+        widget=ForeignKeyWidget(Collection, "abbreviation"),
     )
     specimen_prefix = fields.Field(
-        column_name='specimen_prefix',
-        attribute='accession_row__accession__specimen_prefix',
-        widget=ForeignKeyWidget(Locality, 'abbreviation')
+        column_name="specimen_prefix",
+        attribute="accession_row__accession__specimen_prefix",
+        widget=ForeignKeyWidget(Locality, "abbreviation"),
     )
     specimen_no = fields.Field(
-        column_name='specimen_no',
-        attribute='accession_row__accession__specimen_no',
+        column_name="specimen_no",
+        attribute="accession_row__accession__specimen_no",
     )
     specimen_suffix = fields.Field(
-        column_name='specimen_suffix',
-        attribute='accession_row__specimen_suffix',
+        column_name="specimen_suffix",
+        attribute="accession_row__specimen_suffix",
     )
 
     element = fields.Field(
-        column_name='element',
-        attribute='element',
-        widget=ForeignKeyWidget(Element, 'name'),
+        column_name="element",
+        attribute="element",
+        widget=ForeignKeyWidget(Element, "name"),
     )
 
     side = fields.Field(
-        column_name='side',
-        attribute='side',
+        column_name="side",
+        attribute="side",
     )
 
     condition = fields.Field(
-        column_name='condition',
-        attribute='condition',
+        column_name="condition",
+        attribute="condition",
     )
 
     verbatim_element = fields.Field(
-        column_name='verbatim_element',
-        attribute='verbatim_element',
+        column_name="verbatim_element",
+        attribute="verbatim_element",
     )
 
     portion = fields.Field(
-        column_name='portion',
-        attribute='portion',
+        column_name="portion",
+        attribute="portion",
     )
 
     fragments = fields.Field(
-        column_name='fragments',
-        attribute='fragments',
+        column_name="fragments",
+        attribute="fragments",
     )
 
     def before_import(self, dataset, **kwargs):
@@ -624,11 +723,11 @@ class NatureOfSpecimenResource(resources.ModelResource):
     def before_import_row(self, row, **kwargs):
         # Add accession_row_id to the row
         # Validate required fields
-        collection = row.get('collection')
-        specimen_prefix = row.get('specimen_prefix')
-        specimen_no = row.get('specimen_no')
-        specimen_suffix=row.get('specimen_suffix')
-       
+        collection = row.get("collection")
+        specimen_prefix = row.get("specimen_prefix")
+        specimen_no = row.get("specimen_no")
+        specimen_suffix = row.get("specimen_suffix")
+
         # Raise error if required fields are missing
         if not collection or not specimen_prefix or not specimen_no:
             raise ValueError(
@@ -641,7 +740,7 @@ class NatureOfSpecimenResource(resources.ModelResource):
             accession__collection__abbreviation=collection,
             accession__specimen_prefix__abbreviation=specimen_prefix,
             accession__specimen_no=specimen_no,
-			specimen_suffix=specimen_suffix
+            specimen_suffix=specimen_suffix,
         )
 
         if accession_row_queryset.count() > 1:
@@ -654,35 +753,63 @@ class NatureOfSpecimenResource(resources.ModelResource):
         if not accession_row:
             raise ValueError("Failed to retrieve a valid Accession Row after query.")
         # Add accession_row_id to the row
-        row['accession_row'] = str(accession_row.id)
-        print("Import row number: ", kwargs.get('row_number'))
+        row["accession_row"] = str(accession_row.id)
+        print("Import row number: ", kwargs.get("row_number"))
         print(row)
 
     class Meta:
         model = NatureOfSpecimen
         skip_unchanged = True
         report_skipped = False
-        import_id_fields = ('accession_row_id',)
-        fields = ('accession_row', 'collection', 'specimen_prefix', 'specimen_no', 'specimen_suffix', 'element', 'side', 'condition', 'verbatim_element', 'portion', 'fragments')
-        export_order = ('collection', 'specimen_prefix', 'specimen_no', 'specimen_suffix', 'element', 'side', 'condition', 'verbatim_element', 'portion', 'fragments')
+        import_id_fields = ("accession_row_id",)
+        fields = (
+            "accession_row",
+            "collection",
+            "specimen_prefix",
+            "specimen_no",
+            "specimen_suffix",
+            "element",
+            "side",
+            "condition",
+            "verbatim_element",
+            "portion",
+            "fragments",
+        )
+        export_order = (
+            "collection",
+            "specimen_prefix",
+            "specimen_no",
+            "specimen_suffix",
+            "element",
+            "side",
+            "condition",
+            "verbatim_element",
+            "portion",
+            "fragments",
+        )
+
 
 class PersonResource(resources.ModelResource):
     class Meta:
         model = Person
         skip_unchanged = True
         report_skipped = False
-        import_id_fields = ('first_name', 'last_name',)
-        fields = ('first_name', 'last_name', 'orcid')
-        export_order = ('first_name', 'last_name', 'orcid')
+        import_id_fields = (
+            "first_name",
+            "last_name",
+        )
+        fields = ("first_name", "last_name", "orcid")
+        export_order = ("first_name", "last_name", "orcid")
+
 
 class PreparationMaterialResource(resources.ModelResource):
     class Meta:
         model = PreparationMaterial
         skip_unchanged = True
         report_skipped = False
-        import_id_fields = ('name',)
-        fields = ('name', 'description')
-        export_order = ('name', 'description')
+        import_id_fields = ("name",)
+        fields = ("name", "description")
+        export_order = ("name", "description")
 
 
 class PreparationResource(resources.ModelResource):
@@ -794,7 +921,9 @@ class PreparationResource(resources.ModelResource):
         row["accession_row"] = str(accession_row.id)
 
     def _get_accession(self, obj):
-        return getattr(obj.accession_row, "accession", None) if obj.accession_row else None
+        return (
+            getattr(obj.accession_row, "accession", None) if obj.accession_row else None
+        )
 
     def dehydrate_collection(self, obj):
         accession = self._get_accession(obj)
@@ -876,138 +1005,223 @@ class PreparationResource(resources.ModelResource):
             "notes",
         )
 
+
 class ReferenceResource(resources.ModelResource):
     class Meta:
         model = Reference
         skip_unchanged = True
         report_skipped = False
-        import_id_fields = ('citation',)
-        fields = ('title', 'first_author', 'year', 'journal', 'volume', 'issue', 'pages', 'doi', 'citation')
-        export_order = ('title', 'first_author', 'year', 'journal', 'volume', 'issue', 'pages', 'doi', 'citation')
+        import_id_fields = ("citation",)
+        fields = (
+            "title",
+            "first_author",
+            "year",
+            "journal",
+            "volume",
+            "issue",
+            "pages",
+            "doi",
+            "citation",
+        )
+        export_order = (
+            "title",
+            "first_author",
+            "year",
+            "journal",
+            "volume",
+            "issue",
+            "pages",
+            "doi",
+            "citation",
+        )
+
 
 class StorageResource(resources.ModelResource):
     class Meta:
         model = Storage
         skip_unchanged = True
         report_skipped = False
-        import_id_fields = ('area',)
-        fields = ('area', 'parent_area')
+        import_id_fields = ("area",)
+        fields = ("area", "parent_area")
+
 
 class TaxonResource(resources.ModelResource):
-    # Custom fields can be added or mapped if needed
-    genus = fields.Field(attribute='genus', column_name='Genus Name')
+    accepted_taxon = fields.Field(
+        column_name="accepted_taxon",
+        attribute="accepted_taxon",
+        widget=ForeignKeyWidget(Taxon, "external_id"),
+    )
+    parent = fields.Field(
+        column_name="parent",
+        attribute="parent",
+        widget=ForeignKeyWidget(Taxon, "external_id"),
+    )
+
     class Meta:
         model = Taxon
         skip_unchanged = True
         report_skipped = False
-        import_id_fields = ('taxon_name', 'taxon_rank',)
-        fields = ('taxon_name', 'taxon_rank', 'kingdom', 'phylum', 'class_name', 'order', 'superfamily', 'family', 'subfamily', 'tribe', 'genus', 'species', 'infraspecific_epithet', 'scientific_name_authorship')
-        export_order = ('taxon_name', 'taxon_rank', 'kingdom', 'phylum', 'class_name', 'order', 'superfamily', 'family', 'subfamily', 'tribe', 'genus', 'species', 'infraspecific_epithet', 'scientific_name_authorship')
+        import_id_fields = ("external_source", "external_id")
+        fields = (
+            "external_source",
+            "external_id",
+            "name",
+            "rank",
+            "author_year",
+            "status",
+            "accepted_taxon",
+            "parent",
+            "is_active",
+            "source_version",
+            "kingdom",
+            "phylum",
+            "class_name",
+            "order",
+            "superfamily",
+            "family",
+            "subfamily",
+            "tribe",
+            "genus",
+            "species",
+            "infraspecific_epithet",
+            "scientific_name_authorship",
+        )
+        export_order = fields
 
-    def clean_species(self, value):
-        if not value.isalpha():
-            raise ValueError("Species names must only contain alphabetic characters.")
-        return value
 
 class UserResource(resources.ModelResource):
     class Meta:
         model = User
         skip_unchanged = True
         report_skipped = False
-        import_id_fields = ('username',)
-        fields = ('id', 'username', 'first_name', 'last_name', 'email', 'is_active', 'is_staff', 'is_superuser', 'last_login', 'date_joined')
-        export_order = ('id', 'username', 'first_name', 'last_name', 'email', 'is_active', 'is_staff', 'is_superuser', 'last_login', 'date_joined')
-
-
+        import_id_fields = ("username",)
+        fields = (
+            "id",
+            "username",
+            "first_name",
+            "last_name",
+            "email",
+            "is_active",
+            "is_staff",
+            "is_superuser",
+            "last_login",
+            "date_joined",
+        )
+        export_order = (
+            "id",
+            "username",
+            "first_name",
+            "last_name",
+            "email",
+            "is_active",
+            "is_staff",
+            "is_superuser",
+            "last_login",
+            "date_joined",
+        )
 
 
 class MediaResource(resources.ModelResource):
     accession = fields.Field(
-        column_name='accession',
-        attribute='accession',
-        widget=ForeignKeyWidget(Accession, 'id')
+        column_name="accession",
+        attribute="accession",
+        widget=ForeignKeyWidget(Accession, "id"),
     )
     accession_row = fields.Field(
-        column_name='accession_row',
-        attribute='accession_row',
-        widget=ForeignKeyWidget(AccessionRow, 'id')
+        column_name="accession_row",
+        attribute="accession_row",
+        widget=ForeignKeyWidget(AccessionRow, "id"),
     )
     scanning = fields.Field(
-        column_name='scanning',
-        attribute='scanning',
-        widget=ForeignKeyWidget(Scanning, 'id')
+        column_name="scanning",
+        attribute="scanning",
+        widget=ForeignKeyWidget(Scanning, "id"),
     )
 
     class Meta:
         model = Media
         fields = (
-            'id',
-            'file_name',
-            'type',
-            'format',
-            'media_location',
-            'license',
-            'rights_holder',
-            'scanning',
-            'accession',
-            'accession_row',
+            "id",
+            "file_name",
+            "type",
+            "format",
+            "media_location",
+            "license",
+            "rights_holder",
+            "scanning",
+            "accession",
+            "accession_row",
         )
         export_order = (
-            'id',
-            'file_name',
-            'type',
-            'format',
-            'media_location',
-            'license',
-            'rights_holder',
-            'scanning',
-            'accession',
-            'accession_row',
+            "id",
+            "file_name",
+            "type",
+            "format",
+            "media_location",
+            "license",
+            "rights_holder",
+            "scanning",
+            "accession",
+            "accession_row",
         )
+
 
 class SpecimenGeologyResource(resources.ModelResource):
     accession = fields.Field(
-        column_name='accession',
-        attribute='accession',
-        widget=ForeignKeyWidget(Accession, 'id')
+        column_name="accession",
+        attribute="accession",
+        widget=ForeignKeyWidget(Accession, "id"),
     )
     earliest_geological_context = fields.Field(
-        column_name='earliest_geological_context',
-        attribute='earliest_geological_context',
-        widget=ForeignKeyWidget(GeologicalContext, 'id')
+        column_name="earliest_geological_context",
+        attribute="earliest_geological_context",
+        widget=ForeignKeyWidget(GeologicalContext, "id"),
     )
     latest_geological_context = fields.Field(
-        column_name='latest_geological_context',
-        attribute='latest_geological_context',
-        widget=ForeignKeyWidget(GeologicalContext, 'id')
+        column_name="latest_geological_context",
+        attribute="latest_geological_context",
+        widget=ForeignKeyWidget(GeologicalContext, "id"),
     )
 
     class Meta:
         model = SpecimenGeology
         fields = (
-            'id',
-            'accession',
-            'earliest_geological_context',
-            'latest_geological_context',
+            "id",
+            "accession",
+            "earliest_geological_context",
+            "latest_geological_context",
         )
         export_order = (
-            'id',
-            'accession',
-            'earliest_geological_context',
-            'latest_geological_context',
+            "id",
+            "accession",
+            "earliest_geological_context",
+            "latest_geological_context",
         )
+
 
 class GeologicalContextResource(resources.ModelResource):
     parent_geological_context = fields.Field(
-        column_name='parent_geological_context',
-        attribute='parent_geological_context',
-        widget=ForeignKeyWidget(GeologicalContext, 'id')
+        column_name="parent_geological_context",
+        attribute="parent_geological_context",
+        widget=ForeignKeyWidget(GeologicalContext, "id"),
     )
 
     class Meta:
         model = GeologicalContext
-        fields = ('id', 'geological_context_type', 'unit_name', 'name', 'parent_geological_context')
-        export_order = ('id', 'geological_context_type', 'unit_name', 'name', 'parent_geological_context')
+        fields = (
+            "id",
+            "geological_context_type",
+            "unit_name",
+            "name",
+            "parent_geological_context",
+        )
+        export_order = (
+            "id",
+            "geological_context_type",
+            "unit_name",
+            "name",
+            "parent_geological_context",
+        )
 
 
 class SemicolonManyToManyWidget(ManyToManyWidget):
@@ -1034,7 +1248,7 @@ class DrawerRegisterResource(resources.ModelResource):
     taxa = fields.Field(
         column_name="taxa",
         attribute="taxa",
-        widget=SemicolonManyToManyWidget(Taxon, field="taxon_name", separator=";"),
+        widget=SemicolonManyToManyWidget(Taxon, field="name", separator=";"),
     )
     scanning_users = fields.Field(
         column_name="scanning_users",
