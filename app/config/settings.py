@@ -264,3 +264,7 @@ EMAIL_BACKEND = get_var("EMAIL_BACKEND", "django.core.mail.backends.console.Emai
 
 # This tells Django to allow iframes only on the same origin (localhost:8000).
 X_FRAME_OPTIONS = 'SAMEORIGIN'
+
+# TaxonNow integration URLs
+TAXON_NOW_ACCEPTED_URL = get_var("TAXON_NOW_ACCEPTED_URL", "")
+TAXON_NOW_SYNONYMS_URL = get_var("TAXON_NOW_SYNONYMS_URL", "")
