@@ -88,14 +88,14 @@ def test_now_sync_creates_updates_and_deactivates(db):
 
     accepted_tsv = "\n".join(
         [
-            "taxon_name\ttaxon_level\tauthor\tSTG_TIME_STAMP",
+            "taxon_name\ttaxon_rank\tauthor\tSTG_TIME_STAMP",
             "Herpestes major\tspecies\tNew Author\t2024-01-01",
             "Newcanis novus\tspecies\tA. Researcher\t2024-01-01",
         ]
     )
     synonyms_tsv = "\n".join(
         [
-            "syn_name\ttaxon_name\ttaxon_level\tauthor\tSTG_TIME_STAMP",
+            "syn_name\ttaxon_name\ttaxon_rank\tauthor\tSTG_TIME_STAMP",
             "Herpestes majorus\tHerpestes major\tspecies\tUpdated Syn Author\t2024-01-01",
             "Newcanis junior\tNewcanis novus\tspecies\tB. Res\t2024-01-01",
         ]
@@ -165,13 +165,13 @@ def test_now_sync_creates_updates_and_deactivates(db):
 def test_now_sync_records_issue_when_missing_accepted(db):
     accepted_tsv = "\n".join(
         [
-            "taxon_name\ttaxon_level\tauthor\tSTG_TIME_STAMP",
+            "taxon_name\ttaxon_rank\tauthor\tSTG_TIME_STAMP",
             "Alpha beta\tspecies\tAuthor\t2024-01-01",
         ]
     )
     synonyms_tsv = "\n".join(
         [
-            "syn_name\ttaxon_name\ttaxon_level\tauthor\tSTG_TIME_STAMP",
+            "syn_name\ttaxon_name\ttaxon_rank\tauthor\tSTG_TIME_STAMP",
             "Missing target\tGhost species\tspecies\tSomeone\t2024-01-01",
         ]
     )

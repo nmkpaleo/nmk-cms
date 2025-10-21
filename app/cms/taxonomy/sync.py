@@ -151,7 +151,8 @@ class NowTaxonomySyncService:
             if not name:
                 logger.warning("Skipping NOW accepted row missing taxon name: %s", row)
                 continue
-            rank = _normalize_label(row.get("taxon_level", "")).lower()
+            rank_value = row.get("taxon_rank") or row.get("taxon_level") or ""
+            rank = _normalize_label(rank_value).lower()
             author = _normalize_label(row.get("author", ""))
             source_version = _normalize_label(row.get("STG_TIME_STAMP", ""))
             external_id = build_accepted_external_id(name, rank)
@@ -176,7 +177,8 @@ class NowTaxonomySyncService:
             if not syn_name or not accepted_name:
                 logger.warning("Skipping NOW synonym row missing required names: %s", row)
                 continue
-            rank = _normalize_label(row.get("taxon_level", "")).lower()
+            rank_value = row.get("taxon_rank") or row.get("taxon_level") or ""
+            rank = _normalize_label(rank_value).lower()
             author = _normalize_label(row.get("author", ""))
             source_version = _normalize_label(row.get("STG_TIME_STAMP", ""))
             accepted_record = accepted_by_name.get(accepted_name.lower())
@@ -208,6 +210,14 @@ class NowTaxonomySyncService:
             Taxon.objects.filter(external_source=TaxonExternalSource.NOW).select_related("accepted_taxon")
         )
         existing_by_external_id = {taxon.external_id: taxon for taxon in existing_taxa if taxon.external_id}
+        existing_by_rank_name = {
+            (
+                _normalize_label(taxon.taxon_name).lower(),
+                (taxon.taxon_rank or "").lower(),
+                taxon.status,
+            ): taxon
+            for taxon in existing_taxa
+        }
 
         accepted_to_create: List[AcceptedRecord] = []
         accepted_to_update: List[AcceptedUpdate] = []
@@ -222,6 +232,8 @@ class NowTaxonomySyncService:
             desired_ids.add(record.external_id)
             existing = existing_by_external_id.get(record.external_id)
             if existing is None:
+                existing = existing_by_rank_name.get((record.name.lower(), record.rank, TaxonStatus.ACCEPTED))
+            if existing is None:
                 accepted_to_create.append(record)
                 continue
             changes: Dict[str, Any] = {}
@@ -235,6 +247,8 @@ class NowTaxonomySyncService:
                 changes["status"] = TaxonStatus.ACCEPTED
             if not existing.is_active:
                 changes["is_active"] = True
+            if (existing.external_id or "") != record.external_id:
+                changes["external_id"] = record.external_id
             if existing.source_version != record.source_version:
                 changes["source_version"] = record.source_version
             if changes:
@@ -245,6 +259,8 @@ class NowTaxonomySyncService:
         for record in synonym_records:
             desired_ids.add(record.external_id)
             existing = existing_by_external_id.get(record.external_id)
+            if existing is None:
+                existing = existing_by_rank_name.get((record.name.lower(), record.rank, TaxonStatus.SYNONYM))
             accepted_record = accepted_lookup.get(record.accepted_external_id)
             if accepted_record is None:
                 issues.append(
@@ -272,6 +288,8 @@ class NowTaxonomySyncService:
                 changes["taxon_rank"] = record.rank
             if (existing.author_year or "") != record.author_year:
                 changes["author_year"] = record.author_year
+            if (existing.external_id or "") != record.external_id:
+                changes["external_id"] = record.external_id
             if existing.source_version != record.source_version:
                 changes["source_version"] = record.source_version
             if changes:
@@ -324,7 +342,9 @@ class NowTaxonomySyncService:
                 )
             }
             accepted_mapping.update({taxon.external_id: taxon for taxon in created_taxa if taxon.status == TaxonStatus.ACCEPTED})
-            accepted_mapping.update({update.instance.external_id: update.instance for update in preview.accepted_to_update})
+            accepted_mapping.update(
+                {update.record.external_id: update.instance for update in preview.accepted_to_update}
+            )
 
             accepted_updates = [update for update in preview.accepted_to_update if update.changes]
             if accepted_updates:
@@ -339,6 +359,7 @@ class NowTaxonomySyncService:
                         "status",
                         "is_active",
                         "source_version",
+                        "external_id",
                     ],
                 )
 
@@ -389,6 +410,7 @@ class NowTaxonomySyncService:
                         "accepted_taxon",
                         "is_active",
                         "source_version",
+                        "external_id",
                     ],
                 )
 
