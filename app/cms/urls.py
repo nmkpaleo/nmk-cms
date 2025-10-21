@@ -84,7 +84,6 @@ from cms.forms import (AccessionForm,
 from cms.views import AccessionWizard
 from cms.views import media_report_view
 from .admin import taxonomy_sync_apply_view, taxonomy_sync_preview_view
-app_name = "cms"
 
 urlpatterns = [
     path('reports/media/', media_report_view, name='media_report'),
