@@ -184,7 +184,7 @@ def _taxonomy_sync_preview_view(request):
         "preview_data": preview_data,
         "counts": preview.counts,
         "source_version": preview.source_version,
-        "apply_url": reverse("cms:taxonomy_sync_apply"),
+        "apply_url": reverse("taxonomy_sync_apply"),
         "back_url": reverse(
             f"admin:{Taxon._meta.app_label}_{Taxon._meta.model_name}_changelist"
         ),
@@ -197,7 +197,7 @@ def _taxonomy_sync_apply_view(request):
         raise PermissionDenied
 
     if request.method != "POST":
-        return redirect("cms:taxonomy_sync_preview")
+        return redirect("taxonomy_sync_preview")
 
     service = NowTaxonomySyncService()
 
@@ -208,7 +208,7 @@ def _taxonomy_sync_apply_view(request):
             request,
             _("Unable to apply taxonomy sync: %(error)s") % {"error": exc},
         )
-        return redirect("cms:taxonomy_sync_preview")
+        return redirect("taxonomy_sync_preview")
 
     import_log = result.import_log
     log_url = None
@@ -233,7 +233,7 @@ def _taxonomy_sync_apply_view(request):
         "back_url": reverse(
             f"admin:{Taxon._meta.app_label}_{Taxon._meta.model_name}_changelist"
         ),
-        "preview_url": reverse("cms:taxonomy_sync_preview"),
+        "preview_url": reverse("taxonomy_sync_preview"),
         "success": bool(import_log and import_log.ok),
     }
 
@@ -919,7 +919,7 @@ class TaxonAdmin(HistoricalImportExportAdmin):
         has_permission = _user_can_sync_taxa(request.user)
         extra_context["has_sync_permission"] = has_permission
         if has_permission:
-            extra_context["sync_taxa_url"] = reverse("cms:taxonomy_sync_preview")
+            extra_context["sync_taxa_url"] = reverse("taxonomy_sync_preview")
         return super().changelist_view(request, extra_context=extra_context)
 
 
