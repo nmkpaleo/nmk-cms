@@ -88,7 +88,9 @@ def _serialize_changeset(update) -> list[dict[str, str]]:
     changes = []
     for field, new_value in update.changes.items():
         if field == "accepted_taxon":
-            old_value = update.instance.accepted_taxon.name if update.instance.accepted_taxon else ""
+            old_value = (
+                update.instance.accepted_taxon.taxon_name if update.instance.accepted_taxon else ""
+            )
             new_display = getattr(update.record, "accepted_name", "")
         else:
             old_value = getattr(update.instance, field, "")
@@ -141,7 +143,7 @@ def _serialize_preview_for_template(preview):
         ],
         "deactivations": [
             {
-                "name": taxon.name or taxon.taxon_name,
+                "name": taxon.taxon_name,
                 "external_id": taxon.external_id,
             }
             for taxon in preview.to_deactivate

@@ -36,8 +36,6 @@ def make_taxon(
     return Taxon.objects.create(
         external_source=TaxonExternalSource.NOW,
         external_id=external_id,
-        name=name,
-        rank=rank,
         author_year="Author 1900",
         status=status,
         accepted_taxon=accepted_taxon if status == TaxonStatus.SYNONYM else None,
@@ -115,7 +113,7 @@ def test_identification_form_defaults_taxon_from_record():
     )
 
     assert form.is_valid()
-    assert form.cleaned_data["taxon"] == taxon.name
+    assert form.cleaned_data["taxon"] == taxon.taxon_name
     assert form.cleaned_data["taxon_record"] == taxon
 
 

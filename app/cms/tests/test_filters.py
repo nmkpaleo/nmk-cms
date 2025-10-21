@@ -33,8 +33,6 @@ def make_taxon(
     return Taxon.objects.create(
         external_source=TaxonExternalSource.NOW,
         external_id=external_id,
-        name=name,
-        rank=rank,
         author_year="Author 1900",
         status=status,
         accepted_taxon=accepted_taxon if status == TaxonStatus.SYNONYM else None,
@@ -77,7 +75,7 @@ def test_accession_filter_matches_taxon_record_name():
     )
     Identification.objects.create(
         accession_row=accession_row,
-        taxon=accepted.name,
+        taxon=accepted.taxon_name,
         taxon_record=accepted,
     )
     synonym = make_taxon(
@@ -88,7 +86,7 @@ def test_accession_filter_matches_taxon_record_name():
     )
 
     qs = Accession.objects.all()
-    filterset = AccessionFilter(data={"taxon": synonym.name}, queryset=qs)
+    filterset = AccessionFilter(data={"taxon": synonym.taxon_name}, queryset=qs)
 
     assert accession in filterset.qs
 

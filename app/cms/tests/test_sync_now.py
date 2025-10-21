@@ -36,8 +36,6 @@ def test_now_sync_creates_updates_and_deactivates(db):
     accepted_existing = Taxon.objects.create(
         external_source=TaxonExternalSource.NOW,
         external_id="NOW:species:Herpestes major",
-        name="Herpestes major",
-        rank="species",
         author_year="Old Author",
         status=TaxonStatus.ACCEPTED,
         is_active=False,
@@ -55,8 +53,6 @@ def test_now_sync_creates_updates_and_deactivates(db):
     synonym_existing = Taxon.objects.create(
         external_source=TaxonExternalSource.NOW,
         external_id="NOW:syn:Herpestes majorus::accepted:Herpestes major",
-        name="Herpestes majorus",
-        rank="species",
         author_year="Old Syn Author",
         status=TaxonStatus.SYNONYM,
         accepted_taxon=accepted_existing,
@@ -75,8 +71,6 @@ def test_now_sync_creates_updates_and_deactivates(db):
     to_deactivate = Taxon.objects.create(
         external_source=TaxonExternalSource.NOW,
         external_id="NOW:species:Obsolete taxon",
-        name="Obsolete taxon",
-        rank="species",
         author_year="Removed",
         status=TaxonStatus.ACCEPTED,
         is_active=True,

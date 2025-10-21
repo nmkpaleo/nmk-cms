@@ -225,10 +225,10 @@ class NowTaxonomySyncService:
                 accepted_to_create.append(record)
                 continue
             changes: Dict[str, Any] = {}
-            if _normalize_label(existing.name) != record.name:
-                changes["name"] = record.name
-            if (existing.rank or "").lower() != record.rank:
-                changes["rank"] = record.rank
+            if _normalize_label(existing.taxon_name) != record.name:
+                changes["taxon_name"] = record.name
+            if (existing.taxon_rank or "").lower() != record.rank:
+                changes["taxon_rank"] = record.rank
             if (existing.author_year or "") != record.author_year:
                 changes["author_year"] = record.author_year
             if existing.status != TaxonStatus.ACCEPTED:
@@ -259,8 +259,8 @@ class NowTaxonomySyncService:
                 synonyms_to_create.append(record)
                 continue
             changes = {}
-            if _normalize_label(existing.name) != record.name:
-                changes["name"] = record.name
+            if _normalize_label(existing.taxon_name) != record.name:
+                changes["taxon_name"] = record.name
             if existing.status != TaxonStatus.SYNONYM:
                 changes["status"] = TaxonStatus.SYNONYM
             accepted_obj = existing.accepted_taxon
@@ -268,8 +268,8 @@ class NowTaxonomySyncService:
                 changes["accepted_taxon"] = record.accepted_external_id
             if not existing.is_active:
                 changes["is_active"] = True
-            if (existing.rank or "").lower() != record.rank:
-                changes["rank"] = record.rank
+            if (existing.taxon_rank or "").lower() != record.rank:
+                changes["taxon_rank"] = record.rank
             if (existing.author_year or "") != record.author_year:
                 changes["author_year"] = record.author_year
             if existing.source_version != record.source_version:
@@ -333,8 +333,8 @@ class NowTaxonomySyncService:
                 Taxon.objects.bulk_update(
                     [item.instance for item in accepted_updates],
                     [
-                        "name",
-                        "rank",
+                        "taxon_name",
+                        "taxon_rank",
                         "author_year",
                         "status",
                         "is_active",
@@ -382,8 +382,8 @@ class NowTaxonomySyncService:
                 Taxon.objects.bulk_update(
                     [item.instance for item in synonym_updates],
                     [
-                        "name",
-                        "rank",
+                        "taxon_name",
+                        "taxon_rank",
                         "author_year",
                         "status",
                         "accepted_taxon",
@@ -481,8 +481,6 @@ def build_taxon_from_record(
     instance = Taxon(
         external_source=TaxonExternalSource.NOW,
         external_id=record.external_id,
-        name=record.name,
-        rank=getattr(record, "rank", ""),
         author_year=getattr(record, "author_year", ""),
         status=status,
         accepted_taxon=accepted_taxon if status == TaxonStatus.SYNONYM else None,

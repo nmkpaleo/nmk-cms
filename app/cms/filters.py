@@ -26,13 +26,7 @@ def _matching_taxon_names(attribute: str, value: str) -> set[str]:
         is_active=True,
         **{f"{attribute}__icontains": value},
     )
-    names: set[str] = set()
-    for name, legacy_name in taxa.values_list("name", "taxon_name"):
-        if name:
-            names.add(name)
-        if legacy_name:
-            names.add(legacy_name)
-    return names
+    return set(taxa.values_list("taxon_name", flat=True))
 
 
 class AccessionFilter(django_filters.FilterSet):
@@ -112,9 +106,9 @@ class AccessionFilter(django_filters.FilterSet):
         if not value:
             return queryset
         taxon_q = Q(accessionrow__identification__taxon__icontains=value)
-        taxon_q |= Q(accessionrow__identification__taxon_record__name__icontains=value)
+        taxon_q |= Q(accessionrow__identification__taxon_record__taxon_name__icontains=value)
         taxon_q |= Q(
-            accessionrow__identification__taxon_record__synonyms__name__icontains=value
+            accessionrow__identification__taxon_record__synonyms__taxon_name__icontains=value
         )
         return queryset.filter(taxon_q).distinct()
 
@@ -334,12 +328,12 @@ class DrawerRegisterFilter(django_filters.FilterSet):
     )
     taxa = django_filters.ModelChoiceFilter(
         queryset=Taxon.objects.filter(
-            Q(rank=TaxonRank.ORDER) | Q(taxon_rank__iexact="order"),
+            Q(taxon_rank=TaxonRank.ORDER) | Q(taxon_rank__iexact="order"),
             status=TaxonStatus.ACCEPTED,
             is_active=True,
         )
         .distinct()
-        .order_by("name", "taxon_name"),
+        .order_by("taxon_name"),
         label="Taxon",
         widget=forms.Select(attrs={"class": "w3-select"}),
     )

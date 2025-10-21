@@ -311,9 +311,9 @@ class ReferenceWidget(s2forms.ModelSelect2Widget):
 
 class TaxonWidget(s2forms.ModelSelect2Widget):
     search_fields = [
-        "name__icontains",
+        "taxon_name__icontains",
         "author_year__icontains",
-        "synonyms__name__icontains",
+        "synonyms__taxon_name__icontains",
         "external_id__icontains",
     ]
 
@@ -327,10 +327,10 @@ class TaxonWidget(s2forms.ModelSelect2Widget):
         return Taxon.objects.filter(
             status=TaxonStatus.ACCEPTED,
             is_active=True,
-        ).order_by("name", "taxon_name")
+        ).order_by("taxon_name")
 
     def label_from_instance(self, obj):
-        base_name = obj.name or obj.taxon_name or str(obj)
+        base_name = obj.taxon_name or str(obj)
         if obj.author_year:
             return f"{base_name} {obj.author_year}"
         return base_name
@@ -829,7 +829,7 @@ class AccessionRowIdentificationForm(forms.ModelForm):
         taxon_field.queryset = Taxon.objects.filter(
             status=TaxonStatus.ACCEPTED,
             is_active=True,
-        ).order_by("name", "taxon_name")
+        ).order_by("taxon_name")
         taxon_field.required = False
         taxon_field.widget = TaxonWidget(model=Taxon)
 
@@ -847,7 +847,7 @@ class AccessionRowIdentificationForm(forms.ModelForm):
         taxon_record = cleaned_data.get("taxon_record")
         taxon_name = cleaned_data.get("taxon")
         if taxon_record and not taxon_name:
-            cleaned_data["taxon"] = taxon_record.name or taxon_record.taxon_name
+            cleaned_data["taxon"] = taxon_record.taxon_name
         return cleaned_data
 
 
@@ -957,7 +957,7 @@ class DrawerRegisterForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         # Allow both legacy rank data and new accepted taxonomy schema
         qs = Taxon.objects.filter(
-            Q(rank=TaxonRank.ORDER) | Q(taxon_rank__iexact="order"),
+            Q(taxon_rank=TaxonRank.ORDER) | Q(taxon_rank__iexact="order"),
             status=TaxonStatus.ACCEPTED,
             is_active=True,
         ).distinct()

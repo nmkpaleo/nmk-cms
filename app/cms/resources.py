@@ -1065,8 +1065,8 @@ class TaxonResource(resources.ModelResource):
         fields = (
             "external_source",
             "external_id",
-            "name",
-            "rank",
+            "taxon_name",
+            "taxon_rank",
             "author_year",
             "status",
             "accepted_taxon",
