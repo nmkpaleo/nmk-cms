@@ -83,6 +83,7 @@ from cms.forms import (AccessionForm,
                        SpecimenCompositeForm)
 from cms.views import AccessionWizard
 from cms.views import media_report_view
+from .admin import taxonomy_sync_apply_view, taxonomy_sync_preview_view
 
 
 urlpatterns = [
@@ -193,4 +194,9 @@ if getattr(settings, "MERGE_TOOL_FEATURE", False):
 
 urlpatterns += [
     path("dashboard/", dashboard, name="dashboard"),
+]
+
+urlpatterns += [
+    path("taxonomy/sync/", taxonomy_sync_preview_view, name="taxonomy_sync_preview"),
+    path("taxonomy/sync/apply/", taxonomy_sync_apply_view, name="taxonomy_sync_apply"),
 ]
