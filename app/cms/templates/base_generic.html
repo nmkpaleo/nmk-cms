@@ -22,6 +22,7 @@
     <link rel="stylesheet" href="{% static 'css/style.css' %}" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="{% static 'css/reports.css' %}">
 
     <style>
       .select2-container {
@@ -50,7 +51,14 @@
               <li><a href="{% url 'locality_list' %}">Localities</a></li>
               <li><a href="{% url 'place_list' %}">Places</a></li>
               <li><a href="{% url 'reference_list' %}">References</a></li>
-              <li><a href="{% url 'media_report' %}">Reports</a></li>
+              <li class="dropdown ">
+              <a href="#" class="dropdown-toggle">Reports <i class="bi bi-chevron-down"></i></a>
+              <ul class="dropdown-menu">
+                <li><a href="{% url 'media_report' %}">Media Reports</a></li>
+                <li><a href="{% url 'accession_distribution_report' %}">Accession Reports</a></li>
+              </ul>
+            </li>
+
               
               {% if user.is_superuser or user|has_group:"Collection Managers" %}
                 <li><a href="{% url 'fieldslip_list' %}">Field Slips</a></li>
@@ -135,6 +143,20 @@
     </div>
 
     <script src="{% static 'javascript.js' %}"></script>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const dropdownToggles = document.querySelectorAll('.dropdown-toggle');
+
+      dropdownToggles.forEach(toggle => {
+        toggle.addEventListener('click', function(e) {
+          e.preventDefault();
+          const parent = this.parentElement;
+          parent.classList.toggle('active');
+        });
+      });
+    });
+    </script>
+
 
     {% block extra_scripts %}
       {% if form_media %}
