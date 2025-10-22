@@ -18,11 +18,13 @@
             <dt class="w3-text-gray">{% trans "Type specimen" %}</dt>
             <dd class="w3-margin-0">{{ accession.type_status|default:"—" }}</dd>
           </div>
-          {% if not preview_mode and (user.is_superuser or user|has_group:"Collection Managers") %}
-            <div class="w3-margin-bottom">
-              <dt class="w3-text-gray">{% trans "Accessioned by" %}</dt>
-              <dd class="w3-margin-0">{{ accession.accessioned_by|default:"—" }}</dd>
-            </div>
+          {% if not preview_mode %}
+            {% if user.is_superuser or user|has_group:"Collection Managers" %}
+              <div class="w3-margin-bottom">
+                <dt class="w3-text-gray">{% trans "Accessioned by" %}</dt>
+                <dd class="w3-margin-0">{{ accession.accessioned_by|default:"—" }}</dd>
+              </div>
+            {% endif %}
           {% endif %}
           <div class="w3-margin-bottom">
             <dt class="w3-text-gray">{% trans "General comment" %}</dt>
@@ -38,13 +40,15 @@
           <div class="w3-col s12 m6">
             <h2 id="accession-horizon-heading" class="w3-margin-0">{% trans "Horizon" %}</h2>
           </div>
-          {% if not preview_mode and user.is_authenticated and user|has_group:"Collection Managers" %}
-            <div class="w3-col s12 m6 w3-right-align w3-margin-top">
-              <a href="{% url 'accession_add_geology' accession.id %}" class="w3-button w3-green w3-round">
-                <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
-                <span class="w3-hide-small w3-margin-left">{% trans "Add horizon" %}</span>
-              </a>
-            </div>
+          {% if not preview_mode and user.is_authenticated %}
+            {% if user|has_group:"Collection Managers" %}
+              <div class="w3-col s12 m6 w3-right-align w3-margin-top">
+                <a href="{% url 'accession_add_geology' accession.id %}" class="w3-button w3-green w3-round">
+                  <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+                  <span class="w3-hide-small w3-margin-left">{% trans "Add horizon" %}</span>
+                </a>
+              </div>
+            {% endif %}
           {% endif %}
         </div>
         <div class="w3-responsive w3-margin-top">
@@ -82,13 +86,15 @@
         <span class="w3-margin-left">{% trans "Specimen details" %}</span>
       </h2>
     </div>
-    {% if not preview_mode and user.is_authenticated and user|has_group:"Collection Managers" %}
-      <div class="w3-col s12 m6 w3-right-align">
-        <a href="{% url 'accession_add_row' accession.id %}" class="w3-button w3-green w3-round">
-          <i class="fa-solid fa-plus" aria-hidden="true"></i>
-          <span class="w3-hide-small w3-margin-left">{% trans "Add specimen" %}</span>
-        </a>
-      </div>
+    {% if not preview_mode and user.is_authenticated %}
+      {% if user|has_group:"Collection Managers" %}
+        <div class="w3-col s12 m6 w3-right-align">
+          <a href="{% url 'accession_add_row' accession.id %}" class="w3-button w3-green w3-round">
+            <i class="fa-solid fa-plus" aria-hidden="true"></i>
+            <span class="w3-hide-small w3-margin-left">{% trans "Add specimen" %}</span>
+          </a>
+        </div>
+      {% endif %}
     {% endif %}
   </header>
   <div class="w3-responsive">
@@ -191,13 +197,15 @@
         <span class="w3-margin-left">{% trans "References" %}</span>
       </h2>
     </div>
-    {% if not preview_mode and user.is_authenticated and user|has_group:"Collection Managers" %}
-      <div class="w3-col s12 m6 w3-right-align">
-        <a href="{% url 'accession_add_reference' accession.id %}" class="w3-button w3-green w3-round">
-          <i class="fa-solid fa-plus" aria-hidden="true"></i>
-          <span class="w3-hide-small w3-margin-left">{% trans "Add reference" %}</span>
-        </a>
-      </div>
+    {% if not preview_mode and user.is_authenticated %}
+      {% if user|has_group:"Collection Managers" %}
+        <div class="w3-col s12 m6 w3-right-align">
+          <a href="{% url 'accession_add_reference' accession.id %}" class="w3-button w3-green w3-round">
+            <i class="fa-solid fa-plus" aria-hidden="true"></i>
+            <span class="w3-hide-small w3-margin-left">{% trans "Add reference" %}</span>
+          </a>
+        </div>
+      {% endif %}
     {% endif %}
   </header>
   {% if references %}
@@ -307,13 +315,15 @@
         <span class="w3-margin-left">{% trans "Media" %}</span>
       </h2>
     </div>
-    {% if not preview_mode and user.is_authenticated and user|has_group:"Collection Managers" %}
-      <div class="w3-col s12 m6 w3-right-align">
-        <a href="{% url 'accession_upload_media' accession.id %}" class="w3-button w3-green w3-round">
-          <i class="fa-solid fa-upload" aria-hidden="true"></i>
-          <span class="w3-hide-small w3-margin-left">{% trans "Upload media" %}</span>
-        </a>
-      </div>
+    {% if not preview_mode and user.is_authenticated %}
+      {% if user|has_group:"Collection Managers" %}
+        <div class="w3-col s12 m6 w3-right-align">
+          <a href="{% url 'accession_upload_media' accession.id %}" class="w3-button w3-green w3-round">
+            <i class="fa-solid fa-upload" aria-hidden="true"></i>
+            <span class="w3-hide-small w3-margin-left">{% trans "Upload media" %}</span>
+          </a>
+        </div>
+      {% endif %}
     {% endif %}
   </header>
   <div class="w3-responsive">
