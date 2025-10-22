@@ -1,7 +1,13 @@
 {% extends "base_generic.html" %}
 {% load i18n user_tags %}
 
-{% block title %}{% blocktrans %}Place {{ place.name }}{% endblocktrans %}{% endblock %}
+{% block title %}
+  {% if place.get_place_type_display %}
+    {% blocktrans with name=place.name type=place.get_place_type_display %}Place {{ name }} {{ type }}{% endblocktrans %}
+  {% else %}
+    {% blocktrans with name=place.name %}Place {{ name }}{% endblocktrans %}
+  {% endif %}
+{% endblock %}
 
 {% block content %}
 <main class="w3-container w3-margin-top" role="main">
@@ -60,20 +66,22 @@
         </div>
       </article>
 
-      {% if children %}
-        <article class="w3-col s12 m6 l4">
-          <div class="w3-card w3-round w3-white w3-padding" aria-labelledby="place-children-heading">
-            <h2 id="place-children-heading" class="w3-margin-top">{% trans "Lower geography" %}</h2>
-            <ul class="w3-ul w3-margin-top">
+      <article class="w3-col s12 m6 l4">
+        <div class="w3-card w3-round w3-white w3-padding" aria-labelledby="place-children-heading">
+          <h2 id="place-children-heading" class="w3-margin-top">{% trans "Lower geography" %}</h2>
+          <ul class="w3-ul w3-margin-top" aria-label="{% trans 'List of child places' %}">
+            {% if children %}
               {% for child in children %}
-                <li><a href="{% url 'place_detail' child.pk %}">{{ child.name }}</a></li>
-              {% empty %}
-                <li class="w3-text-gray">{% trans "No child places recorded." %}</li>
+                <li>
+                  <a class="w3-text-indigo" href="{% url 'place_detail' child.pk %}">{{ child.name }}</a>
+                </li>
               {% endfor %}
-            </ul>
-          </div>
-        </article>
-      {% endif %}
+            {% else %}
+              <li class="w3-text-gray">{% trans "No child places recorded." %}</li>
+            {% endif %}
+          </ul>
+        </div>
+      </article>
 
       {% if place.related_place %}
         <article class="w3-col s12 m6 l4">
