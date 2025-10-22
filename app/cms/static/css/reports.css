@@ -56,3 +56,66 @@ h2 {
 .summary, .chart-container {
     animation: fadeIn 0.4s ease-in;
 }
+
+
+/* Dropdown styling for Reports menu */
+.dropdown {
+  position: relative;
+}
+
+.dropdown-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #333;
+  text-decoration: none;
+  padding: 8px 12px;
+  width: 100%;
+  cursor: pointer;
+}
+
+.dropdown-menu {
+  display: none;
+  position: relative;
+  list-style: none;
+  padding-left: 15px;
+  margin: 0;
+}
+
+/* Hide dropdown by default */
+.dropdown-menu {
+  display: none;
+}
+
+/* Show when the dropdown is active */
+.dropdown.active .dropdown-menu {
+  display: block;
+}
+
+/* Optional: rotate the arrow when active */
+.dropdown.active .bi-chevron-down {
+  transform: rotate(180deg);
+  transition: transform 0.2s ease;
+}
+
+.bi-chevron-down {
+  transition: transform 0.2s ease;
+}
+
+
+.dropdown-menu li a {
+  color: #555;
+  text-decoration: none;
+  display: block;
+  padding: 5px 10px;
+  border-left: 2px solid transparent;
+}
+
+.dropdown-menu li a:hover {
+  background: #f1f1f1;
+  border-left: 2px solid #007bff;
+}
+
+.bi-chevron-down {
+  font-size: 0.8rem;
+}

@@ -102,6 +102,9 @@ from plotly.io import to_html
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 from django.utils import timezone
+from .models import Accession
+from django.db.models import Count
+
 
 
 
@@ -225,6 +228,55 @@ def media_report_view(request):
     }
     return render(request, 'reports/media_report.html', context)
 
+#accession distribution report
+def accession_distribution_report(request):
+    """
+    Generates a report showing the distribution of accessions per locality.
+    """
+    # Query grouped counts per locality (specimen_prefix)
+    accession_data = (
+        Accession.objects
+        .values('specimen_prefix__name')
+        .annotate(total_accessions=Count('specimen_no', distinct=True))
+        .order_by('specimen_prefix__name')
+    )
+
+    if not accession_data:
+        return render(request, 'reports/accession_distribution.html', {
+            'message': 'No accession data available yet.'
+        })
+
+    df = pd.DataFrame.from_records(accession_data)
+    df.rename(columns={'specimen_prefix__name': 'Locality', 'total_accessions': 'Accessions'}, inplace=True)
+
+    # --- Locality-based chart ---
+    fig_locality = px.bar(
+        df,
+        x='Locality',
+        y='Accessions',
+        text='Accessions',
+        title='Accessions per Locality',
+        color='Locality',
+        color_discrete_sequence=px.colors.qualitative.Set3
+    )
+    fig_locality.update_traces(textposition='outside')
+    fig_locality.update_layout(
+        xaxis_title='Locality',
+        yaxis_title='Number of Accessions',
+        xaxis_tickangle=-30,
+        showlegend=False,
+        plot_bgcolor='#ffffff',
+        paper_bgcolor='#ffffff'
+    )
+
+    chart_locality = to_html(fig_locality, full_html=False, include_plotlyjs='cdn')
+
+    context = {
+        'chart_locality': chart_locality,
+        'locality_table': df.to_dict(orient='records'),
+    }
+
+    return render(request, 'reports/accession_distribution.html', context)
 
 
 

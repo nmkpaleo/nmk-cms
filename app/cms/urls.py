@@ -5,6 +5,7 @@ from django_filters.views import FilterView
 from cms.models import Accession
 from cms.views import (
     accession_create,
+    accession_distribution_report,
     accession_edit,
     add_accession_row,
     AccessionRowDetailView,
@@ -83,6 +84,7 @@ from cms.views import media_report_view
 
 
 urlpatterns = [
+    path('reports/accession-distribution/', accession_distribution_report, name='accession_distribution_report'),
     path('reports/media/', media_report_view, name='media_report'),
     path('inventory/', inventory_start, name='inventory_start'),
     path('inventory/update/', inventory_update, name='inventory_update'),
