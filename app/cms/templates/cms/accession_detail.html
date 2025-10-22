@@ -1,131 +1,172 @@
 {% extends "base_generic.html" %}
-{% load custom_filters %}
-{% load user_tags %}
+{% load i18n custom_filters user_tags %}
 
-{% block title %}Accession {{ accession }}{% endblock %}
+{% block title %}{% blocktrans with accession_number=accession %}Accession {{ accession_number }}{% endblocktrans %}{% endblock %}
 
 {% block content %}
-    <div class="template-detail-container">
-        <div class="template-detail-header">
-            <h2 class="accession-detail-h2">Accession Detail</h2>
-            {% if user.is_superuser or user|has_group:"Collection Managers" %}
-            <a href="{% url 'accession_edit' accession.pk %}" class="edit-icon">
-                Edit Form ✏️
-            </a>
-            {% endif %}
-        </div>
-        {% include "cms/partials/accession_preview_panel.html" with preview_mode=False %}
-        <div class="grid-containerr">
-            <div class="cards">
-                <hr class="accession_hr">
-                {% if user.is_authenticated and user|has_group:"Collection Managers" %}
-                  <a href="{% url 'accession_add_comment' accession.id %}">➕ Add Comment</a>
-                {% endif %}
-                {% if comments %}
-                    <table>
-                        <caption>Comments</caption>
-                        <thead>
-                            <tr>
-                                <th>Subject</th>
-                                <th>Comment</th>
-                                <th>Comment by</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        {% for comment in comments %}
-                            <tbody>
-                                <tr>
-                                    <td>{{ comment.subject }}</td>
-                                    <td>{{ comment.comment }}</td>
-                                    <td>{{ comment.comment_by }}</td>
-                                    <td>{{ comment.get_status_display }}</td>
-                                </tr>
-                            </tbody>
-                        {% endfor %}
-                    </table>
-                {% else %}
-                    <p>No Comments found for this accession.</p>
-                {% endif %}
-            </div>
-            {% if user.is_superuser or user|has_group:"Collection Managers" %}
-            <div class="cards">
-                <table class="table">
-                    <caption><b><u>Related FieldSlips</u></b></caption>
-                    <thead>
-                        <tr>
-                            <th>Field Number</th>
-                            <th>Verbatim Taxon</th>
-                            <th>Verbatim Element</th>
-                            <th>Verbatim Locality</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for relation in related_fieldslips %}
-                        <tr>
-                            <td>
-                                <a href="{% url 'fieldslip_detail' relation.fieldslip.pk %}">{{ relation.fieldslip.field_number }}</a>
-                            </td>
-                            <td>{{ relation.fieldslip.verbatim_taxon }}</td>
-                            <td>{{ relation.fieldslip.verbatim_element }}</td>
-                            <td>{{ relation.fieldslip.verbatim_locality }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="4">No FieldSlips linked.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-
-                <h5><strong><u>Add Existing FieldSlip</u></strong></h5>
-                {{ add_fieldslip_form.media }}
-                <form method="POST" action="{% url 'accession_add_fieldslip' accession.pk %}">
-                    {% csrf_token %}
-                    {{ add_fieldslip_form }}
-                    <button type="submit" class="btn btn-primary">Add FieldSlip</button>
-                </form>
-                <h5><strong><u>Create and Link New FieldSlip</u></strong></h5>
-
-                <!-- Button to open the modal -->
-                <button onclick="openFieldSlipModal()" class="accesssin_FieldSlip">➕ Add a New FieldSlip</button>
-
-                <!-- Modal (hidden by default) -->
-                <div id="fieldSlipModal" class="w3-modal">
-                    <div class="w3-modal-content w3-card-4 w3-animate-top" style="max-width: 800px;">
-                        <header class="w3-container w3-blue">
-                            <span onclick="closeFieldSlipModal()" class="w3-button w3-display-topright">&times;</span>
-                            <h2>Create and Link New FieldSlip</h2>
-                        </header>
-                        <div class="w3-container">
-                            <iframe id="fieldSlipFrame" src="" width="100%" height="500px" style="border: none;"></iframe>
-                        </div>
-                        <footer class="w3-container w3-padding w3-light-grey">
-                            <button onclick="closeFieldSlipModal()" class="w3-button w3-red">Cancel</button>
-                        </footer>
-                    </div>
-                </div>
-            </div>
-            {% endif %}
-        </div>
+<main class="w3-container w3-margin-top" role="main">
+  <header class="w3-row w3-padding-16 w3-border-bottom w3-white w3-round-large" aria-labelledby="accession-details-heading">
+    <div class="w3-col s12 m8">
+      <h1 id="accession-details-heading" class="w3-margin-0">
+        {% blocktrans with accession_number=accession %}Accession {{ accession_number }}{% endblocktrans %}
+      </h1>
+      <p class="w3-text-gray">{{ accession.collection }}</p>
     </div>
+    {% if user.is_superuser or user|has_group:"Collection Managers" %}
+      <div class="w3-col s12 m4 w3-right-align w3-margin-top">
+        <a href="{% url 'accession_edit' accession.pk %}" class="w3-button w3-blue w3-round" aria-label="{% trans 'Edit accession' %}">
+          <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+          <span class="w3-hide-small w3-margin-left">{% trans "Edit Accession" %}</span>
+        </a>
+      </div>
+    {% endif %}
+  </header>
+
+  {% include "cms/partials/accession_preview_panel.html" with preview_mode=False %}
+
+  <section class="w3-margin-top" aria-labelledby="accession-comments-heading">
+    <header class="w3-row w3-padding-16">
+      <div class="w3-col s12 m6">
+        <h2 id="accession-comments-heading" class="w3-margin-0">
+          <i class="fa-solid fa-comments" aria-hidden="true"></i>
+          <span class="w3-margin-left">{% trans "Comments" %}</span>
+        </h2>
+      </div>
+      {% if user.is_authenticated and user|has_group:"Collection Managers" %}
+        <div class="w3-col s12 m6 w3-right-align">
+          <a href="{% url 'accession_add_comment' accession.id %}" class="w3-button w3-green w3-round">
+            <i class="fa-solid fa-plus" aria-hidden="true"></i>
+            <span class="w3-hide-small w3-margin-left">{% trans "Add comment" %}</span>
+          </a>
+        </div>
+      {% endif %}
+    </header>
+    {% if comments %}
+      <div class="w3-responsive">
+        <table class="w3-table-all w3-hoverable w3-small">
+          <thead>
+            <tr>
+              <th scope="col">{% trans "Subject" %}</th>
+              <th scope="col">{% trans "Comment" %}</th>
+              <th scope="col">{% trans "Comment by" %}</th>
+              <th scope="col">{% trans "Status" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for comment in comments %}
+              <tr>
+                <td>{{ comment.subject|default:"—" }}</td>
+                <td>{{ comment.comment|default:"—" }}</td>
+                <td>{{ comment.comment_by|default:"—" }}</td>
+                <td>{{ comment.get_status_display|default:"—" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="w3-text-gray">{% trans "No comments recorded for this accession." %}</p>
+    {% endif %}
+  </section>
+
+  {% if user.is_superuser or user|has_group:"Collection Managers" %}
+    <section class="w3-margin-top" aria-labelledby="accession-fieldslip-links-heading">
+      <header class="w3-row w3-padding-16">
+        <div class="w3-col s12">
+          <h2 id="accession-fieldslip-links-heading" class="w3-margin-0">
+            <i class="fa-solid fa-link" aria-hidden="true"></i>
+            <span class="w3-margin-left">{% trans "Related field slips" %}</span>
+          </h2>
+        </div>
+      </header>
+      <div class="w3-card w3-round w3-white w3-padding">
+        <div class="w3-responsive">
+          <table class="w3-table-all w3-hoverable w3-small">
+            <thead>
+              <tr>
+                <th scope="col">{% trans "Field number" %}</th>
+                <th scope="col">{% trans "Verbatim taxon" %}</th>
+                <th scope="col">{% trans "Verbatim element" %}</th>
+                <th scope="col">{% trans "Verbatim locality" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for relation in related_fieldslips %}
+                <tr>
+                  <td><a href="{% url 'fieldslip_detail' relation.fieldslip.pk %}">{{ relation.fieldslip.field_number }}</a></td>
+                  <td>{{ relation.fieldslip.verbatim_taxon|default:"—" }}</td>
+                  <td>{{ relation.fieldslip.verbatim_element|default:"—" }}</td>
+                  <td>{{ relation.fieldslip.verbatim_locality|default:"—" }}</td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="4" class="w3-center">{% trans "No field slips linked." %}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="w3-row-padding w3-margin-top">
+          <div class="w3-col s12 m6">
+            <h3 class="w3-margin-top">{% trans "Add existing field slip" %}</h3>
+            {{ add_fieldslip_form.media }}
+            <form method="post" action="{% url 'accession_add_fieldslip' accession.pk %}" class="w3-margin-top">
+              {% csrf_token %}
+              <div class="w3-margin-bottom">
+                {{ add_fieldslip_form }}
+              </div>
+              <button type="submit" class="w3-button w3-blue w3-round">
+                <i class="fa-solid fa-link" aria-hidden="true"></i>
+                <span class="w3-margin-left">{% trans "Link field slip" %}</span>
+              </button>
+            </form>
+          </div>
+          <div class="w3-col s12 m6">
+            <h3 class="w3-margin-top">{% trans "Create and link new field slip" %}</h3>
+            <button type="button" onclick="openFieldSlipModal()" class="w3-button w3-green w3-round" aria-haspopup="dialog" aria-controls="fieldSlipModal">
+              <i class="fa-solid fa-plus" aria-hidden="true"></i>
+              <span class="w3-margin-left">{% trans "Add new field slip" %}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div id="fieldSlipModal" class="w3-modal" role="dialog" aria-modal="true" aria-labelledby="fieldSlipModalTitle">
+        <div class="w3-modal-content w3-card-4 w3-animate-top" style="max-width: 800px;">
+          <header class="w3-container w3-blue">
+            <span onclick="closeFieldSlipModal()" class="w3-button w3-display-topright" aria-label="{% trans 'Close modal' %}">&times;</span>
+            <h2 id="fieldSlipModalTitle">{% trans "Create and link new field slip" %}</h2>
+          </header>
+          <div class="w3-container">
+            <iframe id="fieldSlipFrame" src="" width="100%" height="500" style="border: none;" title="{% trans 'Field slip form' %}"></iframe>
+          </div>
+          <footer class="w3-container w3-padding w3-light-grey">
+            <button type="button" onclick="closeFieldSlipModal()" class="w3-button w3-red">{% trans "Cancel" %}</button>
+          </footer>
+        </div>
+      </div>
+    </section>
+  {% endif %}
+</main>
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
-    function openFieldSlipModal() {
-        var url = "{% url 'accession_create_fieldslip' accession.pk %}";
-        document.getElementById("fieldSlipFrame").src = url;
-        document.getElementById("fieldSlipModal").style.display = "block";
-    }
+  function openFieldSlipModal() {
+    const url = "{% url 'accession_create_fieldslip' accession.pk %}";
+    document.getElementById("fieldSlipFrame").src = url;
+    document.getElementById("fieldSlipModal").style.display = "block";
+  }
 
-    function closeFieldSlipModal() {
-        document.getElementById("fieldSlipModal").style.display = "none";
-        document.getElementById("fieldSlipFrame").src = ""; // Reset iframe content
-    }
+  function closeFieldSlipModal() {
+    document.getElementById("fieldSlipModal").style.display = "none";
+    document.getElementById("fieldSlipFrame").src = "";
+  }
 
-    function closeModalAndRefresh() {
-        closeFieldSlipModal();
-        location.reload(); // Refresh main page after successful save
-    }
+  function closeModalAndRefresh() {
+    closeFieldSlipModal();
+    location.reload();
+  }
 </script>
 {% endblock %}

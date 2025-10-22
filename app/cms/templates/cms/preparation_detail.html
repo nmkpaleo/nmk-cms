@@ -1,147 +1,265 @@
 {% extends "base_generic.html" %}
-{% load user_tags %}
+{% load i18n user_tags %}
 
-{% block title %}Preparation {{ preparation.accession_row }}{% endblock %}
+{% block title %}{% blocktrans %}Preparation {{ preparation.accession_row }}{% endblocktrans %}{% endblock %}
 
 {% block content %}
-
-<div class="template-detail-container">
-    <div class="template-detail-header">
-        <h2>Preparation Details</h2>
-        {% if can_edit %}
-        <a href="{% url 'preparation_edit' preparation.pk %}" class="edit-icon">
-            Edit Preparation ✏️
+<main class="w3-container w3-margin-top" role="main">
+  <header class="w3-row w3-padding-16 w3-border-bottom w3-white w3-round-large" aria-labelledby="preparation-details-heading">
+    <div class="w3-col s12 m8">
+      <h1 id="preparation-details-heading" class="w3-margin-0">
+        {% blocktrans with specimen=preparation.accession_row %}Preparation {{ specimen }}{% endblocktrans %}
+      </h1>
+      <p class="w3-text-gray">{{ preparation.preparator|default:"—" }}</p>
+    </div>
+    {% if can_edit %}
+      <div class="w3-col s12 m4 w3-right-align w3-margin-top">
+        <a href="{% url 'preparation_edit' preparation.pk %}" class="w3-button w3-blue w3-round" aria-label="{% trans 'Edit preparation' %}">
+          <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+          <span class="w3-hide-small w3-margin-left">{% trans "Edit Preparation" %}</span>
         </a>
-        {% endif %}
-    </div>
-
-    <div class="grid-container">
-        <div class="card">
-            <p><strong>Specimen:</strong> {{ preparation.accession_row }}</p>
-            <p><strong>Preparator:</strong> {{ preparation.preparator }}</p>
-            <p><strong>Status:</strong> {{ preparation.status }}</p>
-            <p><strong>Preparation Type:</strong> {{ preparation.preparation_type }}</p>
-            <p><strong>Started On:</strong> {{ preparation.started_on }}</p>
-            <p><strong>Completed On:</strong> {{ preparation.completed_on|default:"Not completed" }}</p>
-        </div>
-
-        <div class="card">
-            <p><strong>Condition Before:</strong> {{ preparation.condition_before }}</p>
-            <p><strong>Condition After:</strong> {{ preparation.condition_after }}</p>
-            <p><strong>Method:</strong> {{ preparation.preparation_method }}</p>
-            <p><strong>Chemicals Used:</strong> {{ preparation.chemicals_used }}</p>
-            <p><strong>Materials Used:</strong> 
-                {% for material in preparation.materials_used.all %}
-                    {{ material.name }},
-                {% empty %}
-                    None
-                {% endfor %}
-            </p>
-        </div>
-
-      <div class="card">
-        {% if user.is_superuser %}
-          <!-- Admin can always curate, even if they are the preparator -->
-          <a href="{% url 'preparation_approve' preparation.id %}" class="btn btn-success">Curate</a>
-
-        {% elif user|has_group:"Curators" and user != preparation.preparator %}
-          <!-- Curators can curate if they're not the preparator -->
-          <a href="{% url 'preparation_approve' preparation.id %}" class="btn btn-success">Curate</a>
-        {% endif %}
-
-        <p><strong>Curator:</strong> {{ preparation.curator|default:"Not assigned" }}</p>
-        <p><strong>Approval Status:</strong> {{ preparation.approval_status }}</p>
-        <p><strong>Approval Date:</strong> {{ preparation.approval_date|default:"Pending" }}</p>
-        <p><strong>Curator Comments:</strong> {{ preparation.curator_comments|default:"No comments" }}</p>
       </div>
-    </div>
-  
-    <h3>Change History</h3>
+    {% endif %}
+  </header>
 
-    {% if history_entries %}
-      <table class="table table-striped">
-        <thead>
-          <tr>
-            <th>Date/time</th>
-            <th></th>
-            <th>Comment</th>
-            <th>Changed by</th>
-            <th>Changes</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for entry in history_entries %}
-            <tr>
-              <td>{{ entry.log.history_date|date:"Y-m-d H:i" }}</td>
-              <td>{{ entry.log.history_type }}</td>
-              <td>{{ entry.log.history_change_reason|default:"" }}</td>
-              <td>{{ entry.log.history_user|default:"System or Unknown" }}</td>
-              <td>
-                {% if entry.changes %}
-                  <ul>
-                    {% for change in entry.changes %}
-                      <li><strong>{{ change.field }}:</strong> {{ change.old }} → {{ change.new }}</li>
-                    {% endfor %}
-                  </ul>
+  <section class="w3-margin-top" aria-labelledby="preparation-overview-heading">
+    <div class="w3-row-padding">
+      <article class="w3-col s12 m6 l4">
+        <div class="w3-card w3-round w3-white w3-padding">
+          <h2 id="preparation-overview-heading" class="w3-margin-top">{% trans "Preparation overview" %}</h2>
+          <dl class="w3-margin-top">
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Specimen" %}</dt>
+              <dd class="w3-margin-0">{{ preparation.accession_row }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Preparator" %}</dt>
+              <dd class="w3-margin-0">{{ preparation.preparator|default:"—" }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Status" %}</dt>
+              <dd class="w3-margin-0">{{ preparation.status }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Preparation type" %}</dt>
+              <dd class="w3-margin-0">{{ preparation.preparation_type }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Started on" %}</dt>
+              <dd class="w3-margin-0">{{ preparation.started_on|date:"Y-m-d"|default:"—" }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Completed on" %}</dt>
+              <dd class="w3-margin-0">
+                {% if preparation.completed_on %}
+                  {{ preparation.completed_on|date:"Y-m-d" }}
                 {% else %}
-                  Initial version
+                  {% trans "Not completed" %}
                 {% endif %}
-              </td>
+              </dd>
+            </div>
+          </dl>
+        </div>
+      </article>
+
+      <article class="w3-col s12 m6 l4">
+        <div class="w3-card w3-round w3-white w3-padding" aria-labelledby="preparation-method-heading">
+          <h2 id="preparation-method-heading" class="w3-margin-top">{% trans "Methods and materials" %}</h2>
+          <dl class="w3-margin-top">
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Condition before" %}</dt>
+              <dd class="w3-margin-0">{{ preparation.condition_before|default:"—" }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Condition after" %}</dt>
+              <dd class="w3-margin-0">{{ preparation.condition_after|default:"—" }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Method" %}</dt>
+              <dd class="w3-margin-0">{{ preparation.preparation_method|default:"—" }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Chemicals used" %}</dt>
+              <dd class="w3-margin-0">{{ preparation.chemicals_used|default:"—" }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Materials used" %}</dt>
+              <dd class="w3-margin-0">
+                {% for material in preparation.materials_used.all %}
+                  {{ material.name }}{% if not forloop.last %}, {% endif %}
+                {% empty %}
+                  {% trans "None recorded" %}
+                {% endfor %}
+              </dd>
+            </div>
+          </dl>
+        </div>
+      </article>
+
+      <article class="w3-col s12 m6 l4">
+        <div class="w3-card w3-round w3-white w3-padding" aria-labelledby="preparation-approval-heading">
+          <h2 id="preparation-approval-heading" class="w3-margin-top">{% trans "Curatorial review" %}</h2>
+          {% if user.is_superuser or (user|has_group:"Curators" and user != preparation.preparator) %}
+            <a href="{% url 'preparation_approve' preparation.id %}" class="w3-button w3-green w3-round w3-margin-bottom">
+              <i class="fa-solid fa-check" aria-hidden="true"></i>
+              <span class="w3-margin-left">{% trans "Curate" %}</span>
+            </a>
+          {% endif %}
+          <dl>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Curator" %}</dt>
+              <dd class="w3-margin-0">
+                {% if preparation.curator %}
+                  {{ preparation.curator }}
+                {% else %}
+                  {% trans "Not assigned" %}
+                {% endif %}
+              </dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Approval status" %}</dt>
+              <dd class="w3-margin-0">{{ preparation.approval_status }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Approval date" %}</dt>
+              <dd class="w3-margin-0">
+                {% if preparation.approval_date %}
+                  {{ preparation.approval_date|date:"Y-m-d" }}
+                {% else %}
+                  {% trans "Pending" %}
+                {% endif %}
+              </dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Curator comments" %}</dt>
+              <dd class="w3-margin-0">
+                {% if preparation.curator_comments %}
+                  {{ preparation.curator_comments }}
+                {% else %}
+                  {% trans "No comments" %}
+                {% endif %}
+              </dd>
+            </div>
+          </dl>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="w3-margin-top" aria-labelledby="preparation-history-heading">
+    <header class="w3-padding-16">
+      <h2 id="preparation-history-heading" class="w3-margin-0">
+        <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "Change history" %}</span>
+      </h2>
+    </header>
+    {% if history_entries %}
+      <div class="w3-responsive">
+        <table class="w3-table-all w3-hoverable w3-small">
+          <thead>
+            <tr>
+              <th scope="col">{% trans "Date/time" %}</th>
+              <th scope="col">{% trans "Action" %}</th>
+              <th scope="col">{% trans "Comment" %}</th>
+              <th scope="col">{% trans "Changed by" %}</th>
+              <th scope="col">{% trans "Changes" %}</th>
             </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% else %}
-      <p>No changes have been logged for this preparation yet.</p>
-    {% endif %}
-
-    {% if user.is_authenticated %}
-        {% if user|has_group:"Collection Managers" or user.is_superuser %}
-        <a href="{% url 'preparation_upload_media_form' preparation.id %}">➕ Upload Media</a>
-        {% endif %}
-    {% endif %}
-
-    <table>
-        <caption>Media</caption>
-        <thead>
-          <tr>
-            <th>File Name</th>
-            <th>Type</th>
-            <th>Context</th>
-            <th>License</th>
-            <th>Uploaded By</th>
-            <th>Created On</th>
-            <th>Preview</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% if preparation.preparationmedia_set.all %}
-            {% for item in preparation.preparationmedia_set.all %}
+          </thead>
+          <tbody>
+            {% for entry in history_entries %}
               <tr>
-                <td>{{ item.media.file_name|default:item.media.media_location.name }}</td>
-                <td>{{ item.media.type }}</td>
-                <td>{{ item.get_context_display }}</td>
-                <td>{{ item.media.get_license_display }}</td>
-                <td>{{ item.media.created_by|default:"Unknown" }}</td>
-                <td>{{ item.media.created_on|date:"Y-m-d H:i" }}</td>
+                <td>{{ entry.log.history_date|date:"Y-m-d H:i" }}</td>
+                <td>{{ entry.log.history_type }}</td>
+                <td>{{ entry.log.history_change_reason|default:"" }}</td>
                 <td>
-                  {% if item.media.media_location %}
-                    <a href="{{ item.media.media_location.url }}" target="_blank">
-                        <img src="{{ item.media.media_location.url }}"
-                                alt="{{ item.media.file_name }}"
-                                style="max-height: 80px; max-width: 120px; object-fit: contain; border: 1px solid #ccc;" />
-                    </a>
-                    {% endif %}
+                  {% if entry.log.history_user %}
+                    {{ entry.log.history_user }}
+                  {% else %}
+                    {% trans "System or unknown" %}
+                  {% endif %}
+                </td>
+                <td>
+                  {% if entry.changes %}
+                    <ul class="w3-ul w3-border-0 w3-small w3-margin-0">
+                      {% for change in entry.changes %}
+                        <li><strong>{{ change.field }}:</strong> {{ change.old }} → {{ change.new }}</li>
+                      {% endfor %}
+                    </ul>
+                  {% else %}
+                    {% trans "Initial version" %}
+                  {% endif %}
                 </td>
               </tr>
             {% endfor %}
-          {% else %}
-            <tr>
-              <td colspan="7">There are no media files available for this preparation.</td>
-            </tr>
-          {% endif %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="w3-text-gray">{% trans "No changes have been logged for this preparation yet." %}</p>
+    {% endif %}
+  </section>
+
+  <section class="w3-margin-top" aria-labelledby="preparation-media-heading">
+    <header class="w3-row w3-padding-16">
+      <div class="w3-col s12 m6">
+        <h2 id="preparation-media-heading" class="w3-margin-0">
+          <i class="fa-solid fa-photo-film" aria-hidden="true"></i>
+          <span class="w3-margin-left">{% trans "Media" %}</span>
+        </h2>
+      </div>
+      <div class="w3-col s12 m6 w3-right-align">
+        {% if user.is_authenticated and (user|has_group:"Collection Managers" or user.is_superuser) %}
+          <a href="{% url 'preparation_upload_media_form' preparation.id %}" class="w3-button w3-green w3-round">
+            <i class="fa-solid fa-upload" aria-hidden="true"></i>
+            <span class="w3-hide-small w3-margin-left">{% trans "Upload media" %}</span>
+          </a>
+        {% endif %}
+      </div>
+    </header>
+    <div class="w3-responsive">
+      <table class="w3-table-all w3-hoverable w3-small">
+        <thead>
+          <tr>
+            <th scope="col">{% trans "File name" %}</th>
+            <th scope="col">{% trans "Type" %}</th>
+            <th scope="col">{% trans "Context" %}</th>
+            <th scope="col">{% trans "License" %}</th>
+            <th scope="col">{% trans "Uploaded by" %}</th>
+            <th scope="col">{% trans "Created on" %}</th>
+            <th scope="col">{% trans "Preview" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% with media_items=preparation.preparationmedia_set.all %}
+            {% if media_items|length %}
+              {% for item in media_items %}
+                <tr>
+                  <td>{{ item.media.file_name|default:item.media.media_location.name }}</td>
+                  <td>{{ item.media.type }}</td>
+                  <td>{{ item.get_context_display }}</td>
+                  <td>{{ item.media.get_license_display }}</td>
+                  <td>{{ item.media.created_by|default:"—" }}</td>
+                  <td>{{ item.media.created_on|date:"Y-m-d H:i" }}</td>
+                  <td>
+                    {% if item.media.media_location %}
+                      <a href="{{ item.media.media_location.url }}" target="_blank" rel="noopener">
+                        <img src="{{ item.media.media_location.url }}" alt="{{ item.media.file_name }}" class="w3-image" style="max-height:80px; max-width:120px; object-fit:contain;" />
+                      </a>
+                    {% else %}
+                      <span class="w3-text-gray">{% trans "Not available" %}</span>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="7" class="w3-center">{% trans "There are no media files available for this preparation." %}</td>
+              </tr>
+            {% endif %}
+          {% endwith %}
         </tbody>
       </table>
-      
-</div>
+    </div>
+  </section>
+</main>
 {% endblock %}

@@ -1,56 +1,118 @@
 {% extends "base_generic.html" %}
+{% load i18n %}
 
-{% block title %}Field Slip {{ fieldslip.field_number }}{% endblock %}
+{% block title %}{% blocktrans %}Field Slip {{ fieldslip.field_number }}{% endblocktrans %}{% endblock %}
 
 {% block content %}
-    
+<main class="w3-container w3-margin-top" role="main">
+  <header class="w3-row w3-padding-16 w3-border-bottom w3-white w3-round-large" aria-labelledby="fieldslip-details-heading">
+    <div class="w3-col s12 m8">
+      <h1 id="fieldslip-details-heading" class="w3-margin-0">
+        {% blocktrans with number=fieldslip.field_number %}Field Slip {{ number }}{% endblocktrans %}
+      </h1>
+      <p class="w3-text-gray">{{ fieldslip.collector }}</p>
+    </div>
+    <div class="w3-col s12 m4 w3-right-align w3-margin-top">
+      <a href="{% url 'fieldslip_edit' fieldslip.pk %}" class="w3-button w3-blue w3-round" aria-label="{% trans 'Edit field slip' %}">
+        <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+        <span class="w3-hide-small w3-margin-left">{% trans "Edit Field Slip" %}</span>
+      </a>
+    </div>
+  </header>
 
-        <div class="template-detail-container">
-            <div class="template-detail-header">
-                <h2 class="template-detail-h2">Field-Slip Detail</h2>
-                <a href="{% url 'fieldslip_edit' fieldslip.pk %}" class="edit-icon">
-                    Edit Form ✏️
-                </a>
+  <section class="w3-margin-top" aria-labelledby="fieldslip-overview-heading">
+    <div class="w3-row-padding">
+      <article class="w3-col s12 m6 l3">
+        <div class="w3-card w3-round w3-white w3-padding">
+          <h2 id="fieldslip-overview-heading" class="w3-margin-top">{% trans "Overview" %}</h2>
+          <dl class="w3-margin-top">
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Field number" %}</dt>
+              <dd class="w3-margin-0">{{ fieldslip.field_number }}</dd>
             </div>
-            <div class="grid-container">
-                <!-- Field Number Card -->
-                <div class="card">
-                    <p><strong>Field number: </strong> <br> {{ fieldslip.field_number }}</p>
-                    <p><strong>Discoverer:</strong> <br> {{ fieldslip.discoverer }} </p>                   
-                    <p><strong>Collector:</strong> <br> {{ fieldslip.collector }}</p>
-                    <p><strong>Collection Date:</strong> <br> {{ fieldslip.collection_date }}</p>
-                    <p><strong>Verbatim locality:</strong> <br> {{ fieldslip.verbatim_locality }}</p>
-                </div>
-    
-                <!-- Verbatim Taxon Card -->
-                <div class="card">
-                    <p><strong>Verbatim Taxon:</strong> <br> {{ fieldslip.verbatim_taxon }}</p>
-                    <p><strong>Verbatim Element:</strong> <br> {{ fieldslip.verbatim_element }}</p>
-                    <p><strong>Verbatim Horizon:</strong> <br> {{ fieldslip.verbatim_horizon }}</p>
-                    <p><strong>Verbatim SRS:</strong> <br> {{ fieldslip.verbatim_SRS }}</p>
-                </div>
-    
-                <!-- Verbatim Latitude Card -->
-                <div class="card">
-                    <p><strong>Verbatim Latitude:</strong> <br> {{ fieldslip.verbatim_latitude }}</p>
-                    <p><strong>Verbatim Longitude:</strong> <br> {{ fieldslip.verbatim_longitude }}</p>
-                    <p><strong>Verbatim Elevation:</strong> <br> {{ fieldslip.verbatim_elevation }}</p>
-                    <p><strong>Verbatim Coordinate System:</strong> <br>  {{ fieldslip.verbatim_coordinate_system }}</p>
-                </div>
-    
-                <!-- Aerial Photo Card -->
-                <div class="card">
-                    <p><strong>Aerial Photo:</strong> <br>
-                    {% if fieldslip.aerial_photo %}
-                        <img src="{{ fieldslip.aerial_photo.url }}" alt="Aerial Photo" width="300">
-                    {% else %}
-                        No aerial photo uploaded.
-                    {% endif %}
-                    </p>
-                </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Discoverer" %}</dt>
+              <dd class="w3-margin-0">{{ fieldslip.discoverer|default:"—" }}</dd>
             </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Collector" %}</dt>
+              <dd class="w3-margin-0">{{ fieldslip.collector|default:"—" }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Collection date" %}</dt>
+              <dd class="w3-margin-0">{{ fieldslip.collection_date|date:"Y-m-d"|default:"—" }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Verbatim locality" %}</dt>
+              <dd class="w3-margin-0">{{ fieldslip.verbatim_locality|default:"—" }}</dd>
+            </div>
+          </dl>
         </div>
+      </article>
 
+      <article class="w3-col s12 m6 l3">
+        <div class="w3-card w3-round w3-white w3-padding" aria-labelledby="fieldslip-taxonomy-heading">
+          <h2 id="fieldslip-taxonomy-heading" class="w3-margin-top">{% trans "Taxonomic notes" %}</h2>
+          <dl class="w3-margin-top">
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Verbatim taxon" %}</dt>
+              <dd class="w3-margin-0">{{ fieldslip.verbatim_taxon|default:"—" }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Verbatim element" %}</dt>
+              <dd class="w3-margin-0">{{ fieldslip.verbatim_element|default:"—" }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Verbatim horizon" %}</dt>
+              <dd class="w3-margin-0">{{ fieldslip.verbatim_horizon|default:"—" }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Verbatim SRS" %}</dt>
+              <dd class="w3-margin-0">{{ fieldslip.verbatim_SRS|default:"—" }}</dd>
+            </div>
+          </dl>
+        </div>
+      </article>
+
+      <article class="w3-col s12 m6 l3">
+        <div class="w3-card w3-round w3-white w3-padding" aria-labelledby="fieldslip-location-heading">
+          <h2 id="fieldslip-location-heading" class="w3-margin-top">{% trans "Location" %}</h2>
+          <dl class="w3-margin-top">
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Verbatim latitude" %}</dt>
+              <dd class="w3-margin-0">{{ fieldslip.verbatim_latitude|default:"—" }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Verbatim longitude" %}</dt>
+              <dd class="w3-margin-0">{{ fieldslip.verbatim_longitude|default:"—" }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Verbatim elevation" %}</dt>
+              <dd class="w3-margin-0">{{ fieldslip.verbatim_elevation|default:"—" }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Verbatim coordinate system" %}</dt>
+              <dd class="w3-margin-0">{{ fieldslip.verbatim_coordinate_system|default:"—" }}</dd>
+            </div>
+          </dl>
+        </div>
+      </article>
+
+      <article class="w3-col s12 m6 l3">
+        <div class="w3-card w3-round w3-white w3-padding" aria-labelledby="fieldslip-media-heading">
+          <h2 id="fieldslip-media-heading" class="w3-margin-top">{% trans "Aerial photo" %}</h2>
+          <div class="w3-margin-top">
+            {% if fieldslip.aerial_photo %}
+              <img src="{{ fieldslip.aerial_photo.url }}" alt="{% trans 'Aerial photograph' %}" class="w3-image" style="max-height:220px; object-fit:cover;" />
+            {% else %}
+              <p class="w3-text-gray">{% trans "No aerial photo uploaded." %}</p>
+            {% endif %}
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+</main>
 {% endblock %}
 
 

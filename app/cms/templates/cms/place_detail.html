@@ -1,43 +1,89 @@
 {% extends "base_generic.html" %}
-{% load user_tags %}
+{% load i18n user_tags %}
 
-{% block title %}Place {{ place.name }}{% endblock %}
+{% block title %}{% blocktrans %}Place {{ place.name }}{% endblocktrans %}{% endblock %}
 
 {% block content %}
-<div class="template-detail-container">
-    <div class="template-detail-header">
-        <h2 class="template-detail-h2">Place Detail</h2>
-        {% if user.is_superuser or user|has_group:"Collection Managers" %}
-        <a href="{% url 'place_edit' place.pk %}" class="edit-icon">Edit Form ✏️</a>
-        {% endif %}
+<main class="w3-container w3-margin-top" role="main">
+  <header class="w3-row w3-padding-16 w3-border-bottom w3-white w3-round-large" aria-labelledby="place-details-heading">
+    <div class="w3-col s12 m8">
+      <h1 id="place-details-heading" class="w3-margin-0">
+        {% blocktrans with name=place.name %}Place {{ name }}{% endblocktrans %}
+      </h1>
+      <p class="w3-text-gray">{{ place.locality.abbreviation }}</p>
     </div>
-    <div class="grid-container">
-        <div class="card">
-            <p><strong>Name:</strong> <br> {{ place.name }}</p>
-            <p><strong>Type:</strong> <br> {{ place.get_place_type_display }}</p>
-            <p><strong>Locality:</strong> <br> {{ place.locality.abbreviation }}</p>
-            <p><strong>Higher Geography:</strong> <br> {{ place.part_of_hierarchy }}</p>
+    {% if user.is_superuser or user|has_group:"Collection Managers" %}
+      <div class="w3-col s12 m4 w3-right-align w3-margin-top">
+        <a href="{% url 'place_edit' place.pk %}" class="w3-button w3-blue w3-round" aria-label="{% trans 'Edit place' %}">
+          <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+          <span class="w3-hide-small w3-margin-left">{% trans "Edit Place" %}</span>
+        </a>
+      </div>
+    {% endif %}
+  </header>
+
+  <section class="w3-margin-top" aria-labelledby="place-metadata-heading">
+    <div class="w3-row-padding">
+      <article class="w3-col s12 m6 l4">
+        <div class="w3-card w3-round w3-white w3-padding">
+          <h2 id="place-metadata-heading" class="w3-margin-top">{% trans "Place overview" %}</h2>
+          <dl class="w3-margin-top">
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Name" %}</dt>
+              <dd class="w3-margin-0">{{ place.name }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Type" %}</dt>
+              <dd class="w3-margin-0">{{ place.get_place_type_display }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Locality" %}</dt>
+              <dd class="w3-margin-0">{{ place.locality.abbreviation }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Higher geography" %}</dt>
+              <dd class="w3-margin-0">{{ place.part_of_hierarchy|default:"—" }}</dd>
+            </div>
             {% if place.description %}
-            <p><strong>Description:</strong> <br> {{ place.description }}</p>
+              <div class="w3-margin-bottom">
+                <dt class="w3-text-gray">{% trans "Description" %}</dt>
+                <dd class="w3-margin-0">{{ place.description }}</dd>
+              </div>
             {% endif %}
             {% if place.comment %}
-            <p><strong>Comment:</strong> <br> {{ place.comment }}</p>
+              <div class="w3-margin-bottom">
+                <dt class="w3-text-gray">{% trans "Comment" %}</dt>
+                <dd class="w3-margin-0">{{ place.comment }}</dd>
+              </div>
             {% endif %}
+          </dl>
         </div>
-        {% if children %}
-        <div class="card">
-            <p><strong>Lower Geography:</strong> <br>
-            {% for child in children %}
-                <a href="{% url 'place_detail' child.pk %}">{{ child.name }}</a>{% if not forloop.last %}, {% endif %}
-            {% endfor %}
-            </p>
-        </div>
-        {% endif %}
-        {% if place.related_place %}
-        <div class="card">
-            <p><strong>Relation:</strong> <br> {{ place.get_relation_type_display }} → {{ place.related_place.name }}</p>
-        </div>
-        {% endif %}
+      </article>
+
+      {% if children %}
+        <article class="w3-col s12 m6 l4">
+          <div class="w3-card w3-round w3-white w3-padding" aria-labelledby="place-children-heading">
+            <h2 id="place-children-heading" class="w3-margin-top">{% trans "Lower geography" %}</h2>
+            <ul class="w3-ul w3-margin-top">
+              {% for child in children %}
+                <li><a href="{% url 'place_detail' child.pk %}">{{ child.name }}</a></li>
+              {% empty %}
+                <li class="w3-text-gray">{% trans "No child places recorded." %}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        </article>
+      {% endif %}
+
+      {% if place.related_place %}
+        <article class="w3-col s12 m6 l4">
+          <div class="w3-card w3-round w3-white w3-padding" aria-labelledby="place-related-heading">
+            <h2 id="place-related-heading" class="w3-margin-top">{% trans "Related place" %}</h2>
+            <p class="w3-margin-top">{{ place.get_relation_type_display }} → {{ place.related_place.name }}</p>
+          </div>
+        </article>
+      {% endif %}
     </div>
-</div>
+  </section>
+</main>
 {% endblock %}
