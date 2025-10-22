@@ -1087,19 +1087,6 @@ class Taxon(BaseModel):
         null=True,
         help_text=_("Stable identifier supplied by the external source."),
     )
-    name = models.CharField(
-        max_length=255,
-        blank=True,
-        null=True,
-        help_text=_("Full scientific name for the taxon."),
-    )
-    rank = models.CharField(
-        max_length=32,
-        choices=TaxonRank.choices,
-        blank=True,
-        null=True,
-        help_text=_("Taxonomic rank represented by this record."),
-    )
     author_year = models.CharField(
         max_length=255,
         blank=True,
@@ -1238,7 +1225,7 @@ class Taxon(BaseModel):
         indexes = [
             models.Index(fields=["external_source", "external_id"], name="taxon_external_idx"),
             models.Index(fields=["status"], name="taxon_status_idx"),
-            models.Index(fields=["rank"], name="taxon_rank_idx"),
+            models.Index(fields=["taxon_rank"], name="taxon_rank_idx"),
             models.Index(fields=["is_active"], name="taxon_active_idx"),
         ]
         permissions = [
@@ -1269,8 +1256,6 @@ class Taxon(BaseModel):
         return reverse('taxon-detail', args=[str(self.id)])
 
     def __str__(self):
-        if self.name:
-            return self.name
         if self.genus and self.species:
             if self.infraspecific_epithet:
                 return f"{self.genus} {self.species} {self.infraspecific_epithet}"

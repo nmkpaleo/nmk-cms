@@ -24,6 +24,72 @@ logger = logging.getLogger(__name__)
 HttpGetter = Callable[[str], requests.Response]
 
 
+TAXONOMY_FIELDS = [
+    "kingdom",
+    "phylum",
+    "class_name",
+    "order",
+    "superfamily",
+    "family",
+    "subfamily",
+    "tribe",
+    "genus",
+    "species",
+    "infraspecific_epithet",
+]
+
+TAXONOMY_DEFAULTS = {
+    "kingdom": "Animalia",
+    "phylum": "Chordata",
+    "class_name": "Mammalia",
+}
+
+RANK_TO_FIELD = {
+    "order": "order",
+    "superfamily": "superfamily",
+    "family": "family",
+    "subfamily": "subfamily",
+    "tribe": "tribe",
+    "genus": "genus",
+    "species": "species",
+    "subspecies": "infraspecific_epithet",
+}
+
+RANK_SCOPE = {
+    "order": ["order"],
+    "superfamily": ["order", "superfamily"],
+    "family": ["order", "superfamily", "family"],
+    "subfamily": ["order", "superfamily", "family", "subfamily"],
+    "tribe": ["order", "superfamily", "family", "subfamily", "tribe"],
+    "genus": ["order", "superfamily", "family", "subfamily", "tribe", "genus"],
+    "species": ["order", "superfamily", "family", "subfamily", "tribe", "genus", "species"],
+    "subspecies": [
+        "order",
+        "superfamily",
+        "family",
+        "subfamily",
+        "tribe",
+        "genus",
+        "species",
+        "infraspecific_epithet",
+    ],
+}
+
+TAXONOMY_ALIASES = {
+    "class_name": ["class", "class_name", "class1", "classlevel"],
+    "order": ["order", "order_name", "taxon_order"],
+    "superfamily": ["superfamily", "superfamily_name"],
+    "family": ["family", "family_name"],
+    "subfamily": ["subfamily", "subfamily_name"],
+    "tribe": ["tribe", "tribe_name"],
+    "genus": ["genus", "genus_name"],
+    "species": ["species", "species_name", "species_epithet"],
+    "infraspecific_epithet": ["subspecies", "infraspecific_epithet", "varietas"],
+}
+
+SKIPPED_RANKS = {"subclass", "suborder"}
+
+
 @dataclass(frozen=True)
 class AcceptedRecord:
     """Parsed representation of an accepted NOW taxon."""
@@ -33,6 +99,7 @@ class AcceptedRecord:
     rank: str
     author_year: str
     source_version: str
+    taxonomy: Dict[str, str]
 
 
 @dataclass(frozen=True)
@@ -46,6 +113,7 @@ class SynonymRecord:
     rank: str
     author_year: str
     source_version: str
+    taxonomy: Dict[str, str]
 
 
 @dataclass(frozen=True)
@@ -151,16 +219,22 @@ class NowTaxonomySyncService:
             if not name:
                 logger.warning("Skipping NOW accepted row missing taxon name: %s", row)
                 continue
-            rank = _normalize_label(row.get("taxon_level", "")).lower()
+            rank_value = row.get("taxon_rank") or row.get("taxon_level") or ""
+            rank = _normalize_label(rank_value).lower()
+            if rank in SKIPPED_RANKS:
+                logger.debug("Skipping NOW accepted row with ignored rank '%s': %s", rank, row)
+                continue
             author = _normalize_label(row.get("author", ""))
             source_version = _normalize_label(row.get("STG_TIME_STAMP", ""))
             external_id = build_accepted_external_id(name, rank)
+            taxonomy = _extract_taxonomy(row, rank, name)
             yield AcceptedRecord(
                 external_id=external_id,
                 name=name,
                 rank=rank,
                 author_year=author,
                 source_version=source_version,
+                taxonomy=taxonomy,
             )
 
     def _parse_synonyms(
@@ -176,7 +250,11 @@ class NowTaxonomySyncService:
             if not syn_name or not accepted_name:
                 logger.warning("Skipping NOW synonym row missing required names: %s", row)
                 continue
-            rank = _normalize_label(row.get("taxon_level", "")).lower()
+            rank_value = row.get("taxon_rank") or row.get("taxon_level") or ""
+            rank = _normalize_label(rank_value).lower()
+            if rank in SKIPPED_RANKS:
+                logger.debug("Skipping NOW synonym row with ignored rank '%s': %s", rank, row)
+                continue
             author = _normalize_label(row.get("author", ""))
             source_version = _normalize_label(row.get("STG_TIME_STAMP", ""))
             accepted_record = accepted_by_name.get(accepted_name.lower())
@@ -184,6 +262,12 @@ class NowTaxonomySyncService:
                 accepted_record.external_id if accepted_record else build_accepted_external_id(accepted_name, rank)
             )
             external_id = build_synonym_external_id(syn_name, accepted_name)
+            taxonomy = _extract_taxonomy(
+                row,
+                rank,
+                syn_name,
+                base=accepted_record.taxonomy if accepted_record else None,
+            )
             yield SynonymRecord(
                 external_id=external_id,
                 name=syn_name,
@@ -192,6 +276,7 @@ class NowTaxonomySyncService:
                 rank=rank,
                 author_year=author,
                 source_version=source_version,
+                taxonomy=taxonomy,
             )
 
     # ------------------------
@@ -208,6 +293,14 @@ class NowTaxonomySyncService:
             Taxon.objects.filter(external_source=TaxonExternalSource.NOW).select_related("accepted_taxon")
         )
         existing_by_external_id = {taxon.external_id: taxon for taxon in existing_taxa if taxon.external_id}
+        existing_by_rank_name = {
+            (
+                _normalize_label(taxon.taxon_name).lower(),
+                (taxon.taxon_rank or "").lower(),
+                taxon.status,
+            ): taxon
+            for taxon in existing_taxa
+        }
 
         accepted_to_create: List[AcceptedRecord] = []
         accepted_to_update: List[AcceptedUpdate] = []
@@ -222,21 +315,32 @@ class NowTaxonomySyncService:
             desired_ids.add(record.external_id)
             existing = existing_by_external_id.get(record.external_id)
             if existing is None:
+                existing = existing_by_rank_name.get((record.name.lower(), record.rank, TaxonStatus.ACCEPTED))
+            if existing is None:
                 accepted_to_create.append(record)
                 continue
             changes: Dict[str, Any] = {}
-            if _normalize_label(existing.name) != record.name:
-                changes["name"] = record.name
-            if (existing.rank or "").lower() != record.rank:
-                changes["rank"] = record.rank
+            if _normalize_label(existing.taxon_name) != record.name:
+                changes["taxon_name"] = record.name
+            if (existing.taxon_rank or "").lower() != record.rank:
+                changes["taxon_rank"] = record.rank
             if (existing.author_year or "") != record.author_year:
                 changes["author_year"] = record.author_year
             if existing.status != TaxonStatus.ACCEPTED:
                 changes["status"] = TaxonStatus.ACCEPTED
             if not existing.is_active:
                 changes["is_active"] = True
+            if (existing.external_id or "") != record.external_id:
+                changes["external_id"] = record.external_id
             if existing.source_version != record.source_version:
                 changes["source_version"] = record.source_version
+            for field in TAXONOMY_FIELDS:
+                desired_value = record.taxonomy.get(field, TAXONOMY_DEFAULTS.get(field, ""))
+                if field in TAXONOMY_DEFAULTS:
+                    desired_value = desired_value or TAXONOMY_DEFAULTS[field]
+                existing_value = getattr(existing, field, "")
+                if _normalize_label(existing_value) != desired_value:
+                    changes[field] = desired_value
             if changes:
                 accepted_to_update.append(AcceptedUpdate(instance=existing, record=record, changes=changes))
 
@@ -245,6 +349,8 @@ class NowTaxonomySyncService:
         for record in synonym_records:
             desired_ids.add(record.external_id)
             existing = existing_by_external_id.get(record.external_id)
+            if existing is None:
+                existing = existing_by_rank_name.get((record.name.lower(), record.rank, TaxonStatus.SYNONYM))
             accepted_record = accepted_lookup.get(record.accepted_external_id)
             if accepted_record is None:
                 issues.append(
@@ -259,8 +365,8 @@ class NowTaxonomySyncService:
                 synonyms_to_create.append(record)
                 continue
             changes = {}
-            if _normalize_label(existing.name) != record.name:
-                changes["name"] = record.name
+            if _normalize_label(existing.taxon_name) != record.name:
+                changes["taxon_name"] = record.name
             if existing.status != TaxonStatus.SYNONYM:
                 changes["status"] = TaxonStatus.SYNONYM
             accepted_obj = existing.accepted_taxon
@@ -268,12 +374,21 @@ class NowTaxonomySyncService:
                 changes["accepted_taxon"] = record.accepted_external_id
             if not existing.is_active:
                 changes["is_active"] = True
-            if (existing.rank or "").lower() != record.rank:
-                changes["rank"] = record.rank
+            if (existing.taxon_rank or "").lower() != record.rank:
+                changes["taxon_rank"] = record.rank
             if (existing.author_year or "") != record.author_year:
                 changes["author_year"] = record.author_year
+            if (existing.external_id or "") != record.external_id:
+                changes["external_id"] = record.external_id
             if existing.source_version != record.source_version:
                 changes["source_version"] = record.source_version
+            for field in TAXONOMY_FIELDS:
+                desired_value = record.taxonomy.get(field, TAXONOMY_DEFAULTS.get(field, ""))
+                if field in TAXONOMY_DEFAULTS:
+                    desired_value = desired_value or TAXONOMY_DEFAULTS[field]
+                existing_value = getattr(existing, field, "")
+                if _normalize_label(existing_value) != desired_value:
+                    changes[field] = desired_value
             if changes:
                 synonyms_to_update.append(SynonymUpdate(instance=existing, record=record, changes=changes))
 
@@ -324,7 +439,9 @@ class NowTaxonomySyncService:
                 )
             }
             accepted_mapping.update({taxon.external_id: taxon for taxon in created_taxa if taxon.status == TaxonStatus.ACCEPTED})
-            accepted_mapping.update({update.instance.external_id: update.instance for update in preview.accepted_to_update})
+            accepted_mapping.update(
+                {update.record.external_id: update.instance for update in preview.accepted_to_update}
+            )
 
             accepted_updates = [update for update in preview.accepted_to_update if update.changes]
             if accepted_updates:
@@ -333,12 +450,24 @@ class NowTaxonomySyncService:
                 Taxon.objects.bulk_update(
                     [item.instance for item in accepted_updates],
                     [
-                        "name",
-                        "rank",
+                        "taxon_name",
+                        "taxon_rank",
                         "author_year",
                         "status",
                         "is_active",
                         "source_version",
+                        "external_id",
+                        "kingdom",
+                        "phylum",
+                        "class_name",
+                        "order",
+                        "superfamily",
+                        "family",
+                        "subfamily",
+                        "tribe",
+                        "genus",
+                        "species",
+                        "infraspecific_epithet",
                     ],
                 )
 
@@ -382,13 +511,25 @@ class NowTaxonomySyncService:
                 Taxon.objects.bulk_update(
                     [item.instance for item in synonym_updates],
                     [
-                        "name",
-                        "rank",
+                        "taxon_name",
+                        "taxon_rank",
                         "author_year",
                         "status",
                         "accepted_taxon",
                         "is_active",
                         "source_version",
+                        "external_id",
+                        "kingdom",
+                        "phylum",
+                        "class_name",
+                        "order",
+                        "superfamily",
+                        "family",
+                        "subfamily",
+                        "tribe",
+                        "genus",
+                        "species",
+                        "infraspecific_epithet",
                     ],
                 )
 
@@ -459,6 +600,76 @@ class TaxonRankFallback:
     SPECIES = "species"
 
 
+def _extract_taxonomy(
+    row: Dict[str, Any],
+    rank: str,
+    name: str,
+    *,
+    base: Optional[Dict[str, str]] = None,
+) -> Dict[str, str]:
+    taxonomy: Dict[str, str] = {field: "" for field in TAXONOMY_FIELDS}
+    taxonomy.update(TAXONOMY_DEFAULTS)
+
+    if base:
+        for field, value in base.items():
+            if value:
+                taxonomy[field] = _normalize_label(value)
+
+    lowered_row = {(key or "").lower(): value for key, value in row.items() if key is not None}
+    for field, aliases in TAXONOMY_ALIASES.items():
+        for alias in aliases:
+            if alias in lowered_row:
+                normalized = _normalize_label(lowered_row[alias])
+                if normalized:
+                    taxonomy[field] = normalized
+                    break
+
+    rank_lower = (rank or "").lower()
+    scope = RANK_SCOPE.get(rank_lower, [])
+    for field in ["order", "superfamily", "family", "subfamily", "tribe", "genus", "species", "infraspecific_epithet"]:
+        if field not in scope:
+            taxonomy[field] = ""
+
+    normalized_name = _normalize_label(name)
+    genus_part, species_part, infra_part = _split_species_parts(normalized_name)
+
+    rank_field = RANK_TO_FIELD.get(rank_lower)
+    if rank_field and not taxonomy.get(rank_field):
+        if rank_field == "species":
+            taxonomy[rank_field] = species_part
+        elif rank_field == "genus":
+            taxonomy[rank_field] = genus_part or normalized_name
+        elif rank_field == "infraspecific_epithet":
+            taxonomy[rank_field] = infra_part
+        else:
+            taxonomy[rank_field] = normalized_name
+
+    if rank_lower in {"species", "subspecies"}:
+        if not taxonomy.get("genus") and genus_part:
+            taxonomy["genus"] = genus_part
+        if not taxonomy.get("species") and species_part:
+            taxonomy["species"] = species_part
+    elif rank_lower == "genus" and not taxonomy.get("genus"):
+        taxonomy["genus"] = normalized_name
+
+    if rank_lower == "subspecies" and not taxonomy.get("infraspecific_epithet"):
+        taxonomy["infraspecific_epithet"] = infra_part
+
+    for field, default in TAXONOMY_DEFAULTS.items():
+        if not taxonomy.get(field):
+            taxonomy[field] = default
+
+    return taxonomy
+
+
+def _split_species_parts(name: str) -> tuple[str, str, str]:
+    parts = name.split()
+    genus = parts[0] if parts else ""
+    species = parts[1] if len(parts) > 1 else ""
+    infraspecific = parts[2] if len(parts) > 2 else ""
+    return genus, species, infraspecific
+
+
 def _deduplicate_records(records: Sequence[AcceptedRecord | SynonymRecord]) -> List[Any]:
     unique: Dict[str, AcceptedRecord | SynonymRecord] = {}
     for record in records:
@@ -472,31 +683,57 @@ def build_taxon_from_record(
     status: str,
     accepted_taxon: Optional[Taxon] = None,
 ) -> Taxon:
-    # Legacy fields defaulted with generic placeholders to satisfy existing schema requirements.
-    name_parts = record.name.split()
-    genus = name_parts[0] if name_parts else "Unknown"
-    species = name_parts[1] if len(name_parts) > 1 else genus
-
     taxon_rank_value = getattr(record, "rank", "") or TaxonRankFallback.SPECIES
+    normalized_name = _normalize_label(record.name)
+    taxonomy = {field: "" for field in TAXONOMY_FIELDS}
+    taxonomy.update(TAXONOMY_DEFAULTS)
+    taxonomy.update(getattr(record, "taxonomy", {}) or {})
+
+    genus_part, species_part, infra_part = _split_species_parts(normalized_name)
+    rank_field = RANK_TO_FIELD.get(taxon_rank_value.lower(), "")
+
+    if rank_field and not taxonomy.get(rank_field):
+        if rank_field == "species":
+            taxonomy[rank_field] = species_part
+        elif rank_field == "genus":
+            taxonomy[rank_field] = genus_part or normalized_name
+        elif rank_field == "infraspecific_epithet":
+            taxonomy[rank_field] = infra_part
+        else:
+            taxonomy[rank_field] = normalized_name
+
+    if taxon_rank_value.lower() in {"species", "subspecies"}:
+        if not taxonomy.get("genus") and genus_part:
+            taxonomy["genus"] = genus_part
+        if not taxonomy.get("species") and species_part:
+            taxonomy["species"] = species_part
+    elif taxon_rank_value.lower() == "genus" and not taxonomy.get("genus"):
+        taxonomy["genus"] = normalized_name
+
+    if taxon_rank_value.lower() == "subspecies" and not taxonomy.get("infraspecific_epithet"):
+        taxonomy["infraspecific_epithet"] = infra_part
+
     instance = Taxon(
         external_source=TaxonExternalSource.NOW,
         external_id=record.external_id,
-        name=record.name,
-        rank=getattr(record, "rank", ""),
         author_year=getattr(record, "author_year", ""),
         status=status,
         accepted_taxon=accepted_taxon if status == TaxonStatus.SYNONYM else None,
         is_active=True,
         source_version=getattr(record, "source_version", ""),
         taxon_rank=taxon_rank_value,
-        taxon_name=record.name,
-        kingdom="Animalia",
-        phylum="Chordata",
-        class_name="Mammalia",
-        order="Unknown",
-        family="Unknown",
-        genus=genus,
-        species=species,
+        taxon_name=normalized_name,
+        kingdom=taxonomy.get("kingdom", TAXONOMY_DEFAULTS["kingdom"]),
+        phylum=taxonomy.get("phylum", TAXONOMY_DEFAULTS["phylum"]),
+        class_name=taxonomy.get("class_name", TAXONOMY_DEFAULTS["class_name"]),
+        order=taxonomy.get("order", ""),
+        superfamily=taxonomy.get("superfamily", ""),
+        family=taxonomy.get("family", ""),
+        subfamily=taxonomy.get("subfamily", ""),
+        tribe=taxonomy.get("tribe", ""),
+        genus=taxonomy.get("genus", ""),
+        species=taxonomy.get("species", ""),
+        infraspecific_epithet=taxonomy.get("infraspecific_epithet", ""),
     )
     return instance
 

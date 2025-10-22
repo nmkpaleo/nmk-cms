@@ -36,8 +36,6 @@ def test_now_sync_creates_updates_and_deactivates(db):
     accepted_existing = Taxon.objects.create(
         external_source=TaxonExternalSource.NOW,
         external_id="NOW:species:Herpestes major",
-        name="Herpestes major",
-        rank="species",
         author_year="Old Author",
         status=TaxonStatus.ACCEPTED,
         is_active=False,
@@ -47,16 +45,17 @@ def test_now_sync_creates_updates_and_deactivates(db):
         kingdom="Animalia",
         phylum="Chordata",
         class_name="Mammalia",
-        order="Carnivora",
-        family="Herpestidae",
-        genus="Herpestes",
+        order="Old order",
+        superfamily="",
+        family="Outdated Family",
+        subfamily="",
+        tribe="",
+        genus="OldGenus",
         species="major",
     )
     synonym_existing = Taxon.objects.create(
         external_source=TaxonExternalSource.NOW,
         external_id="NOW:syn:Herpestes majorus::accepted:Herpestes major",
-        name="Herpestes majorus",
-        rank="species",
         author_year="Old Syn Author",
         status=TaxonStatus.SYNONYM,
         accepted_taxon=accepted_existing,
@@ -67,16 +66,17 @@ def test_now_sync_creates_updates_and_deactivates(db):
         kingdom="Animalia",
         phylum="Chordata",
         class_name="Mammalia",
-        order="Carnivora",
-        family="Herpestidae",
-        genus="Herpestes",
+        order="Old order",
+        superfamily="",
+        family="Outdated Family",
+        subfamily="",
+        tribe="",
+        genus="OldGenus",
         species="majorus",
     )
     to_deactivate = Taxon.objects.create(
         external_source=TaxonExternalSource.NOW,
         external_id="NOW:species:Obsolete taxon",
-        name="Obsolete taxon",
-        rank="species",
         author_year="Removed",
         status=TaxonStatus.ACCEPTED,
         is_active=True,
@@ -94,16 +94,16 @@ def test_now_sync_creates_updates_and_deactivates(db):
 
     accepted_tsv = "\n".join(
         [
-            "taxon_name\ttaxon_level\tauthor\tSTG_TIME_STAMP",
-            "Herpestes major\tspecies\tNew Author\t2024-01-01",
-            "Newcanis novus\tspecies\tA. Researcher\t2024-01-01",
+            "taxon_name\ttaxon_rank\torder_name\tsuperfamily\tfamily\tsubfamily\ttribe\tgenus\tspecies\tauthor\tSTG_TIME_STAMP",
+            "Herpestes major\tspecies\tCarnivora\tHerpestoidea\tHerpestidae\tHerpestinae\t\tHerpestes\tmajor\tNew Author\t2024-01-01",
+            "Newcanis novus\tspecies\tCarnivora\tCanidoidea\tCanidae\tCaninae\tCanini\tNewcanis\tnovus\tA. Researcher\t2024-01-01",
         ]
     )
     synonyms_tsv = "\n".join(
         [
-            "syn_name\ttaxon_name\ttaxon_level\tauthor\tSTG_TIME_STAMP",
-            "Herpestes majorus\tHerpestes major\tspecies\tUpdated Syn Author\t2024-01-01",
-            "Newcanis junior\tNewcanis novus\tspecies\tB. Res\t2024-01-01",
+            "syn_name\ttaxon_name\ttaxon_rank\torder_name\tsuperfamily\tfamily\tsubfamily\ttribe\tgenus\tspecies\tauthor\tSTG_TIME_STAMP",
+            "Herpestes majorus\tHerpestes major\tspecies\tCarnivora\tHerpestoidea\tHerpestidae\tHerpestinae\t\tHerpestes\tmajorus\tUpdated Syn Author\t2024-01-01",
+            "Newcanis junior\tNewcanis novus\tspecies\tCarnivora\tCanidoidea\tCanidae\tCaninae\tCanini\tNewcanis\tjunior\tB. Res\t2024-01-01",
         ]
     )
 
@@ -139,15 +139,31 @@ def test_now_sync_creates_updates_and_deactivates(db):
     assert accepted_existing.author_year == "New Author"
     assert accepted_existing.is_active is True
     assert accepted_existing.source_version == "2024-01-01"
+    assert accepted_existing.order == "Carnivora"
+    assert accepted_existing.superfamily == "Herpestoidea"
+    assert accepted_existing.family == "Herpestidae"
+    assert accepted_existing.subfamily == "Herpestinae"
+    assert accepted_existing.genus == "Herpestes"
+    assert accepted_existing.species == "major"
 
     synonym_existing.refresh_from_db()
     assert synonym_existing.author_year == "Updated Syn Author"
     assert synonym_existing.is_active is True
     assert synonym_existing.accepted_taxon == accepted_existing
+    assert synonym_existing.order == "Carnivora"
+    assert synonym_existing.family == "Herpestidae"
+    assert synonym_existing.genus == "Herpestes"
 
     created_synonym = Taxon.objects.get(external_id="NOW:syn:Newcanis junior::accepted:Newcanis novus")
     created_accepted = Taxon.objects.get(external_id="NOW:species:Newcanis novus")
     assert created_synonym.accepted_taxon == created_accepted
+    assert created_accepted.order == "Carnivora"
+    assert created_accepted.superfamily == "Canidoidea"
+    assert created_accepted.family == "Canidae"
+    assert created_accepted.subfamily == "Caninae"
+    assert created_accepted.tribe == "Canini"
+    assert created_accepted.genus == "Newcanis"
+    assert created_accepted.species == "novus"
 
     to_deactivate.refresh_from_db()
     assert to_deactivate.is_active is False
@@ -168,16 +184,57 @@ def test_now_sync_creates_updates_and_deactivates(db):
     TAXON_NOW_SYNONYMS_URL="https://example.com/synonyms.tsv",
     TAXON_SYNC_DEACTIVATE_MISSING=True,
 )
+def test_now_sync_skips_subranks_and_limits_lower_taxonomy(db):
+    accepted_tsv = "\n".join(
+        [
+            "taxon_name\ttaxon_rank\torder_name\tsuperfamily\tfamily\tsubfamily\ttribe\tgenus\tspecies\tauthor\tSTG_TIME_STAMP",
+            "Theria\tsubclass\tTheria\t\t\t\t\t\t\tA. Person\t2024-02-01",
+            "Felidae\tfamily\tCarnivora\tFeliformia\tFelidae\t\t\t\t\tB. Person\t2024-02-01",
+        ]
+    )
+    synonyms_tsv = "\n".join(
+        [
+            "syn_name\ttaxon_name\ttaxon_rank\torder_name\tsuperfamily\tfamily\tsubfamily\ttribe\tgenus\tspecies\tauthor\tSTG_TIME_STAMP",
+        ]
+    )
+
+    http_get = _http_get_factory(
+        {
+            "https://example.com/accepted.tsv": accepted_tsv,
+            "https://example.com/synonyms.tsv": synonyms_tsv,
+        }
+    )
+
+    service = NowTaxonomySyncService(http_get=http_get)
+    preview = service.preview()
+
+    assert len(preview.accepted_to_create) == 1
+    family_record = preview.accepted_to_create[0]
+    assert family_record.name == "Felidae"
+    assert family_record.rank == "family"
+    assert family_record.taxonomy["order"] == "Carnivora"
+    assert family_record.taxonomy["superfamily"] == "Feliformia"
+    assert family_record.taxonomy["family"] == "Felidae"
+    assert family_record.taxonomy["genus"] == ""
+    assert family_record.taxonomy["species"] == ""
+
+
+@pytest.mark.django_db
+@override_settings(
+    TAXON_NOW_ACCEPTED_URL="https://example.com/accepted.tsv",
+    TAXON_NOW_SYNONYMS_URL="https://example.com/synonyms.tsv",
+    TAXON_SYNC_DEACTIVATE_MISSING=True,
+)
 def test_now_sync_records_issue_when_missing_accepted(db):
     accepted_tsv = "\n".join(
         [
-            "taxon_name\ttaxon_level\tauthor\tSTG_TIME_STAMP",
+            "taxon_name\ttaxon_rank\tauthor\tSTG_TIME_STAMP",
             "Alpha beta\tspecies\tAuthor\t2024-01-01",
         ]
     )
     synonyms_tsv = "\n".join(
         [
-            "syn_name\ttaxon_name\ttaxon_level\tauthor\tSTG_TIME_STAMP",
+            "syn_name\ttaxon_name\ttaxon_rank\tauthor\tSTG_TIME_STAMP",
             "Missing target\tGhost species\tspecies\tSomeone\t2024-01-01",
         ]
     )
