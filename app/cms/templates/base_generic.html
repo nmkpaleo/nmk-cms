@@ -90,7 +90,7 @@
 
             {% if user.is_authenticated %}
               <li class="nav-item nav-user nav-right">
-                <span class="nav-text">{% blocktrans with username=user.get_username %}User: {{ username }}{% endblocktrans %}</span>
+                <span class="nav-text" role="status" aria-live="polite">{% blocktrans with username=user.get_username %}User: {{ username }}{% endblocktrans %}</span>
               </li>
               <li class="nav-item nav-auth">
                 <form id="logout-form" class="logout-form" method="post" action="{% url 'account_logout' %}">
