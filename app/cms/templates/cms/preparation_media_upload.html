@@ -4,8 +4,11 @@
 {% block title %}{% trans "Upload Preparation Media" %}{% endblock %}
 
 {% block content %}
+  {% trans "Upload media" as upload_media_label %}
+  {% trans "Media for preparation" as media_for_preparation_label %}
+  {% trans "Supported file types are validated on upload. Ensure files meet the collection’s metadata standards." as upload_description %}
   <main class="w3-container w3-margin-top w3-margin-bottom" role="main">
-    {% include "includes/base_form.html" with form=form submit_label=_("Upload media") submit_icon="fa-upload" method="post" action=request.path title=_("Media for preparation") access=preparation heading_id="preparation-media-form" description=_("Supported file types are validated on upload. Ensure files meet the collection’s metadata standards.") %}
+    {% include "includes/base_form.html" with form=form submit_label=upload_media_label submit_icon="fa-upload" method="post" action=request.path title=media_for_preparation_label access=preparation heading_id="preparation-media-form" description=upload_description %}
     <div class="w3-margin-top">
       <a href="{% url 'preparation_detail' preparation.id %}" class="w3-button w3-white w3-border w3-round-large w3-hover-light-grey">
         <i class="fa-solid fa-arrow-left-long" aria-hidden="true"></i>

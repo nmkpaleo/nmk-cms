@@ -24,23 +24,26 @@
                     <time datetime="{{ log.history_date|date:'c' }}">{{ log.history_date|date:"Y-m-d H:i" }}</time>
                   </td>
                   <td data-label="{% trans "Action" %}">
+                    {% blocktrans asvar created_label %}Created{% endblocktrans %}
+                    {% blocktrans asvar deleted_label %}Deleted{% endblocktrans %}
+                    {% blocktrans asvar updated_label %}Updated{% endblocktrans %}
                     {% with history_type=log.history_type %}
                       {% if history_type == '+' %}
-                        {% with icon="fa-circle-plus" tag_class="w3-pale-green" label=_("Created") %}
+                        {% with icon="fa-circle-plus" tag_class="w3-pale-green" label=created_label %}
                           <span class="w3-tag w3-round {{ tag_class }}">
                             <i class="fa-solid {{ icon }}" aria-hidden="true"></i>
                             <span class="w3-margin-left">{{ label }}</span>
                           </span>
                         {% endwith %}
                       {% elif history_type == '-' %}
-                        {% with icon="fa-circle-minus" tag_class="w3-pale-red" label=_("Deleted") %}
+                        {% with icon="fa-circle-minus" tag_class="w3-pale-red" label=deleted_label %}
                           <span class="w3-tag w3-round {{ tag_class }}">
                             <i class="fa-solid {{ icon }}" aria-hidden="true"></i>
                             <span class="w3-margin-left">{{ label }}</span>
                           </span>
                         {% endwith %}
                       {% else %}
-                        {% with icon="fa-pen-to-square" tag_class="w3-light-grey" label=_("Updated") %}
+                        {% with icon="fa-pen-to-square" tag_class="w3-light-grey" label=updated_label %}
                           <span class="w3-tag w3-round {{ tag_class }}">
                             <i class="fa-solid {{ icon }}" aria-hidden="true"></i>
                             <span class="w3-margin-left">{{ label }}</span>

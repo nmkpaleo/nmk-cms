@@ -10,8 +10,10 @@
 {% endblock %}
 
 {% block content %}
+  {% trans "Save preparation" as save_preparation_label %}
+  {% trans "Preparation" as preparation_label %}
   <main class="w3-container w3-margin-top w3-margin-bottom" role="main">
-    {% include "includes/base_form.html" with form=form submit_label=_("Save preparation") submit_icon="fa-flask" method="post" action=request.path title=_("Preparation") heading_id="preparation-form" %}
+    {% include "includes/base_form.html" with form=form submit_label=save_preparation_label submit_icon="fa-flask" method="post" action=request.path title=preparation_label heading_id="preparation-form" %}
     <div class="w3-margin-top">
       <a href="{% url 'preparation_list' %}" class="w3-button w3-white w3-border w3-round-large w3-hover-light-grey">
         <i class="fa-solid fa-arrow-left-long" aria-hidden="true"></i>

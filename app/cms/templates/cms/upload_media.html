@@ -4,8 +4,10 @@
 {% block title %}{% trans "Upload Accession Media" %}{% endblock %}
 
 {% block content %}
+  {% trans "Upload media" as upload_media_label %}
+  {% trans "Media to accession:" as media_to_accession_label %}
   <main class="w3-container w3-margin-top w3-margin-bottom" role="main">
-    {% include "includes/base_form.html" with form=form submit_label=_("Upload media") submit_icon="fa-upload" method="post" action=request.path title=_("Media to accession:") access=accession heading_id="accession-media-form" %}
+    {% include "includes/base_form.html" with form=form submit_label=upload_media_label submit_icon="fa-upload" method="post" action=request.path title=media_to_accession_label access=accession heading_id="accession-media-form" %}
     <div class="w3-margin-top">
       <a href="{% url 'accession_detail' accession.id %}" class="w3-button w3-white w3-border w3-round-large w3-hover-light-grey">
         <i class="fa-solid fa-arrow-left-long" aria-hidden="true"></i>

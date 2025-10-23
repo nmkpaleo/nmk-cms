@@ -10,8 +10,10 @@
 {% endblock %}
 
 {% block content %}
+  {% trans "Save storage" as save_storage_label %}
+  {% trans "Storage" as storage_label %}
   <main class="w3-container w3-margin-top w3-margin-bottom" role="main">
-    {% include "includes/base_form.html" with form=form submit_label=_("Save storage") submit_icon="fa-boxes-stacked" method="post" action=request.path title=_("Storage") heading_id="storage-form" %}
+    {% include "includes/base_form.html" with form=form submit_label=save_storage_label submit_icon="fa-boxes-stacked" method="post" action=request.path title=storage_label heading_id="storage-form" %}
     <div class="w3-margin-top">
       <a href="{% url 'storage_list' %}" class="w3-button w3-white w3-border w3-round-large w3-hover-light-grey">
         <i class="fa-solid fa-arrow-left-long" aria-hidden="true"></i>

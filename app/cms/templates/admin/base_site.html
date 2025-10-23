@@ -2,10 +2,14 @@
 {% load i18n %}
 
 {# Customize the admin header to include a quick link for scan uploads #}
-{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
+{% block title %}
+  {% blocktrans asvar default_site_title %}Django site admin{% endblocktrans %}
+  {% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title|default:default_site_title }}
+{% endblock %}
 
 {% block branding %}
-<h1 id="site-name"><a href="{% url 'admin:index' %}">{{ site_header|default:_('Django administration') }}</a></h1>
+{% blocktrans asvar default_admin_header %}Django administration{% endblocktrans %}
+<h1 id="site-name"><a href="{% url 'admin:index' %}">{{ site_header|default:default_admin_header }}</a></h1>
 {% endblock %}
 
 {% block nav-global %}

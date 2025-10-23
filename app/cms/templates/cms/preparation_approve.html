@@ -4,6 +4,8 @@
 {% block title %}{% trans "Approve Preparation" %}{% endblock %}
 
 {% block content %}
+  {% trans "Submit review" as submit_review_label %}
+  {% trans "Preparation approval" as preparation_approval_label %}
   <main class="w3-container w3-margin-top w3-margin-bottom" role="main">
     <section class="w3-section">
       <header class="w3-margin-bottom">
@@ -13,7 +15,7 @@
         </h1>
         <p class="w3-text-gray">{% blocktrans with preparation=preparation %}Review preparation {{ preparation }} before approving.{% endblocktrans %}</p>
       </header>
-      {% include "includes/base_form.html" with form=form submit_label=_("Submit review") submit_icon="fa-check" method="post" action=request.path title=_("Preparation approval") heading_id="preparation-approve-form" %}
+      {% include "includes/base_form.html" with form=form submit_label=submit_review_label submit_icon="fa-check" method="post" action=request.path title=preparation_approval_label heading_id="preparation-approve-form" %}
     </section>
     <div class="w3-margin-top">
       <a href="{% url 'preparation_detail' preparation.pk %}" class="w3-button w3-white w3-border w3-round-large w3-hover-light-grey">

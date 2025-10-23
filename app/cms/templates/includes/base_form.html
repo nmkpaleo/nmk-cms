@@ -5,7 +5,8 @@
       {% include "includes/base_form_inner.html" %}
     {% endwith %}
   {% else %}
-    {% with base_title=title|default:_("Form") %}
+    {% blocktrans asvar default_form_title %}Form{% endblocktrans %}
+    {% with base_title=title|default:default_form_title %}
       {% with resolved_heading_id=base_title|slugify|add:"-form-heading" %}
         {% include "includes/base_form_inner.html" %}
       {% endwith %}
