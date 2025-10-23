@@ -1,15 +1,16 @@
 {% extends "base_generic.html" %}
+{% load i18n %}
 
-{% block title %}Upload Preparation Media{% endblock %}
+{% block title %}{% trans "Upload Preparation Media" %}{% endblock %}
 
 {% block content %}
-<h2>Upload Media to {{ preparation }}</h2>
-
-<form method="post" enctype="multipart/form-data">
-  {% csrf_token %}
-  {{ form.as_p }}
-
-  <button type="submit" class="btn btn-primary">Upload</button>
-  <a href="{% url 'preparation_detail' preparation.id %}" class="btn btn-secondary">Back to Preparation</a>
-</form>
+  <main class="w3-container w3-margin-top w3-margin-bottom" role="main">
+    {% include "includes/base_form.html" with form=form submit_label=_("Upload media") submit_icon="fa-upload" method="post" action=request.path title=_("Media for preparation") access=preparation heading_id="preparation-media-form" description=_("Supported file types are validated on upload. Ensure files meet the collection’s metadata standards.") %}
+    <div class="w3-margin-top">
+      <a href="{% url 'preparation_detail' preparation.id %}" class="w3-button w3-white w3-border w3-round-large w3-hover-light-grey">
+        <i class="fa-solid fa-arrow-left-long" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "Back to preparation" %}</span>
+      </a>
+    </div>
+  </main>
 {% endblock %}

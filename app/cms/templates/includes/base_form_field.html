@@ -1,0 +1,26 @@
+{% load i18n %}
+{% if field.is_hidden %}
+  {{ field }}
+{% else %}
+  {% with field_id=field.id_for_label %}
+    {% with help_id=field_id|add:'-help' error_id=field_id|add:'-errors' %}
+      {% if field.help_text and field.errors %}
+        {% with describedby=help_id|add:' '|add:error_id %}
+          {% include "includes/base_form_field_content.html" %}
+        {% endwith %}
+      {% elif field.help_text %}
+        {% with describedby=help_id %}
+          {% include "includes/base_form_field_content.html" %}
+        {% endwith %}
+      {% elif field.errors %}
+        {% with describedby=error_id %}
+          {% include "includes/base_form_field_content.html" %}
+        {% endwith %}
+      {% else %}
+        {% with describedby='' %}
+          {% include "includes/base_form_field_content.html" %}
+        {% endwith %}
+      {% endif %}
+    {% endwith %}
+  {% endwith %}
+{% endif %}

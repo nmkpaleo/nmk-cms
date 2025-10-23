@@ -1,0 +1,59 @@
+{% load i18n %}
+<form
+  method="{{ method|default:'post' }}"
+  action="{{ action|default:'' }}"
+  enctype="{{ form_enctype }}"
+  class="w3-container w3-card-4 w3-white w3-round-large w3-padding-large"
+  role="form"
+>
+  {% csrf_token %}
+
+  {% if form.management_form %}
+    {{ form.management_form }}
+  {% endif %}
+
+  {% for hidden_field in form.hidden_fields %}
+    {{ hidden_field }}
+  {% endfor %}
+
+  <header class="w3-margin-bottom w3-border-bottom w3-padding-16">
+    <h1 id="{{ resolved_heading_id }}" class="w3-xxlarge w3-margin-0">
+      {% if instance and instance.pk %}
+        {% blocktrans with label=title %}Edit {{ label }}{% endblocktrans %}
+      {% else %}
+        {% blocktrans with label=title %}New {{ label }}{% endblocktrans %}
+      {% endif %}
+    </h1>
+
+    {% if access %}
+      <p class="w3-text-gray w3-small w3-margin-top">{{ access }}</p>
+    {% endif %}
+
+    {% if description %}
+      <p class="w3-text-gray w3-margin-top">{{ description }}</p>
+    {% endif %}
+  </header>
+
+  <div class="w3-section">
+    {% for field in form.visible_fields %}
+      {% include "includes/base_form_field.html" with field=field series_remaining=series_remaining series_range=series_range %}
+    {% empty %}
+      <p class="w3-text-gray">{% trans "No fields available." %}</p>
+    {% endfor %}
+  </div>
+
+  <div class="w3-margin-top w3-right-align">
+    <button type="submit" class="w3-button w3-blue w3-round-large w3-padding-large w3-hover-indigo">
+      <span class="w3-margin-right">
+        <i class="fa-solid {{ submit_icon|default:'fa-floppy-disk' }}" aria-hidden="true"></i>
+      </span>
+      <span>
+        {% if submit_label %}
+          {{ submit_label }}
+        {% else %}
+          {% trans "Save changes" %}
+        {% endif %}
+      </span>
+    </button>
+  </div>
+</form>

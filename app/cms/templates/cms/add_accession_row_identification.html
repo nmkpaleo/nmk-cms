@@ -1,9 +1,16 @@
 {% extends "base_generic.html" %}
+{% load i18n %}
 
-{% block title %}Add Specimen Identification{% endblock %}
+{% block title %}{% trans "Add Specimen Identification" %}{% endblock %}
 
 {% block content %}
-    {% include "includes/base_form.html" with form=form submit_label="Save" method="post" action=request.path title="Taxon to Specimen: " access=accession_row %}
-    
-    <a href="{% url 'accessionrow_detail' accession_row.id %}">Back to Specimen</a>
+  <main class="w3-container w3-margin-top w3-margin-bottom" role="main">
+    {% include "includes/base_form.html" with form=form submit_label=_("Save identification") submit_icon="fa-dna" method="post" action=request.path title=_("Taxon to specimen:") access=accession_row heading_id="specimen-identification-form" %}
+    <div class="w3-margin-top">
+      <a href="{% url 'accessionrow_detail' accession_row.id %}" class="w3-button w3-white w3-border w3-round-large w3-hover-light-grey">
+        <i class="fa-solid fa-arrow-left-long" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "Back to specimen" %}</span>
+      </a>
+    </div>
+  </main>
 {% endblock %}

@@ -1,61 +1,14 @@
-{% if form.non_field_errors %}
-  <div class="form-errors">
-    {% for error in form.non_field_errors %}
-      <p class="error-message w3-text-red">{{ error }}</p>
-    {% endfor %}
-  </div>
-{% endif %}
-
-{% if form.media %}
-  {{ form.media }}
-{% endif %}
-
-{% if title %}
-  <h1>
-    {% if form.instance.pk %}Edit {{ title }}{% else %}New {{ title }}{% endif %}
-  </h1>
-{% endif %}
-
-
-<form method="{{ method|default:'post' }}" action="{{ action|default:'' }}" class="form-container"
-      enctype="{{ enctype|default:'application/x-www-form-urlencoded' }}">
-  {% csrf_token %}
-
-  {# Handle formsets #}
-  {% if form.management_form %}
-    {{ form.management_form }}
+{% load i18n %}
+{% with instance=form.instance %}
+  {% if heading_id %}
+    {% with resolved_heading_id=heading_id %}
+      {% include "includes/base_form_inner.html" %}
+    {% endwith %}
+  {% else %}
+    {% with base_title=title|default:_("Form") %}
+      {% with resolved_heading_id=base_title|slugify|add:"-form-heading" %}
+        {% include "includes/base_form_inner.html" %}
+      {% endwith %}
+    {% endwith %}
   {% endif %}
-
-  <table class="form-table" width="100%">
-    {% for field in form %}
-      <tr class="form-group {% if field.errors %}has-errors{% endif %}">
-        <td><label for="{{ field.id_for_label }}" class="form-label">{{ field.label }} {% if field.field.required %}<span class="required-marker">*</span>{% endif %}</label></td>
-        <td>
-          {{ field.as_widget }}
-          {# Show available accession series range info for the user field only #}
-          {% if field.name == 'user' and series_remaining %}
-            <div class="w3-padding-small w3-pale-yellow w3-round-large w3-margin-top">
-              <strong>{{ series_remaining }}</strong> accession numbers available.
-              {% if series_range %}<br>{{ series_range }}{% endif %}
-            </div>
-          {% endif %}
-          {% if field.help_text %}
-            <small class="form-help-text">{{ field.help_text }}</small>
-          {% endif %}
-          {% if field.errors %}
-            <ul class="error-list w3-text-red">
-              {% for error in field.errors %}
-                <li class="error-message w3-text-red">{{ error }}</li>
-              {% endfor %}
-            </ul>
-          {% endif %}
-        </td>
-      </tr>
-    {% endfor %}
-    <tr>
-      <td colspan="2" class="form-submit-row">
-        <button type="submit" style="background-color: #C46132; width: 200px; margin-left: 450px;">Save data</button>
-      </td>
-    </tr>
-  </table>
-</form>
+{% endwith %}

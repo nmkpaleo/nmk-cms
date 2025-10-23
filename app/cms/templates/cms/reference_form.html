@@ -1,9 +1,22 @@
 {% extends "base_generic.html" %}
+{% load i18n %}
 
-{% block title %}{% if form.instance.pk %}Edit Reference{% else %}New Reference{% endif %}{% endblock %}
+{% block title %}
+  {% if form.instance.pk %}
+    {% trans "Edit Reference" %}
+  {% else %}
+    {% trans "New Reference" %}
+  {% endif %}
+{% endblock %}
 
 {% block content %}
-    {% include "includes/base_form.html" with form=form submit_label="Save" method="post" action=request.path title="Reference" %}
-
-    <a href="{% url 'reference_list' %}">Back to References</a>
+  <main class="w3-container w3-margin-top w3-margin-bottom" role="main">
+    {% include "includes/base_form.html" with form=form submit_label=_("Save reference") submit_icon="fa-book" method="post" action=request.path title=_("Reference") heading_id="reference-form" %}
+    <div class="w3-margin-top">
+      <a href="{% url 'reference_list' %}" class="w3-button w3-white w3-border w3-round-large w3-hover-light-grey">
+        <i class="fa-solid fa-arrow-left-long" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "Back to references" %}</span>
+      </a>
+    </div>
+  </main>
 {% endblock %}

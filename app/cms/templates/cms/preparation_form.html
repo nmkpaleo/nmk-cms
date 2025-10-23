@@ -1,8 +1,22 @@
 {% extends "base_generic.html" %}
+{% load i18n %}
 
-{% block title %}{% if form.instance.pk %}Edit Preparation{% else %}New Preparation{% endif %}{% endblock %}
+{% block title %}
+  {% if form.instance.pk %}
+    {% trans "Edit Preparation" %}
+  {% else %}
+    {% trans "New Preparation" %}
+  {% endif %}
+{% endblock %}
 
 {% block content %}
-    {% include "includes/base_form.html" with form=form submit_label="Save" method="post" action=request.path title="Preparation" %}
-    <a href="{% url 'preparation_list' %}">Back to Preparations</a>
+  <main class="w3-container w3-margin-top w3-margin-bottom" role="main">
+    {% include "includes/base_form.html" with form=form submit_label=_("Save preparation") submit_icon="fa-flask" method="post" action=request.path title=_("Preparation") heading_id="preparation-form" %}
+    <div class="w3-margin-top">
+      <a href="{% url 'preparation_list' %}" class="w3-button w3-white w3-border w3-round-large w3-hover-light-grey">
+        <i class="fa-solid fa-arrow-left-long" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "Back to preparations" %}</span>
+      </a>
+    </div>
+  </main>
 {% endblock %}

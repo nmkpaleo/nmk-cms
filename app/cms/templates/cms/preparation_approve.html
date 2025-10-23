@@ -1,15 +1,25 @@
 {% extends "base_generic.html" %}
+{% load i18n %}
 
-{% block title %}Approve Preparation{% endblock %}
+{% block title %}{% trans "Approve Preparation" %}{% endblock %}
 
 {% block content %}
-<h2>Curator Review</h2>
-
-<form method="post">
-    {% csrf_token %}
-    {{ form.as_p }}
-
-    <button type="submit" class="btn btn-success">Submit Review</button>
-    <a href="{% url 'preparation_detail' preparation.pk %}" class="btn btn-secondary">Cancel</a>
-</form>
+  <main class="w3-container w3-margin-top w3-margin-bottom" role="main">
+    <section class="w3-section">
+      <header class="w3-margin-bottom">
+        <h1 class="w3-xxlarge">
+          <i class="fa-solid fa-clipboard-check" aria-hidden="true"></i>
+          <span class="w3-margin-left">{% trans "Curator review" %}</span>
+        </h1>
+        <p class="w3-text-gray">{% blocktrans with preparation=preparation %}Review preparation {{ preparation }} before approving.{% endblocktrans %}</p>
+      </header>
+      {% include "includes/base_form.html" with form=form submit_label=_("Submit review") submit_icon="fa-check" method="post" action=request.path title=_("Preparation approval") heading_id="preparation-approve-form" %}
+    </section>
+    <div class="w3-margin-top">
+      <a href="{% url 'preparation_detail' preparation.pk %}" class="w3-button w3-white w3-border w3-round-large w3-hover-light-grey">
+        <i class="fa-solid fa-arrow-left-long" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "Back to preparation" %}</span>
+      </a>
+    </div>
+  </main>
 {% endblock %}

@@ -1,9 +1,22 @@
 {% extends "base_generic.html" %}
+{% load i18n %}
 
-{% block title %}{% if form.instance.pk %}Edit Field Slip{% else %}New Field Slip{% endif %}{% endblock %}
+{% block title %}
+  {% if form.instance.pk %}
+    {% trans "Edit Field Slip" %}
+  {% else %}
+    {% trans "New Field Slip" %}
+  {% endif %}
+{% endblock %}
 
 {% block content %}
-    {% include "includes/base_form.html" with form=form submit_label="Save" method="post" action=request.path title="Field Slip" %}
-    
-    <a href="{% url 'fieldslip_list' %}">Back to Field Slips</a>
+  <main class="w3-container w3-margin-top w3-margin-bottom" role="main">
+    {% include "includes/base_form.html" with form=form submit_label=_("Save field slip") submit_icon="fa-map-location-dot" method="post" action=request.path title=_("Field slip") heading_id="fieldslip-form" %}
+    <div class="w3-margin-top">
+      <a href="{% url 'fieldslip_list' %}" class="w3-button w3-white w3-border w3-round-large w3-hover-light-grey">
+        <i class="fa-solid fa-arrow-left-long" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "Back to field slips" %}</span>
+      </a>
+    </div>
+  </main>
 {% endblock %}
