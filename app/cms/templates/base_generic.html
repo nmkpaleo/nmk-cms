@@ -56,16 +56,18 @@
             <li class="nav-item"><a class="w3-bar-item w3-button nav-link" href="{% url 'locality_list' %}">{% trans "Localities" %}</a></li>
             <li class="nav-item"><a class="w3-bar-item w3-button nav-link" href="{% url 'place_list' %}">{% trans "Places" %}</a></li>
             <li class="nav-item"><a class="w3-bar-item w3-button nav-link" href="{% url 'reference_list' %}">{% trans "References" %}</a></li>
-            <li class="nav-item nav-dropdown">
-              <button class="w3-button nav-link dropdown-toggle" type="button" aria-expanded="false" aria-haspopup="true" aria-controls="reports-menu">
-                {% trans "Reports" %}
-                <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
-              </button>
-              <ul id="reports-menu" class="nav-dropdown-menu" role="menu" hidden>
-                <li role="none"><a class="w3-bar-item w3-button nav-link" role="menuitem" href="{% url 'media_report' %}">{% trans "Media Reports" %}</a></li>
-                <li role="none"><a class="w3-bar-item w3-button nav-link" role="menuitem" href="{% url 'accession_distribution_report' %}">{% trans "Accession Reports" %}</a></li>
-              </ul>
-            </li>
+            {% if user.is_superuser or user|has_group:"Collection Managers" %}
+              <li class="nav-item nav-dropdown">
+                <button class="w3-button nav-link dropdown-toggle" type="button" aria-expanded="false" aria-haspopup="true" aria-controls="reports-menu">
+                  {% trans "Reports" %}
+                  <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                </button>
+                <ul id="reports-menu" class="nav-dropdown-menu" role="menu" hidden>
+                  <li role="none"><a class="w3-bar-item w3-button nav-link" role="menuitem" href="{% url 'media_report' %}">{% trans "Media Reports" %}</a></li>
+                  <li role="none"><a class="w3-bar-item w3-button nav-link" role="menuitem" href="{% url 'accession_distribution_report' %}">{% trans "Accession Reports" %}</a></li>
+                </ul>
+              </li>
+            {% endif %}
 
             {% if user.is_superuser or user|has_group:"Collection Managers" %}
               <li class="nav-item"><a class="w3-bar-item w3-button nav-link" href="{% url 'fieldslip_list' %}">{% trans "Field Slips" %}</a></li>

@@ -15,6 +15,8 @@
     align-items: center;
     gap: 1rem;
     padding: 0.25rem 1rem;
+    position: relative;
+    overflow: visible;
 }
 
 .nav-logo {
@@ -44,6 +46,7 @@
 
 .nav-item {
     position: relative;
+    overflow: visible;
 }
 
 .nav-item.nav-right {

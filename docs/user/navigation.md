@@ -13,12 +13,12 @@ Keyboard users can Tab through the links in order. The navigation has `aria-labe
 
 ## Reports dropdown
 
-The Reports entry is an accessible dropdown button. Activating it by mouse, keyboard <kbd>Enter</kbd> / <kbd>Space</kbd>, or touch reveals the menu items:
+The Reports entry is an accessible dropdown button that is visible to superusers and members of the **Collection Managers** group. Activating it by mouse, keyboard <kbd>Enter</kbd> / <kbd>Space</kbd>, or touch reveals the menu items:
 
 - **Media Reports**
 - **Accession Reports**
 
-The dropdown traps focus while open, supports the <kbd>Arrow&nbsp;Down</kbd> key for quick access to the first item, and closes when you press <kbd>Escape</kbd> or click outside the menu.
+The dropdown traps focus while open, supports the <kbd>Arrow&nbsp;Down</kbd> key for quick access to the first item, closes when you press <kbd>Escape</kbd> or click outside the menu, and now expands beyond the navigation bar without clipping.
 
 ## Authentication controls
 

@@ -136,6 +136,15 @@ from formtools.wizard.views import SessionWizardView
 _ident_payload_has_meaningful_data = qc_ident_payload_has_meaningful_data
 _interpreted_value = qc_interpreted_value
 
+
+def is_collection_manager(user):
+    if not getattr(user, "is_authenticated", False):
+        return False
+    return user.is_superuser or user.groups.filter(name="Collection Managers").exists()
+
+
+@login_required
+@user_passes_test(is_collection_manager)
 def media_report_view(request):
     # Fetch OCR status data
     data = Media.objects.values('ocr_status', 'created_on')
@@ -240,6 +249,8 @@ def media_report_view(request):
     return render(request, 'reports/media_report.html', context)
 
 #accession distribution report
+@login_required
+@user_passes_test(is_collection_manager)
 def accession_distribution_report(request):
     """
     Generates a report showing the distribution of accessions per locality.
@@ -797,13 +808,6 @@ class PreparationAccessMixin(UserPassesTestMixin):
             user.is_superuser or
             user.groups.filter(name__in=["Curators", "Collection Managers"]).exists()
         )
-
-# Helper function to check if user can manage collection content
-def is_collection_manager(user):
-    if not getattr(user, "is_authenticated", False):
-        return False
-    return user.is_superuser or user.groups.filter(name="Collection Managers").exists()
-
 
 def is_intern(user):
     if not getattr(user, "is_authenticated", False):
