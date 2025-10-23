@@ -81,7 +81,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 col.style.display = isExpanded ? "none" : "table-cell";
             });
 
-            toggleBtn.textContent = isExpanded ? "Show More" : "Show Less";
+            toggleBtn.textContent = isExpanded ? "Show Less" : "Show More";
             isExpanded = !isExpanded;
         });
     }
