@@ -153,50 +153,9 @@
         <span class="w3-margin-left">{% trans "Change history" %}</span>
       </h2>
     </header>
-    {% if history_entries %}
-      <div class="w3-responsive">
-        <table class="w3-table-all w3-hoverable w3-small">
-          <thead>
-            <tr>
-              <th scope="col">{% trans "Date/time" %}</th>
-              <th scope="col">{% trans "Action" %}</th>
-              <th scope="col">{% trans "Comment" %}</th>
-              <th scope="col">{% trans "Changed by" %}</th>
-              <th scope="col">{% trans "Changes" %}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for entry in history_entries %}
-              <tr>
-                <td>{{ entry.log.history_date|date:"Y-m-d H:i" }}</td>
-                <td>{{ entry.log.history_type }}</td>
-                <td>{{ entry.log.history_change_reason|default:"" }}</td>
-                <td>
-                  {% if entry.log.history_user %}
-                    {{ entry.log.history_user }}
-                  {% else %}
-                    {% trans "System or unknown" %}
-                  {% endif %}
-                </td>
-                <td>
-                  {% if entry.changes %}
-                    <ul class="w3-ul w3-border-0 w3-small w3-margin-0">
-                      {% for change in entry.changes %}
-                        <li><strong>{{ change.field }}:</strong> {{ change.old }} → {{ change.new }}</li>
-                      {% endfor %}
-                    </ul>
-                  {% else %}
-                    {% trans "Initial version" %}
-                  {% endif %}
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    {% else %}
-      <p class="w3-text-gray">{% trans "No changes have been logged for this preparation yet." %}</p>
-    {% endif %}
+    {% trans "Preparation change history" as preparation_history_caption %}
+    {% trans "No changes have been logged for this preparation yet." as preparation_history_empty %}
+    {% include "cms/history_table.html" with entries=history_entries table_id="preparation-history-table" caption=preparation_history_caption empty_message=preparation_history_empty %}
   </section>
 
   <section class="w3-margin-top" aria-labelledby="preparation-media-heading">
