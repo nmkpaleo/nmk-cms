@@ -1,4 +1,4 @@
-{% load i18n %}
+{% load i18n form_helpers %}
 <div
   class="w3-margin-bottom w3-padding-small w3-round-large {% if field.errors %}w3-border w3-border-red{% else %}w3-border w3-border-light-grey{% endif %}"
   data-field-name="{{ field.name }}"
@@ -6,17 +6,9 @@
   {% if field.field.widget.input_type == 'checkbox' %}
     <label class="w3-text-dark-gray w3-medium w3-block">
       {% if describedby %}
-        {% if field.errors %}
-          {{ field.as_widget(attrs={'aria-describedby': describedby, 'aria-invalid': 'true'}) }}
-        {% else %}
-          {{ field.as_widget(attrs={'aria-describedby': describedby}) }}
-        {% endif %}
+        {% render_field_widget field describedby=describedby invalid=field.errors %}
       {% else %}
-        {% if field.errors %}
-          {{ field.as_widget(attrs={'aria-invalid': 'true'}) }}
-        {% else %}
-          {{ field }}
-        {% endif %}
+        {% render_field_widget field invalid=field.errors %}
       {% endif %}
       <span class="w3-margin-left">{{ field.label }}</span>
       {% if field.field.required %}
@@ -34,17 +26,9 @@
     </label>
     <div class="w3-margin-top">
       {% if describedby %}
-        {% if field.errors %}
-          {{ field.as_widget(attrs={'aria-describedby': describedby, 'aria-invalid': 'true'}) }}
-        {% else %}
-          {{ field.as_widget(attrs={'aria-describedby': describedby}) }}
-        {% endif %}
+        {% render_field_widget field describedby=describedby invalid=field.errors %}
       {% else %}
-        {% if field.errors %}
-          {{ field.as_widget(attrs={'aria-invalid': 'true'}) }}
-        {% else %}
-          {{ field }}
-        {% endif %}
+        {% render_field_widget field invalid=field.errors %}
       {% endif %}
     </div>
   {% endif %}
