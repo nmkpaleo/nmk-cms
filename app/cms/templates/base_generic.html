@@ -1,4 +1,5 @@
 {% load static user_tags %}
+{% load i18n %}
 <!doctype html>
 <html lang="en">
   <head>
@@ -34,129 +35,124 @@
       }
     </style>
     <title>{% block title %}NMK CMS{% endblock %}</title>
-  
+
   </head>
 
   <body>
-    <div class="container-fluid">
-      <div class="row">
-        <div class="main_navbar">
-          <a href="{% url 'index' %}"><img src="{% static 'images/logo.jpg' %}" class="logo_image" alt="NMK LOGO"></a>
-          
+    <header class="site-header">
+      <nav class="w3-bar w3-white w3-card main-navbar" role="navigation" aria-label="{% trans 'Primary navigation' %}">
+        <a class="w3-bar-item w3-button w3-hover-none w3-padding-16 nav-logo" href="{% url 'index' %}">
+          <span class="sr-only">{% trans "National Museums of Kenya home" %}</span>
+          <img src="{% static 'images/logo.jpg' %}" class="logo_image" alt="{% trans 'National Museums of Kenya logo' %}">
+        </a>
+        <button id="nav-toggle" class="w3-bar-item w3-button nav-toggle w3-right w3-hide-large w3-hide-medium" type="button" aria-expanded="false" aria-controls="primary-navigation">
+          <span class="fa fa-bars" aria-hidden="true"></span>
+          <span class="sr-only">{% trans "Toggle navigation" %}</span>
+        </button>
 
-          {% block sidebar %}
-            <ul class="sidebar-nav">
-
-              <li><a href="{% url 'accession_list' %}">Accessions</a></li>
-              <li><a href="{% url 'locality_list' %}">Localities</a></li>
-              <li><a href="{% url 'place_list' %}">Places</a></li>
-              <li><a href="{% url 'reference_list' %}">References</a></li>
-              <li class="dropdown ">
-              <a href="#" class="dropdown-toggle">Reports <i class="bi bi-chevron-down"></i></a>
-              <ul class="dropdown-menu">
-                <li><a href="{% url 'media_report' %}">Media Reports</a></li>
-                <li><a href="{% url 'accession_distribution_report' %}">Accession Reports</a></li>
-              </ul>
-            </li>
-
-              
-              {% if user.is_superuser or user|has_group:"Collection Managers" %}
-                <li><a href="{% url 'fieldslip_list' %}">Field Slips</a></li>
-              {% endif %}
-
-              {% if user.is_superuser or user|has_group:"Collection Managers" or user|has_group:"Curators" %}
-                <li><a href="{% url 'preparation_list' %}">Preparations</a></li>
-              {% endif %}
-
-              {% if user.is_superuser or user|has_group:"Collection Managers" %}
-                <li><a href="{% url 'drawerregister_list' %}">Drawers</a></li>
-                <li><a href="{% url 'storage_list' %}">Storages</a></li>
-              {% endif %}
-
-              {% if user.is_authenticated %}
-                {% if user.is_staff or user.is_superuser %}
-                  <li><a href="{% url 'media_qc_history' %}">QC History</a></li>
-                {% endif %}
-              {% endif %}
-
-              {% if user.is_authenticated %}
-                <li>User: {{ user.get_username }}</li>
-                <li>
-                  <form id="logout-form" class="logout-form" method="post" action="{% url 'account_logout' %}">
-                    {% csrf_token %}
-                    <button type="submit" class="logout-button">Logout</button>
-                  </form>
-                </li>
-              {% else %}
-                <a href="{% url 'account_login' %}?next={{ request.path }}" class="login_base_button">Login</a>
-              {% endif %}
-              
-            </ul>
-          {% endblock %}
-          <div class="hamburger" onclick="toggleMenu()">☰</div>
-        </div>
-        
-        <div class="col-sm-10 ">
-          {% block content %}
-
-          {% endblock %}
-
-          {% block pagination %}
-            {% if is_paginated %}
-              <div class="w3-container w3-center w3-margin-top">
-                <div class="w3-bar w3-border w3-round-large w3-white w3-card">
-                  {% if page_obj.has_previous %}
-                    <a href="{{ request.path }}?page={{ page_obj.previous_page_number }}" class="w3-bar-item w3-button" aria-label="Previous page">
-                      <i class="fa-solid fa-angles-left"></i>
-                      <span class="w3-hide-small">Previous</span>
-                    </a>
-                  {% else %}
-                    <span class="w3-bar-item w3-button w3-disabled">
-                      <i class="fa-solid fa-angles-left"></i>
-                      <span class="w3-hide-small">Previous</span>
-                    </span>
-                  {% endif %}
-
-                  <span class="w3-bar-item">
-                    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
-                  </span>
-
-                  {% if page_obj.has_next %}
-                    <a href="{{ request.path }}?page={{ page_obj.next_page_number }}" class="w3-bar-item w3-button" aria-label="Next page">
-                      <span class="w3-hide-small">Next</span>
-                      <i class="fa-solid fa-angles-right"></i>
-                    </a>
-                  {% else %}
-                    <span class="w3-bar-item w3-button w3-disabled">
-                      <span class="w3-hide-small">Next</span>
-                      <i class="fa-solid fa-angles-right"></i>
-                    </span>
-                  {% endif %}
-                </div>
-              </div>
+        {% block sidebar %}
+          <ul id="primary-navigation" class="nav-links" data-collapsed="true">
+            <li class="nav-item"><a class="w3-bar-item w3-button nav-link" href="{% url 'accession_list' %}">{% trans "Accessions" %}</a></li>
+            <li class="nav-item"><a class="w3-bar-item w3-button nav-link" href="{% url 'locality_list' %}">{% trans "Localities" %}</a></li>
+            <li class="nav-item"><a class="w3-bar-item w3-button nav-link" href="{% url 'place_list' %}">{% trans "Places" %}</a></li>
+            <li class="nav-item"><a class="w3-bar-item w3-button nav-link" href="{% url 'reference_list' %}">{% trans "References" %}</a></li>
+            {% if user.is_superuser or user|has_group:"Collection Managers" %}
+              <li class="nav-item nav-dropdown">
+                <button class="w3-button nav-link dropdown-toggle" type="button" aria-expanded="false" aria-haspopup="true" aria-controls="reports-menu">
+                  {% trans "Reports" %}
+                  <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                </button>
+                <ul id="reports-menu" class="nav-dropdown-menu" role="menu" hidden>
+                  <li role="none"><a class="w3-bar-item w3-button nav-link" role="menuitem" href="{% url 'media_report' %}">{% trans "Media Reports" %}</a></li>
+                  <li role="none"><a class="w3-bar-item w3-button nav-link" role="menuitem" href="{% url 'accession_distribution_report' %}">{% trans "Accession Reports" %}</a></li>
+                </ul>
+              </li>
             {% endif %}
-          {% endblock %}
 
+            {% if user.is_superuser or user|has_group:"Collection Managers" %}
+              <li class="nav-item"><a class="w3-bar-item w3-button nav-link" href="{% url 'fieldslip_list' %}">{% trans "Field Slips" %}</a></li>
+            {% endif %}
 
-        </div>
+            {% if user.is_superuser or user|has_group:"Collection Managers" or user|has_group:"Curators" %}
+              <li class="nav-item"><a class="w3-bar-item w3-button nav-link" href="{% url 'preparation_list' %}">{% trans "Preparations" %}</a></li>
+            {% endif %}
+
+            {% if user.is_superuser or user|has_group:"Collection Managers" %}
+              <li class="nav-item"><a class="w3-bar-item w3-button nav-link" href="{% url 'drawerregister_list' %}">{% trans "Drawers" %}</a></li>
+              <li class="nav-item"><a class="w3-bar-item w3-button nav-link" href="{% url 'storage_list' %}">{% trans "Storages" %}</a></li>
+            {% endif %}
+
+            {% if user.is_authenticated %}
+              {% if user.is_staff or user.is_superuser %}
+                <li class="nav-item"><a class="w3-bar-item w3-button nav-link" href="{% url 'media_qc_history' %}">{% trans "QC History" %}</a></li>
+              {% endif %}
+            {% endif %}
+
+            {% if user.is_authenticated %}
+              <li class="nav-item nav-user nav-right">
+                <span class="nav-text" role="status" aria-live="polite">{% blocktrans with username=user.get_username %}User: {{ username }}{% endblocktrans %}</span>
+              </li>
+              <li class="nav-item nav-auth">
+                <form id="logout-form" class="logout-form" method="post" action="{% url 'account_logout' %}">
+                  {% csrf_token %}
+                  <button type="submit" class="w3-button nav-button">{% trans "Logout" %}</button>
+                </form>
+              </li>
+            {% else %}
+              <li class="nav-item nav-auth nav-right">
+                <a class="w3-bar-item w3-button nav-button" href="{% url 'account_login' %}?next={{ request.path }}">{% trans "Login" %}</a>
+              </li>
+            {% endif %}
+          </ul>
+        {% endblock %}
+      </nav>
+    </header>
+
+    <main id="main-content" class="site-main">
+      <div class="container-fluid">
+        {% block content %}
+
+        {% endblock %}
+
+        {% block pagination %}
+          {% if is_paginated %}
+            <div class="w3-container w3-center w3-margin-top">
+              <div class="w3-bar w3-border w3-round-large w3-white w3-card">
+                {% if page_obj.has_previous %}
+                  <a href="{{ request.path }}?page={{ page_obj.previous_page_number }}" class="w3-bar-item w3-button" aria-label="{% trans 'Previous page' %}">
+                    <i class="fa-solid fa-angles-left"></i>
+                    <span class="w3-hide-small">{% trans "Previous" %}</span>
+                  </a>
+                {% else %}
+                  <span class="w3-bar-item w3-button w3-disabled">
+                    <i class="fa-solid fa-angles-left"></i>
+                    <span class="w3-hide-small">{% trans "Previous" %}</span>
+                  </span>
+                {% endif %}
+
+                <span class="w3-bar-item">
+                  {% blocktrans with current=page_obj.number total=page_obj.paginator.num_pages %}Page {{ current }} of {{ total }}{% endblocktrans %}
+                </span>
+
+                {% if page_obj.has_next %}
+                  <a href="{{ request.path }}?page={{ page_obj.next_page_number }}" class="w3-bar-item w3-button" aria-label="{% trans 'Next page' %}">
+                    <span class="w3-hide-small">{% trans "Next" %}</span>
+                    <i class="fa-solid fa-angles-right"></i>
+                  </a>
+                {% else %}
+                  <span class="w3-bar-item w3-button w3-disabled">
+                    <span class="w3-hide-small">{% trans "Next" %}</span>
+                    <i class="fa-solid fa-angles-right"></i>
+                  </span>
+                {% endif %}
+              </div>
+            </div>
+          {% endif %}
+        {% endblock %}
       </div>
-    </div>
+    </main>
 
     <script src="{% static 'javascript.js' %}"></script>
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      const dropdownToggles = document.querySelectorAll('.dropdown-toggle');
-
-      dropdownToggles.forEach(toggle => {
-        toggle.addEventListener('click', function(e) {
-          e.preventDefault();
-          const parent = this.parentElement;
-          parent.classList.toggle('active');
-        });
-      });
-    });
-    </script>
-
 
     {% block extra_scripts %}
       {% if form_media %}
