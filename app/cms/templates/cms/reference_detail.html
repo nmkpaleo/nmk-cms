@@ -1,108 +1,150 @@
 {% extends "base_generic.html" %}
-{% load user_tags %}
+{% load i18n user_tags %}
 
-{% block title %}Reference {{ reference.title }}{% endblock %}
+{% block title %}{% blocktrans %}Reference {{ reference.title }}{% endblocktrans %}{% endblock %}
 
 {% block content %}
-    
+<main class="w3-container w3-margin-top" role="main">
+  <header class="w3-row w3-padding-16 w3-border-bottom w3-white w3-round-large" aria-labelledby="reference-details-heading">
+    <div class="w3-col s12 m8">
+      <h1 id="reference-details-heading" class="w3-margin-0">
+        {% blocktrans with title=reference.title %}Reference {{ title }}{% endblocktrans %}
+      </h1>
+      <p class="w3-text-gray">{{ reference.first_author }} · {{ reference.year }}</p>
+    </div>
+    {% if user.is_superuser or user|has_group:"Collection Managers" %}
+      <div class="w3-col s12 m4 w3-right-align w3-margin-top">
+        <a href="{% url 'reference_edit' reference.pk %}" class="w3-button w3-blue w3-round" aria-label="{% trans 'Edit reference' %}">
+          <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+          <span class="w3-hide-small w3-margin-left">{% trans "Edit Reference" %}</span>
+        </a>
+      </div>
+    {% endif %}
+  </header>
 
-        <div class="template-detail-container">
-            <div class="template-detail-header">
-                <h2 class="template-detail-h2">Reference Detail</h2>
-
-                {% if user.is_superuser or user|has_group:"Collection Managers" %}
-                <a href="{% url 'reference_edit' reference.pk %}" class="edit-icon">
-                    Edit Form ✏️
-                </a>
-                {% endif %}
-
+  <section class="w3-margin-top" aria-labelledby="reference-metadata-heading">
+    <div class="w3-row-padding">
+      <article class="w3-col s12 m6 l4">
+        <div class="w3-card w3-round w3-white w3-padding">
+          <h2 id="reference-metadata-heading" class="w3-margin-top">{% trans "Reference metadata" %}</h2>
+          <dl class="w3-margin-top">
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Title" %}</dt>
+              <dd class="w3-margin-0">{{ reference.title }}</dd>
             </div>
-            <div class="grid-container">
-                <!-- Field Number Card -->
-                <div class="card">
-                    <p><strong>Title:</strong> <br> {{ reference.title }}</p>
-                    <p><strong>First Author: </strong> <br> {{ reference.first_author }}</p>
-                    <p><strong>Year:</strong> <br> {{ reference.year }} </p>                   
-                    
-                </div>
-
-                <div class="card">
-                    <p><strong>Journal:</strong> <br> {{ reference.journal }}</p>
-                    <p><strong>Volume: </strong> <br> {{ reference.volume }}</p>
-                    <p><strong>Issue:</strong> <br> {{ reference.issue }}</p>
-                    <p><strong>Pages: </strong> <br> {{ reference.pages }}</p>
-                    {% if doi_url %}
-                    <p>
-                        <strong>DOI: </strong>
-                        <br>
-                        <a href="{{ doi_url }}" target="_blank" rel="noopener">{{ reference.doi }}</a>
-                    </p>
-                    {% endif %}
-                </div>
-                
-                <div class="card">
-                    <p><strong>Citation:</strong> <br> {{ reference.citation }}</p>
-
-                </div>
-
-
-                <div class="cards">
-                    <table class="w3-table-all w3-hoverable">
-                        <caption class="w3-large"><strong>Accession details</strong></caption>
-                        <thead>
-                            <tr>
-                                <th>Accession</th>
-                                <th>Collection</th>
-                                <th>Specimen Prefix</th>
-                                <th>Specimen Number</th>
-                                <th>Taxon</th>
-                                <th>Element</th>
-                                <th>Page(s)</th>
-                                {% if user.is_superuser or user|has_group:"Collection Managers" %}
-                                <th>Accessioned by</th>
-                                {% endif %}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for accession, page in accession_entries %}
-                            <tr>
-                                <td>
-                                    <a href="{% url 'accession_detail' accession.pk %}">{{ accession }}</a>
-                                </td>
-                                <td>{{ accession.collection.abbreviation }}</td>
-                                <td>{{ accession.specimen_prefix.abbreviation }}</td>
-                                <td><a href="{% url 'accession_detail' accession.pk %}">{{ accession.specimen_no }}</a></td>
-                                <td>
-                                    {% if accession.taxa_list %}
-                                        {{ accession.taxa_list|join:", " }}
-                                    {% else %}
-                                        &mdash;
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if accession.element_list %}
-                                        {{ accession.element_list|join:", " }}
-                                    {% else %}
-                                        &mdash;
-                                    {% endif %}
-                                </td>
-                                <td>{{ page|default:"—" }}</td>
-                                {% if user.is_superuser or user|has_group:"Collection Managers" %}
-                                <td>{{ accession.accessioned_by|default_if_none:"—" }}</td>
-                                {% endif %}
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="{% if user.is_superuser or user|has_group:"Collection Managers" %}8{% else %}7{% endif %}" class="w3-center">No accessions found.</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-
-
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "First author" %}</dt>
+              <dd class="w3-margin-0">{{ reference.first_author }}</dd>
             </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Year" %}</dt>
+              <dd class="w3-margin-0">{{ reference.year }}</dd>
+            </div>
+            {% if reference.citation %}
+              <div class="w3-margin-bottom">
+                <dt class="w3-text-gray">{% trans "Citation" %}</dt>
+                <dd class="w3-margin-0">{{ reference.citation }}</dd>
+              </div>
+            {% endif %}
+          </dl>
         </div>
-        {% endblock %}
+      </article>
+
+      <article class="w3-col s12 m6 l4">
+        <div class="w3-card w3-round w3-white w3-padding" aria-labelledby="reference-journal-heading">
+          <h2 id="reference-journal-heading" class="w3-margin-top">{% trans "Publication details" %}</h2>
+          <dl class="w3-margin-top">
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Journal" %}</dt>
+              <dd class="w3-margin-0">{{ reference.journal|default:"—" }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Volume" %}</dt>
+              <dd class="w3-margin-0">{{ reference.volume|default:"—" }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Issue" %}</dt>
+              <dd class="w3-margin-0">{{ reference.issue|default:"—" }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Pages" %}</dt>
+              <dd class="w3-margin-0">{{ reference.pages|default:"—" }}</dd>
+            </div>
+            {% if doi_url %}
+              <div class="w3-margin-bottom">
+                <dt class="w3-text-gray">{% trans "DOI" %}</dt>
+                <dd class="w3-margin-0">
+                  <a href="{{ doi_url }}" target="_blank" rel="noopener">{{ reference.doi }}</a>
+                </dd>
+              </div>
+            {% endif %}
+          </dl>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="w3-margin-top" aria-labelledby="reference-accessions-heading">
+    <header class="w3-padding-16">
+      <h2 id="reference-accessions-heading" class="w3-margin-0">
+        <i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "Referenced accessions" %}</span>
+      </h2>
+    </header>
+    <div class="w3-responsive">
+      <table class="w3-table-all w3-hoverable w3-small">
+        <thead>
+          <tr>
+            <th scope="col">{% trans "Accession" %}</th>
+            <th scope="col">{% trans "Collection" %}</th>
+            <th scope="col">{% trans "Specimen prefix" %}</th>
+            <th scope="col">{% trans "Specimen number" %}</th>
+            <th scope="col">{% trans "Taxon" %}</th>
+            <th scope="col">{% trans "Element" %}</th>
+            <th scope="col">{% trans "Page(s)" %}</th>
+            {% if user.is_superuser or user|has_group:"Collection Managers" %}
+              <th scope="col">{% trans "Accessioned by" %}</th>
+            {% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for accession, page in accession_entries %}
+            <tr>
+              <td><a href="{% url 'accession_detail' accession.pk %}">{{ accession }}</a></td>
+              <td>{{ accession.collection.abbreviation }}</td>
+              <td>{{ accession.specimen_prefix.abbreviation }}</td>
+              <td><a href="{% url 'accession_detail' accession.pk %}">{{ accession.specimen_no }}</a></td>
+              <td>
+                {% if accession.taxa_list %}
+                  {{ accession.taxa_list|join:", " }}
+                {% else %}
+                  &mdash;
+                {% endif %}
+              </td>
+              <td>
+                {% if accession.element_list %}
+                  {{ accession.element_list|join:", " }}
+                {% else %}
+                  &mdash;
+                {% endif %}
+              </td>
+              <td>{{ page|default:"—" }}</td>
+              {% if user.is_superuser or user|has_group:"Collection Managers" %}
+                <td>{{ accession.accessioned_by|default_if_none:"—" }}</td>
+              {% endif %}
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="{% if user.is_superuser or user|has_group:"Collection Managers" %}8{% else %}7{% endif %}" class="w3-center">
+                {% trans "No accessions found." %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+{% endblock %}
 
 

@@ -1,119 +1,174 @@
 {% extends "base_generic.html" %}
+{% load i18n %}
 
-{% block title %}Specimen {{ accessionrow.specimen_suffix }}{% endblock %}
+{% block title %}{% blocktrans with suffix=accessionrow.specimen_suffix %}Specimen {{ suffix }}{% endblocktrans %}{% endblock %}
 
 {% block content %}
-<div class="template-detail-container">
-  <div class="grid-container">
-    <div class="card">
-      <div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
-        <h2 class="section-title" style="margin:0;">Specimen Detail</h2>
-        {% if can_edit %}
-        <a href="{% url 'accessionrow_edit' accessionrow.pk %}" class="w3-button w3-blue w3-round">
-          <i class="fa-solid fa-pen-to-square"></i>
-          Edit Specimen Detail
+<main class="w3-container w3-margin-top" role="main">
+  <header class="w3-row w3-padding-16 w3-border-bottom w3-white w3-round-large" aria-labelledby="specimen-details-heading">
+    <div class="w3-col s12 m8">
+      <h1 id="specimen-details-heading" class="w3-margin-0">
+        {% blocktrans with suffix=accessionrow.specimen_suffix %}Specimen {{ suffix }}{% endblocktrans %}
+      </h1>
+      <p class="w3-text-gray">{{ accessionrow.accession }}</p>
+    </div>
+    {% if can_edit %}
+      <div class="w3-col s12 m4 w3-right-align w3-margin-top">
+        <a href="{% url 'accessionrow_edit' accessionrow.pk %}" class="w3-button w3-blue w3-round" aria-label="{% trans 'Edit specimen' %}">
+          <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+          <span class="w3-hide-small w3-margin-left">{% trans "Edit Specimen" %}</span>
         </a>
-        {% endif %}
       </div>
+    {% endif %}
+  </header>
 
-      <table>
+  <section class="w3-margin-top" aria-labelledby="specimen-overview-heading">
+    <div class="w3-row-padding">
+      <article class="w3-col s12">
+        <div class="w3-card w3-round w3-white w3-padding">
+          <h2 id="specimen-overview-heading" class="w3-margin-top">{% trans "Specimen overview" %}</h2>
+          <div class="w3-responsive w3-margin-top">
+            <table class="w3-table-all w3-small">
+              <tbody>
+                <tr>
+                  <th scope="row">{% trans "Accession" %}</th>
+                  <td>{{ accessionrow.accession }}</td>
+                </tr>
+                <tr>
+                  <th scope="row">{% trans "Specimen suffix" %}</th>
+                  <td>{{ accessionrow.specimen_suffix }}</td>
+                </tr>
+                <tr>
+                  <th scope="row">{% trans "Storage" %}</th>
+                  <td>{{ accessionrow.storage|default:"—" }}</td>
+                </tr>
+                {% if show_inventory_status %}
+                  <tr>
+                    <th scope="row">{% trans "Inventory status" %}</th>
+                    <td>
+                      {% if accessionrow.get_status_display %}
+                        {{ accessionrow.get_status_display }}
+                      {% else %}
+                        {% trans "Not recorded" %}
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="w3-margin-top" aria-labelledby="specimen-elements-heading">
+    <header class="w3-row w3-padding-16">
+      <div class="w3-col s12 m6">
+        <h2 id="specimen-elements-heading" class="w3-margin-0">
+          <i class="fa-solid fa-bone" aria-hidden="true"></i>
+          <span class="w3-margin-left">{% trans "Elements" %}</span>
+        </h2>
+      </div>
+      {% if can_manage %}
+        <div class="w3-col s12 m6 w3-right-align">
+          <a href="{% url 'accessionrow_add_specimen' accessionrow.id %}" class="w3-button w3-green w3-round">
+            <i class="fa-solid fa-plus" aria-hidden="true"></i>
+            <span class="w3-hide-small w3-margin-left">{% trans "Add Element" %}</span>
+          </a>
+        </div>
+      {% endif %}
+    </header>
+    <div class="w3-responsive">
+      <table class="w3-table-all w3-hoverable w3-small">
+        <thead>
+          <tr>
+            <th scope="col">{% trans "Element" %}</th>
+            <th scope="col">{% trans "Side" %}</th>
+            <th scope="col">{% trans "Condition" %}</th>
+            <th scope="col">{% trans "Description" %}</th>
+            <th scope="col">{% trans "Portion" %}</th>
+            <th scope="col">{% trans "Fragments" %}</th>
+          </tr>
+        </thead>
         <tbody>
-          <tr>
-            <th>Accession:</th>
-            <td>{{ accessionrow.accession }}</td>
-          </tr>
-          <tr>
-            <th>Specimen Suffix:</th>
-            <td>{{ accessionrow.specimen_suffix }}</td>
-          </tr>
-          <tr>
-            <th>Storage:</th>
-            <td>{{ accessionrow.storage }}</td>
-          </tr>
-          {% if show_inventory_status %}
-          <tr>
-            <th>Inventory Status:</th>
-            <td>{{ accessionrow.get_status_display|default:"Not recorded" }}</td>
-          </tr>
-          {% endif %}
+          {% for specimen in natureofspecimens %}
+            <tr>
+              <td>{{ specimen.element|default:"—" }}</td>
+              <td>{{ specimen.side|default:"—" }}</td>
+              <td>{{ specimen.condition|default:"—" }}</td>
+              <td>{{ specimen.verbatim_element|default:"—" }}</td>
+              <td>{{ specimen.portion|default:"—" }}</td>
+              <td>{{ specimen.fragments|default:"—" }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="w3-center">{% trans "No elements recorded." %}</td>
+            </tr>
+          {% endfor %}
         </tbody>
       </table>
-
-      <div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
-        <h2 class="section-title" style="margin:0;">Elements</h2>
-        {% if can_manage %}
-        <a href="{% url 'accessionrow_add_specimen' accessionrow.id %}" class="w3-button w3-blue w3-round">
-          <i class="fa-solid fa-plus"></i>
-          Add Element
-        </a>
-        {% endif %}
-      </div>
-
-      <table>
-        <tr>
-          <th>Element</th>
-          <th>Side</th>
-          <th>Condition</th>
-          <th>Description</th>
-          <th>Portion</th>
-          <th>Fragments</th>
-        </tr>
-        {% for specimen in natureofspecimens %}
-        <tr>
-          <td>{{ specimen.element }}</td>
-          <td>{{ specimen.side }}</td>
-          <td>{{ specimen.condition }}</td>
-          <td>{{ specimen.verbatim_element }}</td>
-          <td>{{ specimen.portion }}</td>
-          <td>{{ specimen.fragments }}</td>
-        </tr>
-        {% empty %}
-        <tr>
-          <td colspan="6" class="w3-center">No elements recorded.</td>
-        </tr>
-        {% endfor %}
-      </table>
-
-      <div class="section-header" style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-top:1.5rem;">
-        <h2 class="section-title" style="margin:0;">Identification</h2>
-        {% if can_manage %}
-        <a href="{% url 'accessionrow_add_identification' accessionrow.id %}" class="w3-button w3-blue w3-round">
-          <i class="fa-solid fa-plus"></i>
-          Add Identification
-        </a>
-        {% endif %}
-      </div>
-      <table>
-        <tr>
-          <th>Identified by</th>
-          <th>Date</th>
-          <th>Verbatim identification</th>
-          <th>Taxon</th>
-          <th>Qualifier</th>
-          <th>Remarks</th>
-          <th>Reference</th>
-        </tr>
-        {% for identification in identifications %}
-        <tr>
-          <td>{{ identification.identified_by }}</td>
-          <td>{{ identification.date_identified }}</td>
-          <td>{{ identification.verbatim_identification }}</td>
-          <td>{{ identification.taxon }}</td>
-          <td>{{ identification.identification_qualifier }}</td>
-          <td>{{ identification.identification_remarks }}</td>
-          <td>{{ identification.reference }}</td>
-        </tr>
-        {% empty %}
-        <tr>
-          <td colspan="7" class="w3-center">No identifications recorded.</td>
-        </tr>
-        {% endfor %}
-      </table>
-      <a href="{% url 'accession_detail' accessionrow.accession.id %}">Back to Accession</a>
     </div>
-  </div>
-</div>
+  </section>
 
+  <section class="w3-margin-top" aria-labelledby="specimen-identification-heading">
+    <header class="w3-row w3-padding-16">
+      <div class="w3-col s12 m6">
+        <h2 id="specimen-identification-heading" class="w3-margin-0">
+          <i class="fa-solid fa-dna" aria-hidden="true"></i>
+          <span class="w3-margin-left">{% trans "Identifications" %}</span>
+        </h2>
+      </div>
+      {% if can_manage %}
+        <div class="w3-col s12 m6 w3-right-align">
+          <a href="{% url 'accessionrow_add_identification' accessionrow.id %}" class="w3-button w3-green w3-round">
+            <i class="fa-solid fa-plus" aria-hidden="true"></i>
+            <span class="w3-hide-small w3-margin-left">{% trans "Add Identification" %}</span>
+          </a>
+        </div>
+      {% endif %}
+    </header>
+    <div class="w3-responsive">
+      <table class="w3-table-all w3-hoverable w3-small">
+        <thead>
+          <tr>
+            <th scope="col">{% trans "Identified by" %}</th>
+            <th scope="col">{% trans "Date" %}</th>
+            <th scope="col">{% trans "Verbatim identification" %}</th>
+            <th scope="col">{% trans "Taxon" %}</th>
+            <th scope="col">{% trans "Qualifier" %}</th>
+            <th scope="col">{% trans "Remarks" %}</th>
+            <th scope="col">{% trans "Reference" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for identification in identifications %}
+            <tr>
+              <td>{{ identification.identified_by|default:"—" }}</td>
+              <td>{{ identification.date_identified|default:"—" }}</td>
+              <td>{{ identification.verbatim_identification|default:"—" }}</td>
+              <td>{{ identification.taxon|default:"—" }}</td>
+              <td>{{ identification.identification_qualifier|default:"—" }}</td>
+              <td>{{ identification.identification_remarks|default:"—" }}</td>
+              <td>{{ identification.reference|default:"—" }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="7" class="w3-center">{% trans "No identifications recorded." %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="w3-margin-top">
+    <a href="{% url 'accession_detail' accessionrow.accession.id %}" class="w3-button w3-light-grey w3-round">
+      <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+      <span class="w3-margin-left">{% trans "Back to accession" %}</span>
+    </a>
+  </div>
+</main>
 {% endblock %}
 
 

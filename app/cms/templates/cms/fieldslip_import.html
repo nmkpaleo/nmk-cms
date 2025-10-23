@@ -1,23 +1,43 @@
 {% extends "base_generic.html" %}
+{% load i18n %}
 
-{% block title %}Import Field Slips{% endblock %}
+{% block title %}{% trans "Import Field Slips" %}{% endblock %}
 
 {% block content %}
-<div class="template_import">
-
-    <div class="import_body">
-        <h2>Import File</h2>
-        <form method="post" enctype="multipart/form-data">
-            {% csrf_token %}
-            <div class="import_area">
-                <i class="fa-solid fa-file-import import_icon" ></i> 
-                <p class="Import_p"><b>Drag and Drop file here</b> </p>
-                <label for="import_file" class="import_CSV">File supported: CSV</label> <br>
-                <input type="file" name="import_file" id="import_file" class="import_file" required>
-            </div>
-            <button type="submit" class="Import_submit">Import</button>
+  <main class="w3-container w3-margin-top w3-margin-bottom" role="main">
+    <section class="w3-section w3-animate-opacity">
+      <article class="w3-card-4 w3-white w3-round-large w3-padding-large">
+        <header class="w3-margin-bottom">
+          <h1 class="w3-xxlarge">
+            <i class="fa-solid fa-file-import" aria-hidden="true"></i>
+            <span class="w3-margin-left">{% trans "Import field slip data" %}</span>
+          </h1>
+          <p class="w3-text-gray">{% trans "Upload a CSV export using the official template. Each row will create or update a field slip record." %}</p>
+        </header>
+        <form method="post" enctype="multipart/form-data" class="w3-container" role="form">
+          {% csrf_token %}
+          <div class="w3-margin-bottom">
+            <label for="import_file" class="w3-text-dark-gray w3-medium">
+              {% trans "Select CSV file" %}
+              <span class="w3-text-red" aria-hidden="true">*</span>
+              <span class="w3-hide">{% trans "Required field" %}</span>
+            </label>
+            <input
+              type="file"
+              name="import_file"
+              id="import_file"
+              class="w3-input w3-border w3-round-large"
+              required
+              accept=".csv"
+            />
+            <p class="w3-small w3-text-gray w3-margin-top">{% trans "Only comma-separated values (CSV) files are supported." %}</p>
+          </div>
+          <button type="submit" class="w3-button w3-blue w3-round-large w3-padding-large w3-hover-indigo">
+            <i class="fa-solid fa-upload" aria-hidden="true"></i>
+            <span class="w3-margin-left">{% trans "Import" %}</span>
+          </button>
         </form>
-    </div>
-
-</div>
+      </article>
+    </section>
+  </main>
 {% endblock %}

@@ -1,55 +1,28 @@
 {% extends "base_generic.html" %}
+{% load i18n %}
 
-{% block title %}Generate Accession Numbers{% endblock %}
+{% block title %}{% trans "Generate Accession Numbers" %}{% endblock %}
 
 {% block content %}
-  <div class="w3-container w3-card w3-padding-large w3-white w3-round-large w3-margin-top">
-    <h2 class="w3-xlarge">Generate Accession Numbers</h2>
-
-    {% if form.non_field_errors %}
-      <div class="w3-panel w3-pale-red w3-leftbar w3-border-red">
-        {% for error in form.non_field_errors %}
-          <p class="w3-text-red">{{ error }}</p>
-        {% endfor %}
-      </div>
-    {% endif %}
-
-    <form method="post" action="{{ request.path }}">
-      {% csrf_token %}
-
-      <table class="w3-table-all">
-        {% for field in form %}
-        <p>DEBUG: {{ field.label }} – {{ field.html_name }}</p>
-
-          <tr>
-            <td><label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <span class="w3-text-red">*</span>{% endif %}</label></td>
-            <td>
-              {{ field.as_widget }}
-
-              {% if field.html_name == 'user' and series_remaining %}
-
-                <div class="w3-padding-small w3-pale-yellow w3-round-large w3-margin-top">
-                  <strong>{{ series_remaining }}</strong> accession numbers available.
-                  {% if series_range %}<br>{{ series_range }}{% endif %}
-                </div>
-              {% endif %}
-
-              {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
-
-              {% if field.errors %}
-                <ul class="w3-text-red">
-                  {% for error in field.errors %}<li>{{ error }}</li>{% endfor %}
-                </ul>
-              {% endif %}
-            </td>
-          </tr>
-        {% endfor %}
-      </table>
-
-      <p class="w3-margin-top">
-        <button type="submit" class="w3-button w3-green">Create Accessions</button>
-        <a href="{% url 'fieldslip_list' %}" class="w3-button w3-gray w3-margin-left">Back to Field Slips</a>
-      </p>
-    </form>
-  </div>
+  {% trans "Create accessions" as create_accessions_label %}
+  {% trans "Batch generation" as batch_generation_label %}
+  {% trans "Users with active series are available for selection. Use the count field to reserve numbers." as batch_generation_description %}
+  <main class="w3-container w3-margin-top w3-margin-bottom" role="main">
+    <section class="w3-section">
+      <header class="w3-margin-bottom">
+        <h1 class="w3-xxlarge">
+          <i class="fa-solid fa-hashtag" aria-hidden="true"></i>
+          <span class="w3-margin-left">{% trans "Generate Accession Numbers" %}</span>
+        </h1>
+        <p class="w3-text-gray">{% trans "Select a preparator and quantity to allocate a new accession series." %}</p>
+      </header>
+      {% include "includes/base_form.html" with form=form submit_label=create_accessions_label submit_icon="fa-plus-circle" method="post" action=request.path title=batch_generation_label heading_id="accession-batch-form" description=batch_generation_description series_remaining=series_remaining series_range=series_range %}
+    </section>
+    <div class="w3-margin-top">
+      <a href="{% url 'fieldslip_list' %}" class="w3-button w3-white w3-border w3-round-large w3-hover-light-grey">
+        <i class="fa-solid fa-arrow-left-long" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "Back to field slips" %}</span>
+      </a>
+    </div>
+  </main>
 {% endblock %}

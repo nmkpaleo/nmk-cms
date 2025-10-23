@@ -1,6 +1,21 @@
 # CMS Template and CSS Inventory
 
-_Last updated: 2025-10-14_
+_Last updated: 2026-04-18_
+
+## Layout Dependency Summary (Pre-Refactor)
+
+| View Type | Primary Templates | W3.CSS Usage | Local CSS / JS Touchpoints | Notes for Refactor |
+| --- | --- | --- | --- | --- |
+| List & Search | `cms/*_list.html` variants (accession, drawer, fieldslip, locality, place, preparation, reference, storage) | Shared header rows, filter accordions, and table shells lean on `w3-container`, `w3-row-padding`, `w3-table-all`, and `w3-responsive`.【F:app/cms/templates/cms/accession_list.html†L8-L108】【F:app/cms/templates/cms/reference_list.html†L8-L123】 | Each template embeds a small `toggleAccordion` helper and duplicates the accordion markup; no bespoke CSS classes beyond inherited typography utilities.【F:app/cms/templates/cms/accession_list.html†L24-L109】 | Extract accordion into an include and switch to a shared stimulus/alpine controller to avoid per-template JS duplication. |
+| Detail | `cms/*_detail.html` (accession, accession_row, drawerregister, fieldslip, locality, place, preparation, reference, storage) | Cards, summary grids, and related tables now standardise on `<main>/<section>` landmarks, `w3-card`, and Font Awesome section icons for quick scanning.【F:app/cms/templates/cms/accession_detail.html†L1-L135】【F:app/cms/templates/cms/preparation_detail.html†L1-L221】 | History tables and related lists share the same W3 table shell; no bespoke CSS classes remain. | Future enhancements: extract history table rows into a shared include and align curator action buttons with a button helper. |
+| Detail + Sub-list | `cms/locality_detail.html`, `cms/storage_detail.html` | Combine W3 cards for the primary object with responsive related-object tables and Font Awesome headings.【F:app/cms/templates/cms/locality_detail.html†L1-L107】 | Manual pagination components mirror the helper used in list templates and rely solely on W3 bar/button classes.【F:app/cms/templates/cms/storage_detail.html†L108-L147】 | Align pagination markup with a single include referenced by both list and detail pages to reduce drift. |
+| Dashboard | `cms/dashboard.html`, `cms/qc/dashboard_queue.html` | Role cards now share W3 card wrappers, Font Awesome section icons, and responsive tables with semantic `<section>` landmarks.【F:app/cms/templates/cms/dashboard.html†L1-L240】【F:app/cms/templates/cms/qc/dashboard_queue.html†L1-L74】 | Queue partial still expects context dicts and renders CTA buttons; empty states reuse W3 alert panels. | Future enhancements: extract repeated role-card scaffolding into an include and expose queue metadata via dataclasses to trim template logic. |
+| Forms & Wizards | `cms/*_form.html`, `cms/*_wizard*.html`, `cms/add_accession_*` | All forms funnel through the refactored `base_form.html` card which applies W3 classes, ARIA labels, and Font Awesome submit icons; parent templates wrap the include in `<main>` with W3 button links.【F:app/cms/templates/includes/base_form.html†L1-L11】【F:app/cms/templates/includes/base_form_tag.html†L1-L44】【F:app/cms/templates/cms/preparation_form.html†L1-L23】 | Wizard templates continue to add per-step scripts via formset JS includes. | Keep wizard navigation consistent with the shared button styles and audit form-level accessibility when introducing new widgets. |
+| History / Audit | `cms/history_table.html`, `cms/history_media_qc_table.html`, `cms/qc/history.html` | Audit tables share the `history_table` partial with `w3-table-all`, `w3-small`, `<time>` stamps, and Font Awesome action icons; the QC history page adds filter controls and pagination.【F:app/cms/templates/cms/history_table.html†L1-L69】【F:app/cms/templates/cms/qc/history.html†L1-L98】 | Detail templates include the partial directly, while the QC list view renders paginated logs via the media-specific helper. | Future enhancements: reuse the QC helper inside wizard previews once legacy CSS is retired. |
+| Media / Upload | `cms/preparation_media_upload.html`, `cms/upload_media.html`, `cms/fieldslip_import.html` | All upload flows now render inside W3 cards with shared form markup; the import screen uses standard W3 inputs in place of custom drag/drop styles.【F:app/cms/templates/cms/preparation_media_upload.html†L1-L18】【F:app/cms/templates/cms/fieldslip_import.html†L1-L27】 | No bespoke CSS remains; styling relies purely on W3 utilities. | When adding new uploaders ensure `form.is_multipart` is honoured so the shared include sets `multipart/form-data` automatically. |
+| Inventory | `inventory/start.html`, `inventory/session.html` | Uses `w3-row`, `w3-col`, `w3-card`, and modal helpers to present scanning workflows.【F:app/cms/templates/inventory/session.html†L1-L120】 | Custom JS drives scanning feedback and toggles classes such as `w3-pale-green`/`w3-pale-red`; no extra CSS beyond inline `<script>`. | Document which DOM hooks the JS expects before replacing custom status markup with W3 alert components. |
+
+The matrix below expands on individual template expectations, context variables, and permission constraints prior to the W3.CSS-centric refactor.
 
 ## Template Inventory
 
@@ -84,7 +99,7 @@ _Last updated: 2025-10-14_
 | QC reference card (partial) | `app/cms/templates/cms/qc/partials/reference_card.html` | Displays reference metadata inside QC flows. | Used within wizard review steps. |
 | QC row card (partial) | `app/cms/templates/cms/qc/partials/row_card.html` | Renders row comparison cards in QC steps. | Supports template row duplication. |
 | QC chip (partial) | `app/cms/templates/cms/qc/partials/chip.html` | Pills for representing nested forms. | Supports ident/specimen chips. |
-| Accession preview panel (partial) | `app/cms/templates/cms/partials/accession_preview_panel.html` | Full preview of accession, field slips, and identifications. | Shared between wizard and detail contexts. |
+| Accession preview panel (partial) | `app/cms/templates/cms/partials/accession_preview_panel.html` | Full preview of accession, field slips, and identifications using stacked W3 cards, semantic sections, and action buttons. | Shared between wizard and detail contexts; honours `preview_mode` to hide mutating controls. |
 
 ### Admin Overrides & Utilities
 | Template | Path | Primary Use | Notes |
@@ -275,6 +290,7 @@ _Default context_: Forms expose `form`, `form.media`, CSRF token, and `request`.
 - **`cms/qc/history.html`** — Blocks `title`, `content`; view `MediaQCHistoryView` (login + role guard) supplies `qc_logs`, optional `filter_media` for heading.
 - **`cms/qc/partials/history_list.html`** — Shared log renderer; expects `logs` (iterable of `MediaQCLog`), optional flags `compact`, `show_empty`, plus nested `comments` on each log.
 - **`cms/partials/accession_preview_panel.html`** — Partial used on accession detail and QC wizard; expects `accession`, `accession_rows`, `first_identifications`, `taxonomy`, `geologies`, `references`, `media`, `slip` collections, `preview_mode` toggle, and optionally `matched_taxon` metadata.
-- **History tables inside detail templates** — `cms/drawerregister_detail.html`, `cms/preparation_detail.html`, and `cms/storage_detail.html` each consume `history_entries` produced by `build_history_entries` and expect entries to expose `.log` (with `history_date`, `history_type`, `history_user`, `history_change_reason`) plus `.changes` iterables for field diffs.
+- **History tables inside detail templates** — `cms/drawerregister_detail.html`, `cms/preparation_detail.html`, and `cms/storage_detail.html` now include `cms/history_table.html`, which expects `history_entries` from `build_history_entries` and renders translated headers, icons for create/update/delete, and `<ul>` change summaries.
+- **Media QC history view** — `cms/qc/history.html` loads `cms/history_media_qc_table.html` with `qc_logs`, exposes `active_media`/`active_change_type` context for filters, and reuses the W3 pagination shell.
 
 This matrix should be kept in sync with view changes so future refactors can rely on an authoritative source of template dependencies.

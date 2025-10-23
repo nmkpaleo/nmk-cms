@@ -53,6 +53,7 @@ from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse_lazy, reverse
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 from django.utils.dateparse import parse_date, parse_datetime
 from django.utils.timezone import now
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, FormView, TemplateView
@@ -1313,12 +1314,26 @@ class MediaQCHistoryView(LoginRequiredMixin, UserPassesTestMixin, ListView):
         if media_uuid:
             queryset = queryset.filter(media__uuid=media_uuid)
             self.filter_media = Media.objects.filter(uuid=media_uuid).first()
+        change_type = self.request.GET.get("change_type", "")
+        self.active_change_type = ""
+        valid_change_types = {value for value, _ in MediaQCLog.ChangeType.choices}
+        if change_type in valid_change_types:
+            queryset = queryset.filter(change_type=change_type)
+            self.active_change_type = change_type
         return queryset
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["filter_media"] = self.filter_media
-        context["page_title"] = "Media QC History"
+        context["page_title"] = _("Media QC history")
+        context["active_media"] = self.request.GET.get("media", "")
+        context["active_change_type"] = getattr(self, "active_change_type", "")
+        context["change_type_choices"] = [
+            {"value": "", "label": _("All changes")}
+        ] + [
+            {"value": value, "label": label}
+            for value, label in MediaQCLog.ChangeType.choices
+        ]
         return context
 
 

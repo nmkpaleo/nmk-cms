@@ -1,7 +1,10 @@
 import pytest
 from django.contrib.auth import get_user_model
+from django.template.loader import render_to_string
+from django.test import RequestFactory
 
 from app.cms.forms import (
+    AccessionForm,
     AccessionRowIdentificationForm,
     DrawerRegisterForm,
     TaxonWidget,
@@ -143,3 +146,62 @@ def test_drawer_register_form_limits_taxa_queryset():
     assert order_taxon in taxa_queryset
     assert synonym not in taxa_queryset
     assert not taxa_queryset.filter(is_active=False).exists()
+
+
+def test_base_form_renders_w3_layout():
+    collection = Collection.objects.create(abbreviation="COL", description="Collection")
+    locality = Locality.objects.create(abbreviation="LC", name="Locality")
+    user_model = get_user_model()
+    user_model.objects.create(username="accessionist")
+
+    request = RequestFactory().get("/accessions/new/")
+    form = AccessionForm()
+    html = render_to_string(
+        "includes/base_form.html",
+        {
+            "form": form,
+            "method": "post",
+            "action": "/accessions/new/",
+            "title": "Accession",
+            "heading_id": "accession-form",
+        },
+        request=request,
+    )
+
+    assert "w3-card-4" in html
+    assert "w3-button w3-blue" in html
+    assert '<h1 id="accession-form"' in html
+
+
+def test_base_form_marks_field_errors_accessibly():
+    collection = Collection.objects.create(abbreviation="COL", description="Collection")
+    locality = Locality.objects.create(abbreviation="LC", name="Locality")
+    user_model = get_user_model()
+    user = user_model.objects.create(username="creator")
+
+    form = AccessionForm(
+        data={
+            "collection": "",
+            "specimen_prefix": "",
+            "specimen_no": "",
+            "accessioned_by": user.pk,
+        }
+    )
+    form.is_valid()
+
+    request = RequestFactory().get("/accessions/new/")
+
+    html = render_to_string(
+        "includes/base_form.html",
+        {
+            "form": form,
+            "method": "post",
+            "action": "/accessions/new/",
+            "title": "Accession",
+            "heading_id": "accession-form",
+        },
+        request=request,
+    )
+
+    assert "aria-invalid=\"true\"" in html
+    assert "role=\"alert\"" in html

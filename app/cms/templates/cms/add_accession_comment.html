@@ -1,9 +1,18 @@
 {% extends "base_generic.html" %}
+{% load i18n %}
 
-{% block title %}Add Accession Comment{% endblock %}
+{% block title %}{% trans "Add Accession Comment" %}{% endblock %}
 
 {% block content %}
-    {% include "includes/base_form.html" with form=form submit_label="Save" method="post" action=request.path title="Comment to Accession: " access=accession %}
-    
-    <a href="{% url 'accession_detail' accession.id %}">Back to Accession</a>
+  {% trans "Save comment" as save_comment_label %}
+  {% trans "Comment to accession:" as comment_to_accession_label %}
+  <main class="w3-container w3-margin-top w3-margin-bottom" role="main">
+    {% include "includes/base_form.html" with form=form submit_label=save_comment_label submit_icon="fa-comment-medical" method="post" action=request.path title=comment_to_accession_label access=accession heading_id="accession-comment-form" %}
+    <div class="w3-margin-top">
+      <a href="{% url 'accession_detail' accession.id %}" class="w3-button w3-white w3-border w3-round-large w3-hover-light-grey">
+        <i class="fa-solid fa-arrow-left-long" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "Back to accession" %}</span>
+      </a>
+    </div>
+  </main>
 {% endblock %}

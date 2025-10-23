@@ -1,214 +1,262 @@
-{% load custom_filters user_tags %}
-<div class="grid-containerr">
-  <div class="cards">
-    <table>
-      <caption><b><u>Accession</u></b></caption>
-      <tbody>
-        <tr>
-          <th>ACC No.:</th>
-          <td>{{ accession }}</td>
-        </tr>
-        <tr>
-          <th>Locality:</th>
-          <td>{{ accession.specimen_prefix }}</td>
-        </tr>
-        <tr>
-          <th>Type specimen:</th>
-          <td>{{ accession.type_status }}</td>
-        </tr>
-        {% if not preview_mode %}
-          {% if user.is_superuser or user|has_group:"Collection Managers" %}
-        <tr>
-          <th>Accessioned by:</th>
-          <td>{{ accession.accessioned_by }}</td>
-        </tr>
+{% load i18n custom_filters user_tags %}
+
+<section class="w3-margin-top" aria-labelledby="accession-summary-heading">
+  <div class="w3-row-padding">
+    <article class="w3-col s12 m6 l4">
+      <div class="w3-card w3-round w3-white w3-padding">
+        <h2 id="accession-summary-heading" class="w3-margin-top">{% trans "Accession overview" %}</h2>
+        <dl class="w3-margin-top">
+          <div class="w3-margin-bottom">
+            <dt class="w3-text-gray">{% trans "Accession number" %}</dt>
+            <dd class="w3-margin-0">{{ accession }}</dd>
+          </div>
+          <div class="w3-margin-bottom">
+            <dt class="w3-text-gray">{% trans "Locality" %}</dt>
+            <dd class="w3-margin-0">{{ accession.specimen_prefix }}</dd>
+          </div>
+          <div class="w3-margin-bottom">
+            <dt class="w3-text-gray">{% trans "Type specimen" %}</dt>
+            <dd class="w3-margin-0">{{ accession.type_status|default:"—" }}</dd>
+          </div>
+          {% if not preview_mode %}
+            {% if user.is_superuser or user|has_group:"Collection Managers" %}
+              <div class="w3-margin-bottom">
+                <dt class="w3-text-gray">{% trans "Accessioned by" %}</dt>
+                <dd class="w3-margin-0">{{ accession.accessioned_by|default:"—" }}</dd>
+              </div>
+            {% endif %}
           {% endif %}
-        {% endif %}
-        <tr>
-          <th>General comment:</th>
-          <td>{{ accession.comment }}</td>
-        </tr>
-      </tbody>
-    </table>
+          <div class="w3-margin-bottom">
+            <dt class="w3-text-gray">{% trans "General comment" %}</dt>
+            <dd class="w3-margin-0">{{ accession.comment|default:"—" }}</dd>
+          </div>
+        </dl>
+      </div>
+    </article>
+
+    <article class="w3-col s12 m6 l8" aria-labelledby="accession-horizon-heading">
+      <div class="w3-card w3-round w3-white w3-padding">
+        <div class="w3-row">
+          <div class="w3-col s12 m6">
+            <h2 id="accession-horizon-heading" class="w3-margin-0">{% trans "Horizon" %}</h2>
+          </div>
+          {% if not preview_mode and user.is_authenticated %}
+            {% if user|has_group:"Collection Managers" %}
+              <div class="w3-col s12 m6 w3-right-align w3-margin-top">
+                <a href="{% url 'accession_add_geology' accession.id %}" class="w3-button w3-green w3-round">
+                  <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+                  <span class="w3-hide-small w3-margin-left">{% trans "Add horizon" %}</span>
+                </a>
+              </div>
+            {% endif %}
+          {% endif %}
+        </div>
+        <div class="w3-responsive w3-margin-top">
+          <table class="w3-table-all w3-hoverable w3-small">
+            <thead>
+              <tr>
+                <th scope="col">{% trans "Upper" %}</th>
+                <th scope="col">{% trans "Lower" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for geology in geologies %}
+                <tr>
+                  <td>{{ geology.earliest_geological_context|default:"—" }}</td>
+                  <td>{{ geology.latest_geological_context|default:"—" }}</td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="2" class="w3-center">{% trans "No horizon data recorded." %}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </article>
   </div>
-  <div class="cards">
-    {% if not preview_mode and user.is_authenticated and user|has_group:"Collection Managers" %}
-      <a href="{% url 'accession_add_geology' accession.id %}">➕ Add Horizon</a>
+</section>
+
+<section class="w3-margin-top" aria-labelledby="accession-specimens-heading">
+  <header class="w3-row w3-padding-16">
+    <div class="w3-col s12 m6">
+      <h2 id="accession-specimens-heading" class="w3-margin-0">
+        <i class="fa-solid fa-vial" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "Specimen details" %}</span>
+      </h2>
+    </div>
+    {% if not preview_mode and user.is_authenticated %}
+      {% if user|has_group:"Collection Managers" %}
+        <div class="w3-col s12 m6 w3-right-align">
+          <a href="{% url 'accession_add_row' accession.id %}" class="w3-button w3-green w3-round">
+            <i class="fa-solid fa-plus" aria-hidden="true"></i>
+            <span class="w3-hide-small w3-margin-left">{% trans "Add specimen" %}</span>
+          </a>
+        </div>
+      {% endif %}
     {% endif %}
-    <table>
-      <caption><b><u>Horizon</u></b></caption>
+  </header>
+  <div class="w3-responsive">
+    <table class="w3-table-all w3-hoverable w3-small">
       <thead>
         <tr>
-          <th>Upper</th>
-          <th>Lower</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for geology in geologies %}
-          <tr>
-            <td>{{ geology.earliest_geological_context }}</td>
-            <td>{{ geology.latest_geological_context }}</td>
-          </tr>
-        {% empty %}
-          <tr>
-            <td colspan="2">No horizon data recorded.</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-
-    <hr class="accession_hr">
-
-    {% if not preview_mode and user.is_authenticated and user|has_group:"Collection Managers" %}
-      <a href="{% url 'accession_add_row' accession.id %}">➕ Add Specimen</a>
-    {% endif %}
-    <table>
-      <caption><em>Specimen details</em></caption>
-      <thead>
-        <tr>
-          <th>Specimen</th>
-          <th>Storage</th>
-          <th>Element</th>
-          <th>Side</th>
-          <th>Description</th>
-          <th>Taxon</th>
-          <th>Family</th>
-          <th>Subfamily</th>
-          <th>Tribe</th>
-          <th>Genus</th>
-          <th>Species</th>
+          <th scope="col">{% trans "Specimen" %}</th>
+          <th scope="col">{% trans "Storage" %}</th>
+          <th scope="col">{% trans "Element" %}</th>
+          <th scope="col">{% trans "Side" %}</th>
+          <th scope="col">{% trans "Description" %}</th>
+          <th scope="col">{% trans "Taxon" %}</th>
+          <th scope="col">{% trans "Family" %}</th>
+          <th scope="col">{% trans "Subfamily" %}</th>
+          <th scope="col">{% trans "Tribe" %}</th>
+          <th scope="col">{% trans "Genus" %}</th>
+          <th scope="col">{% trans "Species" %}</th>
         </tr>
       </thead>
       <tbody>
         {% for accessionrow in accession_rows %}
           {% with specimens=accessionrow.natureofspecimen_set.all %}
-          <tr>
-            <td>
-              {% if preview_mode %}
-                {{ accessionrow.specimen_suffix }}
-              {% else %}
-                <a href="{% url 'accessionrow_detail' accessionrow.pk %}">{{ accessionrow.specimen_suffix }}</a>
-              {% endif %}
-            </td>
-            <td>{{ accessionrow.storage }}</td>
-            <td>
-              {% if specimens %}
-                {% for specimen in specimens %}
-                  {{ specimen.element|default:"—" }}{% if not forloop.last %}<br>{% endif %}
-                {% endfor %}
-              {% else %}
-                &mdash;
-              {% endif %}
-            </td>
-            <td>
-              {% if specimens %}
-                {% for specimen in specimens %}
-                  {{ specimen.side|default:"—" }}{% if not forloop.last %}<br>{% endif %}
-                {% endfor %}
-              {% else %}
-                &mdash;
-              {% endif %}
-            </td>
-            <td>
-              {% if specimens %}
-                {% for specimen in specimens %}
-                  {{ specimen.verbatim_element|default:"—" }}{% if not forloop.last %}<br>{% endif %}
-                {% endfor %}
-              {% else %}
-                &mdash;
-              {% endif %}
-            </td>
-            {% with first_identifications|get_item:accessionrow.id as first_identification %}
-              {% if first_identification %}
-                {% with taxonomy|get_item:first_identification.id as matched_taxon %}
-                  <td>
-                    {{ first_identification.taxon }}
-                    {% if identification_counts|get_item:accessionrow.id > 1 %}
-                      <span title="This specimen has previous identifications">(*)</span>
-                    {% endif %}
-                  </td>
-                  <td>{{ matched_taxon.family|default:"-" }}</td>
-                  <td>{{ matched_taxon.subfamily|default:"-" }}</td>
-                  <td>{{ matched_taxon.tribe|default:"-" }}</td>
-                  <td>{{ matched_taxon.genus|default:"-" }}</td>
-                  <td>{{ matched_taxon.species|default:"-" }}</td>
-                {% endwith %}
-              {% else %}
-                <td>No Taxon identified</td>
-                <td>-</td>
-                <td>-</td>
-                <td>-</td>
-                <td>-</td>
-                <td>-</td>
-              {% endif %}
-            {% endwith %}
-          </tr>
+            <tr>
+              <td>
+                {% if preview_mode %}
+                  {{ accessionrow.specimen_suffix }}
+                {% else %}
+                  <a href="{% url 'accessionrow_detail' accessionrow.pk %}">{{ accessionrow.specimen_suffix }}</a>
+                {% endif %}
+              </td>
+              <td>{{ accessionrow.storage|default:"—" }}</td>
+              <td>
+                {% if specimens %}
+                  {% for specimen in specimens %}
+                    {{ specimen.element|default:"—" }}{% if not forloop.last %}<br>{% endif %}
+                  {% endfor %}
+                {% else %}
+                  &mdash;
+                {% endif %}
+              </td>
+              <td>
+                {% if specimens %}
+                  {% for specimen in specimens %}
+                    {{ specimen.side|default:"—" }}{% if not forloop.last %}<br>{% endif %}
+                  {% endfor %}
+                {% else %}
+                  &mdash;
+                {% endif %}
+              </td>
+              <td>
+                {% if specimens %}
+                  {% for specimen in specimens %}
+                    {{ specimen.verbatim_element|default:"—" }}{% if not forloop.last %}<br>{% endif %}
+                  {% endfor %}
+                {% else %}
+                  &mdash;
+                {% endif %}
+              </td>
+              {% with first_identifications|get_item:accessionrow.id as first_identification %}
+                {% if first_identification %}
+                  {% with taxonomy|get_item:first_identification.id as matched_taxon %}
+                    <td>
+                      {{ first_identification.taxon|default:"—" }}
+                      {% if identification_counts|get_item:accessionrow.id > 1 %}
+                        <span class="w3-text-blue" title="{% trans "This specimen has previous identifications" %}">(*)</span>
+                      {% endif %}
+                    </td>
+                    <td>{{ matched_taxon.family|default:"—" }}</td>
+                    <td>{{ matched_taxon.subfamily|default:"—" }}</td>
+                    <td>{{ matched_taxon.tribe|default:"—" }}</td>
+                    <td>{{ matched_taxon.genus|default:"—" }}</td>
+                    <td>{{ matched_taxon.species|default:"—" }}</td>
+                  {% endwith %}
+                {% else %}
+                  <td>{% trans "No taxon identified" %}</td>
+                  <td>—</td>
+                  <td>—</td>
+                  <td>—</td>
+                  <td>—</td>
+                  <td>—</td>
+                {% endif %}
+              {% endwith %}
+            </tr>
           {% endwith %}
         {% empty %}
           <tr>
-            <td colspan="11">No specimen rows recorded.</td>
+            <td colspan="11" class="w3-center">{% trans "No specimen rows recorded." %}</td>
           </tr>
         {% endfor %}
       </tbody>
     </table>
+  </div>
+</section>
 
-    <hr class="accession_hr">
-
-    {% if not preview_mode and user.is_authenticated and user|has_group:"Collection Managers" %}
-      <a href="{% url 'accession_add_reference' accession.id %}">➕ Add Reference</a>
+<section class="w3-margin-top" aria-labelledby="accession-references-heading">
+  <header class="w3-row w3-padding-16">
+    <div class="w3-col s12 m6">
+      <h2 id="accession-references-heading" class="w3-margin-0">
+        <i class="fa-solid fa-book" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "References" %}</span>
+      </h2>
+    </div>
+    {% if not preview_mode and user.is_authenticated %}
+      {% if user|has_group:"Collection Managers" %}
+        <div class="w3-col s12 m6 w3-right-align">
+          <a href="{% url 'accession_add_reference' accession.id %}" class="w3-button w3-green w3-round">
+            <i class="fa-solid fa-plus" aria-hidden="true"></i>
+            <span class="w3-hide-small w3-margin-left">{% trans "Add reference" %}</span>
+          </a>
+        </div>
+      {% endif %}
     {% endif %}
-    {% if references %}
-      <table>
-        <caption>References</caption>
+  </header>
+  {% if references %}
+    <div class="w3-responsive">
+      <table class="w3-table-all w3-hoverable w3-small">
         <thead>
           <tr>
-            <th>Year</th>
-            <th>First author</th>
-            <th>Title</th>
-            <th>Page(s)</th>
+            <th scope="col">{% trans "Year" %}</th>
+            <th scope="col">{% trans "First author" %}</th>
+            <th scope="col">{% trans "Title" %}</th>
+            <th scope="col">{% trans "Page(s)" %}</th>
           </tr>
         </thead>
         <tbody>
           {% for ref in references %}
             <tr>
-              <td>{{ ref.reference.year }}</td>
-              <td>{{ ref.reference.first_author }}</td>
-              <td>{{ ref.reference.title }}</td>
-              <td>{{ ref.page }}</td>
+              <td>{{ ref.reference.year|default:"—" }}</td>
+              <td>{{ ref.reference.first_author|default:"—" }}</td>
+              <td>{{ ref.reference.title|default:"—" }}</td>
+              <td>{{ ref.page|default:"—" }}</td>
             </tr>
           {% endfor %}
         </tbody>
         <tfoot>
           <tr>
-            <td colspan="3">{{ references|length }} References</td>
+            <td colspan="4" class="w3-text-gray">{{ references|length }} {% trans "reference entries" %}</td>
           </tr>
         </tfoot>
       </table>
-    {% else %}
-      <p>No References found for this accession.</p>
-    {% endif %}
+    </div>
+  {% else %}
+    <p class="w3-text-gray">{% trans "No references linked to this accession." %}</p>
+  {% endif %}
+</section>
 
-    <hr class="accession_hr">
-
-    {% if preview_mode %}
-      <style>
-        .fieldslip-meta-grid {
-          display: grid;
-          gap: 0.25rem 0.5rem;
-          grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-        }
-        .fieldslip-meta-grid strong {
-          font-weight: 600;
-        }
-      </style>
-      <table>
-        <caption><b><u>Field Slips</u></b></caption>
+{% if preview_mode %}
+  <section class="w3-margin-top" aria-labelledby="accession-fieldslips-heading">
+    <header class="w3-padding-16">
+      <h2 id="accession-fieldslips-heading" class="w3-margin-0">
+        <i class="fa-solid fa-map-location-dot" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "Field slips" %}</span>
+      </h2>
+    </header>
+    <div class="w3-responsive">
+      <table class="w3-table-all w3-hoverable w3-small">
         <thead>
           <tr>
-            <th>Field Number</th>
-            <th>Verbatim Locality</th>
-            <th>Verbatim Taxon</th>
-            <th>Verbatim Element</th>
+            <th scope="col">{% trans "Field number" %}</th>
+            <th scope="col">{% trans "Verbatim locality" %}</th>
+            <th scope="col">{% trans "Verbatim taxon" %}</th>
+            <th scope="col">{% trans "Verbatim element" %}</th>
           </tr>
         </thead>
         <tbody>
@@ -223,88 +271,101 @@
               {% if slip.horizon_formation or slip.horizon_member or slip.horizon_bed or slip.horizon_chronostratigraphy or slip.verbatim_latitude or slip.verbatim_longitude or slip.verbatim_elevation or slip.aerial_photo %}
                 <tr>
                   <td colspan="4">
-                    <small class="fieldslip-meta-grid">
+                    <ul class="w3-ul w3-small w3-border-0 w3-margin-0">
                       {% if slip.horizon_formation or slip.horizon_member or slip.horizon_bed or slip.horizon_chronostratigraphy %}
-                        <div>
-                          <strong>Verbatim horizon:</strong>
-                          <span>
-                            {% if slip.horizon_formation %}{{ slip.horizon_formation }}{% endif %}
-                            {% if slip.horizon_member %}{% if slip.horizon_formation %}, {% endif %}{{ slip.horizon_member }}{% endif %}
-                            {% if slip.horizon_bed %}{% if slip.horizon_formation or slip.horizon_member %}, {% endif %}{{ slip.horizon_bed }}{% endif %}
-                            {% if slip.horizon_chronostratigraphy %}{% if slip.horizon_formation or slip.horizon_member or slip.horizon_bed %}, {% endif %}{{ slip.horizon_chronostratigraphy }}{% endif %}
-                          </span>
-                        </div>
+                        <li>
+                          <strong>{% trans "Verbatim horizon" %}:</strong>
+                          {{ slip.horizon_formation }}{% if slip.horizon_member %}, {{ slip.horizon_member }}{% endif %}{% if slip.horizon_bed %}, {{ slip.horizon_bed }}{% endif %}{% if slip.horizon_chronostratigraphy %}, {{ slip.horizon_chronostratigraphy }}{% endif %}
+                        </li>
                       {% endif %}
                       {% if slip.verbatim_latitude or slip.verbatim_longitude or slip.verbatim_elevation %}
-                        <div>
-                          <strong>Coordinates:</strong>
-                          <span>
-                            {% if slip.verbatim_latitude %}Lat {{ slip.verbatim_latitude }}{% endif %}
-                            {% if slip.verbatim_longitude %}{% if slip.verbatim_latitude %}, {% endif %}Lon {{ slip.verbatim_longitude }}{% endif %}
-                            {% if slip.verbatim_elevation %}{% if slip.verbatim_latitude or slip.verbatim_longitude %}, {% endif %}Elev {{ slip.verbatim_elevation }}{% endif %}
-                          </span>
-                        </div>
+                        <li>
+                          <strong>{% trans "Coordinates" %}:</strong>
+                          {% if slip.verbatim_latitude %}{% trans "Lat" %} {{ slip.verbatim_latitude }}{% endif %}
+                          {% if slip.verbatim_longitude %}{% if slip.verbatim_latitude %}, {% endif %}{% trans "Lon" %} {{ slip.verbatim_longitude }}{% endif %}
+                          {% if slip.verbatim_elevation %}{% if slip.verbatim_latitude or slip.verbatim_longitude %}, {% endif %}{% trans "Elev" %} {{ slip.verbatim_elevation }}{% endif %}
+                        </li>
                       {% endif %}
                       {% if slip.aerial_photo %}
-                        <div>
-                          <strong>Aerial photo:</strong> {{ slip.aerial_photo }}
-                        </div>
+                        <li>
+                          <strong>{% trans "Aerial photo" %}:</strong> {{ slip.aerial_photo }}
+                        </li>
                       {% endif %}
-                    </small>
+                    </ul>
                   </td>
                 </tr>
               {% endif %}
             {% endfor %}
           {% else %}
             <tr>
-              <td colspan="4">No Field Slips linked to this accession.</td>
+              <td colspan="4" class="w3-center">{% trans "No field slips linked to this accession." %}</td>
             </tr>
           {% endif %}
         </tbody>
       </table>
+    </div>
+  </section>
+{% endif %}
 
-      <hr class="accession_hr">
+<section class="w3-margin-top" aria-labelledby="accession-media-heading">
+  <header class="w3-row w3-padding-16">
+    <div class="w3-col s12 m6">
+      <h2 id="accession-media-heading" class="w3-margin-0">
+        <i class="fa-solid fa-photo-film" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "Media" %}</span>
+      </h2>
+    </div>
+    {% if not preview_mode and user.is_authenticated %}
+      {% if user|has_group:"Collection Managers" %}
+        <div class="w3-col s12 m6 w3-right-align">
+          <a href="{% url 'accession_upload_media' accession.id %}" class="w3-button w3-green w3-round">
+            <i class="fa-solid fa-upload" aria-hidden="true"></i>
+            <span class="w3-hide-small w3-margin-left">{% trans "Upload media" %}</span>
+          </a>
+        </div>
+      {% endif %}
     {% endif %}
-
-    {% if not preview_mode and user.is_authenticated and user|has_group:"Collection Managers" %}
-      <a href="{% url 'accession_upload_media' accession.id %}">➕ Upload Media</a>
-    {% endif %}
-    <table>
-      <caption><em>Media</em></caption>
+  </header>
+  <div class="w3-responsive">
+    <table class="w3-table-all w3-hoverable w3-small">
       <thead>
         <tr>
-          <th>File Name</th>
-          <th>Type</th>
-          <th>License</th>
-          <th>Media</th>
+          <th scope="col">{% trans "File name" %}</th>
+          <th scope="col">{% trans "Type" %}</th>
+          <th scope="col">{% trans "License" %}</th>
+          <th scope="col">{% trans "Preview" %}</th>
         </tr>
       </thead>
       <tbody>
-        {% if accession.media.all %}
-          {% for media in accession.media.all %}
+        {% with media_items=accession.media.all %}
+          {% if media_items|length %}
+            {% for media in media_items %}
+              <tr>
+                <td>{{ media.file_name|default:"—" }}</td>
+                <td>{{ media.type|default:"—" }}</td>
+                <td>{{ media.get_license_display|default:"—" }}</td>
+                <td>
+                  {% if media.media_location %}
+                    <a href="{{ media.media_location.url }}" target="_blank" rel="noopener">
+                      {% if media.type == "photo" %}
+                        <img src="{{ media.media_location.url }}" alt="{{ media.file_name }}" class="w3-image" style="max-height:80px; max-width:120px; object-fit:contain;" />
+                      {% else %}
+                        {% trans "View file" %}
+                      {% endif %}
+                    </a>
+                  {% else %}
+                    <span class="w3-text-gray">{% trans "Not available" %}</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          {% else %}
             <tr>
-              <td>{{ media.file_name }}</td>
-              <td>{{ media.type }}</td>
-              <td>{{ media.get_license_display }}</td>
-              <td>
-                {% if media.media_location %}
-                  <a href="{{ media.media_location.url }}" target="_blank">
-                    {% if media.type == "photo" %}
-                      <img src="{{ media.media_location.url }}" alt="{{ media.file_name }}" height="100">
-                    {% else %}
-                      View File
-                    {% endif %}
-                  </a>
-                {% endif %}
-              </td>
+              <td colspan="4" class="w3-center">{% trans "There are no media files available for this accession." %}</td>
             </tr>
-          {% endfor %}
-        {% else %}
-          <tr>
-            <td colspan="4">There are no media files available for this accession.</td>
-          </tr>
-        {% endif %}
+          {% endif %}
+        {% endwith %}
       </tbody>
     </table>
   </div>
-</div>
+</section>

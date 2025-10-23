@@ -1,6 +1,6 @@
 {% extends "base_generic.html" %}
 
-{% load custom_filters %}
+{% load i18n custom_filters %}
 
 {% block title %}Storage {{ storage.area }}{% endblock %}
 
@@ -113,46 +113,14 @@
     {% endif %}
   </div>
 
-  <div class="w3-margin-top">
-    <h3>Change Log</h3>
-    {% if history_entries %}
-      <div class="w3-responsive">
-        <table class="w3-table-all w3-small">
-          <thead>
-            <tr>
-              <th>Date/Time</th>
-              <th>Action</th>
-              <th>Comment</th>
-              <th>Changed By</th>
-              <th>Changes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for entry in history_entries %}
-              <tr>
-                <td>{{ entry.log.history_date|date:"Y-m-d H:i" }}</td>
-                <td>{{ entry.log.history_type }}</td>
-                <td>{{ entry.log.history_change_reason|default:"" }}</td>
-                <td>{{ entry.log.history_user|default:"System or Unknown" }}</td>
-                <td>
-                  {% if entry.changes %}
-                    <ul class="w3-ul w3-border-0 w3-margin-0">
-                      {% for change in entry.changes %}
-                        <li><strong>{{ change.field }}:</strong> {{ change.old }} → {{ change.new }}</li>
-                      {% endfor %}
-                    </ul>
-                  {% else %}
-                    Initial version
-                  {% endif %}
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    {% else %}
-      <p class="w3-text-gray">No changes logged.</p>
-    {% endif %}
+  <div class="w3-margin-top" aria-labelledby="storage-history-heading">
+    <h3 id="storage-history-heading">
+      <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+      <span class="w3-margin-left">{% trans "Change log" %}</span>
+    </h3>
+    {% trans "Storage change log" as storage_history_caption %}
+    {% trans "No changes logged." as storage_history_empty %}
+    {% include "cms/history_table.html" with entries=history_entries table_id="storage-history-table" caption=storage_history_caption empty_message=storage_history_empty %}
   </div>
 
   <div class="w3-margin-top">

@@ -1,0 +1,121 @@
+{% load i18n %}
+{% with logs=logs|default:None %}
+  {% if logs %}
+    {% with table_id=table_id|default:'media-qc-history-table' %}
+      <div class="w3-responsive">
+        <table id="{{ table_id }}" class="w3-table-all w3-hoverable w3-small"{% if caption %} aria-describedby="{{ table_id }}-caption"{% endif %}>
+          {% if caption %}
+            <caption id="{{ table_id }}-caption" class="w3-text-grey w3-left-align">{{ caption }}</caption>
+          {% endif %}
+          <thead>
+            <tr>
+              <th scope="col"><abbr title="{% trans "Date and time" %}">{% trans "Date/time" %}</abbr></th>
+              <th scope="col">{% trans "Action" %}</th>
+              <th scope="col">{% trans "Media" %}</th>
+              <th scope="col">{% trans "Changed by" %}</th>
+              <th scope="col">{% trans "Details" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for log in logs %}
+              <tr>
+                <td data-label="{% trans "Date/time" %}">
+                  <time datetime="{{ log.created_on|date:'c' }}">{{ log.created_on|date:"Y-m-d H:i" }}</time>
+                </td>
+                <td data-label="{% trans "Action" %}">
+                  {% with change_type=log.change_type %}
+                    {% if change_type == 'status' %}
+                      {% with icon='fa-arrows-rotate' tag_class='w3-pale-blue' %}
+                        <span class="w3-tag w3-round {{ tag_class }}">
+                          <i class="fa-solid {{ icon }}" aria-hidden="true"></i>
+                          <span class="w3-margin-left">{{ log.get_change_type_display }}</span>
+                        </span>
+                      {% endwith %}
+                    {% elif change_type == 'ocr_data' %}
+                      {% with icon='fa-file-lines' tag_class='w3-pale-yellow' %}
+                        <span class="w3-tag w3-round {{ tag_class }}">
+                          <i class="fa-solid {{ icon }}" aria-hidden="true"></i>
+                          <span class="w3-margin-left">{{ log.get_change_type_display }}</span>
+                        </span>
+                      {% endwith %}
+                    {% elif change_type == 'rows_rearranged' %}
+                      {% with icon='fa-people-arrows' tag_class='w3-pale-red' %}
+                        <span class="w3-tag w3-round {{ tag_class }}">
+                          <i class="fa-solid {{ icon }}" aria-hidden="true"></i>
+                          <span class="w3-margin-left">{{ log.get_change_type_display }}</span>
+                        </span>
+                      {% endwith %}
+                    {% else %}
+                      {% with icon='fa-clock-rotate-left' tag_class='w3-light-grey' %}
+                        <span class="w3-tag w3-round {{ tag_class }}">
+                          <i class="fa-solid {{ icon }}" aria-hidden="true"></i>
+                          <span class="w3-margin-left">{{ log.get_change_type_display }}</span>
+                        </span>
+                      {% endwith %}
+                    {% endif %}
+                  {% endwith %}
+                  {% if log.field_name %}
+                    <div class="w3-small w3-text-grey">{{ log.field_name }}</div>
+                  {% endif %}
+                </td>
+                <td data-label="{% trans "Media" %}">
+                  <a href="{% url 'media_expert_qc' log.media.uuid %}" class="w3-text-indigo">
+                    {{ log.media.file_name|default:log.media.uuid }}
+                  </a>
+                </td>
+                <td data-label="{% trans "Changed by" %}">
+                  {% if log.changed_by %}
+                    {{ log.changed_by.get_full_name|default:log.changed_by.username }}
+                  {% else %}
+                    <span class="w3-text-grey">{% trans "System or unknown" %}</span>
+                  {% endif %}
+                </td>
+                <td data-label="{% trans "Details" %}">
+                  {% if log.description %}
+                    <p class="w3-margin-0">{{ log.description }}</p>
+                  {% endif %}
+                  {% if log.old_value %}
+                    <div class="w3-small w3-margin-top">
+                      <i class="fa-solid fa-arrow-turn-up" aria-hidden="true"></i>
+                      <span class="w3-text-grey w3-margin-left">{% trans "Previous" %}:</span>
+                      <code>{{ log.old_value }}</code>
+                    </div>
+                  {% endif %}
+                  {% if log.new_value %}
+                    <div class="w3-small w3-margin-top">
+                      <i class="fa-solid fa-arrow-turn-down" aria-hidden="true"></i>
+                      <span class="w3-text-grey w3-margin-left">{% trans "Current" %}:</span>
+                      <code>{{ log.new_value }}</code>
+                    </div>
+                  {% endif %}
+                  {% with comments=log.comments.all %}
+                    {% if comments %}
+                      <ul class="w3-ul w3-border-0 w3-small w3-margin-top">
+                        {% for comment in comments %}
+                          <li>
+                            <i class="fa-solid fa-comment-dots" aria-hidden="true"></i>
+                            <span class="w3-margin-left">{{ comment.comment }}</span>
+                            <div class="w3-text-grey">
+                              {{ comment.created_on|date:"Y-m-d H:i" }}
+                              {% if comment.created_by %}
+                                — {{ comment.created_by.get_full_name|default:comment.created_by.username }}
+                              {% else %}
+                                — {% trans "System" %}
+                              {% endif %}
+                            </div>
+                          </li>
+                        {% endfor %}
+                      </ul>
+                    {% endif %}
+                  {% endwith %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endwith %}
+  {% elif empty_message %}
+    <p class="w3-text-grey">{{ empty_message }}</p>
+  {% endif %}
+{% endwith %}

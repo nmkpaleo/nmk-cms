@@ -2,6 +2,15 @@ from django import forms
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db.models import Q
+from django.forms.widgets import (
+    CheckboxInput,
+    CheckboxSelectMultiple,
+    ClearableFileInput,
+    RadioSelect,
+    Select,
+    SelectMultiple,
+    Textarea,
+)
 from django_select2 import forms as s2forms
 from django_select2.forms import (
     ModelSelect2TagWidget,
@@ -43,7 +52,94 @@ import json
 User = get_user_model()
 
 
-class AccessionBatchForm(forms.Form):
+class W3StyleMixin:
+    """Apply W3.CSS-friendly classes to rendered form widgets."""
+
+    _text_input_types = {
+        "text",
+        "email",
+        "number",
+        "password",
+        "url",
+        "search",
+        "tel",
+        "date",
+        "datetime-local",
+        "time",
+        "month",
+        "week",
+        "color",
+    }
+    _input_class = "w3-input w3-border w3-round-large"
+    _select_class = "w3-select w3-border w3-round-large"
+    _checkbox_class = "w3-check"
+    _radio_class = "w3-radio"
+
+    _select2_widgets = (
+        Select2Widget,
+        ModelSelect2Widget,
+        ModelSelect2TagWidget,
+    )
+
+    def _merge_widget_class(self, widget: forms.Widget, class_name: str) -> None:
+        existing = widget.attrs.get("class", "")
+        classes = {c for c in existing.split(" ") if c}
+        classes.update(class_name.split(" "))
+        widget.attrs["class"] = " ".join(sorted(classes))
+
+    def _apply_w3_styles(self) -> None:
+        for field in self.fields.values():
+            widget = field.widget
+
+            if isinstance(widget, self._select2_widgets):
+                # Select2 renders its own markup; avoid overriding classes.
+                continue
+
+            input_type = getattr(widget, "input_type", "")
+
+            if input_type in self._text_input_types:
+                self._merge_widget_class(widget, self._input_class)
+                continue
+
+            if isinstance(widget, Textarea):
+                self._merge_widget_class(widget, self._input_class)
+                continue
+
+            if isinstance(widget, (Select, SelectMultiple)):
+                self._merge_widget_class(widget, self._select_class)
+                continue
+
+            if isinstance(widget, CheckboxInput):
+                self._merge_widget_class(widget, self._checkbox_class)
+                continue
+
+            if isinstance(widget, CheckboxSelectMultiple):
+                self._merge_widget_class(widget, "w3-ul w3-border w3-round-large")
+                continue
+
+            if isinstance(widget, RadioSelect):
+                self._merge_widget_class(widget, self._radio_class)
+                continue
+
+            if isinstance(widget, ClearableFileInput):
+                self._merge_widget_class(widget, self._input_class)
+
+
+class BaseW3Form(W3StyleMixin, forms.Form):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.label_suffix = ""
+        self._apply_w3_styles()
+
+
+class BaseW3ModelForm(W3StyleMixin, forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.label_suffix = ""
+        self._apply_w3_styles()
+
+
+class AccessionBatchForm(BaseW3Form):
     user = forms.ModelChoiceField(queryset=User.objects.all())
     count = forms.IntegerField(min_value=1, max_value=500)
     collection = forms.ModelChoiceField(queryset=Collection.objects.all())
@@ -66,7 +162,7 @@ class AccessionBatchForm(forms.Form):
         return user.get_full_name() or user.username
 
 
-class AccessionNumberSelectForm(forms.Form):
+class AccessionNumberSelectForm(BaseW3Form):
     accession_number = forms.ChoiceField(label="Select Accession Number", choices=[])
 
     def __init__(self, *args, **kwargs):
@@ -75,7 +171,7 @@ class AccessionNumberSelectForm(forms.Form):
         self.fields["accession_number"].choices = [(n, n) for n in available_numbers]
 
 
-class AccessionNumberSeriesAdminForm(forms.ModelForm):
+class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
     TBI_USERNAME = "tbi"
 
     count = forms.IntegerField(
@@ -232,7 +328,7 @@ class AccessionRowWidget(s2forms.ModelSelect2Widget):
         return f"{prefix} {number}{suffix} ({collection})"
 
 
-class AccessionMediaUploadForm(forms.ModelForm):
+class AccessionMediaUploadForm(BaseW3ModelForm):
     class Meta:
         model = Media
         fields = ["media_location", "type", "license", "rights_holder"]
@@ -419,7 +515,7 @@ class IdentifiedByWidget(s2forms.ModelSelect2TagWidget):
         return person.pk
 
 
-class AccessionForm(forms.ModelForm):
+class AccessionForm(BaseW3ModelForm):
     class Meta:
         model = Accession
         fields = [
@@ -443,13 +539,13 @@ class AccessionForm(forms.ModelForm):
         )
 
 
-class AccessionCommentForm(forms.ModelForm):
+class AccessionCommentForm(BaseW3ModelForm):
     class Meta:
         model = Comment
         fields = ["subject", "comment", "comment_by"]
 
 
-class AccessionFieldSlipForm(forms.ModelForm):
+class AccessionFieldSlipForm(BaseW3ModelForm):
     fieldslip = forms.ModelChoiceField(
         queryset=FieldSlip.objects.none(),
         widget=FieldSlipWidget(),
@@ -469,13 +565,13 @@ class AccessionFieldSlipForm(forms.ModelForm):
         self.fields["fieldslip"].widget.choices = self.fields["fieldslip"].choices
 
 
-class AccessionGeologyForm(forms.ModelForm):
+class AccessionGeologyForm(BaseW3ModelForm):
     class Meta:
         model = SpecimenGeology
         fields = ["earliest_geological_context", "latest_geological_context"]
 
 
-class AccessionReferenceForm(forms.ModelForm):
+class AccessionReferenceForm(BaseW3ModelForm):
     class Meta:
         model = AccessionReference
         fields = ["reference", "page"]
@@ -484,7 +580,7 @@ class AccessionReferenceForm(forms.ModelForm):
         }
 
 
-class AccessionReferenceForm2(forms.ModelForm):
+class AccessionReferenceForm2(BaseW3ModelForm):
     reference = forms.ModelChoiceField(
         queryset=Reference.objects.all(),
         widget=ModelSelect2Widget(
@@ -499,9 +595,9 @@ class AccessionReferenceForm2(forms.ModelForm):
         fields = ["reference", "page"]
 
 
-class FieldSlipForm(forms.ModelForm):
+class FieldSlipForm(BaseW3ModelForm):
     collection_date = forms.DateField(
-        widget=forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+        widget=forms.DateInput(attrs={"type": "date"}),
         required=False,
     )
 
@@ -525,7 +621,7 @@ class FieldSlipForm(forms.ModelForm):
         ]
 
 
-class ReferenceForm(forms.ModelForm):
+class ReferenceForm(BaseW3ModelForm):
     class Meta:
         model = Reference
         fields = [
@@ -554,7 +650,7 @@ class ReferenceForm(forms.ModelForm):
         }
 
 
-class LocalityForm(forms.ModelForm):
+class LocalityForm(BaseW3ModelForm):
     class Meta:
         model = Locality
         fields = ["abbreviation", "name"]
@@ -564,7 +660,7 @@ class LocalityForm(forms.ModelForm):
         }
 
 
-class PlaceForm(forms.ModelForm):
+class PlaceForm(BaseW3ModelForm):
     class Meta:
         model = Place
         fields = [
@@ -587,7 +683,7 @@ class PlaceForm(forms.ModelForm):
         }
 
 
-class MediaUploadForm(forms.ModelForm):
+class MediaUploadForm(BaseW3ModelForm):
     class Meta:
         model = Media
         fields = ["media_location", "type", "license", "rights_holder"]
@@ -612,7 +708,7 @@ class MultiFileField(forms.Field):
         return [value]
 
 
-class ScanUploadForm(forms.Form):
+class ScanUploadForm(BaseW3Form):
     files = MultiFileField(label="Scan files")
 
     def __init__(self, *args, **kwargs):
@@ -643,7 +739,7 @@ class ScanUploadForm(forms.Form):
         return uploaded_files
 
 
-class AddAccessionRowForm(forms.ModelForm):
+class AddAccessionRowForm(BaseW3ModelForm):
     specimen_suffix = forms.ChoiceField(choices=[], required=False)
     accession = forms.ModelChoiceField(
         queryset=Accession.objects.all(),
@@ -698,7 +794,7 @@ class AddAccessionRowForm(forms.ModelForm):
         return suffix or "-"
 
 
-class AccessionRowUpdateForm(forms.ModelForm):
+class AccessionRowUpdateForm(BaseW3ModelForm):
     specimen_suffix = forms.ChoiceField(choices=[], required=False)
 
     class Meta:
@@ -744,7 +840,7 @@ class AccessionRowUpdateForm(forms.ModelForm):
         return suffix or "-"
 
 
-class NatureOfSpecimenForm(forms.ModelForm):
+class NatureOfSpecimenForm(BaseW3ModelForm):
     element = forms.ModelChoiceField(
         queryset=Element.objects.order_by("name"),
         widget=ElementWidget(),
@@ -762,7 +858,7 @@ class NatureOfSpecimenForm(forms.ModelForm):
         ]
 
 
-class AddSpecimenForm(forms.ModelForm):
+class AddSpecimenForm(BaseW3ModelForm):
     accession_row = forms.ModelChoiceField(
         queryset=AccessionRow.objects.all(),
         widget=forms.HiddenInput(),  # Ensure it's hidden in the form
@@ -790,7 +886,7 @@ class AddSpecimenForm(forms.ModelForm):
             )
 
 
-class AccessionRowIdentificationForm(forms.ModelForm):
+class AccessionRowIdentificationForm(BaseW3ModelForm):
     reference = forms.ModelChoiceField(
         queryset=Reference.objects.order_by("first_author", "year", "title"),
         required=False,
@@ -851,7 +947,7 @@ class AccessionRowIdentificationForm(forms.ModelForm):
         return cleaned_data
 
 
-class AccessionRowSpecimenForm(forms.ModelForm):
+class AccessionRowSpecimenForm(BaseW3ModelForm):
     element = forms.ModelChoiceField(
         queryset=Element.objects.order_by("name"),
         widget=ElementWidget(),
@@ -869,7 +965,7 @@ class AccessionRowSpecimenForm(forms.ModelForm):
         ]
 
 
-class PreparationForm(forms.ModelForm):
+class PreparationForm(BaseW3ModelForm):
     """Form for creating/updating preparation records."""
 
     class Meta:
@@ -899,7 +995,7 @@ class PreparationForm(forms.ModelForm):
         }
 
 
-class PreparationApprovalForm(forms.ModelForm):
+class PreparationApprovalForm(BaseW3ModelForm):
     """Form for curators to approve or decline a preparation."""
 
     class Meta:
@@ -907,7 +1003,7 @@ class PreparationApprovalForm(forms.ModelForm):
         fields = ["approval_status", "curator_comments"]
 
 
-class PreparationMediaUploadForm(forms.Form):
+class PreparationMediaUploadForm(BaseW3Form):
     media_files = forms.FileField(
         widget=forms.FileInput(attrs={"multiple": False}), label="Upload media files"
     )
@@ -923,7 +1019,7 @@ class PreparationMediaUploadForm(forms.Form):
     notes = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 2}))
 
 
-class SpecimenCompositeForm(forms.Form):
+class SpecimenCompositeForm(BaseW3Form):
     storage = forms.ModelChoiceField(
         queryset=AccessionRow._meta.get_field("storage").related_model.objects.all(),
         required=True,
@@ -940,7 +1036,7 @@ class SpecimenCompositeForm(forms.Form):
     )
 
 
-class DrawerRegisterForm(forms.ModelForm):
+class DrawerRegisterForm(BaseW3ModelForm):
     class Meta:
         model = DrawerRegister
         fields = [
@@ -976,7 +1072,7 @@ class DrawerRegisterForm(forms.ModelForm):
         return cleaned_data
 
 
-class StorageForm(forms.ModelForm):
+class StorageForm(BaseW3ModelForm):
     class Meta:
         model = Storage
         fields = ["area", "parent_area"]
