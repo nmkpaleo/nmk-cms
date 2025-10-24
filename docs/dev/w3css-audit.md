@@ -8,57 +8,28 @@
 
 ## `app/cms/static/css/style.css`
 
-### Global navigation (`base_generic.html`)
-- **Custom selectors:** `.main-navbar`, `.nav-logo`, `.logo_image`, `.nav-toggle`, `.nav-links`, `.nav-item`, `.nav-right`, `.nav-text`, `.nav-link`, `.nav-button`, `.logout-form`, `.nav-dropdown`, `.nav-dropdown-menu` plus responsive media queries.【F:app/cms/static/css/style.css†L11-L188】
-- **Templates:** Primary site navigation still renders these classes in `base_generic.html`.【F:app/cms/templates/base_generic.html†L43-L106】
-- **W3.CSS alternatives:**
-  - Replace bespoke flex layout with `w3-bar`, `w3-bar-item`, and `w3-right` to handle alignment instead of `.nav-links` / `.nav-item` flex rules.
-  - Use `w3-button w3-round-large w3-theme` (or the project theme palette) for CTA styles in place of `.nav-button`.
-  - Swap `.nav-dropdown` structures for the W3 dropdown pattern: `w3-dropdown-hover`/`w3-dropdown-click` with `.w3-dropdown-content w3-card-4`.
-  - Apply `w3-hide-small` / `w3-hide-medium` utilities for responsive hide/show logic instead of custom media queries.
-  - Keep `.sr-only` for screen-reader-only copy; W3.CSS does not ship an equivalent helper and accessibility should not regress.【F:app/cms/static/css/style.css†L143-L153】
-
-### Landing hero (`index.html`)
-- **Status:** Rebuilt with W3 layout, typography, and button utilities; bespoke hero selectors have been removed from `style.css`.
-- **Templates:** The landing hero now uses `w3-row-padding`, `w3-col`, `w3-xxxlarge`, and `w3-button` helpers to deliver the responsive layout and CTA styling.【F:app/cms/templates/index.html†L6-L21】
-- **Follow-up:** None required unless additional marketing sections are added; reuse the same W3 patterns before introducing new custom CSS.
-
-### Legacy Bootstrap-like container usage (reports)
-- **Custom selector:** `.container` sets a fixed width and center alignment for report templates.【F:app/cms/static/css/style.css†L375-L383】
-- **Templates:** `app/templates/reports/media_report.html` and `app/templates/reports/accession_distribution.html` pull in the class (and additional Bootstrap spacing helpers).【F:app/templates/reports/media_report.html†L9-L35】【F:app/templates/reports/accession_distribution.html†L7-L52】
-- **W3.CSS alternatives:** Replace `.container` / Bootstrap margin utilities with `w3-content w3-padding-32` (outer wrapper) and `w3-margin-top` / `w3-margin-bottom` / `w3-center` for spacing. W3 `w3-card` / `w3-round` utilities can substitute the inline box shadows defined alongside the container.
+### Global helpers
+- **Active selectors:** `.logo_image`, `.logout-form`, and `.sr-only` remain in `style.css` to size the NMK logo, remove default margins on the logout form, and provide a reusable screen-reader utility.【F:app/cms/static/css/style.css†L5-L34】
+- **Templates:** The navigation include renders all three helpers.【F:app/cms/templates/base_generic.html†L40-L68】【F:app/cms/templates/includes/navigation_links_inner.html†L10-L49】
+- **W3.CSS follow-up:** The logo sizing could move to an inline `style` or `w3-image` helper, and the logout form can switch to `class="w3-margin-0"` to eliminate bespoke CSS. `.sr-only` continues to fill an accessibility gap not covered by W3.CSS.
 
 ### Account entrance templates (`account/login.html`, `account/signup.html`, social login)
-- **Custom selectors:** `.Login_page`, `.Login_box`, `.login-h1`, `.login-profile`, `.signup-text`, `.login-Sign_In_With-h4` and related form input overrides.【F:app/cms/static/css/style.css†L724-L887】
-- **Templates:** Login and signup flows render the classes, along with the social login partial.【F:app/templates/account/login.html†L9-L104】【F:app/templates/account/signup.html†L8-L63】【F:app/templates/socialaccount/snippets/login.html†L12-L16】
-- **W3.CSS alternatives:**
-  - Wrap forms in `w3-display-container` + `w3-display-middle` or `w3-container w3-padding-64 w3-card-4` to achieve the centered modal feel.
-  - Replace heading styles with `w3-xlarge w3-center w3-text-theme`.
-  - Use `w3-circle` and `w3-border` helpers for the profile icon container, or rely on `w3-card` for depth.
-  - Style form controls with `w3-input w3-border w3-round-large` and CTA buttons with `w3-button w3-block w3-theme` to retire the custom gradients and shadows.
-  - For helper text, use `w3-text-grey` and `w3-small` utilities; hide remember-me via template logic instead of CSS if necessary.
+- **Custom selectors:** `.Login_page`, `.Login_box`, `.login-h1`, `.login-profile`, `.signup-text`, `.login-Sign_In_With-h4`, and the input/button overrides scoped under `.Login_box` persist to preserve the existing entrance design.【F:app/cms/static/css/style.css†L36-L140】
+- **Templates:** Login and signup flows render the namespace, along with the social login partial.【F:app/templates/account/login.html†L9-L104】【F:app/templates/account/signup.html†L8-L63】【F:app/templates/socialaccount/snippets/login.html†L12-L16】
+- **W3.CSS alternatives:** Wrap the forms in `w3-container w3-padding-64 w3-card-4` structures, lean on `w3-input`/`w3-button w3-block` for controls, and re-create the profile badge with `w3-circle w3-border`. Once those templates migrate, the scoped overrides can be retired.
 
-### Drawer register drag handle
-- **Custom selector:** `.drag-handle` enforces a grab cursor for reordering.【F:app/cms/static/css/style.css†L1183-L1188】
-- **Template:** Applied in `cms/drawerregister_list.html` for the draggable rows.【F:app/cms/templates/cms/drawerregister_list.html†L70-L86】
-- **W3.CSS alternatives:** Use a `w3-button w3-round w3-light-grey` (or `w3-col` icon button) to indicate drag affordance, keeping only the `cursor: grab` override if required for SortableJS compatibility.
-
-### Dropdown toggle button
-- **Custom selector:** `.dropdown-toggle` is currently styled via the navigation stylesheet.【F:app/cms/static/css/style.css†L134-L141】
-- **Template:** The Reports menu toggle uses the class in `base_generic.html`.【F:app/cms/templates/base_generic.html†L60-L69】
-- **W3.CSS alternatives:** Switch to `w3-button w3-hover-none` combined with the standard W3 dropdown markup so the icon rotation and visibility rely on `w3-show` / `w3-hide` classes rather than bespoke transforms.
+### Reports (`app/templates/reports/`)
+- **Status:** Both OCR summary templates now wrap content with `w3-content w3-padding-32` and add `w3-card w3-round-large` framing to charts and tables, replacing the bespoke `.container` and Bootstrap-derived classes.【F:app/templates/reports/media_report.html†L9-L33】【F:app/templates/reports/accession_distribution.html†L7-L34】
+- **Next steps:** Gradually fold the remaining `reports.css` shadows and typography into W3 equivalents (`w3-animate-opacity`, `w3-text-grey`, etc.) until the dedicated stylesheet is no longer required.
 
 ### Form error styling
-- **Custom selector:** `ul.errorlist.nonfield` applies bespoke red backgrounds and borders.【F:app/cms/static/css/style.css†L769-L783】
-- **Templates:** Account/login flows and admin OCR prompt rely on Django’s default `errorlist` output, which picks up these styles.【F:app/cms/templates/admin/do_ocr_prompt.html†L7-L37】
-- **W3.CSS alternatives:** Replace with a W3 alert panel such as `w3-panel w3-pale-red w3-leftbar w3-border-red` while keeping semantic `<ul>` markup for screen readers.
+- **Custom selector:** `ul.errorlist.nonfield` remains, but is now scoped to `.Login_box` so only the entrance flows receive the bespoke alert styling.【F:app/cms/static/css/style.css†L89-L101】
+- **W3.CSS alternative:** Replace the block with a `w3-panel w3-pale-red w3-leftbar w3-border-red` wrapper once the login/signup screens adopt the shared form partials.
 
-### Other active helpers
-- **`.logo_image`** ensures the NMK logo scales correctly in navigation.【F:app/cms/static/css/style.css†L26-L28】 Replace with `w3-image` plus inline `style="max-width:120px"` or W3 width utilities; keep ARIA text hidden via `.sr-only`.
-- **`.logout-form`** only zeros margins.【F:app/cms/static/css/style.css†L98-L100】 Swap for `class="w3-margin-0"` on the `<form>` tag to lean on W3 spacing utilities.
-
-### Unused / legacy selectors to prune
-Selectors present in `style.css` but no longer referenced in templates include `.actions`, `.card`, `.template_form_*`, `.search-bar`, `.list-page-header`, `.template_import`, `.pagination_*`, `.helptext`, `.Import_*`, `.reset_button`, `.table-container`, `.template-detail-*`, `.step-link`, `.hidden-mobile`, `.icon-text`, `.dropdown-list-select`, `.select2-*`, etc.【F:app/cms/static/css/style.css†L286-L1194】 None of these selectors surfaced in the repository scan, so they can be removed outright or rewritten with W3 equivalents during cleanup. If any functionality returns, prefer W3 utilities such as `w3-table-all`, `w3-row-padding`, `w3-hide-small`, and `w3-button` before reintroducing bespoke rules.
+### Drawer register drag handle
+- **Custom selector:** `.drag-handle` enforces a grab cursor for reordering.【F:app/cms/static/css/style.css†L150-L156】
+- **Template:** Applied in `cms/drawerregister_list.html` for the draggable rows.【F:app/cms/templates/cms/drawerregister_list.html†L70-L86】
+- **W3.CSS consideration:** The affordance can shift to a `w3-button w3-round w3-light-grey` handle, keeping only the cursor override for clarity.
 
 ## `app/cms/static/css/merge_admin.css`
 - **Custom selectors:** `.merge-admin*` namespace controls layout, cards, badges, tables, and error messaging for the merge UI.【F:app/cms/static/css/merge_admin.css†L1-L131】

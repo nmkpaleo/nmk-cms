@@ -5,15 +5,15 @@
 {% block content %}
 <div class="w3-container w3-margin-top">
   <h2>Start Inventory Session</h2>
-  <form method="post" class="w3-margin-top">
+  <form method="post" class="w3-margin-top w3-card w3-white w3-round-large w3-padding">
     {% csrf_token %}
     <label for="shelf_ids">Select Shelves</label>
-    <select name="shelf_ids" id="shelf_ids" class="w3-select" multiple>
+    <select name="shelf_ids" id="shelf_ids" class="w3-select w3-border w3-round-large" multiple>
       {% for shelf in shelves %}
         <option value="{{ shelf.id }}">{{ shelf }}</option>
       {% endfor %}
     </select>
-    <button type="submit" class="w3-button w3-blue w3-margin-top">Start Session</button>
+    <button type="submit" class="w3-button w3-blue w3-round-large w3-margin-top">Start Session</button>
   </form>
 </div>
 {% endblock %}

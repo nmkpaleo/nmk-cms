@@ -26,7 +26,7 @@
     </button>
 
     <div id="fieldslipFilterPanel" class="w3-hide w3-animate-opacity w3-padding w3-light-grey w3-round-large w3-margin-top w3-card">
-        <form method="get">
+        <form method="get" class="w3-container w3-padding-16" role="search">
             <div class="w3-row-padding">
                 <div class="w3-col s12 m6 l4 w3-margin-bottom">
                     <label class="w3-text-grey">Collector</label>
@@ -83,7 +83,11 @@
                     <th class="responsive-column w3-hide-small w3-hide-medium" data-hide-classes="w3-hide-small w3-hide-medium">Verbatim Horizon</th>
                     <th class="responsive-column w3-hide-small w3-hide-medium" data-hide-classes="w3-hide-small w3-hide-medium">Aerial Photo</th>
                     <th class="w3-right-align">
-                        <button type="button" id="toggleColumns" class="w3-button w3-light-grey w3-round w3-small">
+                        <button
+                            type="button"
+                            id="toggleColumns"
+                            class="w3-button w3-light-grey w3-round w3-small w3-hide-medium w3-hide-large"
+                        >
                             <i class="fa-solid fa-expand"></i>
                             Show More
                         </button>

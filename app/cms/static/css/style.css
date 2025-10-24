@@ -1,14 +1,12 @@
 @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Poppins:wght@400;500;700&display=swap');
 
-
-*{
+* {
     margin: 0;
     padding: 0;
-    
-    
 }
-.logo_image{
+
+.logo_image {
     max-width: 120px;
     height: auto;
 }
@@ -29,510 +27,31 @@
     white-space: nowrap;
 }
 
-/* template lists*/
-.template_buttons{
-    display: flex;
-    justify-content: space-between;
-}
-
-.list-page-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    flex-wrap: wrap;
-    margin-bottom: 1rem;
-}
-
-.list-page-header h2 {
-    margin: 0;
-}
-
-.search-bar {
-    margin-left: 20px;
-    margin-top: 11px;
-}
-
-.search-bar input {
-    width: 150px;
-    padding: 7px;
-    box-shadow: 2px 2px 5px rgb(213, 212, 212), 2px 2px 5px rgb(213, 212, 212);
-    border: 1px solid #fffefe;
-    border-radius: 15px;
-    font-size: 16px;
-    margin-bottom: 18px;
-}
-.search-bar input:hover{
-    border: 2px dashed #C46132;
-}
-.dropdown-list-select:hover{
-    border: 2px dotted #C46132;
-}
-
-
-.actions button {
-    background-color: #C46132;
-    width: 150px;
-    padding: 7px;
-    box-shadow: 2px 2px 5px rgb(213, 212, 212), 2px 2px 5px rgb(213, 212, 212);
-    border: 1px solid #fffefe;
-    border-radius: 15px;
-    font-size: 16px;
-    margin: 10px 50px 0px 0px;
-    
-
-    
-}
-.actions button:hover {
-    background-color: #232323;
-    
-    
-}
-.actions button a{
-    color: white;
-    text-decoration: none;
-}
-
-/* template import */
-.template_import{
-    background-image: url(../images/nmk-image.jpg);
-    background-position: center;
-    background-repeat: no-repeat;
-    background-size: cover;
-    height: 90vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.import_body{
-    background-color: white;
-    width: 40%;
-    height: 80vh;
-    border-radius: 25px;
-    box-shadow: 2px 2px 5px rgb(213, 212, 212), 2px 2px 5px rgb(213, 212, 212);    
-}
-.import_body h2{
-    font-family: 'Inter', sans-serif;
-    color: #232323;
-    font-size: 30px;
-    font-weight: 900;
-    text-align: center;
-    text-decoration: underline;
-    margin-bottom: 20px;   
-}
-
-.import_CSV{
-    margin: 10px 0px 0px 180px;
-    text-shadow: 2px 2px 3px #b85729, 2px 0px 3px #C46132;
-    
-    
-}
-.import_area{
-    border-radius: 30px;
-    border: 2px dashed rgb(156, 155, 155);
-    height: 300px;
-    margin: 20px;
-}
-
-.Import_submit{
-    width: 170px !important;
-    margin-left: 180px !important;
-    
-}
-
-.import_icon{
-    font-size: 40px;
-    margin: 10px 0px 15px 200px;
-    color: rgb(167, 165, 165);
-}
-.Import_p{
-    color: #888;
-    text-align: center;
-    margin-bottom: 10px;
-}
-
-.import_file{
-    margin-top: 35px;
-    margin-left: 150px;
-    
-}
-
-/* Fieldslip list */
-
-.template_list_body{
-    background-color: white;
-
-}
-.container {
-    width: 90%;
-    margin: 20px auto;
-    
-}
-
-
-
-
-
-
-
-
-.dropdown-list-select{
-    width: 150px;
-    padding: 7px;
-    box-shadow: 2px 2px 5px rgb(213, 212, 212), 2px 2px 5px rgb(213, 212, 212);
-    border: 1px solid #fffefe;
-    border-radius: 15px;
-    margin-left: 15px;
-    font-size: 16px;
-    margin-bottom: 18px;
-}
-
-.reset_button{
-    background-color: #232323; 
-    margin-left: 15px;
-    padding: 7px;
-    box-shadow: 2px 2px 5px rgb(213, 212, 212), 2px 2px 5px rgb(213, 212, 212);
-    border: 1px solid white;
-    border-radius: 15px;
-    margin-left: 15px;
-    font-size: 16px;
-    margin-bottom: 18px;
-    cursor: pointer;
-    color: white;
-    width: 90px;
-    font-weight: 600;
-}
-
-
-#toggleColumns{
-    display: none;
-}
-.fieldslip_list_hr{
-    background-color: #f0f0f0;
-    
-}
-.fieldslip_headings, .fieldslip_inputs {
-    margin-top: 10px;
-    display: flex;
-    justify-content: space-between;
-}
-
-.fieldslip_headings p, .fieldslip_inputs p {
-    margin: 0;
-    padding: 0 10px; /* Add some padding to align content */
-    min-width: 100px; /* Adjust the width to fit your needs */
-}
-
-.fieldslip_inputs {
-    align-items: center; /* Ensures all inputs are vertically aligned */
-   
-}
-.fieldslip_inputs a{
-    color: #232323;
-  
-}
-
-.pagination{
-    margin-top: 25px;
-    margin-left: 10px;
-    
-    font-family: 'Poppins', sans-serif;
-}
-.pagination_previous,  .pagination_next{
-    padding: 3px 3px;
-    font-size: 15px;
-    cursor: pointer;
-    color: black;
-    font-weight: 600;
-    text-decoration: none;
-
-}
-.pagination_previous:hover, .pagination_next:hover{
-    background-color: #C46132;
-    padding: 5px;
-    color: white;
-    border-radius: 5px;
-    margin: 10px;
-
-}
-
-/* New fieldslip */
-
-/* Fieldslip Form Styles */
-
-.form_container {
-
-    width: 100%;
-
-    padding: 20px;
-
-    box-sizing: border-box;
-
-}
-
-.form-caption {
-
-    font-size: 30px;
-
-    font-weight: 600;
-
-    margin-bottom: 30px;
-
-    text-decoration: underline;
-
-    text-shadow: 0 0 2px #b85729, 2px 2px 3px #e9af42;
-
-    text-align: center;
-
-    font-family: 'Inter', sans-serif;
-
-}
-
-.template_form_columns {
-
-    display: flex;
-
-    flex-wrap: wrap;
-
-    justify-content: space-between;
-    
-
-}
-
-.template_form_input {
-
-    border-radius: 5px;
-
-    border: 2px solid rgb(206, 202, 202);
-
-    box-shadow: inset 1px 1px 5px rgba(0, 0, 0, 0.3);
-
-    width: 48%;
-
-    padding: 10px;
-
-    font-size: 16px;
-
-    margin-bottom: 20px;
-
-    font-family: 'Poppins', sans-serif;
-    
-
-}
-
-.template_form_input_long {
-
-    width: 100%;
-
-}
-
-.template_form_label {
-
-    width: 100%;
-    
-
-    margin-bottom: 5px;
-
-    font-family: 'Inter', sans-serif;
-
-    font-weight: 500;
-
-    color: #232323;
-
-}
-
-.template_form_submit {
-
-    border-radius: 25px;
-
-    border: 2px solid #f6f3f3;
-
-    box-shadow: 1px 1px 4px #b85729;
-
-    background-image: linear-gradient(150deg, #b85729, #e9af42);
-
-    width: 150px;
-
-    height: 50px;
-
-    text-align: center;
-
-    color: rgb(13, 12, 12);
-
-    font-size: 20px;
-
-    font-weight: 800;
-
-    margin-top: 20px;
-
-    cursor: pointer;
-
-    font-family: 'Inter', sans-serif;
-
-}
-
-
-
-
-
-/* fieldslip details */
-
-.template-detail-container {
-    max-width: 1200px;
-    margin: 0 auto;
-    text-align: center;
-}
-.template-detail-header{
-    display: flex;
-    justify-content: center;
-    gap: 40px;
-    
-}
-.template-detail-h2 {
-    margin-bottom: 30px;
-    color: #232323;
-    font-family: 'Inter', sans-serif;
-    margin-top: 20px;
-    text-decoration: underline;
-
-}
-.edit-icon {
-    font-size: 16px;
-    margin-top: 10px;
-    font-family: 'Inter', sans-serif;
-    text-decoration: none;
-    padding: 5px;
-    width: 160px; 
-    height: 30px;
-    font-weight: 700;
-    
-    box-shadow: 2px 3px 5px whitesmoke, 3px 3px 5px #C46132, 2px 3px 5px rgb(227, 226, 226);
-}
-.template-detail-header a{
-    color: #232323;
-    
-}
-.edit-icon:hover {
-    color: #0056b3; /* Darker shade on hover */
-}
-.grid-container {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 100px;
-    margin-top: 15px;
-    width: 780px;
-    margin-left: 200px;
-    margin-bottom: 50px;
-    
-}
-
-.card {
-    background-color: white;
-    padding: 20px;
-    border-radius: 10px;
-    box-shadow: 5px 4px 6px #D6D2D2, -5px -4px 6px #D9D9D9, 5px -4px 6px #E4E3E3;
-    text-align: left;
-
-}
-
-
-
-.card p {
-    margin-bottom: 8px;
-    color: #3b3b3b;
-    padding: 10px;
-    font-family: 'Poppins', sans-serif;
-   
-    
-}
-.card p strong{
-    font-size: 18px;
-    color: #000000;
-    
-}
-.aerial-photo {
-    width: 100%;
-    height: auto;
-    border-radius: 10px;
-}
-
-@media (max-width: 768px) {
-    .grid-container {
-        grid-template-columns: 1fr;
-    }
-}
-
-
-/* accession details*/
-.cards {
-    background-color: white;
-    padding: 20px;
-    border-radius: 10px;
-    box-shadow: 5px 4px 6px #D6D2D2, -5px -4px 6px #D9D9D9, 5px -4px 6px #E4E3E3;
-    text-align: left;
-    width: 90%;
-    margin-left: 100px;
-    margin-bottom: 30px;
-
-}
-
-.cards caption{
-    color: #b85729;
-}
-
-.accession_hr{
-
-    background-color: rgb(161, 160, 160);
-    height:  2px;
-    
-}
-
-.accesssin_FieldSlip{
-    font-size: 20px;
-    font-family: 'Inter', sans-serif;
-    padding: 5px;
-    width: 250px;
-    color: whitesmoke;    
-    margin-top: 20px;
-    border-radius: 10px;
-    border: 2px solid #C46132;
-    background-color: #C46132;
-    box-shadow: 2px 3px 5px whitesmoke, 3px 3px 5px #C46132, 2px 3px 5px rgb(227, 226, 226);
-}
-.accesssin_FieldSlip:hover{
-    background-color: #000;
-    border: none;
-}
-
-
-
-/* login_page */
-
-.Login_page{
-    background-color: #F5F3F3;
-    height: 100vh;
+/* Account entrance overrides */
+.Login_page {
+    background-color: #f5f3f3;
+    min-height: 100vh;
     display: flex;
     justify-content: center;
     align-items: center;
-    
 }
 
-.Login_box{
-    padding: 11x;
-    border-radius: 30px;
-    border: 2px solid #F5F3F3;
+.Login_box {
     width: 340px;
-    height: 550px;
-    
-    box-shadow: 0 4px 5px rgb(177, 176, 176), 0 4px 5px #C46132, 0 4px 5px #F5F3F3;
+    max-width: 100%;
+    padding: 32px 24px;
+    border-radius: 24px;
+    border: 2px solid #f5f3f3;
+    background-color: #ffffff;
+    box-shadow: 0 4px 5px rgba(177, 176, 176, 0.6), 0 4px 5px #c46132, 0 4px 5px #f5f3f3;
 }
-.login-h1{
+
+.login-h1 {
     text-align: center;
     font-family: 'Inter', sans-serif;
     margin-bottom: 10px;
     font-size: 25px;
     font-weight: 800;
-    
 }
 
 .login-profile {
@@ -540,102 +59,92 @@
     align-items: center;
     justify-content: center;
     box-sizing: border-box;
-    width: 40px;
-    height: 40px;
-    margin-left: 147px;
-    margin-bottom: 15px;
-    background-color: #F5F3F3;
+    width: 48px;
+    height: 48px;
+    margin: 0 auto 20px;
+    background-color: #f5f3f3;
     border-radius: 50%;
-    box-shadow: 0 4px 5px rgb(177, 176, 176), 0 4px 5px #C46132, 0 4px 5px #F5F3F3;
+    box-shadow: 0 4px 5px rgba(177, 176, 176, 0.6), 0 4px 5px #c46132, 0 4px 5px #f5f3f3;
 }
+
 .login-profile i {
-    font-size: 28px; /* Adjust as needed to fit within the box */
-    color: #333; /* Choose a color that works well with the background */
+    font-size: 28px;
+    color: #333;
 }
 
-/* Target the errorlist class specifically */
-ul.errorlist.nonfield {
-    list-style: none; /* Removes the default bullet points */
-    color: red; /* Changes the text color */
-    background-color: #ffe6e6; /* Adds a light red background */
-    padding: 10px; /* Adds some padding around the message */
-    border: 1px solid red; /* Adds a red border */
-    border-radius: 5px; /* Rounds the corners */
-    font-size: 14px; /* Adjusts font size */
+.Login_box ul.errorlist.nonfield {
+    list-style: none;
+    color: #b91c1c;
+    background-color: #ffe6e6;
+    padding: 10px;
+    border: 1px solid #b91c1c;
+    border-radius: 8px;
+    font-size: 14px;
+    margin-bottom: 16px;
 }
 
-/* Additional styling for the list items if needed */
-ul.errorlist.nonfield li {
-    margin-bottom: 5px; /* Adds spacing between errors if multiple exist */
+.Login_box ul.errorlist.nonfield li {
+    margin-bottom: 4px;
 }
 
-
-label[for="id_login"], [for="id_password"] {
+.Login_box label[for="id_login"],
+.Login_box label[for="id_password"],
+.Login_box label[for="id_username"],
+.Login_box label[for="id_email"],
+.Login_box label[for="id_password1"],
+.Login_box label[for="id_password2"] {
     color: #000000;
     font-size: 1em;
     font-weight: 700;
     font-family: 'Inter', sans-serif;
     margin-left: 10px;
-    
-   
 }
 
-
-
-/* Style for the Username field & Password field*/
-#id_login, #id_password {
-    margin-top: 20px;
-    margin-bottom: 20px;
-    width: 85%; 
-    padding: 10px;
+.Login_box #id_login,
+.Login_box #id_password,
+.Login_box #id_username,
+.Login_box #id_email,
+.Login_box #id_password1,
+.Login_box #id_password2 {
+    margin: 20px 0;
+    width: 100%;
+    padding: 12px 16px;
     font-family: 'Poppins', sans-serif;
     font-size: 1em;
-    background-color: #F5F3F3;
-    border: 1px solid #F5F3F3;
+    background-color: #f5f3f3;
+    border: 1px solid #f5f3f3;
     border-radius: 30px;
-    box-shadow: inset 2px 3px 5px rgb(121, 121, 121, 0.25),
-     2px 3px 5px rgba(99, 98, 98, 0.25);
-     margin-left: 10px;
+    box-shadow: inset 2px 3px 5px rgba(121, 121, 121, 0.25), 2px 3px 5px rgba(99, 98, 98, 0.25);
+    box-sizing: border-box;
 }
 
-/* Style for the Forgot Password link */
-.helptext a {
-    color: #C46132;
-    text-decoration: none;
-    font-family: 'Inter', sans-serif;
-    font-size: 14px;
-    font-weight: 600;
-    margin-left: 10px;
-}
-
-.helptext{
-    display: inline-block;
-    vertical-align: middle;
-    margin-right: 10px; 
-}
-#id_remember, [for="id_remember"]{
-    display: none;
-}
-.helptext a:hover {
-    text-decoration: underline; 
-}
-
-#id_login::placeholder,
-#id_password::placeholder {
+.Login_box #id_login::placeholder,
+.Login_box #id_password::placeholder,
+.Login_box #id_username::placeholder,
+.Login_box #id_email::placeholder,
+.Login_box #id_password1::placeholder,
+.Login_box #id_password2::placeholder {
     color: #888;
     font-size: 14px;
 }
 
-/* Target all submit buttons */
-button[type="submit"] {
-    background-color: #C46132;
-    margin-top: 10px;
-    margin-left: 10px;
-    margin-bottom: 8px;
-    color: white;
-    width: 90%;
-    box-shadow: 0 4px 5px rgb(177, 176, 176), 0 4px 5px #C46132, 0 4px 5px #F5F3F3 ;
-    padding: 10px 20px;
+.Login_box .helptext {
+    display: inline-block;
+    vertical-align: middle;
+    margin: 0 10px 10px 10px;
+}
+
+.Login_box #id_remember,
+.Login_box label[for="id_remember"] {
+    display: none;
+}
+
+.Login_box button[type="submit"] {
+    background-color: #c46132;
+    margin: 10px 0;
+    color: #ffffff;
+    width: 100%;
+    padding: 12px 20px;
     border: none;
     border-radius: 30px;
     font-family: 'Inter', sans-serif;
@@ -643,284 +152,68 @@ button[type="submit"] {
     font-size: 16px;
     cursor: pointer;
     transition: background-color 0.3s;
+    box-shadow: 0 4px 5px rgba(177, 176, 176, 0.6), 0 4px 5px #c46132, 0 4px 5px #f5f3f3;
 }
 
-button[type="submit"]:hover {
+.Login_box button[type="submit"]:hover {
     background-color: #151515;
 }
-.signup-text {
+
+.Login_box .signup-text {
     font-size: 14px;
     color: #737373;
     text-align: center;
     font-family: 'Inter', sans-serif;
     font-weight: 700;
-    margin-left: 35px;
-    
+    display: block;
+    margin: 16px auto 0;
 }
 
-
-.login-Sign_In_With-h4{
+.Login_box .login-Sign_In_With-h4 {
     font-size: 15px;
     margin-top: 10px;
+    text-align: center;
 }
-/* CSS to style the "Sign up" link */
-a[href="/accounts/signup/?next=%2F"] {
-    color: #C46132;       
+
+.Login_box a[href*="/accounts/signup"] {
+    color: #c46132;
     text-decoration: none;
 }
 
-a[href="/accounts/signup/?next=%2F"]:hover {
-    color: black; /* Optional: Change color on hover */
+.Login_box a[href*="/accounts/signup"]:hover {
+    color: #000000;
 }
 
+.Login_box a[href*="/accounts/login"] {
+    color: #c46132;
+    text-decoration: none;
+}
+
+.Login_box a[href*="/accounts/login"]:hover {
+    color: #000000;
+}
 
 a[title="Orcid.org"] {
     display: inline-block;
-    width: 25px; /* Set width for the round logo */
-    height: 25px; /* Set height for the round logo */
+    width: 25px;
+    height: 25px;
     background-image: url(../images/orchid\ log.png);
-    background-size: cover; /* Ensure the image fills the space */
-    background-position: center; /* Center the image */
-    border-radius: 50%; /* Makes it round */
-    text-indent: -9999px; /* Hide the text */
-    overflow: hidden; /* Ensures the logo is clipped to the circular shape */
-    margin-left: 35px;
-    margin-top: 15px;
-    margin-bottom: 15px;
+    background-size: cover;
+    background-position: center;
+    border-radius: 50%;
+    text-indent: -9999px;
+    overflow: hidden;
+    margin: 15px 0 15px 35px;
 }
 
-
-/* SIGN-UP PAGE */
-
-
-label[for="id_username"], [for="id_email"], [for="id_password1"], [for="id_password2"] {
-    color: #000000;
-    font-size: 1em;
-    font-weight: 700;
-    font-family: 'Inter', sans-serif;
-    margin-left: 10px;
-    display: none;
-    
-   
-}
-#id_username, #id_email, #id_password1, #id_password2 {
-    margin-top: 20px;
-    margin-bottom: 20px;
-    width: 85%; 
-    padding: 10px;
-    font-family: 'Poppins', sans-serif;
-    font-size: 1em;
-    background-color: #F5F3F3;
-    border: 1px solid #F5F3F3;
-    border-radius: 30px;
-    box-shadow: inset 2px 3px 5px rgb(121, 121, 121, 0.25),
-     2px 3px 5px rgba(99, 98, 98, 0.25);
-     margin-left: 10px;
-}
-
-a[href="/accounts/login/?next=%2F"] {
-    color: #C46132;       
-    text-decoration: none;
-}
-
-a[href="/accounts/login/?next=%2F"]:hover {
-    color: black; /* Optional: Change color on hover */
-}
-
-/* FOR ALL THE LIST TABLES */
-
-.lists_table{
-    border-collapse: collapse;
-    border-spacing: 0;
-    width: 97%;
-    margin-left: 21px;
-    
-    
-    
-}
-th, td {
-    text-align: left;
-    padding: 10px;
-}
-tr:nth-child(even) {
-    background-color: #f2f2f2;
-  }
-.checkbox_list{
-    margin-right: 5px;
-}
-
-
-nav ul {
-    list-style: none;
-    display: flex;
-    gap: 15px;
-    padding: 0;
-  }
-  
-  nav ul li a {
-    text-decoration: none;
-    color: black;
-    padding: 5px 10px;
-    position: relative;
-  }
-  
-  nav ul li a.active {
-    color: blue; /* Highlight color */
-  }
-  
-  nav ul li a.active::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: -2px;
-    height: 2px;
-    background-color: blue;
-  }
-
-    /* Ensures Select2 dropdown takes full width */
-.django-select2 {
-    width: 100% !important;
-}
-
-.select2-container {
-    width: 100% !important;
-}
-
+/* Select2 layout helpers */
+.django-select2,
+.select2-container,
 .select2-selection {
     width: 100% !important;
 }
 
-/* MOBILE VIEW            MOBILE VIEW                   MOBILE VIEW */
-
-@media (max-width: 768px) {
-
-    .close-icon {
-        position: absolute;
-        top: 20px;
-        right: 20px;
-        font-size: 24px;
-        cursor: pointer;
-        color: white;
-    }
-    
-
-    /* Mobile Navigation */
-    .menu_icon {
-        position: absolute;
-        top: 20px;
-        right: 20px;
-        cursor: pointer;
-        font-size: 24px;
-    }
-
-
-
-    /* fieldslip mobile view */
-
-    .hidden-mobile {
-        display: none;
-
-    }
-    
-
-    .search-bar{
-        margin-top: 40px;
-    }
-
-    .table-container {
-        position: relative;
-    }
-    #toggleColumns {
-        display: block;
-        width: 90%;
-        margin-top: 10px;
-        padding: 8px;
-        background-color: #b85729;
-        color: white;
-        border: none;
-        cursor: pointer;
-        text-align: center;
-        border-radius: 10px;
-        font-weight: 800;
-    }
-    .actions {
-        display: flex;
-        justify-content: center;
-        position: fixed;
-        bottom: -2px;
-        width: 100%;
-        left: 50%;
-        transform: translateX(-50%);
-        background: white;
-        padding: 10px;
-        border-radius: 10px;
-        box-shadow: 0px 0px 10px #000;
-    }
-    .actions button {
-        background-color: rgb(255, 255, 255);
-         
-    }
-    .actions button:hover {
-        background-color: #b85729;
-           
-    }
-    .icon-text {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 5px; /* Space between icon and text */
-    }
-
-  /* Change a color */
-  .actions button a  {
-     color: rgb(8, 8, 8);
-            
-        }
-    
-
-    /* Change icon color */
-    .actions button a i {
-        color: rgb(8, 8, 8);
-        font-size: 25px;
-        margin-bottom: 5px;
-    }
-
-    /* Ensure table and other elements don't overlap with floating actions */
-    .table-container {
-        margin-bottom: 80px;
-    }
-
-    /* FIELD DETAILS MOBILE VIEW */
-
-    .grid-container {
-        display: flex;
-        flex-direction: column; /* Stack cards vertically */
-        align-items: center; /* Center cards */
-        gap: 20px; /* Reduce gap for better spacing */
-        width: 80%; /* Take full width */
-        margin-left: 25px; /* Remove fixed margin */
-        padding: 0 10px; /* Add padding to prevent cards from touching edges */
-    }
-
-    .card {
-        
-        width: 100%; /* Make cards responsive */
-        max-width: 400px; /* Prevent cards from becoming too wide */
-    }    
-
-    .template_form_input{
-        width: 80%;
-    }
- 
-}
-
-/*LOCALITY PAGINATION */
-.step-link{
-    color: #000;
-    text-decoration: none;
-}
-
+/* Drawer reordering affordance */
 .drag-handle {
     cursor: grab;
 }
