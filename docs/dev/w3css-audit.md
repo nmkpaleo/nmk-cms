@@ -1,43 +1,51 @@
 # W3.CSS Adoption Audit
 
+_Last updated: 2025-10-24_
+
 ## Methodology
-- Reviewed the custom stylesheets under `app/cms/static/css/` and catalogued each selector that is not part of W3.CSS.
-- Searched every HTML template in the repository to determine which templates still rely on the custom selector set.
-- For each active usage, identified the closest W3.CSS component or utility class that can replace the bespoke styling. Where no direct analogue exists (e.g., screen-reader helpers), the selector is flagged for retention.
-- Logged selectors that no longer appear in templates so they can be safely removed or replaced with W3.CSS during the refactor phase.
+- Review each stylesheet under `app/cms/static/css/` and note selectors that are not part of stock W3.CSS.
+- Trace every selector through the Django templates to confirm whether it is still exercised after the refactor.
+- For active selectors, identify the equivalent W3 utility or component that now covers the use case.
+- Flag any selectors that must remain because W3.CSS lacks the necessary behaviour.
 
-## `app/cms/static/css/style.css`
+## Current CSS footprint
+Only one local stylesheet remains: `app/cms/static/css/style.css`. Its contents fall into five groups:
 
-### Global helpers
-- **Active selectors:** `.logo_image`, `.logout-form`, `.sr-only`, `.django-select2`, `.select2-container`, `.select2-selection`, and `.drag-handle` remain in `style.css` for logo sizing, logout form alignment, accessibility, Select2 layout, and drag affordance.
-- **Templates:** The navigation include and drawer register list exercise these helpers; Select2 rules apply wherever the widget renders.
-- **W3.CSS follow-up:** The logo sizing could move to a `w3-image` helper, and the logout form might adopt inline `style="margin:0"` to retire the class. `.sr-only` and the Select2 overrides fill gaps that W3.CSS does not address.
+| Selector(s) | Purpose | Templates / scripts | W3.CSS coverage |
+| --- | --- | --- | --- |
+| `.logo_image` | Constrains the navigation logo dimensions so it fits inside the W3 bar. | `base_generic.html` navigation include. | No direct alternative; retain until the asset is resized or replaced with an inline SVG using `w3-image`. |
+| `.logout-form` | Removes default margins from the logout form that renders inside the navigation bar. | Shared navigation include. | Could be replaced with inline `style="margin:0"`, but the class keeps markup cleaner. |
+| `.sr-only` | Screen-reader-only helper for hidden labels and instructions. | Login templates, navigation skip links, filter toggles. | W3.CSS does not ship an equivalent helper, so keep this rule. |
+| `.django-select2`, `.select2-container`, `.select2-selection`, `.select2-dropdown` | Forces Select2 widgets to fill their containers and stack above modals/menus. | Any form that renders Select2 widgets. | W3.CSS covers general input spacing but not the Select2 integration; retain these rules. |
+| `.drag-handle` | Provides a grab cursor for draggable drawer rows. | `cms/drawerregister_list.html`. | W3 cursor helpers are insufficient; keep the rule but prefer W3 button styling for the handle body. |
 
-### Account entrance templates (`account/login.html`, `account/signup.html`, social login)
-- **Status:** Login, signup, and the social provider prompt now rely solely on W3 containers, cards, and typography; all bespoke `.Login_*` selectors were removed from `style.css`.
-- **Outcome:** No additional CSS is required beyond the global helpers above, keeping the entrance flows consistent with the rest of the W3-driven UI.
+All other bespoke stylesheets—`merge_admin.css` and `reports.css`—were removed. Their selectors were replaced with the W3 equivalents summarised below.
 
-### Reports (`app/templates/reports/`)
-- **Status:** Both OCR summary templates now wrap content with `w3-content w3-padding-32` and W3 card utilities, fully replacing the bespoke `.summary`, `.chart-container`, and `.message` helpers.
-- **Outcome:** The shared `reports.css` bundle has been removed; the CMS base template no longer loads it, and report layouts depend solely on W3 classes.
+### Areas converted entirely to W3 utilities
+- **Navigation and layout:** `base_generic.html` uses `w3-bar` and `w3-dropdown-*` helpers for both desktop and mobile navigation states. The mobile toggle script flips the `w3-show` class rather than adding inline styles.
+- **Landing page:** The marketing hero in `index.html` now uses `w3-container`, `w3-row`, and `w3-half` instead of custom flexbox rules.
+- **List and detail pages:** All CMS list templates render filter accordions with `w3-card` wrappers and tables with `w3-table-all` plus responsive helpers. Detail pages use `w3-card` stacks and Font Awesome headers.
+- **Forms:** Shared form includes apply `w3-input`, `w3-select`, and `w3-button` classes, eliminating the need for `.template_form_*` selectors.
+- **Authentication:** Login, signup, and social login templates rely exclusively on `w3-card`, `w3-padding`, and `w3-button` classes.
+- **Merge admin:** Templates and `static/js/merge_admin.js` output `w3-card-4` comparison blocks, `w3-responsive` tables, and W3 buttons in place of the retired merge stylesheet.
+- **Reports:** Reporting templates wrap charts and messages with `w3-content`, `w3-card`, and `w3-panel` helpers instead of the old `.summary` and `.chart-container` rules.
 
-### Drawer register drag handle
-- **Custom selector:** `.drag-handle` enforces a grab cursor for reordering.
-- **Template:** Applied in `cms/drawerregister_list.html` for the draggable rows.
-- **W3.CSS consideration:** The affordance can shift to a `w3-button w3-round w3-light-grey` handle, keeping only the cursor override for clarity.
+### Retained selectors requiring review before removal
+- `.logo_image` – evaluate whether the navigation logo asset can be updated to remove the size constraint.
+- `.logout-form` – consider replacing with inline style if the markup changes significantly.
+- `.sr-only` – maintain indefinitely for accessibility.
+- `.django-select2` / `.select2-*` – keep while Select2 remains the widget of choice.
+- `.drag-handle` – keep the cursor override but prefer W3 button classes for any new drag handles.
 
-## `app/cms/static/css/merge_admin.css`
-- **Status:** The bespoke merge stylesheet has been retired; the admin form template now uses W3 containers, cards, tables, and tag helpers directly, and the admin mixin no longer registers a CSS asset.
-- **Dynamic UI:** Merge search results rendered via JavaScript also emit W3 cards and buttons, keeping the experience consistent without custom selectors.
+## Verification
+Automated tests cover the critical W3 structures:
+- Navigation tests ensure the presence of `w3-bar` and mobile toggle classes.
+- Filter widget tests confirm that django-filter forms render W3 input and select classes.
+- Account template tests assert the card layout used for login and signup views.
 
-## `app/cms/static/css/reports.css`
-- **Status:** Retired; reporting pages now use W3 card, typography, and animation helpers directly in their templates, and the base template no longer references a dedicated stylesheet.
-- **Guidance:** Future report templates should copy the W3 card blueprint and rely on W3 text utilities for contextual messaging to keep the CSS footprint minimal.
+Developers should run the Django test suite after template updates to confirm these checks stay green. If new components rely on specific W3 classes, add similar tests to prevent regressions.
 
-## Summary of recommended actions
-1. **Navigation & dropdowns:** Rebuild using W3 bar/dropdown helpers and delete the corresponding custom selectors once verified. ✅
-2. **Hero & marketing sections:** Swap bespoke flex/typography rules for W3 rows, typography, and button utilities. ✅
-3. **Auth screens:** Transition to W3 cards/forms for consistent branding, keeping only the cursor or SR-only overrides that lack W3 equivalents. ✅
-4. **Admin merge UI:** Monitor the W3-based merge workflow (template + JS) for additional accessibility or spacing tweaks that might warrant lightweight overrides instead of reintroducing a stylesheet.
-5. **Reports:** Use the new W3 card blueprint when building future reporting pages to avoid resurrecting a dedicated stylesheet.
-6. **Clean-up:** Delete unused selectors listed above to reduce maintenance, ensuring any future styling leans on W3 utilities first. ✅
+## Next steps
+1. Continue consolidating shared template fragments (e.g., filter accordions) so W3 markup lives in one place.
+2. Document copy-ready snippets for cards, accordions, and modals in the developer docs to encourage consistent structure.
+3. Periodically audit Select2 usage; if the dependency is replaced, remove the related overrides from `style.css`.
