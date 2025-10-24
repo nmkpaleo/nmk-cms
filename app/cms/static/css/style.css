@@ -1,5 +1,6 @@
 /* Branding: keep the site logo sized for the navigation bar */
 .logo_image {
+    display: block;
     max-width: 120px;
     height: auto;
 }
