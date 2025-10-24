@@ -9,7 +9,7 @@
 ## `app/cms/static/css/style.css`
 
 ### Global helpers
-- **Active selectors:** `.logo_image`, `.logout-form`, `.sr-only`, `.django-select2`, `.select2-container`, `.select2-selection`, and `.drag-handle` remain in `style.css` for logo sizing, logout form alignment, accessibility, Select2 layout, and drag affordances.【F:app/cms/static/css/style.css†L1-L38】
+- **Active selectors:** `.logo_image`, `.logout-form`, `.sr-only`, `.django-select2`, `.select2-container`, `.select2-selection`, and `.drag-handle` remain in `style.css` for logo sizing, logout form alignment, accessibility, Select2 layout, and drag affordance.【F:app/cms/static/css/style.css†L1-L38】
 - **Templates:** The navigation include and drawer register list exercise these helpers; Select2 rules apply wherever the widget renders.【F:app/cms/templates/base_generic.html†L40-L68】【F:app/cms/templates/includes/navigation_links_inner.html†L10-L49】【F:app/cms/templates/cms/drawerregister_list.html†L70-L86】
 - **W3.CSS follow-up:** The logo sizing could move to a `w3-image` helper, and the logout form might adopt inline `style="margin:0"` to retire the class. `.sr-only` and the Select2 overrides fill gaps that W3.CSS does not address.
 
