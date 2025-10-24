@@ -4,15 +4,10 @@
 {% get_providers as socialaccount_providers %}
 {% if socialaccount_providers %}
     {% if not SOCIALACCOUNT_ONLY %}
-        {% element hr %}
-        {% endelement %}
-       <!-- {% element h2 %}
-            {% translate "Or Sign In With" %}
-        {% endelement %}-->
-        <div class="login-Sign_In_With">
-            <h4 class="login-Sign_In_With-h4">
-                -----------------------Or Sign In With------------------------
-            </h4>
+        <div class="w3-section">
+            <div class="w3-center w3-border-top w3-border-light-grey w3-padding-small">
+                <span class="w3-small w3-text-grey">{% translate "Or sign in with" %}</span>
+            </div>
         </div>
     {% endif %}
     {% include "socialaccount/snippets/provider_list.html" with process="login" %}

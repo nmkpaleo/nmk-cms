@@ -121,12 +121,12 @@ The matrix below expands on individual template expectations, context variables,
 ### Local Stylesheets
 | File | Path | Purpose | Consumers |
 | --- | --- | --- | --- |
-| CMS global styles | `app/cms/static/css/style.css` | Houses global navigation, hero, form helper, and list/table styling. | Loaded via `base_generic.html` for all CMS pages and public landing. |
+| CMS global styles | `app/cms/static/css/style.css` | Minimal overrides for header logo sizing, logout form alignment, Select2 width/stacking, and drag handles. | Loaded via `base_generic.html` for all CMS pages and public landing. |
 | — | — | — | The merge admin and reporting UIs now rely entirely on W3.CSS utilities; dedicated stylesheets were removed in favour of shared markup classes. |
 
 ### Redundancy and Consolidation Opportunities
-- **Custom CSS scope in `style.css`:** The stylesheet now only carries the navigation helpers (`.logo_image`, `.logout-form`, `.sr-only`), the account entrance overrides (`.Login_box` namespace), Select2 width fixes, and the drawer drag-handle cursor. Legacy helpers such as `.template_buttons`, `.search-bar`, `.table-container`, and `.template_form_*` have been removed in favour of W3.CSS utilities.【F:app/cms/static/css/style.css†L5-L156】
-- **Duplicate Select2 width rules:** Both `style.css` and the inline block in `base_generic.html` set `.select2-container` widths; consolidate to one source to avoid divergence.【F:app/cms/static/css/style.css†L209-L214】【F:app/cms/templates/base_generic.html†L21-L36】
+- **Custom CSS scope in `style.css`:** The stylesheet is limited to navigation helpers (`.logo_image`, `.logout-form`, `.sr-only`), Select2 width and stacking overrides, and the drawer drag-handle cursor. Legacy helpers such as `.template_buttons`, `.search-bar`, `.table-container`, and `.template_form_*` remain retired in favour of W3.CSS utilities.【F:app/cms/static/css/style.css†L1-L38】
+- **Select2 overrides centralised:** Inline duplication was removed from `base_generic.html`; keep future adjustments inside `style.css` to avoid drift.【F:app/cms/static/css/style.css†L20-L32】【F:app/cms/templates/base_generic.html†L1-L68】
 
 ### Follow-up Ideas
 - Centralize frequently reused filter accordion markup into an include to reduce duplication across list templates.
