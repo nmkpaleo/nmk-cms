@@ -40,70 +40,23 @@
 
   <body>
     <header class="site-header">
-      <nav class="w3-bar w3-white w3-card main-navbar" role="navigation" aria-label="{% trans 'Primary navigation' %}">
-        <a class="w3-bar-item w3-button w3-hover-none w3-padding-16 nav-logo" href="{% url 'index' %}">
+      <nav class="w3-bar w3-white w3-card" role="navigation" aria-label="{% trans 'Primary navigation' %}">
+        <a class="w3-bar-item w3-button w3-hover-none w3-padding-16" href="{% url 'index' %}">
           <span class="sr-only">{% trans "National Museums of Kenya home" %}</span>
           <img src="{% static 'images/logo.jpg' %}" class="logo_image" alt="{% trans 'National Museums of Kenya logo' %}">
         </a>
-        <button id="nav-toggle" class="w3-bar-item w3-button nav-toggle w3-right w3-hide-large w3-hide-medium" type="button" aria-expanded="false" aria-controls="primary-navigation">
+        <button id="nav-toggle" class="w3-bar-item w3-button w3-right w3-hide-large w3-hide-medium" type="button" aria-expanded="false" aria-controls="primary-navigation">
           <span class="fa fa-bars" aria-hidden="true"></span>
           <span class="sr-only">{% trans "Toggle navigation" %}</span>
         </button>
 
         {% block sidebar %}
-          <ul id="primary-navigation" class="nav-links" data-collapsed="true">
-            <li class="nav-item"><a class="w3-bar-item w3-button nav-link" href="{% url 'accession_list' %}">{% trans "Accessions" %}</a></li>
-            <li class="nav-item"><a class="w3-bar-item w3-button nav-link" href="{% url 'locality_list' %}">{% trans "Localities" %}</a></li>
-            <li class="nav-item"><a class="w3-bar-item w3-button nav-link" href="{% url 'place_list' %}">{% trans "Places" %}</a></li>
-            <li class="nav-item"><a class="w3-bar-item w3-button nav-link" href="{% url 'reference_list' %}">{% trans "References" %}</a></li>
-            {% if user.is_superuser or user|has_group:"Collection Managers" %}
-              <li class="nav-item nav-dropdown">
-                <button class="w3-button nav-link dropdown-toggle" type="button" aria-expanded="false" aria-haspopup="true" aria-controls="reports-menu">
-                  {% trans "Reports" %}
-                  <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
-                </button>
-                <ul id="reports-menu" class="nav-dropdown-menu" role="menu" hidden>
-                  <li role="none"><a class="w3-bar-item w3-button nav-link" role="menuitem" href="{% url 'media_report' %}">{% trans "Media Reports" %}</a></li>
-                  <li role="none"><a class="w3-bar-item w3-button nav-link" role="menuitem" href="{% url 'accession_distribution_report' %}">{% trans "Accession Reports" %}</a></li>
-                </ul>
-              </li>
-            {% endif %}
-
-            {% if user.is_superuser or user|has_group:"Collection Managers" %}
-              <li class="nav-item"><a class="w3-bar-item w3-button nav-link" href="{% url 'fieldslip_list' %}">{% trans "Field Slips" %}</a></li>
-            {% endif %}
-
-            {% if user.is_superuser or user|has_group:"Collection Managers" or user|has_group:"Curators" %}
-              <li class="nav-item"><a class="w3-bar-item w3-button nav-link" href="{% url 'preparation_list' %}">{% trans "Preparations" %}</a></li>
-            {% endif %}
-
-            {% if user.is_superuser or user|has_group:"Collection Managers" %}
-              <li class="nav-item"><a class="w3-bar-item w3-button nav-link" href="{% url 'drawerregister_list' %}">{% trans "Drawers" %}</a></li>
-              <li class="nav-item"><a class="w3-bar-item w3-button nav-link" href="{% url 'storage_list' %}">{% trans "Storages" %}</a></li>
-            {% endif %}
-
-            {% if user.is_authenticated %}
-              {% if user.is_staff or user.is_superuser %}
-                <li class="nav-item"><a class="w3-bar-item w3-button nav-link" href="{% url 'media_qc_history' %}">{% trans "QC History" %}</a></li>
-              {% endif %}
-            {% endif %}
-
-            {% if user.is_authenticated %}
-              <li class="nav-item nav-user nav-right">
-                <span class="nav-text" role="status" aria-live="polite">{% blocktrans with username=user.get_username %}User: {{ username }}{% endblocktrans %}</span>
-              </li>
-              <li class="nav-item nav-auth">
-                <form id="logout-form" class="logout-form" method="post" action="{% url 'account_logout' %}">
-                  {% csrf_token %}
-                  <button type="submit" class="w3-button nav-button">{% trans "Logout" %}</button>
-                </form>
-              </li>
-            {% else %}
-              <li class="nav-item nav-auth nav-right">
-                <a class="w3-bar-item w3-button nav-button" href="{% url 'account_login' %}?next={{ request.path }}">{% trans "Login" %}</a>
-              </li>
-            {% endif %}
-          </ul>
+          <div class="w3-bar w3-hide-small w3-right">
+            {% include "includes/navigation_links.html" with layout="desktop" %}
+          </div>
+          <div id="primary-navigation" class="w3-bar-block w3-white w3-hide w3-hide-large w3-hide-medium" data-collapsed="true">
+            {% include "includes/navigation_links.html" with layout="mobile" %}
+          </div>
         {% endblock %}
       </nav>
     </header>

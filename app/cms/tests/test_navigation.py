@@ -26,11 +26,13 @@ class NavigationTemplateTests(TestCase):
         response = self.client.get(reverse("index"))
 
         self.assertContains(response, _("Primary navigation"))
-        self.assertContains(response, 'class="w3-bar w3-white w3-card main-navbar"', html=False)
+        self.assertContains(response, 'class="w3-bar w3-white w3-card"', html=False)
         self.assertContains(response, 'id="primary-navigation"', html=False)
+        self.assertContains(response, 'w3-bar-block w3-white w3-hide w3-hide-large w3-hide-medium', html=False)
         self.assertContains(response, _("Login"))
         self.assertNotContains(response, _("Logout"))
-        self.assertNotContains(response, 'id="reports-menu"', html=False)
+        self.assertNotContains(response, 'data-dropdown-toggle="reports-menu"', html=False)
+        self.assertContains(response, 'w3-button w3-round-large w3-amber w3-text-white', html=False)
 
     def test_navigation_structure_authenticated_regular_user(self):
         user = self._create_user("navtester")
@@ -42,10 +44,10 @@ class NavigationTemplateTests(TestCase):
         self.assertContains(response, _("Logout"))
         expected_user_label = _("User: %(username)s") % {"username": user.get_username()}
         self.assertContains(response, expected_user_label)
-        self.assertContains(response, 'class="nav-item nav-auth"', html=False)
-        self.assertContains(response, 'class="w3-button nav-button"', html=False)
         self.assertContains(response, 'form id="logout-form"', html=False)
-        self.assertNotContains(response, 'id="reports-menu"', html=False)
+        self.assertContains(response, 'w3-button w3-round-large w3-amber w3-text-white', html=False)
+        self.assertContains(response, 'w3-bar-item w3-small w3-text-dark-grey', html=False)
+        self.assertNotContains(response, 'data-dropdown-toggle="reports-menu"', html=False)
 
     def test_reports_menu_visible_for_collection_manager(self):
         user = self._create_user("collection_manager", groups=[self.collection_manager_group])
