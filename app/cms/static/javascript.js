@@ -87,10 +87,9 @@ document.addEventListener("DOMContentLoaded", function() {
         });
 
         document.addEventListener("click", function(event) {
-            if (!dropdownContainer || dropdownContainer.contains(event.target)) {
-                return;
+            if (dropdownContainer && !dropdownContainer.contains(event.target)) {
+                closeDropdown();
             }
-            closeDropdown();
         });
     });
 
