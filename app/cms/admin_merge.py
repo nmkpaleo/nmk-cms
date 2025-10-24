@@ -218,7 +218,6 @@ class MergeAdminMixin:
     merge_form_class = MergeAdminForm
 
     class Media:
-        css = {"all": ("cms/css/merge_admin.css",)}
         js = ("cms/js/merge_admin.js",)
 
     def is_merge_tool_enabled(self) -> bool:

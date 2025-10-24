@@ -1,0 +1,51 @@
+{% load i18n user_tags %}
+<a class="{{ link_class }}" href="{% url 'accession_list' %}">{% trans "Accessions" %}</a>
+<a class="{{ link_class }}" href="{% url 'locality_list' %}">{% trans "Localities" %}</a>
+<a class="{{ link_class }}" href="{% url 'place_list' %}">{% trans "Places" %}</a>
+<a class="{{ link_class }}" href="{% url 'reference_list' %}">{% trans "References" %}</a>
+
+{% if user.is_superuser or user|has_group:"Collection Managers" %}
+  <div class="{{ dropdown_container_class }}" data-dropdown>
+    <button class="{{ dropdown_button_class }}" type="button" data-dropdown-toggle="{{ menu_id }}" aria-haspopup="true" aria-expanded="false" aria-controls="{{ menu_id }}">
+      {% trans "Reports" %}
+      <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+    </button>
+    <div id="{{ menu_id }}" class="w3-dropdown-content w3-bar-block w3-card-4 w3-white" role="menu" hidden>
+      <a class="w3-bar-item w3-button w3-text-dark-grey w3-hover-text-deep-orange" role="menuitem" href="{% url 'media_report' %}">{% trans "Media Reports" %}</a>
+      <a class="w3-bar-item w3-button w3-text-dark-grey w3-hover-text-deep-orange" role="menuitem" href="{% url 'accession_distribution_report' %}">{% trans "Accession Reports" %}</a>
+    </div>
+  </div>
+{% endif %}
+
+{% if user.is_superuser or user|has_group:"Collection Managers" %}
+  <a class="{{ link_class }}" href="{% url 'fieldslip_list' %}">{% trans "Field Slips" %}</a>
+{% endif %}
+
+{% if user.is_superuser or user|has_group:"Collection Managers" or user|has_group:"Curators" %}
+  <a class="{{ link_class }}" href="{% url 'preparation_list' %}">{% trans "Preparations" %}</a>
+{% endif %}
+
+{% if user.is_superuser or user|has_group:"Collection Managers" %}
+  <a class="{{ link_class }}" href="{% url 'drawerregister_list' %}">{% trans "Drawers" %}</a>
+  <a class="{{ link_class }}" href="{% url 'storage_list' %}">{% trans "Storages" %}</a>
+{% endif %}
+
+{% if user.is_authenticated %}
+  {% if user.is_staff or user.is_superuser %}
+    <a class="{{ link_class }}" href="{% url 'media_qc_history' %}">{% trans "QC History" %}</a>
+  {% endif %}
+{% endif %}
+
+{% if user.is_authenticated %}
+  <span class="{{ user_label_class }}" role="status" aria-live="polite">
+    {% blocktrans with username=user.get_username %}User: {{ username }}{% endblocktrans %}
+  </span>
+  <div class="{{ logout_container_class }}">
+    <form id="logout-form" class="logout-form" method="post" action="{% url 'account_logout' %}">
+      {% csrf_token %}
+      <button type="submit" class="{{ logout_button_class }}">{% trans "Logout" %}</button>
+    </form>
+  </div>
+{% else %}
+  <a class="{{ login_button_class }}" href="{% url 'account_login' %}?next={{ request.path }}">{% trans "Login" %}</a>
+{% endif %}

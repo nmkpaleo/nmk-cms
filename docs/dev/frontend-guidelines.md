@@ -1,296 +1,62 @@
-# CMS Template and CSS Inventory
+# CMS Frontend Guidelines
 
-_Last updated: 2026-04-18_
+_Last updated: 2025-10-24_
 
-## Layout Dependency Summary (Pre-Refactor)
+## Overview
+The CMS frontend now relies almost entirely on W3.CSS utilities and semantic HTML5 landmarks. Every template extends `base_generic.html`, which loads the W3 stylesheet from the CDN, shared Font Awesome assets, and the small custom override bundle in `app/cms/static/css/style.css`. This document captures the patterns that must be preserved when building or updating templates.
 
-| View Type | Primary Templates | W3.CSS Usage | Local CSS / JS Touchpoints | Notes for Refactor |
-| --- | --- | --- | --- | --- |
-| List & Search | `cms/*_list.html` variants (accession, drawer, fieldslip, locality, place, preparation, reference, storage) | Shared header rows, filter accordions, and table shells lean on `w3-container`, `w3-row-padding`, `w3-table-all`, and `w3-responsive`.【F:app/cms/templates/cms/accession_list.html†L8-L108】【F:app/cms/templates/cms/reference_list.html†L8-L123】 | Each template embeds a small `toggleAccordion` helper and duplicates the accordion markup; no bespoke CSS classes beyond inherited typography utilities.【F:app/cms/templates/cms/accession_list.html†L24-L109】 | Extract accordion into an include and switch to a shared stimulus/alpine controller to avoid per-template JS duplication. |
-| Detail | `cms/*_detail.html` (accession, accession_row, drawerregister, fieldslip, locality, place, preparation, reference, storage) | Cards, summary grids, and related tables now standardise on `<main>/<section>` landmarks, `w3-card`, and Font Awesome section icons for quick scanning.【F:app/cms/templates/cms/accession_detail.html†L1-L135】【F:app/cms/templates/cms/preparation_detail.html†L1-L221】 | History tables and related lists share the same W3 table shell; no bespoke CSS classes remain. | Future enhancements: extract history table rows into a shared include and align curator action buttons with a button helper. |
-| Detail + Sub-list | `cms/locality_detail.html`, `cms/storage_detail.html` | Combine W3 cards for the primary object with responsive related-object tables and Font Awesome headings.【F:app/cms/templates/cms/locality_detail.html†L1-L107】 | Manual pagination components mirror the helper used in list templates and rely solely on W3 bar/button classes.【F:app/cms/templates/cms/storage_detail.html†L108-L147】 | Align pagination markup with a single include referenced by both list and detail pages to reduce drift. |
-| Dashboard | `cms/dashboard.html`, `cms/qc/dashboard_queue.html` | Role cards now share W3 card wrappers, Font Awesome section icons, and responsive tables with semantic `<section>` landmarks.【F:app/cms/templates/cms/dashboard.html†L1-L240】【F:app/cms/templates/cms/qc/dashboard_queue.html†L1-L74】 | Queue partial still expects context dicts and renders CTA buttons; empty states reuse W3 alert panels. | Future enhancements: extract repeated role-card scaffolding into an include and expose queue metadata via dataclasses to trim template logic. |
-| Forms & Wizards | `cms/*_form.html`, `cms/*_wizard*.html`, `cms/add_accession_*` | All forms funnel through the refactored `base_form.html` card which applies W3 classes, ARIA labels, and Font Awesome submit icons; parent templates wrap the include in `<main>` with W3 button links.【F:app/cms/templates/includes/base_form.html†L1-L11】【F:app/cms/templates/includes/base_form_tag.html†L1-L44】【F:app/cms/templates/cms/preparation_form.html†L1-L23】 | Wizard templates continue to add per-step scripts via formset JS includes. | Keep wizard navigation consistent with the shared button styles and audit form-level accessibility when introducing new widgets. |
-| History / Audit | `cms/history_table.html`, `cms/history_media_qc_table.html`, `cms/qc/history.html` | Audit tables share the `history_table` partial with `w3-table-all`, `w3-small`, `<time>` stamps, and Font Awesome action icons; the QC history page adds filter controls and pagination.【F:app/cms/templates/cms/history_table.html†L1-L69】【F:app/cms/templates/cms/qc/history.html†L1-L98】 | Detail templates include the partial directly, while the QC list view renders paginated logs via the media-specific helper. | Future enhancements: reuse the QC helper inside wizard previews once legacy CSS is retired. |
-| Media / Upload | `cms/preparation_media_upload.html`, `cms/upload_media.html`, `cms/fieldslip_import.html` | All upload flows now render inside W3 cards with shared form markup; the import screen uses standard W3 inputs in place of custom drag/drop styles.【F:app/cms/templates/cms/preparation_media_upload.html†L1-L18】【F:app/cms/templates/cms/fieldslip_import.html†L1-L27】 | No bespoke CSS remains; styling relies purely on W3 utilities. | When adding new uploaders ensure `form.is_multipart` is honoured so the shared include sets `multipart/form-data` automatically. |
-| Inventory | `inventory/start.html`, `inventory/session.html` | Uses `w3-row`, `w3-col`, `w3-card`, and modal helpers to present scanning workflows.【F:app/cms/templates/inventory/session.html†L1-L120】 | Custom JS drives scanning feedback and toggles classes such as `w3-pale-green`/`w3-pale-red`; no extra CSS beyond inline `<script>`. | Document which DOM hooks the JS expects before replacing custom status markup with W3 alert components. |
-
-The matrix below expands on individual template expectations, context variables, and permission constraints prior to the W3.CSS-centric refactor.
-
-## Template Inventory
-
-### Layout & Entry Points
-| Template | Path | Primary Use | Notes |
+### Core layout patterns
+| Area | Key templates | W3.CSS primitives | Notes |
 | --- | --- | --- | --- |
-| Base layout | `app/cms/templates/base_generic.html` | Primary CMS shell with navigation, pagination block, and static asset loading. | Provides global nav, W3.CSS integration, and hooks for Select2 assets. |
-| Public landing page | `app/cms/templates/index.html` | Marketing-style hero landing for unauthenticated visitors. | Uses hero classes from `style.css` and static imagery. |
+| Navigation shell | `base_generic.html` + `includes/navigation_links*.html` | `w3-bar`, `w3-bar-item`, `w3-dropdown-hover`, `w3-hide-large`, `w3-show` | Desktop and mobile menus share the same include logic. The logout control stays inside the navigation bar and requires the `.logout-form` override to remove default margins. |
+| Landing / marketing | `index.html` | `w3-container`, `w3-row`, `w3-half`, `w3-padding-64`, `w3-button`, `w3-round-large` | Hero sections no longer use bespoke flexbox. Stick to W3 grid helpers for future promotional content. |
+| List & filter views | `cms/*_list.html` variants | `w3-container`, `w3-card`, `w3-table-all`, `w3-responsive`, `w3-accordion`, `w3-hide-small` | Filter panels render inside `w3-card` accordions and expose django-filter forms styled with `w3-input` / `w3-select`. |
+| Detail pages | `cms/*_detail.html` | `w3-card`, `w3-row-padding`, `w3-margin`, Font Awesome icons | History tables, related lists, and action toolbars all share the same W3 table/button vocabulary. |
+| Forms & wizards | `cms/*_form.html`, `cms/qc/*wizard*.html`, `includes/base_form*.html` | `w3-card`, `w3-padding`, `w3-section`, `w3-button`, `w3-theme` palette | All form templates include the base form partial. Custom widgets (Select2, barcode inputs) inherit W3 wrappers and only require small CSS overrides documented below. |
+| Admin merge UI | `admin/cms/merge/*.html`, `static/js/merge_admin.js` | `w3-container`, `w3-card-4`, `w3-responsive`, `w3-button`, `w3-badge` | Merge tables and comparison panes were rebuilt with W3 classes. JavaScript that injects rows must continue to emit the same class names for consistency. |
+| Reports | `templates/reports/*.html` | `w3-content`, `w3-card`, `w3-padding-32`, `w3-panel`, `w3-pale-blue`/`w3-pale-green` | Charts and summary blocks no longer import a dedicated stylesheet. Reuse card and panel helpers for any new reporting screens. |
+| Account entrance | `templates/account/login.html`, `templates/account/signup.html`, `templates/socialaccount/snippets/login.html` | `w3-display-container`, `w3-card`, `w3-padding`, `w3-margin`, `w3-button`, `w3-round` | The allauth templates now mirror the CMS look and feel while relying purely on W3 utilities. |
+| Inventory workflows | `templates/inventory/start.html`, `templates/inventory/session.html` | `w3-row`, `w3-col`, `w3-card`, `w3-modal`, `w3-pale-*` status helpers | Inline JavaScript toggles W3 contextual classes to reflect scan states; do not reintroduce bespoke CSS for these alerts. |
 
-### Dashboard & Workflow Views
-| Template | Path | Primary Use | Notes |
-| --- | --- | --- | --- |
-| CMS dashboard | `app/cms/templates/cms/dashboard.html` | Role-aware dashboard summarizing preparations, accessions, and QC queues. | Includes the QC dashboard partial and links to creation flows. |
-| QC queue (partial) | `app/cms/templates/cms/qc/dashboard_queue.html` | Embeds QC backlog metrics inside dashboards. | Shared by the main dashboard and QC wizard pages. |
-| Inventory start | `app/cms/templates/inventory/start.html` | Start screen for physical inventory sessions. | Basic multi-select of shelves before launching a session. |
-| Inventory session | `app/cms/templates/inventory/session.html` | Interactive session interface for inventory scanning/updating. | Contains inline JS for fetch-based updates and barcode scanning feedback. |
+## Template guidelines
 
-### List & Search Views
-| Template | Path | Primary Use | Notes |
-| --- | --- | --- | --- |
-| Accessions list | `app/cms/templates/cms/accession_list.html` | Filterable accession listing with bulk filter panel. | Leverages FilterView forms for taxonomy and metadata fields. |
-| Drawer list | `app/cms/templates/cms/drawerregister_list.html` | Filterable list of drawers with drag-to-reorder support. | Includes drag handle column when user can edit. |
-| Field slip list | `app/cms/templates/cms/fieldslip_list.html` | Table of field slips with inline access to aerial photos. | Uses W3 responsive table styling. |
-| Locality list | `app/cms/templates/cms/locality_list.html` | Filtered locality listing with summarised data. | Shares filter toggling pattern with other list templates. |
-| Place list | `app/cms/templates/cms/place_list.html` | Filter/search interface for places. | Presents address metadata in table format. |
-| Preparation list | `app/cms/templates/cms/preparation_list.html` | List of specimen preparations with status filtering. | Gate-kept by preparation access mixin. |
-| Reference list | `app/cms/templates/cms/reference_list.html` | Bibliographic reference catalog list. | Integrates filter form for citation metadata. |
-| Storage list | `app/cms/templates/cms/storage_list.html` | Storage location overview with filterable attributes. | Includes create CTA for collection managers. |
-| Accession row list (wizard) | `app/cms/templates/cms/qc/rows_step.html` | Step in QC workflow that lists accession rows for review. | Renders row cards via the shared partial. |
-| QC media queue | `app/cms/templates/cms/qc/media_queue_list.html` | Media QC backlog listing for staff review. | Backed by `MediaQCQueueView`. |
+1. **Extend the base layout.** All new templates should inherit from `base_generic.html` to obtain navigation, asset loading, and the responsive grid meta tags.
+2. **Use semantic regions.** Continue to wrap primary content in `<main>`, logical sections in `<section>`/`<article>`, and supporting content in `<aside>`/`<footer>`.
+3. **Leverage W3 grids before custom CSS.** `w3-row-padding` and `w3-col` (or `w3-half`, `w3-third`, etc.) cover most layout needs. When the design calls for alignment tweaks, prefer W3 spacing utilities (`w3-margin`, `w3-padding`) over hand-written rules.
+4. **Buttons and links.** Use `w3-button` combined with palette classes (`w3-theme`, `w3-teal`, `w3-white`, `w3-border`) for all calls to action. Rounded buttons should add `w3-round` or `w3-round-large` instead of bespoke border radii.
+5. **Forms.** Django form widgets should receive W3 classes via either the shared base form include or widget `attrs`. Inputs use `w3-input`, selects use `w3-select`, and groups should sit inside `w3-section` or `w3-margin-bottom` containers. Preserve ARIA attributes and label associations provided by Django.
+6. **Tables.** Data tables should combine `w3-table-all` with `w3-striped`, `w3-hoverable`, and `w3-responsive` as appropriate. Pagination controls reuse the navigation button pattern with `w3-bar` wrappers.
+7. **Messages and alerts.** Use W3 panel helpers (`w3-panel`, `w3-pale-green`, `w3-border`) for flash messages, validation summaries, or background highlights.
+8. **Icons.** Font Awesome 6 is available globally. Use the standard `<i class="fa-solid fa-icon">` markup and avoid inline SVG unless the icon is missing from FA.
 
-### Detail Views
-| Template | Path | Primary Use | Notes |
-| --- | --- | --- | --- |
-| Accession detail | `app/cms/templates/cms/accession_detail.html` | Full accession profile with related records. | Links to preview partial for nested relationships. |
-| Accession row detail | `app/cms/templates/cms/accession_row_detail.html` | Single accession row detail, including identifications/specimens. | Used in QC preview and direct navigation. |
-| Drawer detail | `app/cms/templates/cms/drawerregister_detail.html` | Drawer metadata view with scanning details. | Shows aggregated counts and assigned users. |
-| Field slip detail | `app/cms/templates/cms/fieldslip_detail.html` | Field slip record detail page with attachments. | Displays aerial photo when present. |
-| Locality detail | `app/cms/templates/cms/locality_detail.html` | Locality context with map/location metadata. | Integrates referencing data where available. |
-| Place detail | `app/cms/templates/cms/place_detail.html` | Place address and association detail view. | Accessible from locality/place lists. |
-| Preparation detail | `app/cms/templates/cms/preparation_detail.html` | Shows preparation lifecycle, actions, and attachments. | Supports curator approval actions. |
-| Reference detail | `app/cms/templates/cms/reference_detail.html` | Detailed reference view with citation metadata. | Linked from accessions and list pages. |
-| Storage detail | `app/cms/templates/cms/storage_detail.html` | Storage area detail including capacity and child records. | Provides editing shortcut for managers. |
+## Custom CSS inventory
+The shared stylesheet `app/cms/static/css/style.css` intentionally remains small. Only the following helpers are allowed:
 
-### Form, Wizard, and Action Templates
-| Template | Path | Primary Use | Notes |
-| --- | --- | --- | --- |
-| Accession create/edit | `app/cms/templates/cms/accession_form.html` | General accession form wrapper. | Uses `includes/base_form.html` for layout. |
-| Accession wizard | `app/cms/templates/cms/accession_wizard.html` | Multi-step accession creation wizard. | Pulls in add_* step partials for nested data. |
-| Accession batch | `app/cms/templates/cms/accession_batch_form.html` | Batch accession number generation form. | Provides preview of generated ranges. |
-| Accession row form | `app/cms/templates/cms/accession_row_form.html` | Inline form for individual accession rows. | Reused in wizard contexts. |
-| Add accession comment | `app/cms/templates/cms/add_accession_comment.html` | Modal-like form for appending comments. | Submitted via wizard step actions. |
-| Add accession geology | `app/cms/templates/cms/add_accession_geology.html` | Wizard step for geological metadata. | Works with dynamic formsets. |
-| Add accession reference | `app/cms/templates/cms/add_accession_reference.html` | Wizard step to connect references. | Integrates Select2 reference widgets. |
-| Add accession row | `app/cms/templates/cms/add_accession_row.html` | Container for adding nested row data. | Hosts specimen/identification sub-forms. |
-| Add row identification | `app/cms/templates/cms/add_accession_row_identification.html` | Nested identification form for accession rows. | Renders dynamic formset entries. |
-| Add row specimen | `app/cms/templates/cms/add_accession_row_specimen.html` | Nested specimen form for accession rows. | Works with JavaScript duplication logic. |
-| Drawer form | `app/cms/templates/cms/drawerregister_form.html` | CRUD form for drawers. | Shares base form include. |
-| Storage form | `app/cms/templates/cms/storage_form.html` | CRUD form for storage locations. | Shares base form include. |
-| Field slip form | `app/cms/templates/cms/fieldslip_form.html` | Field slip add/edit form. | Uses W3 form controls and file inputs. |
-| Field slip import | `app/cms/templates/cms/fieldslip_import.html` | CSV import UI for field slips. | Applies hero-style upload panel. |
-| Locality form | `app/cms/templates/cms/locality_form.html` | Locality creation/edit form. | Shares base form include. |
-| Place form | `app/cms/templates/cms/place_form.html` | Place creation/edit form. | Shares base form include. |
-| Preparation form | `app/cms/templates/cms/preparation_form.html` | Preparation create/edit form. | Provides dynamic stepper for statuses. |
-| Preparation approve | `app/cms/templates/cms/preparation_approve.html` | Curator approval confirmation. | Offers decision actions. |
-| Preparation confirm delete | `app/cms/templates/cms/preparation_confirm_delete.html` | Deletion confirmation dialog. | Minimal content around confirm/cancel. |
-| Preparation media upload | `app/cms/templates/cms/preparation_media_upload.html` | Upload interface for preparation assets. | Works with file multi-upload. |
-| Reference form | `app/cms/templates/cms/reference_form.html` | CRUD form for references. | Relies on `template_form_*` CSS helpers. |
-| Upload media | `app/cms/templates/cms/upload_media.html` | Generic media upload form. | Links to storage after success. |
-| Base form include | `app/cms/templates/includes/base_form.html` | Shared form rendering include. | Centralizes CSRF, help text, and submit button. |
-| QC wizard base | `app/cms/templates/cms/qc/wizard_base.html` | Parent template for QC workflows. | Embeds preview panel and history partials. |
-| QC intern wizard | `app/cms/templates/cms/qc/intern_wizard.html` | Specialization of QC wizard for interns. | Extends wizard base with intern-specific steps. |
-| QC expert wizard | `app/cms/templates/cms/qc/expert_wizard.html` | Expert-level QC interface. | Adjusts toolbars and available actions. |
-| QC summary step | `app/cms/templates/cms/qc/summary_step.html` | Final QC summary panel. | Summarizes validations before submission. |
+- `.logo_image` – constrains the navigation logo width so it fits within the bar.
+- `.logout-form` – removes default margins around the logout button’s form wrapper so it aligns with bar items.
+- `.sr-only` – provides an accessible screen-reader-only helper that W3.CSS does not supply.
+- `.django-select2`, `.select2-container`, `.select2-selection`, `.select2-dropdown` – ensure Select2 widgets span full width and stack above modals or dropdowns.
+- `.drag-handle` – keeps the grab cursor for drag-to-reorder handles; JavaScript toggles this on drawer lists.
 
-### History & Reporting
-| Template | Path | Primary Use | Notes |
-| --- | --- | --- | --- |
-| QC history | `app/cms/templates/cms/qc/history.html` | History view of QC submissions. | Embeds the history list partial. |
-| QC history list (partial) | `app/cms/templates/cms/qc/partials/history_list.html` | Reusable log list for QC history views. | Accepts flags for compact rendering. |
-| QC reference card (partial) | `app/cms/templates/cms/qc/partials/reference_card.html` | Displays reference metadata inside QC flows. | Used within wizard review steps. |
-| QC row card (partial) | `app/cms/templates/cms/qc/partials/row_card.html` | Renders row comparison cards in QC steps. | Supports template row duplication. |
-| QC chip (partial) | `app/cms/templates/cms/qc/partials/chip.html` | Pills for representing nested forms. | Supports ident/specimen chips. |
-| Accession preview panel (partial) | `app/cms/templates/cms/partials/accession_preview_panel.html` | Full preview of accession, field slips, and identifications using stacked W3 cards, semantic sections, and action buttons. | Shared between wizard and detail contexts; honours `preview_mode` to hide mutating controls. |
+Do not add new selectors without first checking whether a W3 utility or an existing helper can cover the requirement. If a new override is unavoidable, document the rationale directly above the rule and update this guideline.
 
-### Admin Overrides & Utilities
-| Template | Path | Primary Use | Notes |
-| --- | --- | --- | --- |
-| Admin base | `app/cms/templates/admin/base_site.html` | Overrides admin chrome (logo, titles). | Extends default admin base. |
-| Flat file import | `app/cms/templates/admin/flat_file_import.html` | Custom admin page for CSV import. | Provides w3-styled upload UI. |
-| Upload scan | `app/cms/templates/admin/upload_scan.html` | Admin view for bulk scan uploads. | Contains direct file submit form. |
-| OCR prompt | `app/cms/templates/admin/do_ocr_prompt.html` | Admin action confirmation for OCR jobs. | Provides status messaging. |
-| ChatGPT usage report | `app/cms/templates/admin/chatgpt_usage_report.html` | Reporting page for AI usage metrics. | Tabular view of user requests. |
-| Accession number series form | `app/cms/templates/admin/cms/accessionnumberseries/change_form.html` | Admin change form customization. | Provides inline helper text. |
-| Merge candidate list | `app/cms/templates/admin/cms/merge/candidate_list.html` | Lists possible merge targets. | Loaded by merge admin `ListView`. |
-| Merge search results | `app/cms/templates/admin/cms/merge/search_results.html` | Paginated search results for merge admin. | Includes paginator markup. |
-| Merge manual confirm | `app/cms/templates/admin/cms/merge/manual_action_confirm.html` | Manual merge confirmation dialog. | Highlights selected records before action. |
-| Merge compare | `app/cms/templates/admin/cms/merge/compare.html` | Side-by-side merge comparison UI. | Displays fields before merge. |
-| Merge form | `app/cms/templates/admin/cms/merge/merge_form.html` | Form for executing merge actions. | Integrates merge admin JS. |
+## JavaScript expectations
+Certain scripts assume W3 classes are present:
 
-## CSS Asset Inventory
+- `static/javascript.js` toggles `w3-show` and `w3-hide` to open the mobile navigation panel.
+- `static/js/merge_admin.js` generates search results using `w3-card-4`, `w3-padding`, and `w3-button` classes. Any markup changes must update both the template and script.
+- Inventory scanning scripts add contextual classes such as `w3-pale-green` to status elements. Keep those hooks stable.
 
-### Local Stylesheets
-| File | Path | Purpose | Consumers |
-| --- | --- | --- | --- |
-| CMS global styles | `app/cms/static/css/style.css` | Houses global navigation, hero, form helper, and list/table styling. | Loaded via `base_generic.html` for all CMS pages and public landing. |
-| Merge admin styles | `app/cms/static/css/merge_admin.css` | Styling for merge admin dashboard components. | Loaded by `MergeAdmin` via `Media` declaration in `admin_merge.py`. |
+## Testing coverage
+Template regression tests live in `app/cms/tests/` and verify that W3 classes render as expected:
 
-### Redundancy and Consolidation Opportunities
-- **Unused or orphaned selectors in `style.css`:** Helper classes such as `.template_buttons`, `.list-page-header`, `.search-bar`, `.dropdown-list-select`, `.actions`, `.reset_button`, `.lists_table`, `.checkbox_list`, and `.table-container` do not appear in any CMS templates or widgets, indicating they can be pruned or relocated to domain-specific bundles.【F:app/cms/static/css/style.css†L151-L192】【F:app/cms/static/css/style.css†L280-L356】【F:app/cms/static/css/style.css†L826-L858】【F:app/cms/static/css/style.css†L1042-L1107】
-- **Mismatched selector vs. markup:** `.step-link` is defined in the stylesheet, while the paginator markup uses `.step-links`, so the intended styling never applies.【F:app/cms/static/css/style.css†L1130-L1133】【F:app/cms/templates/admin/cms/merge/search_results.html†L59-L74】 Aligning class names will remove redundant CSS.
-- **JavaScript toggles unused styles:** The mobile menu script toggles `.shifted` on the main content container, but `style.css` only styles `.hero_section_container.shifted`, leaving the transition unused. Consider updating the selector or removing the CSS/JS pairing.【F:app/cms/static/javascript.js†L1-L19】【F:app/cms/static/css/style.css†L973-L984】
-- **Legacy pagination styles:** `.pagination`, `.pagination_previous`, and `.pagination_next` remain from earlier designs but all templates now use W3 pagination helpers from `base_generic.html`. These selectors can be retired once confirmed unused across non-CMS templates.【F:app/cms/static/css/style.css†L372-L423】【F:app/cms/templates/base_generic.html†L83-L131】
-- **Redundant Select2 width overrides:** Global `.select2-container`/`.select2-selection` rules in `style.css` duplicate the inline `<style>` block in `base_generic.html`; consolidate to a single source to avoid drift.【F:app/cms/static/css/style.css†L892-L908】【F:app/cms/templates/base_generic.html†L21-L36】
+- `test_navigation.py` asserts the navigation bar structure and mobile toggle behaviour.
+- `test_filter_widgets.py` ensures django-filter widgets expose W3 form classes.
+- `test_account_templates.py` checks the login and signup templates for the expected card and button classes.
 
-### Follow-up Ideas
-- Centralize frequently reused filter accordion markup into an include to reduce duplication across list templates.
-- Split the current monolithic `style.css` into domain-specific bundles (public landing, CMS shell, forms, import flows) to simplify future audits.
-- Document the expected CSS hooks for dynamically injected components (e.g., Select2, drag handles) within this guideline to aid future refactors.
+Add similar assertions when creating new templates that depend on W3-specific structure.
 
-### Template Context Matrix (2025-02)
-The tables above capture high-level intent. This matrix inventories the concrete context requirements, reusable fragments, and authentication gates for every CMS template before refactoring. Unless otherwise noted, templates extend `base_generic.html` and inherit its HTML5 structure and W3.CSS baseline.
-
-#### List & Search Templates
-_Default context_: Django `ListView`/`FilterView` supplies `object_list` (e.g. `accessions`, `drawers`), `page_obj`, `paginator`, `is_paginated`, and `filter` (with `filter.form`) where applicable.
-
-- **`cms/accession_list.html`**
-  - Blocks: `title`, `content`, `script`
-  - View: `AccessionListView` (`FilterView`)
-  - Additional context: `user` for permission-aware columns; `accessions` preloaded with taxa/element summaries.
-  - Reusable pieces: Inline accordion pattern for filters; no external includes.
-  - Auth: Public read. Non-staff see only `is_published` rows via queryset guard.
-- **`cms/drawerregister_list.html`**
-  - Blocks: `title`, `content`, `script`
-  - View: `DrawerRegisterListView` (`LoginRequiredMixin`, `DrawerRegisterAccessMixin`, `FilterView`)
-  - Additional context: `can_edit` toggles reorder controls and drag handles.
-  - Reusable pieces: Drag-and-drop script posts to `drawerregister_reorder` endpoint.
-  - Auth: Staff/intern roles enforced by mixin; reorder requires elevated groups.
-- **`cms/fieldslip_list.html`**
-  - Blocks: `title`, `content`, `script`
-  - View: `FieldSlipListView` (`LoginRequiredMixin`, `UserPassesTestMixin`, `FilterView`)
-  - Additional context: none beyond filter + list; responsive column toggles rely on DOM IDs.
-  - Auth: Restricted to Collection Managers via `test_func`.
-- **`cms/locality_list.html`**
-  - Blocks: `title`, `content`, `script`
-  - View: `LocalityListView` (`FilterView`)
-  - Additional context: `localities` alias populated by view; template expects filter fields `name` and `abbreviation`.
-  - Auth: Public read.
-- **`cms/place_list.html`**
-  - Blocks: `title`, `content`, `script`
-  - View: `PlaceListView` (`FilterView`)
-  - Additional context: Filter requires `locality`, `name`, `place_type` fields.
-  - Auth: Public read.
-- **`cms/preparation_list.html`**
-  - Blocks: `title`, `content`, `script`
-  - View: `PreparationListView` (`LoginRequiredMixin`, `PreparationAccessMixin`, `FilterView`)
-  - Additional context: Queryset annotation exposes `accession_label` used in template.
-  - Auth: Curators, Collection Managers, and superusers via mixin.
-- **`cms/reference_list.html`**
-  - Blocks: `title`, `content`, `pagination`, `script`
-  - View: `ReferenceListView` (`FilterView`)
-  - Additional context: Template consumes `page_obj` for manual pagination block.
-  - Auth: Public read.
-- **`cms/storage_list.html`**
-  - Blocks: `title`, `content`, `script`
-  - View: `StorageListView` (`LoginRequiredMixin`, `CollectionManagerAccessMixin`, `FilterView`)
-  - Additional context: `storages` alias includes counts and parent areas for display.
-  - Auth: Collection Managers / superusers.
-- **`cms/qc/media_queue_list.html`**
-  - Blocks: `title`, `content`
-  - View: `MediaQCQueueView` variants (`LoginRequiredMixin`, `UserPassesTestMixin`, `ListView`)
-  - Additional context: `queue_title`, `queue_description`, `queue_action_label`, `queue_empty_message` strings; template reads `media_list` and `page_obj`.
-  - Reusable pieces: Shared by multiple queue subclasses with differing filters.
-  - Auth: Intern/expert gating controlled per subclass `allowed_roles`.
-
-#### Detail Templates
-_Default context_: Django `DetailView` supplies `object` (aliased per view) and `user`.
-
-- **`cms/accession_detail.html`**
-  - Blocks: `title`, `content`, `extra_scripts`
-  - View: `AccessionDetailView` (public with queryset guard)
-  - Additional context: `related_fieldslips`, `references`, `geologies`, `comments`, `accession_rows`, `first_identifications`, `identification_counts`, `taxonomy`, `add_fieldslip_form`.
-  - Reusable pieces: Includes `cms/partials/accession_preview_panel.html`.
-  - Auth: Public read; edit links limited to Collection Managers/superusers.
-- **`cms/accession_row_detail.html`**
-  - Blocks: `title`, `content`
-  - View: `AccessionRowDetailView` (`DetailView`)
-  - Additional context: `natureofspecimens`, `identifications`, `can_edit`, `can_manage`, `show_inventory_status`.
-  - Auth: Public view; management actions hidden unless Collection Manager/superuser.
-- **`cms/drawerregister_detail.html`**
-  - Blocks: `title`, `content`
-  - View: `DrawerRegisterDetailView` (`LoginRequiredMixin`, `DrawerRegisterAccessMixin`, `DetailView`)
-  - Additional context: `history_entries`, `can_edit`.
-  - Auth: Drawer access mixin ensures proper roles.
-- **`cms/fieldslip_detail.html`**
-  - Blocks: `title`, `content`
-  - View: `FieldSlipDetailView`
-  - Additional context: none beyond `fieldslip` object; template accesses media fields for aerial photo.
-  - Auth: Public read.
-- **`cms/locality_detail.html`**
-  - Blocks: `title`, `content`
-  - View: `LocalityDetailView`
-  - Additional context: `accessions`, `page_obj`, `is_paginated` for the related accession list.
-  - Auth: Public read.
-- **`cms/place_detail.html`**
-  - Blocks: `title`, `content`
-  - View: `PlaceDetailView`
-  - Additional context: `children` queryset of related places in addition to the `place` object.
-  - Auth: Public read.
-- **`cms/preparation_detail.html`**
-  - Blocks: `title`, `content`
-  - View: `PreparationDetailView` (`LoginRequiredMixin`, `DetailView`)
-  - Additional context: `history_entries`, `can_edit`; template pulls related media directly via `preparation.preparationmedia_set`.
-  - Auth: Curators, Preparators, Collection Managers based on `can_edit` logic; list access enforced by mixin.
-- **`cms/reference_detail.html`**
-  - Blocks: `title`, `content`
-  - View: `ReferenceDetailView`
-  - Additional context: `accession_entries` (accession/page tuples) and optional `doi_url`.
-  - Auth: Public read.
-- **`cms/storage_detail.html`**
-  - Blocks: `title`, `content`
-  - View: `StorageDetailView` (`LoginRequiredMixin`, `CollectionManagerAccessMixin`, `DetailView`)
-  - Additional context: `specimen_page_obj`, `specimens`, `specimen_count`, `children`, `history_entries`, `can_edit`.
-  - Auth: Collection Managers / superusers.
-
-#### Dashboard Template
-- **`cms/dashboard.html`**
-  - Blocks: `title`, `content`
-  - View: `dashboard` function view
-  - Context: `is_preparator`, `my_preparations`, `priority_tasks`, `is_curator`, `completed_preparations`, `is_collection_manager`, `has_active_series`, `unassigned_accessions`, `latest_accessions`, `is_intern`, `my_drawers`, `qc_sections`, `qc_extra_links`, `no_role`.
-  - Reusable pieces: Includes `cms/qc/dashboard_queue.html`; relies on timer JS for intern scan tracking.
-  - Auth: Expects authenticated users; role flags derived from group membership.
-
-#### Form & Action Templates
-_Default context_: Forms expose `form`, `form.media`, CSRF token, and `request`.
-
-- **`cms/accession_batch_form.html`** — Blocks `title`, `content`; expects `form`, `series_remaining`, `series_range`, plus `title`, `method`, `action` strings from `generate_accession_batch` (`@staff_member_required`).
-- **`cms/accession_form.html`** — Blocks `title`, `content`; requires `form` and `request.path`. Used by `accession_create` and `accession_edit` (edit requires Collection Manager login).
-- **`cms/accession_row_form.html`** — Blocks `title`, `content`; expects `form`, `accessionrow`, `request.path`; served by `AccessionRowUpdateView` (login + Collection Manager check).
-- **`cms/accession_wizard.html`** — Blocks `title`, `head`, `content`, `extra_scripts`; uses `wizard` context from `AccessionWizard` (steps metadata, `wizard.management_form`, per-step `wizard.form`, `wizard.steps`).
-- **`cms/add_accession_comment.html`** — Blocks `title`, `content`; expects `form`, `accession`; guarded by `@login_required` + Collection Manager test.
-- **`cms/add_accession_geology.html`** — Blocks `title`, `content`; expects `form`, `accession`; guarded by `@login_required` + Collection Manager test.
-- **`cms/add_accession_reference.html`** — Blocks `title`, `content`; expects `form`, `accession`; guarded by `@login_required` + Collection Manager test.
-- **`cms/add_accession_row.html`** — Blocks `title`, `content`; expects `form`, `accession`; view enforces Collection Manager login before saving.
-- **`cms/add_accession_row_identification.html`** — Blocks `title`, `content`; expects `form`, `accession_row`; view restricted to Collection Managers (`@login_required`, `user_passes_test`).
-- **`cms/add_accession_row_specimen.html`** — Blocks `title`, `content`; expects `form`, `accession_row`; same auth guard as identification.
-- **`cms/drawerregister_form.html`** — Blocks `title`, `content`; requires `form`, `request.path`; used by `DrawerRegisterCreateView`/`UpdateView` (login + drawer access mixin).
-- **`cms/fieldslip_form.html`** — Blocks `title`, `content`; expects `form`; used by `fieldslip_create`/`fieldslip_edit` (functions without decorators, but exposed in staff navigation; consider restricting in refactor).
-- **`cms/fieldslip_import.html`** — Blocks `title`, `content`; no bound form object—relies on `<input type="file" name="import_file">`; view `fieldslip_import` handles POST.
-- **`cms/locality_form.html`** — Blocks `title`, `content`; expects `form`; `locality_create`/`locality_edit` functions serve it.
-- **`cms/place_form.html`** — Blocks `title`, `content`; expects `form`; `place_create`/`place_edit` functions serve it.
-- **`cms/preparation_approve.html`** — Blocks `title`, `content`; expects `form` from `PreparationApproveView` (`LoginRequiredMixin`, curator gate).
-- **`cms/preparation_confirm_delete.html`** — Blocks `title`, `content`; expects `preparation` object plus default delete view context; served by `PreparationDeleteView` (login + curator guard).
-- **`cms/preparation_form.html`** — Blocks `title`, `content`; expects `form`; used by `PreparationCreateView`/`UpdateView` (login, group-sensitive validation).
-- **`cms/preparation_media_upload.html`** — Blocks `title`, `content`; expects `form`, `preparation`; `PreparationMediaUploadView` enforces curator/manager auth before upload.
-- **`cms/reference_form.html`** — Blocks `title`, `content`; expects `form`; used by `reference_create`/`reference_edit` (function-based views, typically staff-only via navigation).
-- **`cms/storage_form.html`** — Blocks `title`, `content`; expects `form`, `request.path`; served by `StorageCreateView`/`StorageUpdateView` (`LoginRequiredMixin`, `CollectionManagerAccessMixin`).
-- **`cms/upload_media.html`** — Blocks `title`, `content`; expects `form`, `accession`; `upload_media` view handles POST (no decorator today—future refactor should enforce auth).
-
-#### QC Wizard Templates
-- **`cms/qc/wizard_base.html`** — Blocks `title`, `wizard_title`, `content`, `wizard_heading`, `wizard_subheading`, `wizard_extra_fields`, `wizard_actions`, `extra_scripts`; requires `media`, `accession_form`, `fieldslip_formset`, `row_formset`, `ident_formset`, `specimen_formset`, `reference_formset`, `row_contexts`, `storage_suggestions`, `storage_datalist_id`, `qc_history_logs`, `qc_preview`, `qc_diff`, `form_media`, plus optional `qc_conflicts`, `qc_acknowledged_warnings`.
-- **`cms/qc/intern_wizard.html`** — Extends wizard base; fills blocks `wizard_title`, `wizard_heading`, `wizard_subheading`, `wizard_extra_fields`, `wizard_actions`. Requires intern/expert-specific context (`qc_comment`, `qc_comments`, `latest_qc_comment`, `is_expert`, `qc_conflicts`, `qc_diff`).
-- **`cms/qc/expert_wizard.html`** — Extends wizard base; similar requirements with expert-only actions (`qc_conflicts`, `qc_comment`, `qc_comments`).
-- **`cms/qc/rows_step.html`** — Included by wizard steps; expects `row_formset`, `row_contexts`, `storage_suggestions`, `storage_datalist_id`.
-- **`cms/qc/summary_step.html`** — Summaries diff output; requires `qc_diff`, `qc_warnings`/`warnings_map` data from wizard manager.
-- **`cms/qc/dashboard_queue.html`** — Partial used by dashboard; expects `qc_sections` (list of dicts with `key`, `label`, `entries`, `has_more`, `action_url_name`, `cta_label`, `empty_message`, `view_all_url`) and optional `qc_extra_links` (label/url pairs).
-- **`cms/qc/partials/chip.html`** — Chip component for inline formsets; expects `chip_form`, `chip_type`, `field` iteration, `hidden` flag.
-- **`cms/qc/partials/reference_card.html`** — Requires `ref_form` bound fields (`first_author`, `title`, `year`, `page`) plus `hidden` toggle.
-- **`cms/qc/partials/row_card.html`** — Requires `row_form`, `display_index`, `row_id`, `hidden`; consumes form field HTML names/IDs for JS ordering.
-
-#### History & Shared Fragments
-- **`cms/qc/history.html`** — Blocks `title`, `content`; view `MediaQCHistoryView` (login + role guard) supplies `qc_logs`, optional `filter_media` for heading.
-- **`cms/qc/partials/history_list.html`** — Shared log renderer; expects `logs` (iterable of `MediaQCLog`), optional flags `compact`, `show_empty`, plus nested `comments` on each log.
-- **`cms/partials/accession_preview_panel.html`** — Partial used on accession detail and QC wizard; expects `accession`, `accession_rows`, `first_identifications`, `taxonomy`, `geologies`, `references`, `media`, `slip` collections, `preview_mode` toggle, and optionally `matched_taxon` metadata.
-- **History tables inside detail templates** — `cms/drawerregister_detail.html`, `cms/preparation_detail.html`, and `cms/storage_detail.html` now include `cms/history_table.html`, which expects `history_entries` from `build_history_entries` and renders translated headers, icons for create/update/delete, and `<ul>` change summaries.
-- **Media QC history view** — `cms/qc/history.html` loads `cms/history_media_qc_table.html` with `qc_logs`, exposes `active_media`/`active_change_type` context for filters, and reuses the W3 pagination shell.
-
-This matrix should be kept in sync with view changes so future refactors can rely on an authoritative source of template dependencies.
+## Future enhancements
+- Extract the repeated filter accordion into a reusable include to reduce duplication across list templates.
+- Publish example snippets for common layouts (cards, tables, modals) so contributors can copy the sanctioned markup.
+- Audit remaining JavaScript-driven DOM injections to ensure they emit the same class names as the server-rendered templates.
