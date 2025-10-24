@@ -83,7 +83,7 @@ The matrix below expands on individual template expectations, context variables,
 | Preparation approve | `app/cms/templates/cms/preparation_approve.html` | Curator approval confirmation. | Offers decision actions. |
 | Preparation confirm delete | `app/cms/templates/cms/preparation_confirm_delete.html` | Deletion confirmation dialog. | Minimal content around confirm/cancel. |
 | Preparation media upload | `app/cms/templates/cms/preparation_media_upload.html` | Upload interface for preparation assets. | Works with file multi-upload. |
-| Reference form | `app/cms/templates/cms/reference_form.html` | CRUD form for references. | Relies on `template_form_*` CSS helpers. |
+| Reference form | `app/cms/templates/cms/reference_form.html` | CRUD form for references. | Shares the base W3 form include and Select2 widgets. |
 | Upload media | `app/cms/templates/cms/upload_media.html` | Generic media upload form. | Links to storage after success. |
 | Base form include | `app/cms/templates/includes/base_form.html` | Shared form rendering include. | Centralizes CSRF, help text, and submit button. |
 | QC wizard base | `app/cms/templates/cms/qc/wizard_base.html` | Parent template for QC workflows. | Embeds preview panel and history partials. |
@@ -121,15 +121,13 @@ The matrix below expands on individual template expectations, context variables,
 ### Local Stylesheets
 | File | Path | Purpose | Consumers |
 | --- | --- | --- | --- |
-| CMS global styles | `app/cms/static/css/style.css` | Houses global navigation, hero, form helper, and list/table styling. | Loaded via `base_generic.html` for all CMS pages and public landing. |
-| Merge admin styles | `app/cms/static/css/merge_admin.css` | Styling for merge admin dashboard components. | Loaded by `MergeAdmin` via `Media` declaration in `admin_merge.py`. |
+| CMS global styles | `app/cms/static/css/style.css` | Minimal overrides for header logo sizing, logout form alignment, Select2 width/stacking, and drag handles. | Loaded via `base_generic.html` for all CMS pages and public landing. |
+| — | — | — | The merge admin and reporting UIs now rely entirely on W3.CSS utilities; dedicated stylesheets were removed in favour of shared markup classes. |
 
 ### Redundancy and Consolidation Opportunities
-- **Unused or orphaned selectors in `style.css`:** Helper classes such as `.template_buttons`, `.list-page-header`, `.search-bar`, `.dropdown-list-select`, `.actions`, `.reset_button`, `.lists_table`, `.checkbox_list`, and `.table-container` do not appear in any CMS templates or widgets, indicating they can be pruned or relocated to domain-specific bundles.【F:app/cms/static/css/style.css†L151-L192】【F:app/cms/static/css/style.css†L280-L356】【F:app/cms/static/css/style.css†L826-L858】【F:app/cms/static/css/style.css†L1042-L1107】
-- **Mismatched selector vs. markup:** `.step-link` is defined in the stylesheet, while the paginator markup uses `.step-links`, so the intended styling never applies.【F:app/cms/static/css/style.css†L1130-L1133】【F:app/cms/templates/admin/cms/merge/search_results.html†L59-L74】 Aligning class names will remove redundant CSS.
-- **JavaScript toggles unused styles:** The mobile menu script toggles `.shifted` on the main content container, but `style.css` only styles `.hero_section_container.shifted`, leaving the transition unused. Consider updating the selector or removing the CSS/JS pairing.【F:app/cms/static/javascript.js†L1-L19】【F:app/cms/static/css/style.css†L973-L984】
-- **Legacy pagination styles:** `.pagination`, `.pagination_previous`, and `.pagination_next` remain from earlier designs but all templates now use W3 pagination helpers from `base_generic.html`. These selectors can be retired once confirmed unused across non-CMS templates.【F:app/cms/static/css/style.css†L372-L423】【F:app/cms/templates/base_generic.html†L83-L131】
-- **Redundant Select2 width overrides:** Global `.select2-container`/`.select2-selection` rules in `style.css` duplicate the inline `<style>` block in `base_generic.html`; consolidate to a single source to avoid drift.【F:app/cms/static/css/style.css†L892-L908】【F:app/cms/templates/base_generic.html†L21-L36】
+- **Custom CSS scope in `style.css`:** The stylesheet is limited to navigation helpers (`.logo_image`, `.logout-form`, `.sr-only`), Select2 width and stacking overrides, and the drawer drag-handle cursor. Legacy helpers such as `.template_buttons`, `.search-bar`, `.table-container`, and `.template_form_*` remain retired in favour of W3.CSS utilities.【F:app/cms/static/css/style.css†L1-L38】
+- **Select2 overrides centralised:** Inline duplication was removed from `base_generic.html`; keep future adjustments inside `style.css` to avoid drift.【F:app/cms/static/css/style.css†L20-L32】【F:app/cms/templates/base_generic.html†L40-L68】
+- **Template regression coverage:** Navigation (`test_navigation`), filter widgets (`test_filter_widgets`), and account entrance flows (`test_account_templates`) now assert the presence of W3 classes so future edits cannot silently reintroduce bespoke selectors. Extend this pattern when reworking other templates that lean on W3 utility classes.【F:app/cms/tests/test_navigation.py†L24-L76】【F:app/cms/tests/test_filter_widgets.py†L1-L52】【F:app/cms/tests/test_account_templates.py†L1-L23】
 
 ### Follow-up Ideas
 - Centralize frequently reused filter accordion markup into an include to reduce duplication across list templates.
