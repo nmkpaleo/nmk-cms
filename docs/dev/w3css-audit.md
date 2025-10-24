@@ -19,13 +19,9 @@
   - Keep `.sr-only` for screen-reader-only copy; W3.CSS does not ship an equivalent helper and accessibility should not regress.【F:app/cms/static/css/style.css†L143-L153】
 
 ### Landing hero (`index.html`)
-- **Custom selectors:** `.hero_section_container`, `.hero_section_h1`, `.hero_section_p`, `.hero_section_button`, `.hero_section_image` plus mobile overrides.【F:app/cms/static/css/style.css†L197-L288】【F:app/cms/static/css/style.css†L960-L1019】
-- **Templates:** Landing page hero still references these classes.【F:app/cms/templates/index.html†L6-L24】
-- **W3.CSS alternatives:**
-  - Use `w3-row-padding` with `w3-col` grid columns to replace the flexbox wrapper.
-  - Convert heading and copy to `w3-xxxlarge`, `w3-large`, and `w3-text-theme` typography helpers instead of custom font sizing.
-  - Replace the CTA button with `w3-button w3-theme w3-round-large` and rely on `w3-hover-opacity` for hover feedback.
-  - Swap the image class with `w3-image w3-hide-small` (as needed) plus `w3-padding-24` for spacing.
+- **Status:** Rebuilt with W3 layout, typography, and button utilities; bespoke hero selectors have been removed from `style.css`.
+- **Templates:** The landing hero now uses `w3-row-padding`, `w3-col`, `w3-xxxlarge`, and `w3-button` helpers to deliver the responsive layout and CTA styling.【F:app/cms/templates/index.html†L6-L21】
+- **Follow-up:** None required unless additional marketing sections are added; reuse the same W3 patterns before introducing new custom CSS.
 
 ### Legacy Bootstrap-like container usage (reports)
 - **Custom selector:** `.container` sets a fixed width and center alignment for report templates.【F:app/cms/static/css/style.css†L375-L383】

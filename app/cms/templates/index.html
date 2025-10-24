@@ -3,28 +3,22 @@
 
 
 {% block content %}
-<div class="hero_section_container">
-
-  <div>
-    <h1 class="hero_section_h1">Unlock the Past and <br> 
-      Discover the Stories</h1>
-    <p class="hero_section_p">
-      Explore our extensive digital archives, 
-      gain  <br> insights into historical artifacts, and access  <br> 
-      curated content designed to inspire learning <br> 
-      and discovery for all.
-    </p>
-
-    <button class="hero_section_button">Read more</button>
+<section class="w3-container w3-padding-64 w3-light-grey" aria-labelledby="homepage-hero-title">
+  <div class="w3-row-padding w3-stretch">
+    <article class="w3-col l6 m6 w3-padding-16">
+      <h1 id="homepage-hero-title" class="w3-xxxlarge w3-text-dark-grey w3-margin-top">Unlock the Past and
+        Discover the Stories</h1>
+      <p class="w3-large w3-text-grey">
+        Explore our extensive digital archives, gain insights into historical artifacts, and access curated content
+        designed to inspire learning and discovery for all.
+      </p>
+      <a class="w3-button w3-round-large w3-deep-orange w3-hover-amber w3-margin-top" href="#main-content">Read
+        more</a>
+    </article>
+    <aside class="w3-col l6 m6 w3-center w3-padding-16">
+      {% load static %}
+      <img src="{% static 'images/animal_skull.png' %}" class="w3-image w3-round-large w3-card" alt="Animal skull">
+    </aside>
   </div>
-  <div>
-    {% load static %}
-    <img 
-    src="{% static 'images/animal_skull.png' %}" 
-    class="hero_section_image" alt="animal skull">
-    
-  </div>
-
-</div>
-  
+</section>
 {% endblock %}
