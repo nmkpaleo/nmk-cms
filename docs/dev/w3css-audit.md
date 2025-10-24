@@ -19,8 +19,8 @@
 - **W3.CSS alternatives:** Wrap the forms in `w3-container w3-padding-64 w3-card-4` structures, lean on `w3-input`/`w3-button w3-block` for controls, and re-create the profile badge with `w3-circle w3-border`. Once those templates migrate, the scoped overrides can be retired.
 
 ### Reports (`app/templates/reports/`)
-- **Status:** Both OCR summary templates now wrap content with `w3-content w3-padding-32` and add `w3-card w3-round-large` framing to charts and tables, replacing the bespoke `.container` and Bootstrap-derived classes.【F:app/templates/reports/media_report.html†L9-L33】【F:app/templates/reports/accession_distribution.html†L7-L34】
-- **Next steps:** Gradually fold the remaining `reports.css` shadows and typography into W3 equivalents (`w3-animate-opacity`, `w3-text-grey`, etc.) until the dedicated stylesheet is no longer required.
+- **Status:** Both OCR summary templates now wrap content with `w3-content w3-padding-32` and W3 card utilities, fully replacing the bespoke `.summary`, `.chart-container`, and `.message` helpers.【F:app/templates/reports/media_report.html†L1-L32】【F:app/templates/reports/accession_distribution.html†L1-L34】
+- **Outcome:** The shared `reports.css` bundle has been removed; the CMS base template no longer loads it, and report layouts depend solely on W3 classes.【F:app/cms/templates/base_generic.html†L21-L35】
 
 ### Form error styling
 - **Custom selector:** `ul.errorlist.nonfield` remains, but is now scoped to `.Login_box` so only the entrance flows receive the bespoke alert styling.【F:app/cms/static/css/style.css†L89-L101】
@@ -32,28 +32,17 @@
 - **W3.CSS consideration:** The affordance can shift to a `w3-button w3-round w3-light-grey` handle, keeping only the cursor override for clarity.
 
 ## `app/cms/static/css/merge_admin.css`
-- **Custom selectors:** `.merge-admin*` namespace controls layout, cards, badges, tables, and error messaging for the merge UI.【F:app/cms/static/css/merge_admin.css†L1-L131】
-- **Templates:** Exclusively used by `app/cms/templates/admin/cms/merge/merge_form.html`.【F:app/cms/templates/admin/cms/merge/merge_form.html†L12-L153】
-- **W3.CSS alternatives:**
-  - Wrap the entire interface in `w3-container w3-padding-32` instead of fixed `max-width` containers.
-  - Convert selection grids and cards to `w3-row-padding` with `w3-third` / `w3-half` columns and `w3-card-4 w3-round-large` articles.
-  - Replace badge styling with `w3-tag w3-round w3-small`.
-  - Use `w3-panel w3-pale-red` for error blocks and `w3-table-all w3-striped` for the comparison table.
-  - Leverage `w3-bar w3-right` for action button groups instead of flexbox gaps.
+- **Status:** The bespoke merge stylesheet has been retired; the admin form template now uses W3 containers, cards, tables, and tag helpers directly, and the admin mixin no longer registers a CSS asset.【F:app/cms/templates/admin/cms/merge/merge_form.html†L1-L174】【F:app/cms/admin_merge.py†L214-L221】
+- **Dynamic UI:** Merge search results rendered via JavaScript also emit W3 cards and buttons, keeping the experience consistent without custom selectors.【F:app/cms/static/js/merge_admin.js†L74-L119】
 
 ## `app/cms/static/css/reports.css`
-- **Custom selectors:** Body font/background overrides, `.summary`, `.chart-container`, `.message`, and fade-in animation styling.【F:app/cms/static/css/reports.css†L4-L58】
-- **Templates:** Applied in `app/templates/reports/media_report.html` for OCR metrics and embedded charts.【F:app/templates/reports/media_report.html†L7-L35】
-- **W3.CSS alternatives:**
-  - Replace `.summary` and `.chart-container` cards with `w3-card-4 w3-round-large w3-padding-24 w3-white` blocks.
-  - Use `w3-text-grey`, `w3-large`, and `w3-center` to style text instead of bespoke typography.
-  - Swap the body background and font settings for W3 theme classes (`w3-light-grey`, `w3-theme-l5`) applied on the `<body>` via template blocks.
-  - Optional: reproduce the fade-in effect with `w3-animate-opacity` to avoid custom keyframes.
+- **Status:** Retired; reporting pages now use W3 card, typography, and animation helpers directly in their templates, and the base template no longer references a dedicated stylesheet.【F:app/templates/reports/media_report.html†L1-L32】【F:app/templates/reports/accession_distribution.html†L1-L34】【F:app/cms/templates/base_generic.html†L21-L35】
+- **Guidance:** Future report templates should copy the W3 card blueprint and rely on W3 text utilities for contextual messaging to keep the CSS footprint minimal.
 
 ## Summary of recommended actions
 1. **Navigation & dropdowns:** Rebuild using W3 bar/dropdown helpers and delete the corresponding custom selectors once verified.
 2. **Hero & marketing sections:** Swap bespoke flex/typography rules for W3 rows, typography, and button utilities.
 3. **Auth screens:** Transition to W3 cards/forms for consistent branding, keeping only the cursor or SR-only overrides that lack W3 equivalents.
-4. **Admin merge UI:** Map each layout construct to W3 cards, grids, tables, and panels, significantly reducing `merge_admin.css`.
-5. **Reports:** Convert report wrappers and cards to W3 components and remove the dedicated `reports.css` once templates rely solely on W3 classes.
+4. **Admin merge UI:** Monitor the W3-based merge workflow (template + JS) for additional accessibility or spacing tweaks that might warrant lightweight overrides instead of reintroducing a stylesheet.
+5. **Reports:** Use the new W3 card blueprint when building future reporting pages to avoid resurrecting a dedicated stylesheet.
 6. **Clean-up:** Delete unused selectors listed above to reduce maintenance, ensuring any future styling leans on W3 utilities first.

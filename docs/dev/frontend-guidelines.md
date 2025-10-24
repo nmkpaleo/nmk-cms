@@ -122,7 +122,7 @@ The matrix below expands on individual template expectations, context variables,
 | File | Path | Purpose | Consumers |
 | --- | --- | --- | --- |
 | CMS global styles | `app/cms/static/css/style.css` | Houses global navigation, hero, form helper, and list/table styling. | Loaded via `base_generic.html` for all CMS pages and public landing. |
-| Merge admin styles | `app/cms/static/css/merge_admin.css` | Styling for merge admin dashboard components. | Loaded by `MergeAdmin` via `Media` declaration in `admin_merge.py`. |
+| — | — | — | The merge admin and reporting UIs now rely entirely on W3.CSS utilities; dedicated stylesheets were removed in favour of shared markup classes. |
 
 ### Redundancy and Consolidation Opportunities
 - **Custom CSS scope in `style.css`:** The stylesheet now only carries the navigation helpers (`.logo_image`, `.logout-form`, `.sr-only`), the account entrance overrides (`.Login_box` namespace), Select2 width fixes, and the drawer drag-handle cursor. Legacy helpers such as `.template_buttons`, `.search-bar`, `.table-container`, and `.template_form_*` have been removed in favour of W3.CSS utilities.【F:app/cms/static/css/style.css†L5-L156】

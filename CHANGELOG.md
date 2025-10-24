@@ -8,3 +8,4 @@
 - Standardise django-simple-history tables and the Media QC history page on shared W3.CSS partials with filter controls, pagination, and documentation updates (T4).
 - Refresh the primary navigation with a W3.CSS toolbar, accessible Reports dropdown limited to superusers and Collection Managers, overflow-safe styling, and unified login/logout controls; document the behaviour in the navigation user guide (T1).
 - Adopt W3.CSS styling for list filters, inventory session controls, and report layouts, trim legacy selectors from `style.css`, expand developer docs, and add widget-class regression tests.
+- Convert the admin merge workflow and reporting dashboards to W3.CSS-only markup, drop bespoke CSS bundles, refresh merge tooling JS, and document the new patterns.

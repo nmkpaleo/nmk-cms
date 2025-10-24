@@ -76,14 +76,17 @@
       return;
     }
     if (!payload || !Array.isArray(payload.results) || payload.results.length === 0) {
-      resultsContainer.innerHTML = '<p class="merge-admin__notice">No candidates found.</p>';
+      resultsContainer.innerHTML = '<p class="w3-padding w3-text-grey">No candidates found.</p>';
       return;
     }
 
     const fragment = document.createDocumentFragment();
     payload.results.forEach((item) => {
+      const column = document.createElement('div');
+      column.className = 'w3-col l4 m6 w3-margin-bottom';
+
       const card = document.createElement('article');
-      card.className = 'merge-admin__card';
+      card.className = 'w3-card w3-white w3-round-large w3-padding-large';
 
       const header = document.createElement('header');
       const title = document.createElement('h3');
@@ -93,7 +96,7 @@
 
       if (Array.isArray(item.preview) && item.preview.length) {
         const previewList = document.createElement('ul');
-        previewList.className = 'merge-admin__preview';
+        previewList.className = 'w3-ul w3-small';
         item.preview.forEach((row) => {
           const li = document.createElement('li');
           li.innerHTML = `<strong>${row.field}:</strong> ${row.value || ''}`;
@@ -103,24 +106,25 @@
       }
 
       const actions = document.createElement('div');
-      actions.className = 'merge-admin__card-actions';
+      actions.className = 'w3-margin-top';
 
       const targetButton = document.createElement('button');
       targetButton.type = 'button';
-      targetButton.className = 'button';
+      targetButton.className = 'button w3-button w3-round w3-blue w3-margin-right';
       targetButton.textContent = 'Use as target';
       targetButton.addEventListener('click', () => updateLocation('target', item.candidate.pk));
       actions.appendChild(targetButton);
 
       const sourceButton = document.createElement('button');
       sourceButton.type = 'button';
-      sourceButton.className = 'button';
+      sourceButton.className = 'button w3-button w3-round w3-border';
       sourceButton.textContent = 'Use as source';
       sourceButton.addEventListener('click', () => updateLocation('source', item.candidate.pk));
       actions.appendChild(sourceButton);
 
       card.appendChild(actions);
-      fragment.appendChild(card);
+      column.appendChild(card);
+      fragment.appendChild(column);
     });
 
     resultsContainer.innerHTML = '';
@@ -134,7 +138,7 @@
       const query = (formData.get('query') || '').toString().trim();
       if (!query) {
         if (resultsContainer) {
-          resultsContainer.innerHTML = '<p class="merge-admin__notice">Enter a search term to continue.</p>';
+          resultsContainer.innerHTML = '<p class="w3-padding w3-text-grey">Enter a search term to continue.</p>';
         }
         return;
       }
@@ -148,7 +152,7 @@
       }
 
       if (resultsContainer) {
-        resultsContainer.innerHTML = '<p class="merge-admin__notice">Searching…</p>';
+        resultsContainer.innerHTML = '<p class="w3-padding w3-text-grey">Searching…</p>';
       }
 
       fetch(`${searchUrl}?${params.toString()}`)
@@ -163,7 +167,7 @@
         })
         .catch(() => {
           if (resultsContainer) {
-            resultsContainer.innerHTML = '<p class="merge-admin__error">Unable to load merge candidates.</p>';
+            resultsContainer.innerHTML = '<p class="w3-padding w3-text-red">Unable to load merge candidates.</p>';
           }
         });
     });
