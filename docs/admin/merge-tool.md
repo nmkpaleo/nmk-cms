@@ -2,6 +2,8 @@
 
 The merge tool lets authorised staff review duplicate records side-by-side and consolidate them into a single canonical entry. It relies on the `MergeAdminMixin` and merge engine that power automated logging and relation handling.
 
+The interface now renders entirely with W3.CSS containers and cards, so the admin changelist action, compare screen, and candidate search share consistent spacing without relying on bespoke stylesheets. Expect each step to appear inside a `w3-card-4` wrapper with W3 tables for comparison rows; any spacing tweaks should continue to use W3 utilities instead of adding new CSS rules.【F:app/cms/templates/admin/cms/merge/merge_form.html†L1-L174】
+
 ## Prerequisites and Access Control
 
 1. Ensure the model is registered with the Django admin using `MergeAdminMixin` so the merge workflow, templates, and actions are available.

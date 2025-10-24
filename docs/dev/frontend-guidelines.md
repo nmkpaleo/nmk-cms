@@ -126,7 +126,8 @@ The matrix below expands on individual template expectations, context variables,
 
 ### Redundancy and Consolidation Opportunities
 - **Custom CSS scope in `style.css`:** The stylesheet is limited to navigation helpers (`.logo_image`, `.logout-form`, `.sr-only`), Select2 width and stacking overrides, and the drawer drag-handle cursor. Legacy helpers such as `.template_buttons`, `.search-bar`, `.table-container`, and `.template_form_*` remain retired in favour of W3.CSS utilities.【F:app/cms/static/css/style.css†L1-L38】
-- **Select2 overrides centralised:** Inline duplication was removed from `base_generic.html`; keep future adjustments inside `style.css` to avoid drift.【F:app/cms/static/css/style.css†L20-L32】【F:app/cms/templates/base_generic.html†L1-L68】
+- **Select2 overrides centralised:** Inline duplication was removed from `base_generic.html`; keep future adjustments inside `style.css` to avoid drift.【F:app/cms/static/css/style.css†L20-L32】【F:app/cms/templates/base_generic.html†L40-L68】
+- **Template regression coverage:** Navigation (`test_navigation`), filter widgets (`test_filter_widgets`), and account entrance flows (`test_account_templates`) now assert the presence of W3 classes so future edits cannot silently reintroduce bespoke selectors. Extend this pattern when reworking other templates that lean on W3 utility classes.【F:app/cms/tests/test_navigation.py†L24-L76】【F:app/cms/tests/test_filter_widgets.py†L1-L52】【F:app/cms/tests/test_account_templates.py†L1-L23】
 
 ### Follow-up Ideas
 - Centralize frequently reused filter accordion markup into an include to reduce duplication across list templates.
