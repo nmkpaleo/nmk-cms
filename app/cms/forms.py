@@ -1,8 +1,11 @@
 import csv
 import io
+import posixpath
+import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, List
+from xml.etree import ElementTree
 
 from tablib import Dataset
 from django import forms
@@ -1097,6 +1100,157 @@ class StorageForm(BaseW3ModelForm):
 MANUAL_IMPORT_PERMISSION_CODENAME = "can_import_manual_qc"
 _MANUAL_IMPORT_PERMISSION_NAME = _("Can import manual QC data")
 
+_SPREADSHEET_NS = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+_REL_NS = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
+_PKG_REL_NS = "{http://schemas.openxmlformats.org/package/2006/relationships}"
+
+
+def _column_index_from_reference(reference: str | None) -> int:
+    if not reference:
+        return 0
+    letters: List[str] = []
+    for char in reference:
+        if char.isalpha():
+            letters.append(char.upper())
+        else:
+            break
+    index = 0
+    for char in letters:
+        index = index * 26 + (ord(char) - ord("A") + 1)
+    return max(index - 1, 0)
+
+
+def _read_shared_strings(zf: zipfile.ZipFile) -> List[str]:
+    try:
+        with zf.open("xl/sharedStrings.xml") as handle:
+            tree = ElementTree.parse(handle)
+    except KeyError:
+        return []
+    root = tree.getroot()
+    shared_strings: List[str] = []
+    for si in root.iter(f"{_SPREADSHEET_NS}si"):
+        pieces: List[str] = []
+        for text_node in si.iter(f"{_SPREADSHEET_NS}t"):
+            if text_node.text:
+                pieces.append(text_node.text)
+        shared_strings.append("".join(pieces))
+    return shared_strings
+
+
+def _resolve_first_sheet_path(zf: zipfile.ZipFile) -> str:
+    with zf.open("xl/workbook.xml") as handle:
+        workbook_tree = ElementTree.parse(handle)
+    root = workbook_tree.getroot()
+    sheet = root.find(f"{_SPREADSHEET_NS}sheets/{_SPREADSHEET_NS}sheet")
+    if sheet is None:
+        raise ValueError(str(_("The Excel workbook does not contain any worksheets.")))
+    rel_id = sheet.attrib.get(f"{_REL_NS}id")
+    if not rel_id:
+        return "xl/worksheets/sheet1.xml"
+    with zf.open("xl/_rels/workbook.xml.rels") as handle:
+        rels_tree = ElementTree.parse(handle)
+    rel_root = rels_tree.getroot()
+    for rel in rel_root.findall(f"{_PKG_REL_NS}Relationship"):
+        if rel.attrib.get("Id") == rel_id:
+            target = rel.attrib.get("Target", "")
+            if not target:
+                break
+            joined = posixpath.normpath(posixpath.join("xl", target))
+            return joined.lstrip("/")
+    return "xl/worksheets/sheet1.xml"
+
+
+def _read_cell_value(cell, shared_strings: List[str]) -> str:
+    cell_type = cell.attrib.get("t")
+    if cell_type == "inlineStr":
+        inline = cell.find(f"{_SPREADSHEET_NS}is")
+        if inline is not None:
+            return "".join(part for part in inline.itertext())
+        return ""
+    value = cell.findtext(f"{_SPREADSHEET_NS}v", default="")
+    if cell_type == "s":
+        try:
+            index = int(value)
+        except (TypeError, ValueError):
+            return ""
+        if 0 <= index < len(shared_strings):
+            return shared_strings[index]
+        return ""
+    if cell_type == "b":
+        return "TRUE" if value == "1" else "FALSE"
+    if cell_type == "str":
+        if value:
+            return value
+        text_node = cell.find(f"{_SPREADSHEET_NS}t")
+        if text_node is not None and text_node.text:
+            return text_node.text
+        return ""
+    return value
+
+
+def _extract_sheet_rows(
+    zf: zipfile.ZipFile, sheet_path: str, shared_strings: List[str]
+) -> List[List[str]]:
+    with zf.open(sheet_path) as handle:
+        sheet_tree = ElementTree.parse(handle)
+    root = sheet_tree.getroot()
+    rows: List[List[str]] = []
+    for row in root.findall(f"{_SPREADSHEET_NS}sheetData/{_SPREADSHEET_NS}row"):
+        values: List[str] = []
+        for cell in row.findall(f"{_SPREADSHEET_NS}c"):
+            reference = cell.attrib.get("r")
+            column_index = _column_index_from_reference(reference)
+            while len(values) <= column_index:
+                values.append("")
+            values[column_index] = _read_cell_value(cell, shared_strings) or ""
+        rows.append(values)
+    return rows
+
+
+def _trim_empty_columns(rows: List[List[str]]) -> List[List[str]]:
+    if not rows:
+        return rows
+    max_index = -1
+    for row in rows:
+        for index, value in enumerate(row):
+            if str(value).strip():
+                if index > max_index:
+                    max_index = index
+    if max_index == -1:
+        return []
+    trimmed: List[List[str]] = []
+    for row in rows:
+        trimmed.append(row[: max_index + 1])
+    return trimmed
+
+
+def _load_xlsx_dataset(data: bytes) -> Dataset:
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            shared_strings = _read_shared_strings(zf)
+            sheet_path = _resolve_first_sheet_path(zf)
+            rows = _extract_sheet_rows(zf, sheet_path, shared_strings)
+    except (KeyError, zipfile.BadZipFile) as exc:
+        raise ValueError(
+            str(_("The uploaded Excel file is not a valid .xlsx workbook."))
+        ) from exc
+
+    rows = _trim_empty_columns(rows)
+    if not rows:
+        return Dataset()
+
+    dataset = Dataset()
+    headers = [str(value).strip() for value in rows[0]]
+    dataset.headers = headers
+    for data_row in rows[1:]:
+        normalized = [str(value) if value is not None else "" for value in data_row]
+        if len(normalized) < len(headers):
+            normalized.extend([""] * (len(headers) - len(normalized)))
+        elif len(normalized) > len(headers):
+            normalized = normalized[: len(headers)]
+        dataset.append(normalized)
+    return dataset
+
 
 @dataclass(slots=True)
 class ManualImportFailure:
@@ -1144,7 +1298,6 @@ def ensure_manual_qc_permission() -> Permission:
 def load_manual_qc_dataset(file_obj) -> Dataset:
     """Load a tabular dataset from an uploaded manual QC file."""
 
-    dataset = Dataset()
     data = file_obj.read()
     if not data:
         raise ValueError(str(_("The uploaded file is empty.")))
@@ -1157,16 +1310,28 @@ def load_manual_qc_dataset(file_obj) -> Dataset:
         ".xls": "xls",
     }.get(suffix)
 
+    dataset: Dataset
+
     try:
         if format_hint in {"csv", "tsv"}:
+            dataset = Dataset()
             dataset.load(data.decode("utf-8-sig"), format=format_hint)
-        elif format_hint in {"xlsx", "xls"}:
-            dataset.load(data, format=format_hint)
+        elif format_hint == "xlsx":
+            dataset = _load_xlsx_dataset(data)
+        elif format_hint == "xls":
+            raise ValueError(
+                str(
+                    _(
+                        "Legacy .xls files are not supported. Save the workbook as .xlsx or CSV."
+                    )
+                )
+            )
         else:
             try:
+                dataset = Dataset()
                 dataset.load(data.decode("utf-8-sig"), format="csv")
             except UnicodeDecodeError:
-                dataset.load(data, format="xlsx")
+                dataset = _load_xlsx_dataset(data)
     except Exception as exc:  # pragma: no cover - defensive guard around tablib
         raise ValueError(
             str(_("The uploaded file could not be parsed. Upload a CSV or Excel file."))

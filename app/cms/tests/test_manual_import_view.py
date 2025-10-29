@@ -1,4 +1,6 @@
+import io
 import os
+import zipfile
 from unittest.mock import patch
 
 import django
@@ -20,6 +22,83 @@ from cms.forms import (
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 os.environ.setdefault("DB_ENGINE", "django.db.backends.sqlite3")
 django.setup()
+
+
+def _excel_column_letter(index: int) -> str:
+    result = ""
+    index += 1
+    while index:
+        index, remainder = divmod(index - 1, 26)
+        result = chr(65 + remainder) + result
+    return result
+
+
+def _xml_escape(value: str) -> str:
+    return (
+        value.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&apos;")
+    )
+
+
+def build_minimal_workbook(headers: list[str], rows: list[list[str]]) -> bytes:
+    buffer = io.BytesIO()
+    sheet_rows = []
+    for row_index, row_values in enumerate([headers, *rows], start=1):
+        cells = []
+        for column_index, raw_value in enumerate(row_values):
+            value = _xml_escape(str(raw_value))
+            cell_reference = f"{_excel_column_letter(column_index)}{row_index}"
+            cells.append(
+                f'<c r="{cell_reference}" t="inlineStr"><is><t>{value}</t></is></c>'
+            )
+        sheet_rows.append(f"<row r=\"{row_index}\">{''.join(cells)}</row>")
+
+    sheet_xml = (
+        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+        "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
+        "<sheetData>"
+        + "".join(sheet_rows)
+        + "</sheetData></worksheet>"
+    )
+
+    with zipfile.ZipFile(buffer, "w") as zf:
+        zf.writestr(
+            "[Content_Types].xml",
+            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+            "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">"
+            "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>"
+            "<Default Extension=\"xml\" ContentType=\"application/xml\"/>"
+            "<Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>"
+            "<Override PartName=\"/xl/worksheets/sheet1.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>"
+            "</Types>",
+        )
+        zf.writestr(
+            "_rels/.rels",
+            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+            "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+            "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"xl/workbook.xml\"/>"
+            "</Relationships>",
+        )
+        zf.writestr(
+            "xl/workbook.xml",
+            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+            "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+            "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">"
+            "<sheets><sheet name=\"Sheet1\" sheetId=\"1\" r:id=\"rId1\"/></sheets></workbook>",
+        )
+        zf.writestr(
+            "xl/_rels/workbook.xml.rels",
+            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+            "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+            "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet1.xml\"/>"
+            "</Relationships>",
+        )
+        zf.writestr("xl/worksheets/sheet1.xml", sheet_xml)
+
+    return buffer.getvalue()
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -112,6 +191,31 @@ def test_manual_import_view_handles_successful_upload(client, collection_manager
     assert mock_run.called
     args, kwargs = mock_run.call_args
     assert len(args[0]) == 1
+    assert kwargs["default_created_by"] == collection_manager.username
+
+
+def test_manual_import_view_accepts_xlsx_upload(client, collection_manager):
+    client.force_login(collection_manager)
+
+    xlsx_content = build_minimal_workbook(["id", "collection_id"], [["1", "KNM"]])
+    upload = SimpleUploadedFile(
+        "manual.xlsx",
+        xlsx_content,
+        content_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+    )
+
+    summary = ManualImportSummary(total_rows=1, success_count=1, created_count=1)
+
+    with patch("cms.forms.run_manual_qc_import", return_value=summary) as mock_run:
+        response = client.post(reverse("manual_qc_import"), {"dataset_file": upload})
+
+    assert response.status_code == 200
+    args, kwargs = mock_run.call_args
+    rows = args[0]
+    assert len(rows) == 1
+    assert rows[0]["id"] == "1"
     assert kwargs["default_created_by"] == collection_manager.username
 
 
