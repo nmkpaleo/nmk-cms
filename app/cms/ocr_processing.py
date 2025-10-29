@@ -74,6 +74,29 @@ logger = logging.getLogger(__name__)
 MAX_OCR_ROWS_PER_ACCESSION = 50
 
 
+def make_interpreted_value(
+    interpreted: object | None,
+    *,
+    raw: object | None = None,
+    confidence: float | None = None,
+) -> dict[str, object]:
+    """Return a minimal OCR-style value dictionary.
+
+    When ``interpreted`` is falsy the function returns an empty dictionary so
+    that downstream lookups using ``.get('interpreted')`` behave consistently.
+    """
+
+    if interpreted in (None, "") and raw in (None, "") and confidence is None:
+        return {}
+
+    payload: dict[str, object] = {"interpreted": interpreted}
+    if raw is not None:
+        payload["raw"] = raw
+    if confidence is not None:
+        payload["confidence"] = confidence
+    return payload
+
+
 def _load_env() -> None:
     """Load environment variables from the project root .env file."""
     env_path = Path(__file__).resolve().parents[2] / ".env"

@@ -1,5 +1,10 @@
+from __future__ import annotations
+
+from typing import Any
+
 from django.core.exceptions import ValidationError
 from django.db import models
+
 from cms.models import Accession, AccessionNumberSeries
 
 def generate_accessions_from_series(series_user, count, collection, specimen_prefix, creator_user=None):
@@ -75,4 +80,24 @@ def build_history_entries(instance):
                 changes.append({"field": field_name, "old": old, "new": new})
         history_entries.append({"log": log, "changes": changes})
     return history_entries
+
+
+def coerce_stripped(value: Any | None) -> str | None:
+    """Return ``value`` as a stripped string or ``None`` if empty."""
+
+    if value in (None, ""):
+        return None
+    if isinstance(value, str):
+        result = value.strip()
+        return result or None
+    result = str(value).strip()
+    return result or None
+
+
+def normalise_yes_no(value: Any | None) -> bool:
+    """Interpret common truthy strings (yes/true/1) as ``True``."""
+
+    if value in (None, ""):
+        return False
+    return str(value).strip().lower() in {"yes", "true", "1", "y", "t"}
 
