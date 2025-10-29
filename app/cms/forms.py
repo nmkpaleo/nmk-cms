@@ -1,6 +1,15 @@
+import csv
+import io
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Iterable, List
+
+from tablib import Dataset
 from django import forms
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
+from django.contrib.contenttypes.models import ContentType
 from django.db.models import Q
 from django.forms.widgets import (
     CheckboxInput,
@@ -48,6 +57,9 @@ from .models import (
 )
 
 import json
+
+from cms.manual_import import ManualImportError, import_manual_row
+from cms.utils import coerce_stripped
 
 User = get_user_model()
 
@@ -1080,3 +1092,203 @@ class StorageForm(BaseW3ModelForm):
             "area": forms.TextInput(attrs={"class": "w3-input"}),
             "parent_area": forms.Select(attrs={"class": "w3-select"}),
         }
+
+
+MANUAL_IMPORT_PERMISSION_CODENAME = "can_import_manual_qc"
+_MANUAL_IMPORT_PERMISSION_NAME = _("Can import manual QC data")
+
+
+@dataclass(slots=True)
+class ManualImportFailure:
+    row_number: int
+    identifier: str | None
+    message: str
+
+
+@dataclass
+class ManualImportSummary:
+    total_rows: int
+    success_count: int = 0
+    created_count: int = 0
+    failures: List[ManualImportFailure] = field(default_factory=list)
+
+    @property
+    def error_count(self) -> int:
+        return len(self.failures)
+
+    def build_error_report(self) -> str:
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["row_number", "identifier", "message"])
+        for failure in self.failures:
+            writer.writerow([failure.row_number, failure.identifier or "", failure.message])
+        return output.getvalue()
+
+
+def ensure_manual_qc_permission() -> Permission:
+    """Ensure the custom manual import permission exists and return it."""
+
+    content_type = ContentType.objects.get_for_model(Media)
+    permission, created = Permission.objects.get_or_create(
+        codename=MANUAL_IMPORT_PERMISSION_CODENAME,
+        content_type=content_type,
+        defaults={"name": str(_MANUAL_IMPORT_PERMISSION_NAME)},
+    )
+    desired_name = str(_MANUAL_IMPORT_PERMISSION_NAME)
+    if not created and permission.name != desired_name:
+        permission.name = desired_name
+        permission.save(update_fields=["name"])
+    return permission
+
+
+def load_manual_qc_dataset(file_obj) -> Dataset:
+    """Load a tabular dataset from an uploaded manual QC file."""
+
+    dataset = Dataset()
+    data = file_obj.read()
+    if not data:
+        raise ValueError(str(_("The uploaded file is empty.")))
+
+    suffix = Path(getattr(file_obj, "name", "")).suffix.lower()
+    format_hint = {
+        ".csv": "csv",
+        ".tsv": "tsv",
+        ".xlsx": "xlsx",
+        ".xls": "xls",
+    }.get(suffix)
+
+    try:
+        if format_hint in {"csv", "tsv"}:
+            dataset.load(data.decode("utf-8-sig"), format=format_hint)
+        elif format_hint in {"xlsx", "xls"}:
+            dataset.load(data, format=format_hint)
+        else:
+            try:
+                dataset.load(data.decode("utf-8-sig"), format="csv")
+            except UnicodeDecodeError:
+                dataset.load(data, format="xlsx")
+    except Exception as exc:  # pragma: no cover - defensive guard around tablib
+        raise ValueError(
+            str(_("The uploaded file could not be parsed. Upload a CSV or Excel file."))
+        ) from exc
+    finally:
+        file_obj.seek(0)
+
+    if not dataset.headers:
+        raise ValueError(str(_("The uploaded file must include a header row.")))
+
+    return dataset
+
+
+def dataset_to_rows(dataset: Dataset) -> List[dict[str, Any]]:
+    """Convert a dataset into normalized row dictionaries."""
+
+    normalized_headers = [
+        str(header).strip().lower()
+        for header in dataset.headers
+        if header is not None and str(header).strip()
+    ]
+
+    if "id" not in normalized_headers:
+        raise ValueError(str(_("The header row must include an 'id' column.")))
+
+    rows: List[dict[str, Any]] = []
+    for raw_row in dataset.dict:
+        normalized_row: dict[str, Any] = {}
+        for key, value in raw_row.items():
+            normalized_key = str(key).strip().lower()
+            if normalized_key:
+                normalized_row[normalized_key] = value
+        rows.append(normalized_row)
+
+    if not rows:
+        raise ValueError(str(_("The uploaded file does not contain any data rows.")))
+
+    return rows
+
+
+def run_manual_qc_import(
+    rows: Iterable[dict[str, Any]],
+    *,
+    queryset=None,
+    default_created_by: str | None = None,
+) -> ManualImportSummary:
+    """Execute manual QC import rows and capture a summary."""
+
+    materialized_rows = list(rows)
+    summary = ManualImportSummary(total_rows=len(materialized_rows))
+
+    if not materialized_rows:
+        return summary
+
+    if queryset is None:
+        queryset = Media.objects.all()
+
+    for index, original_row in enumerate(materialized_rows, start=2):
+        row = dict(original_row)
+        identifier = coerce_stripped(row.get("id"))
+
+        if default_created_by and not coerce_stripped(row.get("created_by")):
+            row["created_by"] = default_created_by
+
+        try:
+            result = import_manual_row(row, queryset=queryset)
+        except ManualImportError as exc:
+            summary.failures.append(
+                ManualImportFailure(row_number=index, identifier=identifier, message=str(exc))
+            )
+            continue
+        except Exception as exc:  # pragma: no cover - unexpected errors bubbled to caller
+            summary.failures.append(
+                ManualImportFailure(row_number=index, identifier=identifier, message=str(exc))
+            )
+            continue
+
+        summary.success_count += 1
+        if isinstance(result, dict):
+            created_records = result.get("created")
+            if isinstance(created_records, list):
+                summary.created_count += len(created_records)
+
+    return summary
+
+
+class ManualQCImportForm(BaseW3Form):
+    dataset_file = forms.FileField(
+        label=_("Manual QC spreadsheet"),
+        help_text=_("Upload a CSV or Excel file containing the manually validated QC rows."),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._rows: List[dict[str, Any]] = []
+
+    def clean_dataset_file(self):
+        uploaded = self.cleaned_data["dataset_file"]
+        try:
+            dataset = load_manual_qc_dataset(uploaded)
+            rows = dataset_to_rows(dataset)
+        except ValueError as exc:
+            raise forms.ValidationError(str(exc)) from exc
+
+        self._rows = rows
+        return uploaded
+
+    @property
+    def rows(self) -> List[dict[str, Any]]:
+        return self._rows
+
+    def execute_import(self, user) -> ManualImportSummary:
+        if not self._rows:
+            raise ValueError("ManualQCImportForm must be validated before executing the import.")
+
+        queryset = Media.objects.all()
+        default_created_by = None
+        if getattr(user, "is_authenticated", False):
+            default_created_by = user.get_username()
+
+        return run_manual_qc_import(
+            self._rows,
+            queryset=queryset,
+            default_created_by=default_created_by,
+        )
