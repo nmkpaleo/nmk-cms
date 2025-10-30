@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import re
+import copy
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Mapping, Sequence
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
@@ -32,7 +33,8 @@ class ManualRowContext:
 
 
 ACCESSION_RE = re.compile(
-    r"^(?:(?P<collection>[A-Za-z]+)\s*[-:]\s*)?(?P<prefix>[A-Za-z]+)?[\s-]*(?P<number>\d+)(?:[\s\-/]*(?P<suffix>[A-Za-z0-9]+))?",
+    r"^(?:(?P<collection>[A-Za-z]+)\s*[-:]\s*)?(?P<prefix>[A-Za-z]+)?[\s-]*(?P<number>\d+)"
+    r"(?:[\s\-/]*(?P<suffix>[A-Za-z0-9]+(?:\s*-\s*[A-Za-z0-9]+)?))?",
     flags=re.IGNORECASE,
 )
 
@@ -54,7 +56,7 @@ def parse_accession_number(accession_number: Any) -> ManualRowContext:
 
     suffix = coerce_stripped(match.group("suffix"))
     if suffix:
-        suffix = suffix.upper()
+        suffix = re.sub(r"\s+", "", suffix.upper())
 
     prefix = coerce_stripped(match.group("prefix"))
     if prefix:
@@ -79,6 +81,13 @@ def make_taxon_value(row: Mapping[str, Any]) -> str | None:
 
 
 def parse_coordinates(value: Any) -> tuple[str | None, str | None]:
+    if isinstance(value, (list, tuple, set)):
+        for item in value:
+            latitude, longitude = parse_coordinates(item)
+            if latitude or longitude:
+                return latitude, longitude
+        return None, None
+
     text = coerce_stripped(value)
     if not text:
         return None, None
@@ -102,6 +111,12 @@ def parse_fragments(value: Any) -> str | None:
 
 
 def build_reference_entries(value: Any) -> list[dict[str, dict[str, Any]]]:
+    if isinstance(value, (list, tuple, set)):
+        entries: list[dict[str, dict[str, Any]]] = []
+        for item in value:
+            entries.extend(build_reference_entries(item))
+        return entries
+
     text = coerce_stripped(value)
     if not text:
         return []
@@ -158,8 +173,8 @@ def build_field_slip(row: Mapping[str, Any], taxon_value: str | None) -> dict[st
 
 
 def build_row_section(
-    context: ManualRowContext,
     row: Mapping[str, Any],
+    specimen_suffix: str | None,
 ) -> dict[str, Any]:
     storage = make_interpreted_value(coerce_stripped(row.get("shelf")))
     body_parts = parse_body_parts(row.get("body_parts"))
@@ -184,7 +199,7 @@ def build_row_section(
         natures.append(nature_entry)
 
     return {
-        "specimen_suffix": make_interpreted_value(context.specimen_suffix or "-"),
+        "specimen_suffix": make_interpreted_value(specimen_suffix or "-"),
         "storage_area": storage,
         "natures": natures,
     }
@@ -197,34 +212,158 @@ def make_identification_entry(taxon_value: str | None) -> dict[str, Any]:
     }
 
 
-def build_accession_payload(row: Mapping[str, Any]) -> dict[str, Any]:
-    context = parse_accession_number(row.get("accession_number"))
-    taxon_value = make_taxon_value(row)
+def _letter_code_to_number(code: str) -> int | None:
+    if not code or not code.isalpha():
+        return None
+    result = 0
+    for char in code.upper():
+        result = result * 26 + (ord(char) - 64)
+    return result
+
+
+def _number_to_letter_code(number: int) -> str:
+    if number <= 0:
+        return ""
+    result = ""
+    while number:
+        number, remainder = divmod(number - 1, 26)
+        result = chr(65 + remainder) + result
+    return result
+
+
+def expand_specimen_suffix(suffix: str | None) -> list[str]:
+    if not suffix or suffix == "-":
+        return []
+    text = suffix.upper()
+    if "-" in text:
+        start, end = text.split("-", 1)
+        start = coerce_stripped(start)
+        end = coerce_stripped(end)
+        if start and end:
+            start_num = _letter_code_to_number(start)
+            end_num = _letter_code_to_number(end)
+            if start_num is not None and end_num is not None and end_num >= start_num:
+                return [_number_to_letter_code(idx) for idx in range(start_num, end_num + 1)]
+    return [text]
+
+
+def _unique_preserving(values: Iterable[str | None]) -> list[str | None]:
+    seen: set[str | None] = set()
+    result: list[str | None] = []
+    for value in values:
+        key = value.upper() if isinstance(value, str) else value
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(value)
+    return result
+
+
+def _join_unique(values: Iterable[str], *, separator: str = " | ") -> str | None:
+    unique = _unique_preserving(values)
+    filtered = [value for value in unique if value]
+    if not filtered:
+        return None
+    return separator.join(filtered)
+
+
+def _collect_unique(rows: Sequence[Mapping[str, Any]], key: str) -> list[str]:
+    collected: list[str] = []
+    for row in rows:
+        value = coerce_stripped(row.get(key))
+        if value and value not in collected:
+            collected.append(value)
+    return collected
+
+
+def _determine_suffix_display(suffixes: list[str | None]) -> str | None:
+    meaningful = [suffix for suffix in suffixes if suffix]
+    if not meaningful:
+        return None
+    if len(meaningful) == 1:
+        return meaningful[0]
+    return f"{meaningful[0]}-{meaningful[-1]}"
+
+
+def build_accession_payload(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    if not rows:
+        raise ManualImportError("No rows provided for accession payload generation")
+
+    contexts = [parse_accession_number(row.get("accession_number")) for row in rows]
+
+    collection_values = _collect_unique(rows, "collection_id")
+    collection_value = collection_values[0] if collection_values else None
+    if not collection_value:
+        for context in contexts:
+            if context.collection_abbreviation:
+                collection_value = context.collection_abbreviation
+                break
+    if not collection_value:
+        collection_value = "KNM"
+
+    prefix_value = None
+    number_value = None
+    suffix_values: list[str | None] = []
+    for context in contexts:
+        if context.specimen_prefix and prefix_value is None:
+            prefix_value = context.specimen_prefix
+        if context.specimen_number is not None and number_value is None:
+            number_value = context.specimen_number
+        suffix_values.extend(expand_specimen_suffix(context.specimen_suffix))
+
+    suffixes = _unique_preserving(suffix_values)
+    if not suffixes:
+        suffixes = [None]
+    suffix_display = _determine_suffix_display(suffixes)
+
+    type_values = _collect_unique(rows, "is_type_specimen")
+    is_type = any(normalise_yes_no(value) for value in type_values)
+
+    published_values = _collect_unique(rows, "is_published")
+    is_published = any(normalise_yes_no(value) for value in published_values)
+
+    references = _collect_unique(rows, "reference")
+    comments = _collect_unique(rows, "other")
+
+    aggregated_row = {
+        "collection_id": collection_value,
+        "field_number": _join_unique(_collect_unique(rows, "field_number")),
+        "field_number_printed": _join_unique(_collect_unique(rows, "field_number_printed")),
+        "date": _join_unique(_collect_unique(rows, "date")),
+        "shelf": _join_unique(_collect_unique(rows, "shelf")),
+        "taxon": _join_unique(_collect_unique(rows, "taxon")),
+        "family": _join_unique(_collect_unique(rows, "family")),
+        "subfamily": _join_unique(_collect_unique(rows, "subfamily")),
+        "tribe": _join_unique(_collect_unique(rows, "tribe")),
+        "genus": _join_unique(_collect_unique(rows, "genus")),
+        "species": _join_unique(_collect_unique(rows, "species")),
+        "body_parts": _join_unique(_collect_unique(rows, "body_parts"), separator="; "),
+        "fragments": _join_unique(_collect_unique(rows, "fragments")),
+        "coordinates": _collect_unique(rows, "coordinates"),
+        "locality": _join_unique(_collect_unique(rows, "locality")),
+        "site_area": _join_unique(_collect_unique(rows, "site_area")),
+        "formation": _join_unique(_collect_unique(rows, "formation")),
+        "member_horizon_level": _join_unique(_collect_unique(rows, "member_horizon_level")),
+        "photo_id": _join_unique(_collect_unique(rows, "photo_id")),
+    }
+
+    taxon_value = make_taxon_value(aggregated_row)
 
     accession_entry: dict[str, Any] = {
-        "collection_abbreviation": make_interpreted_value(
-            coerce_stripped(row.get("collection_id"))
-            or context.collection_abbreviation
-            or "KNM"
-        ),
-        "specimen_prefix_abbreviation": make_interpreted_value(context.specimen_prefix),
-        "specimen_no": make_interpreted_value(context.specimen_number),
-        "specimen_suffix": make_interpreted_value(context.specimen_suffix),
-        "type_status": make_interpreted_value(
-            "Type" if normalise_yes_no(row.get("is_type_specimen")) else None
-        ),
-        "published": make_interpreted_value(
-            "Yes" if normalise_yes_no(row.get("is_published")) else "No"
-        ),
+        "collection_abbreviation": make_interpreted_value(collection_value),
+        "specimen_prefix_abbreviation": make_interpreted_value(prefix_value),
+        "specimen_no": make_interpreted_value(number_value),
+        "specimen_suffix": make_interpreted_value(suffix_display),
+        "type_status": make_interpreted_value("Type" if is_type else None),
+        "published": make_interpreted_value("Yes" if is_published else "No"),
         "additional_notes": [],
-        "references": build_reference_entries(row.get("reference")),
-        "field_slips": [build_field_slip(row, taxon_value)],
-        "rows": [build_row_section(context, row)],
+        "references": build_reference_entries(references),
+        "field_slips": [build_field_slip(aggregated_row, taxon_value)],
+        "rows": [build_row_section(aggregated_row, suffix) for suffix in suffixes],
         "identifications": [make_identification_entry(taxon_value)],
     }
 
-    comment = coerce_stripped(row.get("other"))
-    if comment:
+    for comment in comments:
         accession_entry["additional_notes"].append(
             {
                 "heading": make_interpreted_value(_("Manual QC")),
@@ -298,41 +437,80 @@ def parse_timestamp(value: Any) -> datetime | None:
 
 @transaction.atomic
 def import_manual_row(
-    row: Mapping[str, Any],
+    rows: Mapping[str, Any] | Sequence[Mapping[str, Any]],
     *,
     queryset: Iterable[Media] | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
-    media = find_media_for_row(row, queryset=queryset)
-    payload = build_accession_payload(row)
+    if isinstance(rows, Mapping):
+        row_list: list[Mapping[str, Any]] = [rows]
+    else:
+        row_list = list(rows)
+
+    if not row_list:
+        raise ManualImportError(_("Manual import row group is empty"))
+
+    medias = [find_media_for_row(row, queryset=queryset) for row in row_list]
+    payload = build_accession_payload(row_list)
+
+    row_ids = [coerce_stripped(row.get("id")) for row in row_list if coerce_stripped(row.get("id"))]
+    created_by_values = _collect_unique(row_list, "created_by")
+    created_on_values = _collect_unique(row_list, "created_on")
+
     metadata = {
         "source": "manual_qc",
-        "row_id": coerce_stripped(row.get("id")),
-        "created_by": coerce_stripped(row.get("created_by")),
-        "created_on": coerce_stripped(row.get("created_on")),
+        "row_ids": row_ids,
+        "group_size": len(row_list),
     }
+
+    if row_ids:
+        metadata["row_id"] = row_ids[0]
+    if created_by_values:
+        metadata["created_by"] = created_by_values[0]
+        if len(created_by_values) > 1:
+            metadata["created_by_values"] = created_by_values
+    if created_on_values:
+        metadata["created_on"] = created_on_values[0]
+        if len(created_on_values) > 1:
+            metadata["created_on_values"] = created_on_values
+
     payload["_manual_import"] = metadata
 
-    media.ocr_data = payload
-    media.ocr_status = Media.OCRStatus.COMPLETED
-    media.qc_status = Media.QCStatus.APPROVED
+    result: dict[str, list[dict[str, Any]]] | None = None
 
-    update_fields = ["ocr_data", "ocr_status", "qc_status"]
+    for index, (row, media) in enumerate(zip(row_list, medias)):
+        row_payload = copy.deepcopy(payload)
+        row_metadata = dict(row_payload.get("_manual_import", {}))
+        identifier = coerce_stripped(row.get("id"))
+        if identifier:
+            row_metadata["row_id"] = identifier
+        row_metadata["group_index"] = index
+        row_metadata["primary"] = index == 0
+        row_payload["_manual_import"] = row_metadata
 
-    expert_checked_on = parse_timestamp(row.get("created_on"))
-    if expert_checked_on:
-        media.expert_checked_on = expert_checked_on
-        update_fields.append("expert_checked_on")
+        media.ocr_data = row_payload
+        media.ocr_status = Media.OCRStatus.COMPLETED
+        media.qc_status = Media.QCStatus.APPROVED
 
-    expert_identifier = coerce_stripped(row.get("created_by"))
-    if expert_identifier:
-        try:
-            user_model = Media._meta.get_field("expert_checked_by").remote_field.model
-            media.expert_checked_by = user_model.objects.get(username=expert_identifier)
-            update_fields.append("expert_checked_by")
-        except ObjectDoesNotExist:
-            pass
+        update_fields = ["ocr_data", "ocr_status", "qc_status"]
 
-    media.save(update_fields=update_fields)
+        expert_checked_on = parse_timestamp(row.get("created_on"))
+        if expert_checked_on:
+            media.expert_checked_on = expert_checked_on
+            update_fields.append("expert_checked_on")
 
-    return create_accessions_from_media(media)
+        expert_identifier = coerce_stripped(row.get("created_by"))
+        if expert_identifier:
+            try:
+                user_model = Media._meta.get_field("expert_checked_by").remote_field.model
+                media.expert_checked_by = user_model.objects.get(username=expert_identifier)
+                update_fields.append("expert_checked_by")
+            except ObjectDoesNotExist:
+                pass
+
+        media.save(update_fields=update_fields)
+
+        if index == 0:
+            result = create_accessions_from_media(media)
+
+    return result or {}
 

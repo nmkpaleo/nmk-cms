@@ -61,7 +61,11 @@ from .models import (
 
 import json
 
-from cms.manual_import import ManualImportError, import_manual_row
+from cms.manual_import import (
+    ManualImportError,
+    import_manual_row,
+    parse_accession_number,
+)
 from cms.utils import coerce_stripped
 
 User = get_user_model()
@@ -1380,40 +1384,83 @@ def run_manual_qc_import(
 ) -> ManualImportSummary:
     """Execute manual QC import rows and capture a summary."""
 
-    materialized_rows = list(rows)
-    summary = ManualImportSummary(total_rows=len(materialized_rows))
+    prepared_rows: list[dict[str, Any]] = []
+    for original in rows:
+        row = dict(original)
+        if default_created_by and not coerce_stripped(row.get("created_by")):
+            row["created_by"] = default_created_by
+        prepared_rows.append(row)
 
-    if not materialized_rows:
+    summary = ManualImportSummary(total_rows=len(prepared_rows))
+
+    if not prepared_rows:
         return summary
 
     if queryset is None:
         queryset = Media.objects.all()
 
-    for index, original_row in enumerate(materialized_rows, start=2):
-        row = dict(original_row)
-        identifier = coerce_stripped(row.get("id"))
+    position = 0
+    row_number = 2
 
-        if default_created_by and not coerce_stripped(row.get("created_by")):
-            row["created_by"] = default_created_by
+    while position < len(prepared_rows):
+        current_row = prepared_rows[position]
+        context = parse_accession_number(current_row.get("accession_number"))
+        key = None
+        if context.specimen_prefix and context.specimen_number is not None:
+            key = (context.specimen_prefix, context.specimen_number)
+
+        group: list[dict[str, Any]] = [current_row]
+        position += 1
+
+        while position < len(prepared_rows):
+            candidate = prepared_rows[position]
+            candidate_context = parse_accession_number(candidate.get("accession_number"))
+            candidate_key = None
+            if candidate_context.specimen_prefix and candidate_context.specimen_number is not None:
+                candidate_key = (
+                    candidate_context.specimen_prefix,
+                    candidate_context.specimen_number,
+                )
+            if key and candidate_key == key:
+                group.append(candidate)
+                position += 1
+            else:
+                break
+
+        identifiers = [coerce_stripped(item.get("id")) for item in group]
 
         try:
-            result = import_manual_row(row, queryset=queryset)
+            result = import_manual_row(group, queryset=queryset)
         except ManualImportError as exc:
-            summary.failures.append(
-                ManualImportFailure(row_number=index, identifier=identifier, message=str(exc))
-            )
+            for offset, identifier in enumerate(identifiers):
+                summary.failures.append(
+                    ManualImportFailure(
+                        row_number=row_number + offset,
+                        identifier=identifier,
+                        message=str(exc),
+                    )
+                )
+            row_number += len(group)
             continue
         except Exception as exc:  # pragma: no cover - unexpected errors bubbled to caller
-            summary.failures.append(
-                ManualImportFailure(row_number=index, identifier=identifier, message=str(exc))
-            )
+            for offset, identifier in enumerate(identifiers):
+                summary.failures.append(
+                    ManualImportFailure(
+                        row_number=row_number + offset,
+                        identifier=identifier,
+                        message=str(exc),
+                    )
+                )
+            row_number += len(group)
             continue
 
-        summary.success_count += 1
+        summary.success_count += len(group)
         if isinstance(result, dict):
             created_records = result.get("created")
             if isinstance(created_records, list):
                 summary.created_count += len(created_records)
+
+        row_number += len(group)
 
     return summary
 

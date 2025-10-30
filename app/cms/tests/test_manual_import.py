@@ -63,7 +63,7 @@ def test_build_accession_payload_maps_row_fields():
         "other": "Verified manually",
     }
 
-    payload = build_accession_payload(row)
+    payload = build_accession_payload([row])
 
     assert payload["card_type"] == "accession_card"
     accession = payload["accessions"][0]
@@ -86,6 +86,40 @@ def test_build_accession_payload_maps_row_fields():
     nature = row_entry["natures"][0]
     assert nature["verbatim_element"]["interpreted"] == "Rt. femur"
     assert nature["fragments"]["interpreted"] == "3"
+
+
+def test_build_accession_payload_aggregates_consecutive_rows():
+    base_row = {
+        "id": "1",
+        "collection_id": "KNM",
+        "accession_number": "ER 123 A",
+        "shelf": "Cabinet 5",
+        "body_parts": "Mandible",
+        "is_published": "No",
+    }
+    extended_row = {
+        "id": "2",
+        "collection_id": "KNM",
+        "accession_number": "ER 123 A-C",
+        "shelf": "Cabinet 5",
+        "body_parts": "Tooth",
+        "is_published": "Yes",
+    }
+
+    payload = build_accession_payload([base_row, extended_row])
+
+    accession = payload["accessions"][0]
+    assert accession["specimen_suffix"]["interpreted"] == "A-C"
+    row_suffixes = [entry["specimen_suffix"]["interpreted"] for entry in accession["rows"]]
+    assert row_suffixes == ["A", "B", "C"]
+    element_values = {
+        nature["verbatim_element"]["interpreted"]
+        for entry in accession["rows"]
+        for nature in entry["natures"]
+    }
+    assert "Mandible" in element_values
+    assert "Tooth" in element_values
+    assert accession["published"]["interpreted"] == "Yes"
 
 
 def test_find_media_for_row_matches_filename():
@@ -136,6 +170,71 @@ def test_import_manual_row_updates_media_and_invokes_create(monkeypatch):
     assert media.qc_status == Media.QCStatus.APPROVED
     assert media.ocr_status == Media.OCRStatus.COMPLETED
     assert media.expert_checked_by.username == "importer"
-    assert media.ocr_data["_manual_import"]["row_id"] == "manual-import-7"
+    manual_metadata = media.ocr_data["_manual_import"]
+    assert manual_metadata["row_id"] == "manual-import-7"
+    assert manual_metadata["row_ids"] == ["manual-import-7"]
+    assert manual_metadata["group_size"] == 1
     assert captured_payload["card_type"] == "accession_card"
     assert result == {"created": [{"accession_id": 1}]}
+
+
+def test_import_manual_row_groups_consecutive_rows(monkeypatch):
+    collection = Collection.objects.filter(abbreviation="KNM").order_by("pk").first()
+    if collection is None:
+        collection = Collection.objects.create(abbreviation="KNM", description="Test collection")
+    locality = Locality.objects.filter(abbreviation="ER").order_by("pk").first()
+    if locality is None:
+        locality = Locality.objects.create(abbreviation="ER", name="Koobi Fora")
+    media_primary = Media.objects.create(media_location="uploads/manual-import-8.jpg", file_name="manual-import-8.jpg")
+    media_secondary = Media.objects.create(media_location="uploads/manual-import-9.jpg", file_name="manual-import-9.jpg")
+
+    call_count = {"value": 0}
+
+    def _fake_create(media_obj):
+        call_count["value"] += 1
+        return {"created": [{"accession_id": 7}]}
+
+    monkeypatch.setattr("cms.manual_import.create_accessions_from_media", _fake_create)
+
+    rows = [
+        {
+            "id": "manual-import-8",
+            "collection_id": "KNM",
+            "accession_number": "ER 888 A",
+            "shelf": "Drawer 1",
+            "body_parts": "Skull",
+            "is_published": "No",
+            "created_by": "importer",
+            "created_on": "2024-03-03",
+        },
+        {
+            "id": "manual-import-9",
+            "collection_id": "KNM",
+            "accession_number": "ER 888 A-C",
+            "shelf": "Drawer 1",
+            "body_parts": "Femur",
+            "is_published": "Yes",
+            "created_by": "importer",
+            "created_on": "2024-03-04",
+        },
+    ]
+
+    queryset = Media.objects.filter(pk__in=[media_primary.pk, media_secondary.pk])
+
+    result = import_manual_row(rows, queryset=queryset)
+
+    media_primary.refresh_from_db()
+    media_secondary.refresh_from_db()
+
+    assert call_count["value"] == 1
+    assert media_primary.qc_status == Media.QCStatus.APPROVED
+    assert media_secondary.qc_status == Media.QCStatus.APPROVED
+    assert media_primary.ocr_data["_manual_import"]["row_ids"] == [
+        "manual-import-8",
+        "manual-import-9",
+    ]
+    assert media_secondary.ocr_data["_manual_import"]["primary"] is False
+    rows_payload = media_primary.ocr_data["accessions"][0]["rows"]
+    suffixes = [entry["specimen_suffix"]["interpreted"] for entry in rows_payload]
+    assert suffixes == ["A", "B", "C"]
+    assert result == {"created": [{"accession_id": 7}]}
