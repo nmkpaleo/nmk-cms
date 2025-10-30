@@ -12,7 +12,7 @@ from django.db import transaction
 from django.db.models import Q, QuerySet
 from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext as _
 
 from .models import Media
 from .ocr_processing import create_accessions_from_media, make_interpreted_value
