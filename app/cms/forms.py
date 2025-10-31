@@ -1,6 +1,18 @@
+import csv
+import io
+import posixpath
+import zipfile
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Iterable, List
+from xml.etree import ElementTree
+
+from tablib import Dataset
 from django import forms
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
+from django.contrib.contenttypes.models import ContentType
 from django.db.models import Q
 from django.forms.widgets import (
     CheckboxInput,
@@ -48,6 +60,13 @@ from .models import (
 )
 
 import json
+
+from cms.manual_import import (
+    ManualImportError,
+    import_manual_row,
+    parse_accession_number,
+)
+from cms.utils import coerce_stripped
 
 User = get_user_model()
 
@@ -1080,3 +1099,408 @@ class StorageForm(BaseW3ModelForm):
             "area": forms.TextInput(attrs={"class": "w3-input"}),
             "parent_area": forms.Select(attrs={"class": "w3-select"}),
         }
+
+
+MANUAL_IMPORT_PERMISSION_CODENAME = "can_import_manual_qc"
+_MANUAL_IMPORT_PERMISSION_NAME = _("Can import manual QC data")
+
+_SPREADSHEET_NS = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+_REL_NS = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
+_PKG_REL_NS = "{http://schemas.openxmlformats.org/package/2006/relationships}"
+
+
+def _column_index_from_reference(reference: str | None) -> int:
+    if not reference:
+        return 0
+    letters: List[str] = []
+    for char in reference:
+        if char.isalpha():
+            letters.append(char.upper())
+        else:
+            break
+    index = 0
+    for char in letters:
+        index = index * 26 + (ord(char) - ord("A") + 1)
+    return max(index - 1, 0)
+
+
+def _read_shared_strings(zf: zipfile.ZipFile) -> List[str]:
+    try:
+        with zf.open("xl/sharedStrings.xml") as handle:
+            tree = ElementTree.parse(handle)
+    except KeyError:
+        return []
+    root = tree.getroot()
+    shared_strings: List[str] = []
+    for si in root.iter(f"{_SPREADSHEET_NS}si"):
+        pieces: List[str] = []
+        for text_node in si.iter(f"{_SPREADSHEET_NS}t"):
+            if text_node.text:
+                pieces.append(text_node.text)
+        shared_strings.append("".join(pieces))
+    return shared_strings
+
+
+def _resolve_first_sheet_path(zf: zipfile.ZipFile) -> str:
+    with zf.open("xl/workbook.xml") as handle:
+        workbook_tree = ElementTree.parse(handle)
+    root = workbook_tree.getroot()
+    sheet = root.find(f"{_SPREADSHEET_NS}sheets/{_SPREADSHEET_NS}sheet")
+    if sheet is None:
+        raise ValueError(str(_("The Excel workbook does not contain any worksheets.")))
+    rel_id = sheet.attrib.get(f"{_REL_NS}id")
+    if not rel_id:
+        return "xl/worksheets/sheet1.xml"
+    with zf.open("xl/_rels/workbook.xml.rels") as handle:
+        rels_tree = ElementTree.parse(handle)
+    rel_root = rels_tree.getroot()
+    for rel in rel_root.findall(f"{_PKG_REL_NS}Relationship"):
+        if rel.attrib.get("Id") == rel_id:
+            target = rel.attrib.get("Target", "")
+            if not target:
+                break
+            joined = posixpath.normpath(posixpath.join("xl", target))
+            return joined.lstrip("/")
+    return "xl/worksheets/sheet1.xml"
+
+
+def _read_cell_value(cell, shared_strings: List[str]) -> str:
+    cell_type = cell.attrib.get("t")
+    if cell_type == "inlineStr":
+        inline = cell.find(f"{_SPREADSHEET_NS}is")
+        if inline is not None:
+            return "".join(part for part in inline.itertext())
+        return ""
+    value = cell.findtext(f"{_SPREADSHEET_NS}v", default="")
+    if cell_type == "s":
+        try:
+            index = int(value)
+        except (TypeError, ValueError):
+            return ""
+        if 0 <= index < len(shared_strings):
+            return shared_strings[index]
+        return ""
+    if cell_type == "b":
+        return "TRUE" if value == "1" else "FALSE"
+    if cell_type == "str":
+        if value:
+            return value
+        text_node = cell.find(f"{_SPREADSHEET_NS}t")
+        if text_node is not None and text_node.text:
+            return text_node.text
+        return ""
+    return value
+
+
+def _extract_sheet_rows(
+    zf: zipfile.ZipFile, sheet_path: str, shared_strings: List[str]
+) -> List[List[str]]:
+    with zf.open(sheet_path) as handle:
+        sheet_tree = ElementTree.parse(handle)
+    root = sheet_tree.getroot()
+    rows: List[List[str]] = []
+    for row in root.findall(f"{_SPREADSHEET_NS}sheetData/{_SPREADSHEET_NS}row"):
+        values: List[str] = []
+        for cell in row.findall(f"{_SPREADSHEET_NS}c"):
+            reference = cell.attrib.get("r")
+            column_index = _column_index_from_reference(reference)
+            while len(values) <= column_index:
+                values.append("")
+            values[column_index] = _read_cell_value(cell, shared_strings) or ""
+        rows.append(values)
+    return rows
+
+
+def _trim_empty_columns(rows: List[List[str]]) -> List[List[str]]:
+    if not rows:
+        return rows
+    max_index = -1
+    for row in rows:
+        for index, value in enumerate(row):
+            if str(value).strip():
+                if index > max_index:
+                    max_index = index
+    if max_index == -1:
+        return []
+    trimmed: List[List[str]] = []
+    for row in rows:
+        trimmed.append(row[: max_index + 1])
+    return trimmed
+
+
+def _load_xlsx_dataset(data: bytes) -> Dataset:
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            shared_strings = _read_shared_strings(zf)
+            sheet_path = _resolve_first_sheet_path(zf)
+            rows = _extract_sheet_rows(zf, sheet_path, shared_strings)
+    except (KeyError, zipfile.BadZipFile) as exc:
+        raise ValueError(
+            str(_("The uploaded Excel file is not a valid .xlsx workbook."))
+        ) from exc
+
+    rows = _trim_empty_columns(rows)
+    if not rows:
+        return Dataset()
+
+    dataset = Dataset()
+    headers = [str(value).strip() for value in rows[0]]
+    dataset.headers = headers
+    for data_row in rows[1:]:
+        normalized = [str(value) if value is not None else "" for value in data_row]
+        if len(normalized) < len(headers):
+            normalized.extend([""] * (len(headers) - len(normalized)))
+        elif len(normalized) > len(headers):
+            normalized = normalized[: len(headers)]
+        dataset.append(normalized)
+    return dataset
+
+
+@dataclass(slots=True)
+class ManualImportFailure:
+    row_number: int
+    identifier: str | None
+    message: str
+
+
+@dataclass
+class ManualImportSummary:
+    total_rows: int
+    success_count: int = 0
+    created_count: int = 0
+    failures: List[ManualImportFailure] = field(default_factory=list)
+
+    @property
+    def error_count(self) -> int:
+        return len(self.failures)
+
+    def build_error_report(self) -> str:
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["row_number", "identifier", "message"])
+        for failure in self.failures:
+            writer.writerow([failure.row_number, failure.identifier or "", failure.message])
+        return output.getvalue()
+
+
+def ensure_manual_qc_permission() -> Permission:
+    """Ensure the custom manual import permission exists and return it."""
+
+    content_type = ContentType.objects.get_for_model(Media)
+    permission, created = Permission.objects.get_or_create(
+        codename=MANUAL_IMPORT_PERMISSION_CODENAME,
+        content_type=content_type,
+        defaults={"name": str(_MANUAL_IMPORT_PERMISSION_NAME)},
+    )
+    desired_name = str(_MANUAL_IMPORT_PERMISSION_NAME)
+    if not created and permission.name != desired_name:
+        permission.name = desired_name
+        permission.save(update_fields=["name"])
+    return permission
+
+
+def load_manual_qc_dataset(file_obj) -> Dataset:
+    """Load a tabular dataset from an uploaded manual QC file."""
+
+    data = file_obj.read()
+    if not data:
+        raise ValueError(str(_("The uploaded file is empty.")))
+
+    suffix = Path(getattr(file_obj, "name", "")).suffix.lower()
+    format_hint = {
+        ".csv": "csv",
+        ".tsv": "tsv",
+        ".xlsx": "xlsx",
+        ".xls": "xls",
+    }.get(suffix)
+
+    dataset: Dataset
+
+    try:
+        if format_hint in {"csv", "tsv"}:
+            dataset = Dataset()
+            dataset.load(data.decode("utf-8-sig"), format=format_hint)
+        elif format_hint == "xlsx":
+            dataset = _load_xlsx_dataset(data)
+        elif format_hint == "xls":
+            raise ValueError(
+                str(
+                    _(
+                        "Legacy .xls files are not supported. Save the workbook as .xlsx or CSV."
+                    )
+                )
+            )
+        else:
+            try:
+                dataset = Dataset()
+                dataset.load(data.decode("utf-8-sig"), format="csv")
+            except UnicodeDecodeError:
+                dataset = _load_xlsx_dataset(data)
+    except Exception as exc:  # pragma: no cover - defensive guard around tablib
+        raise ValueError(
+            str(_("The uploaded file could not be parsed. Upload a CSV or Excel file."))
+        ) from exc
+    finally:
+        file_obj.seek(0)
+
+    if not dataset.headers:
+        raise ValueError(str(_("The uploaded file must include a header row.")))
+
+    return dataset
+
+
+def dataset_to_rows(dataset: Dataset) -> List[dict[str, Any]]:
+    """Convert a dataset into normalized row dictionaries."""
+
+    normalized_headers = [
+        str(header).strip().lower()
+        for header in dataset.headers
+        if header is not None and str(header).strip()
+    ]
+
+    if "id" not in normalized_headers:
+        raise ValueError(str(_("The header row must include an 'id' column.")))
+
+    rows: List[dict[str, Any]] = []
+    for raw_row in dataset.dict:
+        normalized_row: dict[str, Any] = {}
+        for key, value in raw_row.items():
+            normalized_key = str(key).strip().lower()
+            if normalized_key:
+                normalized_row[normalized_key] = value
+        rows.append(normalized_row)
+
+    if not rows:
+        raise ValueError(str(_("The uploaded file does not contain any data rows.")))
+
+    return rows
+
+
+def run_manual_qc_import(
+    rows: Iterable[dict[str, Any]],
+    *,
+    queryset=None,
+    default_created_by: str | None = None,
+) -> ManualImportSummary:
+    """Execute manual QC import rows and capture a summary."""
+
+    prepared_rows: list[dict[str, Any]] = []
+    for original in rows:
+        row = dict(original)
+        if default_created_by and not coerce_stripped(row.get("created_by")):
+            row["created_by"] = default_created_by
+        prepared_rows.append(row)
+
+    summary = ManualImportSummary(total_rows=len(prepared_rows))
+
+    if not prepared_rows:
+        return summary
+
+    if queryset is None:
+        queryset = Media.objects.all()
+
+    position = 0
+    row_number = 2
+
+    while position < len(prepared_rows):
+        current_row = prepared_rows[position]
+        context = parse_accession_number(current_row.get("accession_number"))
+        key = None
+        if context.specimen_prefix and context.specimen_number is not None:
+            key = (context.specimen_prefix, context.specimen_number)
+
+        group: list[dict[str, Any]] = [current_row]
+        position += 1
+
+        while position < len(prepared_rows):
+            candidate = prepared_rows[position]
+            candidate_context = parse_accession_number(candidate.get("accession_number"))
+            candidate_key = None
+            if candidate_context.specimen_prefix and candidate_context.specimen_number is not None:
+                candidate_key = (
+                    candidate_context.specimen_prefix,
+                    candidate_context.specimen_number,
+                )
+            if key and candidate_key == key:
+                group.append(candidate)
+                position += 1
+            else:
+                break
+
+        identifiers = [coerce_stripped(item.get("id")) for item in group]
+
+        try:
+            result = import_manual_row(group, queryset=queryset)
+        except ManualImportError as exc:
+            for offset, identifier in enumerate(identifiers):
+                summary.failures.append(
+                    ManualImportFailure(
+                        row_number=row_number + offset,
+                        identifier=identifier,
+                        message=str(exc),
+                    )
+                )
+            row_number += len(group)
+            continue
+        except Exception as exc:  # pragma: no cover - unexpected errors bubbled to caller
+            for offset, identifier in enumerate(identifiers):
+                summary.failures.append(
+                    ManualImportFailure(
+                        row_number=row_number + offset,
+                        identifier=identifier,
+                        message=str(exc),
+                    )
+                )
+            row_number += len(group)
+            continue
+
+        summary.success_count += len(group)
+        if isinstance(result, dict):
+            created_records = result.get("created")
+            if isinstance(created_records, list):
+                summary.created_count += len(created_records)
+
+        row_number += len(group)
+
+    return summary
+
+
+class ManualQCImportForm(BaseW3Form):
+    dataset_file = forms.FileField(
+        label=_("Manual QC spreadsheet"),
+        help_text=_("Upload a CSV or Excel file containing the manually validated QC rows."),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._rows: List[dict[str, Any]] = []
+
+    def clean_dataset_file(self):
+        uploaded = self.cleaned_data["dataset_file"]
+        try:
+            dataset = load_manual_qc_dataset(uploaded)
+            rows = dataset_to_rows(dataset)
+        except ValueError as exc:
+            raise forms.ValidationError(str(exc)) from exc
+
+        self._rows = rows
+        return uploaded
+
+    @property
+    def rows(self) -> List[dict[str, Any]]:
+        return self._rows
+
+    def execute_import(self, user) -> ManualImportSummary:
+        if not self._rows:
+            raise ValueError("ManualQCImportForm must be validated before executing the import.")
+
+        queryset = Media.objects.all()
+        default_created_by = None
+        if getattr(user, "is_authenticated", False):
+            default_created_by = user.get_username()
+
+        return run_manual_qc_import(
+            self._rows,
+            queryset=queryset,
+            default_created_by=default_created_by,
+        )

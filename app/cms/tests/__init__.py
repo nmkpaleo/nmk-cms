@@ -3,9 +3,16 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
 from pathlib import Path
 from types import ModuleType
+
+import django
+
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+os.environ.setdefault("DB_ENGINE", "django.db.backends.sqlite3")
+django.setup()
 
 _MODULE_NAME = "cms._tests_module"
 _tests_module = sys.modules.get(_MODULE_NAME)

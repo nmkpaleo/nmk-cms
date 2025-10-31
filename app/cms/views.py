@@ -45,11 +45,15 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required, user_passes_test
-from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.contrib.auth.mixins import (
+    LoginRequiredMixin,
+    PermissionRequiredMixin,
+    UserPassesTestMixin,
+)
 from django.core.exceptions import FieldDoesNotExist, ValidationError
 from django.forms import BaseFormSet, formset_factory, modelformset_factory
 from django.forms.widgets import Media as FormsMedia
-from django.http import HttpResponse, HttpResponseForbidden
+from django.http import Http404, HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse_lazy, reverse
 from django.utils import timezone
@@ -59,17 +63,37 @@ from django.utils.timezone import now
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, FormView, TemplateView
 from django.core.serializers.json import DjangoJSONEncoder
 
-from cms.forms import (AccessionBatchForm, AccessionCommentForm,
-                    AccessionForm, AccessionFieldSlipForm, AccessionGeologyForm,
-                    AccessionNumberSelectForm,
-                    AccessionRowIdentificationForm, AccessionMediaUploadForm,
-                    AccessionRowSpecimenForm, AccessionRowUpdateForm,
-                    AccessionReferenceForm, AddAccessionRowForm, FieldSlipForm,
-                    MediaUploadForm, NatureOfSpecimenForm, PreparationForm,
-                    PreparationApprovalForm, PreparationMediaUploadForm,
-                    SpecimenCompositeForm, ReferenceForm, LocalityForm,
-                    PlaceForm, DrawerRegisterForm, StorageForm, ScanUploadForm,
-                    ReferenceWidget)
+from cms.forms import (
+    AccessionBatchForm,
+    AccessionCommentForm,
+    AccessionForm,
+    AccessionFieldSlipForm,
+    AccessionGeologyForm,
+    AccessionNumberSelectForm,
+    AccessionRowIdentificationForm,
+    AccessionMediaUploadForm,
+    AccessionRowSpecimenForm,
+    AccessionRowUpdateForm,
+    AccessionReferenceForm,
+    AddAccessionRowForm,
+    DrawerRegisterForm,
+    FieldSlipForm,
+    LocalityForm,
+    ManualQCImportForm,
+    ManualImportSummary,
+    MediaUploadForm,
+    NatureOfSpecimenForm,
+    PlaceForm,
+    PreparationApprovalForm,
+    PreparationForm,
+    PreparationMediaUploadForm,
+    ReferenceForm,
+    ReferenceWidget,
+    ScanUploadForm,
+    SpecimenCompositeForm,
+    StorageForm,
+    ensure_manual_qc_permission,
+)
 
 from cms.models import (
     Accession,
@@ -4789,6 +4813,83 @@ class DrawerRegisterUpdateView(LoginRequiredMixin, DrawerRegisterAccessMixin, Up
     form_class = DrawerRegisterForm
     template_name = "cms/drawerregister_form.html"
     success_url = reverse_lazy("drawerregister_list")
+
+
+class ManualQCImportView(LoginRequiredMixin, PermissionRequiredMixin, FormView):
+    template_name = "cms/manual_import_form.html"
+    form_class = ManualQCImportForm
+    permission_required = "cms.can_import_manual_qc"
+    raise_exception = True
+    success_url = reverse_lazy("manual_qc_import")
+
+    error_session_key = "cms_manual_qc_error_report"
+
+    def dispatch(self, request, *args, **kwargs):
+        ensure_manual_qc_permission()
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
+        if request.GET.get("download") == "errors":
+            return self._download_error_report()
+        return super().get(request, *args, **kwargs)
+
+    def form_valid(self, form: ManualQCImportForm):  # type: ignore[override]
+        result = form.execute_import(self.request.user)
+        self._store_error_report(result)
+
+        if result.success_count:
+            messages.success(
+                self.request,
+                _("Imported %(success)d manual QC rows.")
+                % {"success": result.success_count},
+            )
+
+        if result.error_count:
+            messages.warning(
+                self.request,
+                _(
+                    "%(error)d rows could not be imported. Download the error report for details."
+                )
+                % {"error": result.error_count},
+            )
+
+        context = self.get_context_data(
+            form=self.get_form_class()(),
+            result=result,
+        )
+        return self.render_to_response(context)
+
+    def form_invalid(self, form):
+        self._clear_error_report()
+        return super().form_invalid(form)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.setdefault("result", None)
+        return context
+
+    def _store_error_report(self, result: ManualImportSummary) -> None:
+        if result.error_count:
+            self.request.session[self.error_session_key] = result.build_error_report()
+            self.request.session.modified = True
+        else:
+            self._clear_error_report()
+
+    def _clear_error_report(self) -> None:
+        if self.error_session_key in self.request.session:
+            del self.request.session[self.error_session_key]
+            self.request.session.modified = True
+
+    def _download_error_report(self) -> HttpResponse:
+        report = self.request.session.get(self.error_session_key)
+        if not report:
+            raise Http404("No manual QC error report available.")
+
+        response = HttpResponse(report, content_type="text/csv")
+        response["Content-Disposition"] = (
+            'attachment; filename="manual-qc-import-errors.csv"'
+        )
+        return response
 
 
 @login_required

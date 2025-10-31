@@ -13,10 +13,12 @@ logger = logging.getLogger("cms.upload_processing")
 
 INCOMING = Path(settings.MEDIA_ROOT) / "uploads" / "incoming"
 PENDING = Path(settings.MEDIA_ROOT) / "uploads" / "pending"
+MANUAL_QC = Path(settings.MEDIA_ROOT) / "uploads" / "manual_qc"
 REJECTED = Path(settings.MEDIA_ROOT) / "uploads" / "rejected"
 
 TIMESTAMP_FORMAT = "%Y-%m-%dT%H%M%S"
-NAME_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{6}\.png$")
+NAME_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{6}\.png$", re.IGNORECASE)
+MANUAL_QC_PATTERN = re.compile(r"^\d+\.jpe?g$", re.IGNORECASE)
 
 
 def create_media(
@@ -56,6 +58,19 @@ def create_media(
     media.save()
 
 
+def create_manual_qc_media(path: Path) -> None:
+    """Create a Media record for a manual QC scan upload."""
+
+    logger.info("Processing manual QC media %s", path)
+    media = Media(
+        type="photo",
+        license="CC0",
+        rights_holder="National Museums of Kenya",
+    )
+    media.media_location.name = str(path.relative_to(settings.MEDIA_ROOT))
+    media.save()
+
+
 def process_file(src: Path) -> Path:
     """Validate ``src`` and move it to ``pending`` or ``rejected``.
 
@@ -69,6 +84,11 @@ def process_file(src: Path) -> Path:
         timestamp = timestamp.replace(tzinfo=scanning_utils.NAIROBI_TZ)
         shutil.move(src, dest)
         create_media(dest, scan_timestamp=timestamp)
+    elif MANUAL_QC_PATTERN.match(src.name):
+        dest = MANUAL_QC / src.name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(src, dest)
+        create_manual_qc_media(dest)
     else:
         dest = REJECTED / src.name
         dest.parent.mkdir(parents=True, exist_ok=True)
