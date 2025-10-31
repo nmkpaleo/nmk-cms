@@ -89,8 +89,12 @@ def coerce_stripped(value: Any | None) -> str | None:
         return None
     if isinstance(value, str):
         result = value.strip()
+        if result == "\\N":
+            return None
         return result or None
     result = str(value).strip()
+    if result == "\\N":
+        return None
     return result or None
 
 

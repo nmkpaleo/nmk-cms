@@ -15,7 +15,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
 from django.utils.translation import gettext as _
 
-from .models import Media
+from .models import Accession, Media
 from .ocr_processing import create_accessions_from_media, make_interpreted_value
 from .utils import coerce_stripped, normalise_yes_no
 
@@ -148,10 +148,7 @@ def build_field_slip(row: Mapping[str, Any], taxon_value: str | None) -> dict[st
     latitude, longitude = parse_coordinates(row.get("coordinates"))
 
     slip: dict[str, Any] = {
-        "field_number": make_interpreted_value(
-            coerce_stripped(row.get("field_number_printed"))
-            or coerce_stripped(row.get("field_number"))
-        ),
+        "field_number": make_interpreted_value(coerce_stripped(row.get("field_number"))),
         "collection_date": make_interpreted_value(coerce_stripped(row.get("date"))),
         "verbatim_locality": make_interpreted_value(verbatim_locality),
         "verbatim_taxon": make_interpreted_value(taxon_value),
@@ -328,7 +325,6 @@ def build_accession_payload(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]
     aggregated_row = {
         "collection_id": collection_value,
         "field_number": _join_unique(_collect_unique(rows, "field_number")),
-        "field_number_printed": _join_unique(_collect_unique(rows, "field_number_printed")),
         "date": _join_unique(_collect_unique(rows, "date")),
         "shelf": _join_unique(_collect_unique(rows, "shelf")),
         "taxon": _join_unique(_collect_unique(rows, "taxon")),
@@ -349,6 +345,12 @@ def build_accession_payload(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]
 
     taxon_value = make_taxon_value(aggregated_row)
 
+    field_slips: list[dict[str, Any]] = []
+    for row in rows:
+        row_taxon_value = make_taxon_value(row)
+        slip_taxon_value = row_taxon_value or taxon_value
+        field_slips.append(build_field_slip(row, slip_taxon_value))
+
     accession_entry: dict[str, Any] = {
         "collection_abbreviation": make_interpreted_value(collection_value),
         "specimen_prefix_abbreviation": make_interpreted_value(prefix_value),
@@ -358,7 +360,7 @@ def build_accession_payload(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]
         "published": make_interpreted_value("Yes" if is_published else "No"),
         "additional_notes": [],
         "references": build_reference_entries(references),
-        "field_slips": [build_field_slip(aggregated_row, taxon_value)],
+        "field_slips": field_slips,
         "rows": [build_row_section(aggregated_row, suffix) for suffix in suffixes],
         "identifications": [make_identification_entry(taxon_value)],
     }
@@ -476,6 +478,8 @@ def import_manual_row(
     payload["_manual_import"] = metadata
 
     result: dict[str, list[dict[str, Any]]] | None = None
+    primary_accession = None
+    secondary_medias: list[Media] = []
 
     for index, (row, media) in enumerate(zip(row_list, medias)):
         row_payload = copy.deepcopy(payload)
@@ -511,6 +515,34 @@ def import_manual_row(
 
         if index == 0:
             result = create_accessions_from_media(media)
+            primary_accession = getattr(media, "accession", None)
+            if primary_accession is None:
+                created_entries = (result or {}).get("created") or []
+                for entry in created_entries:
+                    accession_id = entry.get("accession_id")
+                    if accession_id:
+                        candidate = Accession.objects.filter(pk=accession_id).first()
+                        if candidate:
+                            primary_accession = candidate
+                            break
+            if primary_accession and media.accession_id != getattr(primary_accession, "pk", None):
+                media.accession = primary_accession
+                media.save(update_fields=["accession"])
+        else:
+            secondary_medias.append(media)
+
+    accession_obj = None
+    if primary_accession is not None:
+        if hasattr(primary_accession, "pk"):
+            accession_obj = primary_accession
+        else:
+            accession_obj = Accession.objects.filter(pk=primary_accession).first()
+
+    if accession_obj:
+        for media in secondary_medias:
+            if media.accession_id != accession_obj.pk:
+                media.accession = accession_obj
+                media.save(update_fields=["accession"])
 
     return result or {}
 

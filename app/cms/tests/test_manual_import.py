@@ -12,7 +12,9 @@ from cms.manual_import import (
     find_media_for_row,
     import_manual_row,
 )
-from cms.models import Collection, Locality, Media
+from django.db import models
+
+from cms.models import Collection, Locality, Media, Accession
 
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
@@ -75,7 +77,7 @@ def test_build_accession_payload_maps_row_fields():
     assert accession["type_status"]["interpreted"] == "Type"
 
     field_slip = accession["field_slips"][0]
-    assert field_slip["field_number"]["interpreted"] == "FN-42A"
+    assert field_slip["field_number"]["interpreted"] == "FN-42"
     assert field_slip["verbatim_locality"]["interpreted"] == "Koobi Fora | Area 15"
     assert field_slip["verbatim_latitude"]["interpreted"] == "1.23"
     assert field_slip["verbatim_longitude"]["interpreted"] == "4.56"
@@ -96,6 +98,8 @@ def test_build_accession_payload_aggregates_consecutive_rows():
         "shelf": "Cabinet 5",
         "body_parts": "Mandible",
         "is_published": "No",
+        "field_number": "FN-001",
+        "locality": "Base Camp",
     }
     extended_row = {
         "id": "2",
@@ -104,12 +108,18 @@ def test_build_accession_payload_aggregates_consecutive_rows():
         "shelf": "Cabinet 5",
         "body_parts": "Tooth",
         "is_published": "Yes",
+        "field_number": "FN-002",
+        "locality": "Base Camp",
     }
 
     payload = build_accession_payload([base_row, extended_row])
 
     accession = payload["accessions"][0]
     assert accession["specimen_suffix"]["interpreted"] == "A-C"
+    assert len(accession["field_slips"]) == 2
+    assert {
+        slip["field_number"]["interpreted"] for slip in accession["field_slips"]
+    } == {"FN-001", "FN-002"}
     row_suffixes = [entry["specimen_suffix"]["interpreted"] for entry in accession["rows"]]
     assert row_suffixes == ["A", "B", "C"]
     element_values = {
@@ -133,6 +143,29 @@ def test_find_media_for_row_matches_filename():
 def test_find_media_for_row_missing_raises():
     with pytest.raises(ManualImportError):
         find_media_for_row({"id": "999"}, queryset=[])
+
+
+def test_build_accession_payload_treats_null_marker_as_blank():
+    rows = [
+        {
+            "id": "10",
+            "collection_id": "KNM",
+            "accession_number": "ER 999 A",
+            "field_number": "\\N",
+            "locality": "\\N",
+            "body_parts": "\\N",
+            "reference": "\\N",
+            "other": "\\N",
+        }
+    ]
+
+    payload = build_accession_payload(rows)
+
+    accession = payload["accessions"][0]
+    field_slip = accession["field_slips"][0]
+    assert field_slip["field_number"] == {}
+    assert accession["references"] == []
+    assert accession["additional_notes"] == []
 
 
 def test_import_manual_row_updates_media_and_invokes_create(monkeypatch):
@@ -238,3 +271,50 @@ def test_import_manual_row_groups_consecutive_rows(monkeypatch):
     suffixes = [entry["specimen_suffix"]["interpreted"] for entry in rows_payload]
     assert suffixes == ["A", "B", "C"]
     assert result == {"created": [{"accession_id": 7}]}
+
+
+def test_import_manual_row_links_all_media_to_accession():
+    collection = Collection.objects.filter(abbreviation="KNM").order_by("pk").first()
+    if collection is None:
+        collection = Collection.objects.create(abbreviation="KNM", description="Test collection")
+
+    next_number = (
+        Accession.objects.aggregate(max_no=models.Max("specimen_no")).get("max_no") or 900
+    ) + 1
+    accession_base = f"ER {next_number}"
+
+    media_primary = Media.objects.create(media_location="uploads/manual-import-10.jpg", file_name="manual-import-10.jpg")
+    media_secondary = Media.objects.create(media_location="uploads/manual-import-11.jpg", file_name="manual-import-11.jpg")
+
+    rows = [
+        {
+            "id": "manual-import-10",
+            "collection_id": "KNM",
+            "accession_number": f"{accession_base} A",
+            "shelf": "Drawer 4",
+            "field_number": "FN-100",
+            "body_parts": "Mandible",
+            "is_published": "No",
+        },
+        {
+            "id": "manual-import-11",
+            "collection_id": "KNM",
+            "accession_number": f"{accession_base} A-B",
+            "shelf": "Drawer 4",
+            "field_number": "FN-101",
+            "body_parts": "Tooth",
+            "is_published": "No",
+        },
+    ]
+
+    queryset = Media.objects.filter(pk__in=[media_primary.pk, media_secondary.pk])
+
+    result = import_manual_row(rows, queryset=queryset)
+
+    media_primary.refresh_from_db()
+    media_secondary.refresh_from_db()
+
+    assert result["created"], result
+    assert media_primary.accession_id is not None
+    assert media_secondary.accession_id == media_primary.accession_id
+    assert result["created"]
