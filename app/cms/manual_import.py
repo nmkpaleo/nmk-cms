@@ -388,34 +388,51 @@ def find_media_for_row(
     if not identifier:
         raise ManualImportError(_("Row is missing an id column"))
 
-    candidates = {
-        identifier,
-        f"{identifier}.jpg",
-        f"{identifier}.jpeg",
-        f"{identifier}.JPG",
-        f"{identifier}.JPEG",
-    }
-
     qs = queryset if queryset is not None else Media.objects.all()
+
+    base_candidates = [f"{identifier}.jpg", f"{identifier}.jpeg"]
+    manual_paths = [f"uploads/manual_qc/{name}" for name in base_candidates]
+
+    manual_paths_lower = {path.lower() for path in manual_paths}
+    name_candidates_lower = {name.lower() for name in base_candidates}
+
+    def _from_iterable(iterable: Iterable[Media]) -> Media | None:
+        for media in iterable:
+            file_name = getattr(media, "file_name", "")
+            media_path = getattr(media.media_location, "name", "")
+            if media_path and media_path.lower() in manual_paths_lower:
+                return media
+            if file_name and file_name.lower() in name_candidates_lower:
+                return media
+        return None
+
     if not isinstance(qs, QuerySet):
         try:
             iterator = iter(qs)
         except TypeError as exc:  # pragma: no cover - defensive
             raise ManualImportError("Invalid queryset provided") from exc
-        matches = [media for media in iterator if getattr(media, "file_name", None) in candidates]
-        if matches:
-            return matches[0]
+        match = _from_iterable(iterator)
+        if match:
+            return match
         raise ManualImportError(_("No media found for id %(identifier)s") % {"identifier": identifier})
 
-    lookup = Q()
-    for candidate in candidates:
-        lookup |= Q(file_name__iexact=candidate)
-    media = qs.filter(lookup).order_by("id").first()
+    path_lookup = Q()
+    for path in manual_paths:
+        path_lookup |= Q(media_location__iexact=path)
+    media = qs.filter(path_lookup).order_by("id").first()
+
     if not media:
-        tail_lookup = Q()
-        for candidate in candidates:
-            tail_lookup |= Q(media_location__iendswith=f"/{candidate}") | Q(media_location__iendswith=candidate)
-        media = qs.filter(tail_lookup).order_by("id").first()
+        name_lookup = Q()
+        for name in base_candidates:
+            name_lookup |= Q(file_name__iexact=name)
+        media = qs.filter(name_lookup).order_by("id").first()
+
+    if not media:
+        fallback_lookup = Q()
+        for name in base_candidates:
+            fallback_lookup |= Q(media_location__iendswith=f"/{name}") | Q(media_location__iendswith=name)
+        media = qs.filter(fallback_lookup).order_by("id").first()
+
     if not media:
         raise ManualImportError(_("No media found for id %(identifier)s") % {"identifier": identifier})
     return media
@@ -479,7 +496,8 @@ def import_manual_row(
 
     result: dict[str, list[dict[str, Any]]] | None = None
     primary_accession = None
-    secondary_medias: list[Media] = []
+
+    processed_medias: list[Media] = []
 
     for index, (row, media) in enumerate(zip(row_list, medias)):
         row_payload = copy.deepcopy(payload)
@@ -528,8 +546,8 @@ def import_manual_row(
             if primary_accession and media.accession_id != getattr(primary_accession, "pk", None):
                 media.accession = primary_accession
                 media.save(update_fields=["accession"])
-        else:
-            secondary_medias.append(media)
+
+        processed_medias.append(media)
 
     accession_obj = None
     if primary_accession is not None:
@@ -539,7 +557,7 @@ def import_manual_row(
             accession_obj = Accession.objects.filter(pk=primary_accession).first()
 
     if accession_obj:
-        for media in secondary_medias:
+        for media in processed_medias:
             if media.accession_id != accession_obj.pk:
                 media.accession = accession_obj
                 media.save(update_fields=["accession"])

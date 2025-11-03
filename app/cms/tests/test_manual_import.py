@@ -318,3 +318,20 @@ def test_import_manual_row_links_all_media_to_accession():
     assert media_primary.accession_id is not None
     assert media_secondary.accession_id == media_primary.accession_id
     assert result["created"]
+
+
+def test_find_media_for_row_prefers_manual_qc_path():
+    manual_media = Media.objects.create(
+        media_location="uploads/manual_qc/1.jpg",
+        file_name="1.jpg",
+    )
+    Media.objects.create(
+        media_location="uploads/misc/1.jpg",
+        file_name="1.jpg",
+    )
+
+    row = {"id": "1"}
+
+    found = find_media_for_row(row)
+
+    assert found.pk == manual_media.pk
