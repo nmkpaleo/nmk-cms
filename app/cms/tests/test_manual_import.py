@@ -178,10 +178,23 @@ def test_import_manual_row_updates_media_and_invokes_create(monkeypatch):
     media = Media.objects.create(media_location="uploads/manual-import-7.jpg", file_name="manual-import-7.jpg")
 
     captured_payload = {}
+    captured_kwargs = {}
 
-    def _fake_create(media_obj):
+    def _fake_create(media_obj, **kwargs):
         captured_payload.update(media_obj.ocr_data or {})
-        return {"created": [{"accession_id": 1}]}
+        captured_kwargs.update(kwargs)
+        next_specimen = (
+            Accession.objects.aggregate(max_no=models.Max("specimen_no")).get("max_no")
+            or 1000
+        ) + 1
+        accession = Accession.objects.create(
+            collection=collection,
+            specimen_prefix=locality,
+            specimen_no=next_specimen,
+        )
+        media_obj.accession = accession
+        media_obj.accession_id = accession.pk
+        return {"created": [{"accession_id": accession.pk}]}
 
     monkeypatch.setattr("cms.manual_import.create_accessions_from_media", _fake_create)
 
@@ -208,7 +221,9 @@ def test_import_manual_row_updates_media_and_invokes_create(monkeypatch):
     assert manual_metadata["row_ids"] == ["manual-import-7"]
     assert manual_metadata["group_size"] == 1
     assert captured_payload["card_type"] == "accession_card"
-    assert result == {"created": [{"accession_id": 1}]}
+    assert captured_kwargs.get("resolution_map") == {}
+    assert result["created"]
+    assert result["created"][0]["accession_id"] == media.accession_id
 
 
 def test_import_manual_row_groups_consecutive_rows(monkeypatch):
@@ -222,10 +237,23 @@ def test_import_manual_row_groups_consecutive_rows(monkeypatch):
     media_secondary = Media.objects.create(media_location="uploads/manual-import-9.jpg", file_name="manual-import-9.jpg")
 
     call_count = {"value": 0}
+    captured_kwargs = {}
 
-    def _fake_create(media_obj):
+    def _fake_create(media_obj, **kwargs):
         call_count["value"] += 1
-        return {"created": [{"accession_id": 7}]}
+        captured_kwargs.update(kwargs)
+        next_specimen = (
+            Accession.objects.aggregate(max_no=models.Max("specimen_no")).get("max_no")
+            or 2000
+        ) + 1
+        accession = Accession.objects.create(
+            collection=collection,
+            specimen_prefix=locality,
+            specimen_no=next_specimen,
+        )
+        media_obj.accession = accession
+        media_obj.accession_id = accession.pk
+        return {"created": [{"accession_id": accession.pk}]}
 
     monkeypatch.setattr("cms.manual_import.create_accessions_from_media", _fake_create)
 
@@ -270,7 +298,9 @@ def test_import_manual_row_groups_consecutive_rows(monkeypatch):
     rows_payload = media_primary.ocr_data["accessions"][0]["rows"]
     suffixes = [entry["specimen_suffix"]["interpreted"] for entry in rows_payload]
     assert suffixes == ["A", "B", "C"]
-    assert result == {"created": [{"accession_id": 7}]}
+    assert result["created"]
+    assert captured_kwargs.get("resolution_map") == {}
+    assert result["created"][0]["accession_id"] == media_primary.accession_id
 
 
 def test_import_manual_row_links_all_media_to_accession():
@@ -318,6 +348,66 @@ def test_import_manual_row_links_all_media_to_accession():
     assert media_primary.accession_id is not None
     assert media_secondary.accession_id == media_primary.accession_id
     assert result["created"]
+
+
+def test_import_manual_row_creates_new_instance_for_existing_accession():
+    collection = Collection.objects.filter(abbreviation="KNM").order_by("pk").first()
+    if collection is None:
+        collection = Collection.objects.create(abbreviation="KNM", description="Test collection")
+
+    locality = Locality.objects.filter(abbreviation="ER").order_by("pk").first()
+    if locality is None:
+        locality = Locality.objects.create(abbreviation="ER", name="East River")
+
+    specimen_no = (
+        Accession.objects.filter(collection=collection, specimen_prefix=locality)
+        .aggregate(max_no=models.Max("specimen_no"))
+        .get("max_no")
+        or 1000
+    ) + 1
+
+    existing = Accession.objects.create(
+        collection=collection,
+        specimen_prefix=locality,
+        specimen_no=specimen_no,
+        instance_number=1,
+    )
+
+    media = Media.objects.create(
+        media_location="uploads/manual_qc/manual-dup-1.jpg",
+        file_name="manual-dup-1.jpg",
+    )
+
+    rows = [
+        {
+            "id": "manual-dup-1",
+            "collection_id": "KNM",
+            "accession_number": f"ER {specimen_no} A",
+            "shelf": "Drawer 7",
+            "field_number": "FD-200",
+            "body_parts": "Femur",
+            "is_published": "No",
+        }
+    ]
+
+    queryset = Media.objects.filter(pk=media.pk)
+
+    result = import_manual_row(rows, queryset=queryset)
+
+    media.refresh_from_db()
+
+    matching_accessions = Accession.objects.filter(
+        collection=collection,
+        specimen_prefix=locality,
+        specimen_no=specimen_no,
+    ).order_by("instance_number")
+
+    assert matching_accessions.count() == 2
+    newest = matching_accessions.last()
+    assert newest.instance_number == existing.instance_number + 1
+    assert media.accession_id == newest.pk
+    assert result["created"]
+    assert result["created"][0]["accession_id"] == newest.pk
 
 
 def test_find_media_for_row_prefers_manual_qc_path():

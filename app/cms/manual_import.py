@@ -10,7 +10,7 @@ from typing import Any, Iterable, Mapping, Sequence
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
-from django.db.models import Q, QuerySet
+from django.db.models import Q, QuerySet, Max
 from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
 from django.utils.translation import gettext as _
@@ -379,6 +379,58 @@ def build_accession_payload(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]
     }
 
 
+def _extract_accession_key(entry: Mapping[str, Any]) -> tuple[str | None, str | None, int | None]:
+    collection = coerce_stripped((entry.get("collection_abbreviation") or {}).get("interpreted"))
+    prefix = coerce_stripped((entry.get("specimen_prefix_abbreviation") or {}).get("interpreted"))
+    specimen_no_value = (entry.get("specimen_no") or {}).get("interpreted")
+    try:
+        specimen_no = int(specimen_no_value) if specimen_no_value not in (None, "") else None
+    except (TypeError, ValueError):
+        specimen_no = None
+    return collection, prefix, specimen_no
+
+
+def _build_resolution_map(entry: Mapping[str, Any]) -> dict[str, dict[str, object]]:
+    collection, prefix, specimen_no = _extract_accession_key(entry)
+    if not collection or not prefix or specimen_no is None:
+        return {}
+
+    existing_qs = Accession.objects.filter(
+        collection__abbreviation=collection,
+        specimen_prefix__abbreviation=prefix,
+        specimen_no=specimen_no,
+    )
+    if not existing_qs.exists():
+        return {}
+
+    max_instance = existing_qs.aggregate(max_instance=Max("instance_number")).get("max_instance") or 1
+    key = f"{collection}:{prefix}:{specimen_no}"
+    return {
+        key: {
+            "action": "new_instance",
+            "instance_number": max_instance + 1,
+        }
+    }
+
+
+def _find_existing_accession(entry: Mapping[str, Any]) -> Accession | None:
+    collection, prefix, specimen_no = _extract_accession_key(entry)
+    if specimen_no is None:
+        return None
+
+    filters: dict[str, object] = {"specimen_no": specimen_no}
+    if collection:
+        filters["collection__abbreviation"] = collection
+    if prefix:
+        filters["specimen_prefix__abbreviation"] = prefix
+
+    return (
+        Accession.objects.filter(**filters)
+        .order_by("-instance_number", "-pk")
+        .first()
+    )
+
+
 def find_media_for_row(
     row: Mapping[str, Any],
     *,
@@ -494,6 +546,9 @@ def import_manual_row(
 
     payload["_manual_import"] = metadata
 
+    accession_entry = (payload.get("accessions") or [{}])[0]
+    resolution_map = _build_resolution_map(accession_entry)
+
     result: dict[str, list[dict[str, Any]]] | None = None
     primary_accession = None
 
@@ -532,7 +587,7 @@ def import_manual_row(
         media.save(update_fields=update_fields)
 
         if index == 0:
-            result = create_accessions_from_media(media)
+            result = create_accessions_from_media(media, resolution_map=resolution_map)
             primary_accession = getattr(media, "accession", None)
             if primary_accession is None:
                 created_entries = (result or {}).get("created") or []
@@ -556,6 +611,9 @@ def import_manual_row(
         else:
             accession_obj = Accession.objects.filter(pk=primary_accession).first()
 
+    if accession_obj is None:
+        accession_obj = _find_existing_accession(accession_entry)
+
     if accession_obj:
         media_ids = [media.pk for media in processed_medias if getattr(media, "pk", None)]
         if media_ids:
@@ -563,6 +621,15 @@ def import_manual_row(
             for media in processed_medias:
                 media.accession = accession_obj
                 media.accession_id = accession_obj.pk
+    else:
+        conflicts = (result or {}).get("conflicts") if result else []
+        if conflicts:
+            reasons = ", ".join(filter(None, (conflict.get("reason") for conflict in conflicts)))
+            raise ManualImportError(
+                _("Unable to create accession for manual QC rows (%(reason)s)")
+                % {"reason": reasons or "unknown"}
+            )
+        raise ManualImportError(_("Manual QC import did not produce an accession"))
 
     return result or {}
 
