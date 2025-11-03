@@ -419,19 +419,19 @@ def find_media_for_row(
     path_lookup = Q()
     for path in manual_paths:
         path_lookup |= Q(media_location__iexact=path)
-    media = qs.filter(path_lookup).order_by("id").first()
+    media = qs.filter(path_lookup).order_by("-id").first()
 
     if not media:
         name_lookup = Q()
         for name in base_candidates:
             name_lookup |= Q(file_name__iexact=name)
-        media = qs.filter(name_lookup).order_by("id").first()
+        media = qs.filter(name_lookup).order_by("-id").first()
 
     if not media:
         fallback_lookup = Q()
         for name in base_candidates:
             fallback_lookup |= Q(media_location__iendswith=f"/{name}") | Q(media_location__iendswith=name)
-        media = qs.filter(fallback_lookup).order_by("id").first()
+        media = qs.filter(fallback_lookup).order_by("-id").first()
 
     if not media:
         raise ManualImportError(_("No media found for id %(identifier)s") % {"identifier": identifier})
@@ -557,10 +557,12 @@ def import_manual_row(
             accession_obj = Accession.objects.filter(pk=primary_accession).first()
 
     if accession_obj:
-        for media in processed_medias:
-            if media.accession_id != accession_obj.pk:
+        media_ids = [media.pk for media in processed_medias if getattr(media, "pk", None)]
+        if media_ids:
+            Media.objects.filter(pk__in=media_ids).update(accession=accession_obj)
+            for media in processed_medias:
                 media.accession = accession_obj
-                media.save(update_fields=["accession"])
+                media.accession_id = accession_obj.pk
 
     return result or {}
 
