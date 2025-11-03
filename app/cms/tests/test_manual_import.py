@@ -9,12 +9,13 @@ from django.core.management import call_command
 from cms.manual_import import (
     ManualImportError,
     build_accession_payload,
+    build_reference_entries,
     find_media_for_row,
     import_manual_row,
 )
 from django.db import models
 
-from cms.models import Collection, Locality, Media, Accession
+from cms.models import Accession, AccessionReference, Collection, Locality, Media
 
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
@@ -166,6 +167,19 @@ def test_build_accession_payload_treats_null_marker_as_blank():
     assert field_slip["field_number"] == {}
     assert accession["references"] == []
     assert accession["additional_notes"] == []
+
+
+def test_build_reference_entries_extracts_page_and_defaults_year():
+    reference_text = "Koobi Fora Research Project vol. 6 pg 246"
+
+    entries = build_reference_entries(reference_text)
+
+    assert len(entries) == 1
+    entry = entries[0]
+    assert entry["reference_first_author"]["interpreted"].startswith("Koobi Fora")
+    assert entry["reference_title"]["interpreted"] == reference_text[:255]
+    assert entry["reference_year"]["interpreted"] == "0000"
+    assert entry["page"]["interpreted"] == "246"
 
 
 def test_import_manual_row_updates_media_and_invokes_create(monkeypatch):
@@ -425,3 +439,53 @@ def test_find_media_for_row_prefers_manual_qc_path():
     found = find_media_for_row(row)
 
     assert found.pk == manual_media.pk
+
+
+def test_import_manual_row_creates_reference_links():
+    collection, _ = Collection.objects.get_or_create(
+        abbreviation="KNM", defaults={"description": "Test collection"}
+    )
+    locality, _ = Locality.objects.get_or_create(
+        abbreviation="ER", defaults={"name": "Koobi Fora"}
+    )
+
+    media = Media.objects.create(
+        media_location="uploads/manual_qc/25.jpg", file_name="25.jpg"
+    )
+
+    row = {
+        "id": "25",
+        "collection_id": collection.abbreviation,
+        "accession_number": "ER 500 A",
+        "field_number": "ER 88 4866",
+        "date": "2021-01-14",
+        "shelf": "Cabinet 1",
+        "is_type_specimen": "No",
+        "taxon": "Cercopithecidae",
+        "family": "Cercopithecidae",
+        "genus": "Parapapio",
+        "species": "medium/small",
+        "body_parts": "1/2 p4 Lt.",
+        "reference": "Leakey, L.S.B., 1964 Koobi Fora Research Project vol. 6 pg 246",
+        "created_by": "admin",
+        "created_on": "2021-01-14",
+    }
+
+    import_manual_row(row, queryset=Media.objects.filter(pk=media.pk))
+
+    media.refresh_from_db()
+    accession = media.accession
+
+    assert accession is not None
+
+    links = AccessionReference.objects.filter(accession=accession).select_related(
+        "reference"
+    )
+
+    assert links.count() == 1
+    link = links.first()
+    assert link is not None
+    assert link.page == "246"
+    assert link.reference.first_author == "Leakey"
+    assert link.reference.year == "1964"
+    assert link.reference.title.startswith("Leakey")

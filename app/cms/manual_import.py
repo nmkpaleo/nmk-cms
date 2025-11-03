@@ -110,6 +110,22 @@ def parse_fragments(value: Any) -> str | None:
     return text
 
 
+def _extract_reference_page(text: str | None) -> str | None:
+    if not text:
+        return None
+    page_match = re.search(
+        r"(?:pg\.?|p\.?)\s*(?P<page>[\d\-–, ]+)",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if not page_match:
+        return None
+    page_value = coerce_stripped(page_match.group("page"))
+    if not page_value:
+        return None
+    return page_value[:10]
+
+
 def build_reference_entries(value: Any) -> list[dict[str, dict[str, Any]]]:
     if isinstance(value, (list, tuple, set)):
         entries: list[dict[str, dict[str, Any]]] = []
@@ -122,12 +138,10 @@ def build_reference_entries(value: Any) -> list[dict[str, dict[str, Any]]]:
         return []
 
     year_match = re.search(r"(18|19|20)\d{2}", text)
-    page_match = re.search(r"p(?:p\.)?\.?\s*(?P<page>[\d\-–, ]+)", text, flags=re.IGNORECASE)
-
-    first_author = text.split(",", 1)[0].strip()
-    interpreted_title = text
-    year = year_match.group(0) if year_match else None
-    page = page_match.group("page").strip() if page_match else None
+    first_author = (coerce_stripped(text.split(",", 1)[0]) or "Unknown")[:255]
+    interpreted_title = text[:255]
+    year = year_match.group(0) if year_match else "0000"
+    page = _extract_reference_page(text)
 
     entry = {
         "reference_first_author": make_interpreted_value(first_author),
