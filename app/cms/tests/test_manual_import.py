@@ -15,7 +15,18 @@ from cms.manual_import import (
 )
 from django.db import models
 
-from cms.models import Accession, AccessionReference, Collection, Locality, Media
+from cms.models import (
+    Accession,
+    AccessionFieldSlip,
+    AccessionReference,
+    AccessionRow,
+    Collection,
+    FieldSlip,
+    Locality,
+    Media,
+    NatureOfSpecimen,
+    Storage,
+)
 
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
@@ -47,14 +58,14 @@ def test_build_accession_payload_maps_row_fields():
         "field_number": "FN-42",
         "field_number_printed": "FN-42A",
         "date": "2024-01-31",
-        "shelf": "Cabinet 5",
+        "storage_area": "Cabinet 5",
         "is_type_specimen": "Yes",
         "taxon": "Homo erectus",
         "family": "Hominidae",
         "genus": "Homo",
         "species": "erectus",
         "body_parts": "Rt. femur",
-        "fragments": "3",
+        "fragments": "19 bone frags ",
         "coordinates": "1.23, 4.56",
         "locality": "Koobi Fora",
         "site_area": "Area 15",
@@ -78,6 +89,7 @@ def test_build_accession_payload_maps_row_fields():
     assert accession["type_status"]["interpreted"] == "Type"
 
     field_slip = accession["field_slips"][0]
+    assert field_slip["collection_date"]["interpreted"] == "2024-01-31"
     assert field_slip["field_number"]["interpreted"] == "FN-42"
     assert field_slip["verbatim_locality"]["interpreted"] == "Koobi Fora | Area 15"
     assert field_slip["verbatim_latitude"]["interpreted"] == "1.23"
@@ -88,7 +100,58 @@ def test_build_accession_payload_maps_row_fields():
     assert row_entry["storage_area"]["interpreted"] == "Cabinet 5"
     nature = row_entry["natures"][0]
     assert nature["verbatim_element"]["interpreted"] == "Rt. femur"
-    assert nature["fragments"]["interpreted"] == "3"
+    assert nature["fragments"]["interpreted"] == "19"
+
+
+@pytest.mark.parametrize(
+    "coordinates, expected_lat, expected_lon",
+    [
+        ("N:03.86986 E:036.36386", "3.86986", "36.36386"),
+        ("N: 03.86987 E: 036.36386", "3.86987", "36.36386"),
+        ("35° 50' E, 02° 20' N", "2.333333", "35.833333"),
+        ("35°50'E, 02°20'N ", "2.333333", "35.833333"),
+    ],
+)
+def test_build_accession_payload_parses_coordinates_and_year_date(
+    coordinates: str, expected_lat: str, expected_lon: str
+):
+    row = {
+        "id": "2",
+        "collection_id": "KNM",
+        "accession_number": "ER 555",
+        "field_number": "FN-55",
+        "date": "1995",
+        "storage_area": "Cabinet 6",
+        "body_parts": "Specimen part",
+        "coordinates": coordinates,
+        "taxon": "Pan troglodytes",
+    }
+
+    payload = build_accession_payload([row])
+
+    accession = payload["accessions"][0]
+    field_slip = accession["field_slips"][0]
+    assert field_slip["collection_date"]["interpreted"] == "1995-01-01"
+    assert field_slip["verbatim_latitude"]["interpreted"] == expected_lat
+    assert field_slip["verbatim_longitude"]["interpreted"] == expected_lon
+
+
+def test_build_accession_payload_extracts_fragment_counts():
+    row = {
+        "id": "3",
+        "collection_id": "KNM",
+        "accession_number": "ER 777",
+        "field_number": "FN-77",
+        "body_parts": "Fragment",
+        "fragments": "4 pieces ",
+        "storage_area": "Cabinet 8",
+    }
+
+    payload = build_accession_payload([row])
+    accession = payload["accessions"][0]
+    row_entry = accession["rows"][0]
+    nature = row_entry["natures"][0]
+    assert nature["fragments"]["interpreted"] == "4"
 
 
 def test_build_accession_payload_aggregates_consecutive_rows():
@@ -96,7 +159,7 @@ def test_build_accession_payload_aggregates_consecutive_rows():
         "id": "1",
         "collection_id": "KNM",
         "accession_number": "ER 123 A",
-        "shelf": "Cabinet 5",
+        "storage_area": "Cabinet 5",
         "body_parts": "Mandible",
         "is_published": "No",
         "field_number": "FN-001",
@@ -106,7 +169,7 @@ def test_build_accession_payload_aggregates_consecutive_rows():
         "id": "2",
         "collection_id": "KNM",
         "accession_number": "ER 123 A-C",
-        "shelf": "Cabinet 5",
+        "storage_area": "Cabinet 5",
         "body_parts": "Tooth",
         "is_published": "Yes",
         "field_number": "FN-002",
@@ -216,7 +279,7 @@ def test_import_manual_row_updates_media_and_invokes_create(monkeypatch):
         "id": "manual-import-7",
         "collection_id": "KNM",
         "accession_number": "ER 777",
-        "shelf": "Drawer 9",
+        "storage_area": "Drawer 9",
         "taxon": "Test taxon",
         "body_parts": "Skull",
         "is_published": "No",
@@ -276,7 +339,7 @@ def test_import_manual_row_groups_consecutive_rows(monkeypatch):
             "id": "manual-import-8",
             "collection_id": "KNM",
             "accession_number": "ER 888 A",
-            "shelf": "Drawer 1",
+            "storage_area": "Drawer 1",
             "body_parts": "Skull",
             "is_published": "No",
             "created_by": "importer",
@@ -286,7 +349,7 @@ def test_import_manual_row_groups_consecutive_rows(monkeypatch):
             "id": "manual-import-9",
             "collection_id": "KNM",
             "accession_number": "ER 888 A-C",
-            "shelf": "Drawer 1",
+            "storage_area": "Drawer 1",
             "body_parts": "Femur",
             "is_published": "Yes",
             "created_by": "importer",
@@ -335,18 +398,24 @@ def test_import_manual_row_links_all_media_to_accession():
             "id": "manual-import-10",
             "collection_id": "KNM",
             "accession_number": f"{accession_base} A",
-            "shelf": "Drawer 4",
+            "storage_area": "Drawer 4",
             "field_number": "FN-100",
+            "date": "1995",
             "body_parts": "Mandible",
+            "taxon": "Pan troglodytes",
+            "fragments": "19 bone frags ",
+            "coordinates": "35°50'E, 02°20'N ",
             "is_published": "No",
         },
         {
             "id": "manual-import-11",
             "collection_id": "KNM",
             "accession_number": f"{accession_base} A-B",
-            "shelf": "Drawer 4",
+            "storage_area": "Drawer 4",
             "field_number": "FN-101",
             "body_parts": "Tooth",
+            "taxon": "Pan troglodytes",
+            "fragments": "4 pieces ",
             "is_published": "No",
         },
     ]
@@ -362,6 +431,39 @@ def test_import_manual_row_links_all_media_to_accession():
     assert media_primary.accession_id is not None
     assert media_secondary.accession_id == media_primary.accession_id
     assert result["created"]
+
+    accession = media_primary.accession
+    assert accession is not None
+
+    rows_qs = accession.accessionrow_set.select_related("storage").order_by("specimen_suffix")
+    assert rows_qs.count() == 2
+    storage_names = {row.storage.area for row in rows_qs if row.storage}
+    assert storage_names == {"Drawer 4"}
+    assert Storage.objects.filter(area__iexact="Drawer 4").exists()
+
+    fragments = [
+        nature.fragments
+        for row in rows_qs
+        for nature in NatureOfSpecimen.objects.filter(accession_row=row)
+        if nature.fragments is not None
+    ]
+    assert fragments
+    assert any(fragment and fragment > 0 for fragment in fragments)
+
+    accession.refresh_from_db()
+    slip_relation = (
+        AccessionFieldSlip.objects.filter(accession=accession)
+        .select_related("fieldslip")
+        .order_by("fieldslip__field_number")
+        .first()
+    )
+    assert slip_relation is not None
+    field_slip = slip_relation.fieldslip
+    assert isinstance(field_slip, FieldSlip)
+    assert field_slip.collection_date is not None
+    assert field_slip.collection_date.isoformat() == "1995-01-01"
+    assert field_slip.verbatim_latitude == "2.333333"
+    assert field_slip.verbatim_longitude == "35.833333"
 
 
 def test_import_manual_row_creates_new_instance_for_existing_accession():
@@ -397,7 +499,7 @@ def test_import_manual_row_creates_new_instance_for_existing_accession():
             "id": "manual-dup-1",
             "collection_id": "KNM",
             "accession_number": f"ER {specimen_no} A",
-            "shelf": "Drawer 7",
+            "storage_area": "Drawer 7",
             "field_number": "FD-200",
             "body_parts": "Femur",
             "is_published": "No",
@@ -459,7 +561,7 @@ def test_import_manual_row_creates_reference_links():
         "accession_number": "ER 500 A",
         "field_number": "ER 88 4866",
         "date": "2021-01-14",
-        "shelf": "Cabinet 1",
+        "storage_area": "Cabinet 1",
         "is_type_specimen": "No",
         "taxon": "Cercopithecidae",
         "family": "Cercopithecidae",

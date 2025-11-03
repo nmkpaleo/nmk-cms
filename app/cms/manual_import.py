@@ -80,6 +80,47 @@ def make_taxon_value(row: Mapping[str, Any]) -> str | None:
     return " | ".join(dict.fromkeys(pieces))
 
 
+def parse_collection_date(value: Any) -> str | None:
+    text = coerce_stripped(value)
+    if not text:
+        return None
+    if re.fullmatch(r"\d{4}", text):
+        try:
+            return f"{int(text):04d}-01-01"
+        except ValueError:
+            return None
+    parsed = parse_date(text)
+    if parsed:
+        return parsed.isoformat()
+    return text
+
+
+def _convert_coordinate_component(direction: str, raw_value: str) -> str | None:
+    cleaned = raw_value.replace(":", " ")
+    cleaned = re.sub(r"[°º]", " ", cleaned)
+    cleaned = re.sub(r"[′'’]", " ", cleaned)
+    cleaned = re.sub(r"[″\"]", " ", cleaned)
+    cleaned = cleaned.replace(",", " ")
+    numbers = [part for part in re.split(r"\s+", cleaned) if part]
+    values: list[float] = []
+    for part in numbers[:3]:
+        try:
+            values.append(float(part))
+        except (TypeError, ValueError):
+            continue
+    if not values:
+        stripped = coerce_stripped(raw_value)
+        return stripped
+    degrees = values[0]
+    minutes = values[1] if len(values) > 1 else 0.0
+    seconds = values[2] if len(values) > 2 else 0.0
+    decimal = degrees + minutes / 60 + seconds / 3600
+    if direction in {"S", "W"}:
+        decimal = -decimal
+    formatted = f"{decimal:.6f}".rstrip("0").rstrip(".")
+    return formatted or "0"
+
+
 def parse_coordinates(value: Any) -> tuple[str | None, str | None]:
     if isinstance(value, (list, tuple, set)):
         for item in value:
@@ -91,6 +132,47 @@ def parse_coordinates(value: Any) -> tuple[str | None, str | None]:
     text = coerce_stripped(value)
     if not text:
         return None, None
+
+    latitude: str | None = None
+    longitude: str | None = None
+
+    dir_first_pattern = re.compile(
+        r"([NSEW])(?:\s*[:]\s*|\s+)([-+0-9°º.,'\"\s]+?)(?=(?:\s*[NSEW])|$)",
+        flags=re.IGNORECASE,
+    )
+
+    for match in dir_first_pattern.finditer(text):
+        direction = match.group(1).upper()
+        raw_value = match.group(2).strip()
+        if not raw_value:
+            continue
+        component = _convert_coordinate_component(direction, raw_value)
+        if direction in {"N", "S"} and latitude is None:
+            latitude = component
+        elif direction in {"E", "W"} and longitude is None:
+            longitude = component
+
+    remaining = dir_first_pattern.sub(" ", text)
+
+    dir_last_pattern = re.compile(
+        r"([-+0-9°º.,'\"\s]+?)([NSEW])",
+        flags=re.IGNORECASE,
+    )
+
+    for match in dir_last_pattern.finditer(remaining):
+        raw_value = match.group(1).strip()
+        direction = match.group(2).upper()
+        if not raw_value:
+            continue
+        component = _convert_coordinate_component(direction, raw_value)
+        if direction in {"N", "S"} and latitude is None:
+            latitude = component
+        elif direction in {"E", "W"} and longitude is None:
+            longitude = component
+
+    if latitude or longitude:
+        return latitude, longitude
+
     matches = re.findall(r"[-+]?\d+(?:\.\d+)?", text)
     if len(matches) >= 2:
         return matches[0], matches[1]
@@ -107,6 +189,11 @@ def parse_body_parts(value: Any) -> list[str]:
 
 def parse_fragments(value: Any) -> str | None:
     text = coerce_stripped(value)
+    if not text:
+        return None
+    match = re.search(r"\d+", text)
+    if match:
+        return match.group(0)
     return text
 
 
@@ -163,7 +250,7 @@ def build_field_slip(row: Mapping[str, Any], taxon_value: str | None) -> dict[st
 
     slip: dict[str, Any] = {
         "field_number": make_interpreted_value(coerce_stripped(row.get("field_number"))),
-        "collection_date": make_interpreted_value(coerce_stripped(row.get("date"))),
+        "collection_date": make_interpreted_value(parse_collection_date(row.get("date"))),
         "verbatim_locality": make_interpreted_value(verbatim_locality),
         "verbatim_taxon": make_interpreted_value(taxon_value),
         "verbatim_element": make_interpreted_value(coerce_stripped(row.get("body_parts"))),
@@ -187,7 +274,8 @@ def build_row_section(
     row: Mapping[str, Any],
     specimen_suffix: str | None,
 ) -> dict[str, Any]:
-    storage = make_interpreted_value(coerce_stripped(row.get("shelf")))
+    storage_value = coerce_stripped(row.get("storage_area") or row.get("shelf"))
+    storage = make_interpreted_value(storage_value)
     body_parts = parse_body_parts(row.get("body_parts"))
     fragments = parse_fragments(row.get("fragments"))
 
@@ -340,6 +428,9 @@ def build_accession_payload(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]
         "collection_id": collection_value,
         "field_number": _join_unique(_collect_unique(rows, "field_number")),
         "date": _join_unique(_collect_unique(rows, "date")),
+        "storage_area": _join_unique(
+            _collect_unique(rows, "storage_area") or _collect_unique(rows, "shelf")
+        ),
         "shelf": _join_unique(_collect_unique(rows, "shelf")),
         "taxon": _join_unique(_collect_unique(rows, "taxon")),
         "family": _join_unique(_collect_unique(rows, "family")),
