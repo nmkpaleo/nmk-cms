@@ -302,6 +302,13 @@ def test_import_manual_row_updates_media_and_invokes_create(monkeypatch):
     assert result["created"]
     assert result["created"][0]["accession_id"] == media.accession_id
 
+    accession = media.accession
+    accession.refresh_from_db()
+    assert accession.comment is not None
+    assert "Manual QC import" in accession.comment
+    assert "importer" in accession.comment
+    assert "2024-03-02" in accession.comment
+
 
 def test_import_manual_row_groups_consecutive_rows(monkeypatch):
     collection = Collection.objects.filter(abbreviation="KNM").order_by("pk").first()
@@ -378,6 +385,14 @@ def test_import_manual_row_groups_consecutive_rows(monkeypatch):
     assert result["created"]
     assert captured_kwargs.get("resolution_map") == {}
     assert result["created"][0]["accession_id"] == media_primary.accession_id
+
+    accession = media_primary.accession
+    accession.refresh_from_db()
+    assert accession.comment is not None
+    assert "Manual QC import" in accession.comment
+    assert "importer" in accession.comment
+    assert "2024-03-03" in accession.comment
+    assert "2024-03-04" in accession.comment
 
 
 def test_import_manual_row_links_all_media_to_accession():

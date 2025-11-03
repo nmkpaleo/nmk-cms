@@ -375,6 +375,37 @@ def _collect_unique(rows: Sequence[Mapping[str, Any]], key: str) -> list[str]:
     return collected
 
 
+def _format_manual_import_value(values: Sequence[str]) -> str | None:
+    if not values:
+        return None
+    primary = coerce_stripped(values[0])
+    extras = [coerce_stripped(value) for value in values[1:] if coerce_stripped(value)]
+    if not primary:
+        if extras:
+            primary = extras.pop(0)
+        else:
+            return None
+    if extras:
+        extras_str = ", ".join(extras)
+        return _("%(primary)s (others: %(others)s)") % {"primary": primary, "others": extras_str}
+    return primary
+
+
+def _build_manual_import_comment(
+    created_by_values: Sequence[str], created_on_values: Sequence[str]
+) -> str | None:
+    parts: list[str] = []
+    formatted_by = _format_manual_import_value(created_by_values)
+    if formatted_by:
+        parts.append(_("Created by %(value)s") % {"value": formatted_by})
+    formatted_on = _format_manual_import_value(created_on_values)
+    if formatted_on:
+        parts.append(_("Created on %(value)s") % {"value": formatted_on})
+    if not parts:
+        return None
+    return _("Manual QC import — %(details)s") % {"details": "; ".join(parts)}
+
+
 def _determine_suffix_display(suffixes: list[str | None]) -> str | None:
     meaningful = [suffix for suffix in suffixes if suffix]
     if not meaningful:
@@ -726,6 +757,13 @@ def import_manual_row(
             for media in processed_medias:
                 media.accession = accession_obj
                 media.accession_id = accession_obj.pk
+        comment_text = _build_manual_import_comment(created_by_values, created_on_values)
+        if comment_text:
+            _append_manual_import_comment(
+                accession_obj,
+                comment_text,
+                additional_accessions=_gather_additional_accessions(result, accession_obj),
+            )
     else:
         conflicts = (result or {}).get("conflicts") if result else []
         if conflicts:
@@ -737,4 +775,65 @@ def import_manual_row(
         raise ManualImportError(_("Manual QC import did not produce an accession"))
 
     return result or {}
+
+
+def _gather_additional_accessions(
+    result: dict[str, list[dict[str, Any]]] | None,
+    primary_accession: Accession,
+) -> list[Accession]:
+    if not result:
+        return []
+
+    primary_pk = getattr(primary_accession, "pk", None)
+    accession_ids: set[int] = set()
+
+    for key in ("created", "updated"):
+        for entry in result.get(key, []) or []:
+            accession_id = entry.get("accession_id")
+            if accession_id and accession_id != primary_pk:
+                accession_ids.add(accession_id)
+
+    if not accession_ids:
+        return []
+
+    return list(Accession.objects.filter(pk__in=accession_ids))
+
+
+def _append_manual_import_comment(
+    accession: Accession,
+    comment_text: str | None,
+    *,
+    additional_accessions: Sequence[Accession] | None = None,
+) -> None:
+    if not comment_text:
+        return
+
+    targets: list[Accession] = []
+
+    if accession is not None:
+        targets.append(accession)
+
+    if additional_accessions:
+        for extra in additional_accessions:
+            if extra is not None:
+                targets.append(extra)
+
+    seen: set[int] = set()
+
+    for target in targets:
+        pk = getattr(target, "pk", None)
+        if pk is not None:
+            if pk in seen:
+                continue
+            seen.add(pk)
+
+        existing = target.comment or ""
+        if comment_text in existing:
+            continue
+        if existing:
+            new_comment = f"{existing.rstrip()}\n{comment_text}"
+        else:
+            new_comment = comment_text
+        target.comment = new_comment
+        target.save(update_fields=["comment"])
 
