@@ -20,6 +20,9 @@ import uuid
 from django.utils.translation import gettext_lazy as _
 User = get_user_model()
 
+
+MANUAL_QC_SOURCE = "manual_qc"
+
 from .merge import MergeMixin, MergeStrategy
 from .notifications import notify_media_qc_transition
 
@@ -362,6 +365,31 @@ class Accession(BaseModel):
         help_text="Indicates whether this accession has been cited in references.",
     )
     history = HistoricalRecords()
+
+    @property
+    def manual_import_media(self):
+        """Return the first related media item originating from a manual QC import."""
+
+        prefetched = getattr(self, "_prefetched_objects_cache", {}).get("media")
+        if prefetched is not None:
+            for media in prefetched:
+                if getattr(media, "is_manual_import", False):
+                    return media
+
+        for media in self.media.all():
+            if getattr(media, "is_manual_import", False):
+                return media
+        return None
+
+    def get_manual_import_metadata(self) -> Optional[Dict[str, Any]]:
+        media = self.manual_import_media
+        if media is None:
+            return None
+        return media.get_manual_import_metadata()
+
+    @property
+    def is_manual_import(self) -> bool:
+        return self.get_manual_import_metadata() is not None
 
     def save(self, *args, **kwargs):
         """
@@ -1462,6 +1490,36 @@ class Media(BaseModel):
     )
     history = HistoricalRecords()
 
+    MANUAL_IMPORT_SOURCE = MANUAL_QC_SOURCE
+
+    def get_manual_import_metadata(self) -> Optional[Dict[str, Any]]:
+        """Return manual import metadata embedded in the OCR payload, if any."""
+
+        data = self.ocr_data if isinstance(self.ocr_data, dict) else None
+        if not data:
+            return None
+        metadata = data.get("_manual_import")
+        if not isinstance(metadata, dict):
+            return None
+        source = metadata.get("source")
+        if source and source != self.MANUAL_IMPORT_SOURCE:
+            return None
+        return metadata
+
+    @property
+    def is_manual_import(self) -> bool:
+        return self.get_manual_import_metadata() is not None
+
+    def manual_import_display(self) -> Optional[str]:
+        metadata = self.get_manual_import_metadata()
+        if not metadata:
+            return None
+        row_id = metadata.get("row_id")
+        created_by = metadata.get("created_by")
+        if row_id and created_by:
+            return f"{row_id} — {created_by}"
+        return row_id or created_by
+
     def save(self, *args, **kwargs):
         user_override_set = hasattr(self, "_force_qc_user")
         if user_override_set:
@@ -1492,12 +1550,14 @@ class Media(BaseModel):
                 self.QCStatus.APPROVED,
                 self.QCStatus.REJECTED,
             }:
-                self.intern_checked_on = timestamp
-                if user:
+                if not self.intern_checked_on:
+                    self.intern_checked_on = timestamp
+                if user and not getattr(self, "intern_checked_by_id", None):
                     self.intern_checked_by = user
             if self.qc_status in {self.QCStatus.APPROVED, self.QCStatus.REJECTED}:
-                self.expert_checked_on = timestamp
-                if user:
+                if not self.expert_checked_on:
+                    self.expert_checked_on = timestamp
+                if user and not getattr(self, "expert_checked_by_id", None):
                     self.expert_checked_by = user
 
         super().save(*args, **kwargs)

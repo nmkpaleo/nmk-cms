@@ -6,6 +6,7 @@ import re
 import shutil
 import time
 import textwrap
+from datetime import date
 from pathlib import Path
 from typing import Any, Optional
 
@@ -32,6 +33,7 @@ except ImportError:  # pragma: no cover
 
 from django.conf import settings
 from django.db.models import Max, Prefetch
+from django.utils.dateparse import parse_date
 
 from .models import (
     Media,
@@ -72,6 +74,29 @@ logger = logging.getLogger(__name__)
 
 
 MAX_OCR_ROWS_PER_ACCESSION = 50
+
+
+def make_interpreted_value(
+    interpreted: object | None,
+    *,
+    raw: object | None = None,
+    confidence: float | None = None,
+) -> dict[str, object]:
+    """Return a minimal OCR-style value dictionary.
+
+    When ``interpreted`` is falsy the function returns an empty dictionary so
+    that downstream lookups using ``.get('interpreted')`` behave consistently.
+    """
+
+    if interpreted in (None, "") and raw in (None, "") and confidence is None:
+        return {}
+
+    payload: dict[str, object] = {"interpreted": interpreted}
+    if raw is not None:
+        payload["raw"] = raw
+    if confidence is not None:
+        payload["confidence"] = confidence
+    return payload
 
 
 def _load_env() -> None:
@@ -532,6 +557,7 @@ def _extract_entry_components(entry: dict) -> dict[str, object]:
             {
                 "index": index,
                 "field_number": (slip.get("field_number") or {}).get("interpreted"),
+                "collection_date": (slip.get("collection_date") or {}).get("interpreted"),
                 "verbatim_locality": (slip.get("verbatim_locality") or {}).get("interpreted"),
                 "verbatim_taxon": (slip.get("verbatim_taxon") or {}).get("interpreted"),
                 "verbatim_element": (slip.get("verbatim_element") or {}).get("interpreted"),
@@ -658,6 +684,17 @@ def _clean_string(value: object) -> str | None:
     return cleaned or None
 
 
+def _parse_collection_date_value(value: str | None) -> date | None:
+    if not value:
+        return None
+    if re.fullmatch(r"\d{4}", value):
+        try:
+            return date(int(value), 1, 1)
+        except ValueError:
+            return None
+    return parse_date(value)
+
+
 def _has_identification_data(data: dict[str, object]) -> bool:
     if not isinstance(data, dict):
         return False
@@ -729,6 +766,8 @@ def _ensure_field_slip(data: dict[str, object]) -> FieldSlip | None:
     verbatim_latitude = _clean_string(data.get("verbatim_latitude"))
     verbatim_longitude = _clean_string(data.get("verbatim_longitude"))
     verbatim_elevation = _clean_string(data.get("verbatim_elevation"))
+    collection_date_value = _clean_string(data.get("collection_date"))
+    collection_date = _parse_collection_date_value(collection_date_value)
 
     base_queryset = FieldSlip.objects.filter(
         verbatim_locality=verb_locality,
@@ -738,12 +777,18 @@ def _ensure_field_slip(data: dict[str, object]) -> FieldSlip | None:
     if field_number:
         field_slip = base_queryset.filter(field_number=field_number).first()
         if field_slip:
+            if collection_date and field_slip.collection_date != collection_date:
+                field_slip.collection_date = collection_date
+                field_slip.save(update_fields=["collection_date"])
             return field_slip
     else:
         field_slip = base_queryset.filter(
             field_number__startswith=UNKNOWN_FIELD_NUMBER_PREFIX
         ).first()
         if field_slip:
+            if collection_date and field_slip.collection_date != collection_date:
+                field_slip.collection_date = collection_date
+                field_slip.save(update_fields=["collection_date"])
             return field_slip
         field_number = _generate_unknown_field_number()
 
@@ -769,6 +814,7 @@ def _ensure_field_slip(data: dict[str, object]) -> FieldSlip | None:
         verbatim_latitude=verbatim_latitude,
         verbatim_longitude=verbatim_longitude,
         verbatim_elevation=verbatim_elevation,
+        collection_date=collection_date,
     )
 
 

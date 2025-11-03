@@ -438,13 +438,75 @@ class DuplicateFilter(admin.SimpleListFilter):
         else:
             return annotated  # ✅ return the annotated base queryset
 
+
+class ManualImportMediaFilter(admin.SimpleListFilter):
+    title = _("Manual QC provenance")
+    parameter_name = "manual_import"
+
+    def lookups(self, request, model_admin):
+        return [
+            ("manual", _("Manual QC import")),
+            ("other", _("Other sources")),
+        ]
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if isinstance(value, list):
+            value = value[0] if value else None
+        if value in {"manual", "other"}:
+            records = list(queryset)
+            manual_ids = [
+                media.pk for media in records if media.is_manual_import
+            ]
+            if value == "manual":
+                return queryset.filter(pk__in=manual_ids)
+            return queryset.exclude(pk__in=manual_ids)
+        return queryset
+
+
+class AccessionManualImportFilter(admin.SimpleListFilter):
+    title = _("Manual QC provenance")
+    parameter_name = "manual_import"
+
+    def lookups(self, request, model_admin):
+        return [
+            ("manual", _("Manual QC import")),
+            ("other", _("Other sources")),
+        ]
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if isinstance(value, list):
+            value = value[0] if value else None
+        if value in {"manual", "other"}:
+            records = list(queryset.prefetch_related("media"))
+            manual_ids = [
+                accession.pk for accession in records if accession.is_manual_import
+            ]
+            if value == "manual":
+                return queryset.filter(pk__in=manual_ids)
+            return queryset.exclude(pk__in=manual_ids)
+        return queryset
+
 # Accession Model
 class AccessionAdmin(HistoricalImportExportAdmin):
     resource_class = AccessionResource
-    list_display = ('collection_abbreviation', 'specimen_prefix_abbreviation',
-                    'specimen_no', 'instance_number','accessioned_by',
-                    'is_duplicate_display',)
-    list_filter = ('collection', 'specimen_prefix', 'accessioned_by', DuplicateFilter)
+    list_display = (
+        'collection_abbreviation',
+        'specimen_prefix_abbreviation',
+        'specimen_no',
+        'instance_number',
+        'accessioned_by',
+        'is_duplicate_display',
+        'manual_import_badge',
+    )
+    list_filter = (
+        'collection',
+        'specimen_prefix',
+        'accessioned_by',
+        DuplicateFilter,
+        AccessionManualImportFilter,
+    )
     search_fields = ('specimen_no', 'collection__abbreviation', 'specimen_prefix__abbreviation', 'accessioned_by__username')
     ordering = ('specimen_no', 'specimen_prefix__abbreviation')
 
@@ -465,6 +527,39 @@ class AccessionAdmin(HistoricalImportExportAdmin):
             return format_html('<span style="color: orange;">Yes ({})</span>', count)
         return format_html('<span style="color: green;">No</span>')
     is_duplicate_display.short_description = 'Duplicate?'
+
+    def manual_import_badge(self, obj):
+        metadata = obj.get_manual_import_metadata()
+        if not metadata:
+            return "—"
+        row_id = metadata.get("row_id") or _("Manual QC")
+        created_by = metadata.get("created_by") or ""
+        created_on = metadata.get("created_on") or ""
+        tooltip_parts = [part for part in (created_by, created_on) if part]
+        tooltip = " \u2014 ".join(tooltip_parts) if tooltip_parts else row_id
+        return format_html(
+            '<span class="manual-import" title="{}"><i class="fa fa-clipboard-check" aria-hidden="true"></i> {}</span>',
+            tooltip,
+            row_id,
+        )
+
+    manual_import_badge.short_description = _("Manual QC provenance")
+
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        return queryset.prefetch_related("media")
+
+    def get_list_display(self, request):
+        columns = list(super().get_list_display(request))
+        if not request.user.has_perm("cms.can_import_manual_qc"):
+            columns = [column for column in columns if column != "manual_import_badge"]
+        return columns
+
+    def get_list_filter(self, request):
+        filters = list(super().get_list_filter(request))
+        if not request.user.has_perm("cms.can_import_manual_qc"):
+            filters = [flt for flt in filters if flt is not AccessionManualImportFilter]
+        return filters
 
 
 @admin.register(AccessionNumberSeries)
@@ -699,6 +794,7 @@ class MediaAdmin(HistoricalImportExportAdmin):
         'scanning',
         'qc_status',
         'rows_rearranged',
+        "manual_import_badge",
         "created_by",
         "created_on",
     )
@@ -726,7 +822,7 @@ class MediaAdmin(HistoricalImportExportAdmin):
         'accession_row',
         'scanning',
     ]
-    list_filter = ('type', 'format', 'qc_status', 'rows_rearranged')
+    list_filter = ('type', 'format', 'qc_status', 'rows_rearranged', ManualImportMediaFilter)
     ordering = ('file_name',)
     inlines = [MediaQCLogInline, LLMUsageRecordInline]
     fieldsets = (
@@ -781,6 +877,35 @@ class MediaAdmin(HistoricalImportExportAdmin):
             },
         ),
     )
+
+    def manual_import_badge(self, obj):
+        metadata = obj.get_manual_import_metadata()
+        if not metadata:
+            return "—"
+        row_id = metadata.get("row_id") or _("Manual QC")
+        created_by = metadata.get("created_by") or ""
+        created_on = metadata.get("created_on") or ""
+        tooltip_parts = [part for part in (created_by, created_on) if part]
+        tooltip = " \u2014 ".join(tooltip_parts) if tooltip_parts else row_id
+        return format_html(
+            '<span class="manual-import" title="{}"><i class="fa fa-clipboard-check" aria-hidden="true"></i> {}</span>',
+            tooltip,
+            row_id,
+        )
+
+    manual_import_badge.short_description = _("Manual QC provenance")
+
+    def get_list_display(self, request):
+        columns = list(super().get_list_display(request))
+        if not request.user.has_perm("cms.can_import_manual_qc"):
+            columns = [column for column in columns if column != "manual_import_badge"]
+        return columns
+
+    def get_list_filter(self, request):
+        filters = list(super().get_list_filter(request))
+        if not request.user.has_perm("cms.can_import_manual_qc"):
+            filters = [flt for flt in filters if flt is not ManualImportMediaFilter]
+        return filters
 
 
 class MediaQCCommentInline(admin.TabularInline):

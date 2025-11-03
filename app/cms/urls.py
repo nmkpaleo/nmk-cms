@@ -74,6 +74,7 @@ from cms.views import (
     StorageUpdateView,
     MergeCandidateAdminView,
     MergeCandidateAPIView,
+    ManualQCImportView,
 )
 from .views import PreparationMediaUploadView
 from .views import FieldSlipAutocomplete, ReferenceAutocomplete
@@ -89,6 +90,7 @@ from .admin import taxonomy_sync_apply_view, taxonomy_sync_preview_view
 urlpatterns = [
     path('reports/accession-distribution/', accession_distribution_report, name='accession_distribution_report'),
     path('reports/media/', media_report_view, name='media_report'),
+    path('manual-import/', ManualQCImportView.as_view(), name='manual_qc_import'),
     path('inventory/', inventory_start, name='inventory_start'),
     path('inventory/update/', inventory_update, name='inventory_update'),
     path('inventory/reset/', inventory_reset, name='inventory_reset'),
