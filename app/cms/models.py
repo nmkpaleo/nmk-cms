@@ -250,7 +250,7 @@ class Locality(BaseModel):
         return display_labels
 
     def geological_times_label_display(self) -> str:
-        return "/".join(self.get_geological_times_display())
+        return "/".join(str(label) for label in self.get_geological_times_display())
 
     geological_times_label_display.short_description = _("Geological time(s)")
     geological_times_label_display.admin_order_field = "geological_times"
