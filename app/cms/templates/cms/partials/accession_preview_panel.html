@@ -115,6 +115,7 @@
         </tr>
       </thead>
       <tbody>
+        {% with taxonomy_source=taxonomy_map|default:taxonomy %}
         {% for accessionrow in accession_rows %}
           {% with specimens=accessionrow.natureofspecimen_set.all %}
             <tr>
@@ -154,11 +155,12 @@
                 {% endif %}
               </td>
               {% with first_identifications|get_item:accessionrow.id as first_identification %}
-                {% if first_identification %}
-                  {% with taxonomy|get_item:first_identification.id as matched_taxon %}
+                {% with identification_counts|get_item:accessionrow.id as identification_count %}
+                  {% if first_identification %}
+                    {% with taxonomy_source|get_item:first_identification.id as matched_taxon %}
                     <td>
                       {{ first_identification.taxon|default:"—" }}
-                      {% if identification_counts|get_item:accessionrow.id > 1 %}
+                      {% if identification_count|default:0 > 1 %}
                         <span class="w3-text-blue" title="{% trans "This specimen has previous identifications" %}">(*)</span>
                       {% endif %}
                     </td>
@@ -167,15 +169,16 @@
                     <td>{{ matched_taxon.tribe|default:"—" }}</td>
                     <td>{{ matched_taxon.genus|default:"—" }}</td>
                     <td>{{ matched_taxon.species|default:"—" }}</td>
-                  {% endwith %}
-                {% else %}
-                  <td>{% trans "No taxon identified" %}</td>
-                  <td>—</td>
-                  <td>—</td>
-                  <td>—</td>
-                  <td>—</td>
-                  <td>—</td>
-                {% endif %}
+                    {% endwith %}
+                  {% else %}
+                    <td>{% trans "No taxon identified" %}</td>
+                    <td>—</td>
+                    <td>—</td>
+                    <td>—</td>
+                    <td>—</td>
+                    <td>—</td>
+                  {% endif %}
+                {% endwith %}
               {% endwith %}
             </tr>
           {% endwith %}
@@ -184,6 +187,7 @@
             <td colspan="11" class="w3-center">{% trans "No specimen rows recorded." %}</td>
           </tr>
         {% endfor %}
+        {% endwith %}
       </tbody>
     </table>
   </div>
