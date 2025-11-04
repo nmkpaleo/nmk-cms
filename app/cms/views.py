@@ -3654,7 +3654,9 @@ class LocalityPrintView(TemplateView):
             {
                 "name": locality.name,
                 "abbreviation": locality.abbreviation,
-                "ages": "/".join(locality.get_geological_times_display()),
+                "ages": "/".join(
+                    str(label) for label in locality.get_geological_times_display()
+                ),
             }
             for locality in localities
         ]
@@ -3671,7 +3673,7 @@ class LocalityPrintView(TemplateView):
 
         context["locality_rows"] = rows
         context["geological_time_legend"] = [
-            {"code": code, "label": label}
+            {"code": code, "label": str(label)}
             for code, label in Locality.GeologicalTime.choices
         ]
         return context
