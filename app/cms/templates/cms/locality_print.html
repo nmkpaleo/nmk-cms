@@ -1,0 +1,70 @@
+{% extends "base_generic.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Printable locality list" %}{% endblock %}
+
+{% block content %}
+<main class="w3-container w3-margin-top" role="main">
+    <header class="w3-center w3-margin-bottom">
+        <h1 class="w3-xxlarge w3-margin-bottom">{% trans "LIST OF CODE MARKS FOR KENYAN FOSSIL LOCALITIES" %}</h1>
+    </header>
+    <section class="w3-responsive">
+        <table class="w3-table-all w3-bordered">
+            <caption class="w3-hide">{% trans "Printable list of localities with abbreviations and geological ages" %}</caption>
+            <thead>
+                <tr>
+                    <th scope="col">{% trans "Locality" %}</th>
+                    <th scope="col">{% trans "Abr." %}</th>
+                    <th scope="col">{% trans "Age" %}</th>
+                    <th scope="col">{% trans "Locality" %}</th>
+                    <th scope="col">{% trans "Abr." %}</th>
+                    <th scope="col">{% trans "Age" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for left, right in locality_rows %}
+                    <tr>
+                        <td>{{ left.name }}</td>
+                        <td>{{ left.abbreviation }}</td>
+                        <td>
+                            {% if left.ages %}
+                                {{ left.ages }}
+                            {% else %}
+                                <span class="w3-text-grey">&mdash;</span>
+                            {% endif %}
+                        </td>
+                        {% if right %}
+                            <td>{{ right.name }}</td>
+                            <td>{{ right.abbreviation }}</td>
+                            <td>
+                                {% if right.ages %}
+                                    {{ right.ages }}
+                                {% else %}
+                                    <span class="w3-text-grey">&mdash;</span>
+                                {% endif %}
+                            </td>
+                        {% else %}
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                        {% endif %}
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="6" class="w3-center">{% trans "No localities available." %}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+    <footer class="w3-margin-top">
+        <p class="w3-small">
+            {% for item in geological_time_legend %}
+                <span>{{ item.code }} = {{ item.label }}{% if not forloop.last %}; {% endif %}</span>
+            {% empty %}
+                <span>{% trans "No geological times defined." %}</span>
+            {% endfor %}
+        </p>
+    </footer>
+</main>
+{% endblock %}

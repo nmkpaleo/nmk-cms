@@ -1,6 +1,7 @@
 import django_filters
 from django import forms
 from django.db.models import Q
+from django.utils.translation import gettext_lazy as _
 from .models import (
     Accession,
     Locality,
@@ -211,10 +212,29 @@ class LocalityFilter(django_filters.FilterSet):
         label="Name",
         widget=forms.Select(attrs={"class": "w3-select"}),
     )
+    geological_times = django_filters.MultipleChoiceFilter(
+        choices=Locality.GeologicalTime.choices,
+        label=_("Geological time"),
+        widget=forms.SelectMultiple(attrs={"class": "w3-select"}),
+        method="filter_geological_times",
+    )
 
     class Meta:
         model = Locality
-        fields = ["abbreviation", "name"]
+        fields = ["abbreviation", "name", "geological_times"]
+
+    def filter_geological_times(self, queryset, name, value):
+        if not value:
+            return queryset
+
+        conditions = Q()
+        for choice in value:
+            conditions |= Q(geological_times__contains=[choice])
+
+        if not conditions:
+            return queryset
+
+        return queryset.filter(conditions)
 
 
 class PlaceFilter(django_filters.FilterSet):

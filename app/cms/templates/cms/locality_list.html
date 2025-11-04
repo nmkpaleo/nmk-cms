@@ -1,5 +1,5 @@
 {% extends "base_generic.html" %}
-{% load user_tags %}
+{% load i18n user_tags %}
 
 {% block title %}Localities{% endblock %}
 
@@ -11,12 +11,24 @@
             <h2 class="w3-margin-0">Localities</h2>
         </div>
         <div class="w3-col s12 m6 l6 w3-right-align w3-margin-top">
-            {% if user.is_superuser or user|has_group:"Collection Managers" %}
-                <a href="{% url 'locality_create' %}" class="w3-button w3-green w3-round">
-                    <i class="fa-solid fa-plus-circle"></i>
-                    New Locality
+            <div class="w3-bar w3-right-align">
+                {% if user.is_superuser or user|has_group:"Collection Managers" %}
+                    <a href="{% url 'locality_create' %}" class="w3-button w3-green w3-round w3-margin-bottom">
+                        <i class="fa-solid fa-plus-circle" aria-hidden="true"></i>
+                        <span class="w3-margin-left">{% trans "New locality" %}</span>
+                    </a>
+                {% endif %}
+                <a
+                    href="{% url 'locality_print' %}"
+                    class="w3-button w3-light-grey w3-round w3-margin-left w3-margin-bottom"
+                    target="_blank"
+                    rel="noopener"
+                    aria-label="{% trans 'Open printable locality list in a new tab' %}"
+                >
+                    <i class="fa-solid fa-print" aria-hidden="true"></i>
+                    <span class="w3-margin-left">{% trans "Print list" %}</span>
                 </a>
-            {% endif %}
+            </div>
         </div>
     </div>
 
@@ -28,24 +40,28 @@
     <div id="localityFilterPanel" class="w3-hide w3-animate-opacity w3-padding w3-light-grey w3-round-large w3-margin-top w3-card">
         <form method="get" class="w3-container w3-padding-16" role="search">
             <div class="w3-row-padding">
-                <div class="w3-col s12 m6 l6 w3-margin-bottom">
-                    <label class="w3-text-grey">Abbreviation</label>
+                <div class="w3-col s12 m6 l4 w3-margin-bottom">
+                    <label class="w3-text-grey">{% trans "Abbreviation" %}</label>
                     {{ filter.form.abbreviation }}
                 </div>
-                <div class="w3-col s12 m6 l6 w3-margin-bottom">
-                    <label class="w3-text-grey">Name</label>
+                <div class="w3-col s12 m6 l4 w3-margin-bottom">
+                    <label class="w3-text-grey">{% trans "Name" %}</label>
                     {{ filter.form.name }}
+                </div>
+                <div class="w3-col s12 m6 l4 w3-margin-bottom">
+                    <label class="w3-text-grey">{% trans "Geological time" %}</label>
+                    {{ filter.form.geological_times }}
                 </div>
             </div>
 
             <div class="w3-margin-top">
                 <button type="submit" class="w3-button w3-blue w3-round w3-margin-right">
-                    <i class="fa-solid fa-check"></i>
-                    Apply Filters
+                    <i class="fa-solid fa-check" aria-hidden="true"></i>
+                    {% trans "Apply filters" %}
                 </button>
                 <a href="{% url 'locality_list' %}" class="w3-button w3-gray w3-round">
-                    <i class="fa-solid fa-rotate-left"></i>
-                    Clear
+                    <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
+                    {% trans "Clear" %}
                 </a>
             </div>
         </form>
@@ -55,8 +71,10 @@
         <table class="w3-table-all w3-hoverable">
             <thead>
                 <tr>
-                    <th>Abbreviation</th>
-                    <th>Name</th>
+                    <th>{% trans "Abbreviation" %}</th>
+                    <th>{% trans "Name" %}</th>
+                    <th>{% trans "Geological time" %}</th>
+                    <th>{% trans "Accessions" %}</th>
                 </tr>
             </thead>
             <tbody>
@@ -64,10 +82,20 @@
                     <tr>
                         <td><a href="{% url 'locality_detail' locality.pk %}">{{ locality.abbreviation }}</a></td>
                         <td>{{ locality.name }}</td>
+                        <td>
+                            {% with times=locality.geological_times_abbreviation_display %}
+                                {% if times %}
+                                    {{ times }}
+                                {% else %}
+                                    <span class="w3-text-grey">&mdash;</span>
+                                {% endif %}
+                            {% endwith %}
+                        </td>
+                        <td>{{ locality.accession_count|default:0 }}</td>
                     </tr>
                 {% empty %}
                     <tr>
-                        <td colspan="2" class="w3-center">No localities found.</td>
+                        <td colspan="4" class="w3-center">{% trans "No localities found." %}</td>
                     </tr>
                 {% endfor %}
             </tbody>
