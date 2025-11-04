@@ -688,10 +688,29 @@ class IdentificationAdmin(HistoricalImportExportAdmin):
     ordering = ('accession_row', 'date_identified')
 
 # Locality Model
+class GeologicalTimeListFilter(admin.SimpleListFilter):
+    title = _("Geological time")
+    parameter_name = "geological_time"
+
+    def lookups(self, request, model_admin):
+        return Locality.GeologicalTime.choices
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if not value:
+            return queryset
+        return queryset.filter(geological_times__contains=[value])
+
+
 class LocalityAdmin(HistoricalImportExportAdmin):
     resource_class = LocalityResource
-    list_display = ('abbreviation', 'name')
-    search_fields = ('abbreviation', 'name')
+    list_display = (
+        'abbreviation',
+        'name',
+        'geological_times_abbreviation_display',
+    )
+    search_fields = ('abbreviation', 'name', 'geological_times__icontains')
+    list_filter = (GeologicalTimeListFilter,)
     ordering = ('abbreviation', 'name')
 
 

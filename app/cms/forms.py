@@ -670,9 +670,17 @@ class ReferenceForm(BaseW3ModelForm):
 
 
 class LocalityForm(BaseW3ModelForm):
+    geological_times = forms.MultipleChoiceField(
+        label=_("Geological time"),
+        required=False,
+        choices=Locality.GeologicalTime.choices,
+        widget=forms.SelectMultiple(attrs={"class": "template_form_select"}),
+        help_text=_("Select relevant geological times for this locality."),
+    )
+
     class Meta:
         model = Locality
-        fields = ["abbreviation", "name"]
+        fields = ["abbreviation", "name", "geological_times"]
         widgets = {
             "abbreviation": forms.TextInput(attrs={"class": "template_form_input"}),
             "name": forms.TextInput(attrs={"class": "template_form_input"}),

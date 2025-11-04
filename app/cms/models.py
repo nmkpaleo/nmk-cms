@@ -178,14 +178,26 @@ class MergeLog(BaseModel):
 
 # Locality Model
 class Locality(BaseModel):
+    class GeologicalTime(models.TextChoices):
+        MIOCENE = "M", _("Miocene")
+        PLIOCENE = "Pi", _("Pliocene")
+        PLEISTOCENE = "Pe", _("Pleistocene")
+        HOLOCENE = "H", _("Holocene")
+
     abbreviation = models.CharField(
         max_length=2,
         unique=True,
         help_text="Enter the Abbreviation of the Locality",
     )
     name = models.CharField(max_length=50, help_text="The name of the Locality.")
+    geological_times = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=_("Selected geological time abbreviations for this locality."),
+        verbose_name=_("Geological time"),
+    )
     history = HistoricalRecords()
-    
+
     class Meta:
         ordering = ["name"]
 
@@ -198,6 +210,50 @@ class Locality(BaseModel):
     class Meta:
         verbose_name = "Locality"
         verbose_name_plural = "Localities"
+
+    def clean(self):
+        super().clean()
+        times = self.geological_times or []
+        if not isinstance(times, list):
+            raise ValidationError(
+                {"geological_times": _("Geological times must be a list of values.")}
+            )
+
+        invalid = [value for value in times if value not in self.GeologicalTime.values]
+        if invalid:
+            raise ValidationError(
+                {
+                    "geological_times": _(
+                        "Invalid geological time selection: %(invalid)s"
+                    )
+                    % {"invalid": ", ".join(invalid)}
+                }
+            )
+
+        # Ensure stored list does not contain duplicates while preserving order.
+        seen: set[str] = set()
+        deduped: list[str] = []
+        for value in times:
+            if value in seen:
+                continue
+            seen.add(value)
+            deduped.append(value)
+        self.geological_times = deduped
+
+    def get_geological_times_display(self) -> list[str]:
+        display_labels: list[str] = []
+        for value in self.geological_times:
+            try:
+                display_labels.append(self.GeologicalTime(value).label)
+            except ValueError:
+                display_labels.append(value)
+        return display_labels
+
+    def geological_times_abbreviation_display(self) -> str:
+        return "/".join(self.geological_times)
+
+    geological_times_abbreviation_display.short_description = _("Geological time(s)")
+    geological_times_abbreviation_display.admin_order_field = "geological_times"
 
 
 class Place(BaseModel):

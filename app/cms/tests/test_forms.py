@@ -1,4 +1,5 @@
 import pytest
+from crum import set_current_user
 from django.contrib.auth import get_user_model
 from django.template.loader import render_to_string
 from django.test import RequestFactory
@@ -7,6 +8,7 @@ from app.cms.forms import (
     AccessionForm,
     AccessionRowIdentificationForm,
     DrawerRegisterForm,
+    LocalityForm,
     TaxonWidget,
 )
 from app.cms.models import (
@@ -22,6 +24,12 @@ from app.cms.models import (
 )
 
 pytestmark = pytest.mark.django_db
+
+
+@pytest.fixture
+def locality_user():
+    user_model = get_user_model()
+    return user_model.objects.create(username="locality-manager")
 
 
 def make_taxon(
@@ -205,3 +213,51 @@ def test_base_form_marks_field_errors_accessibly():
 
     assert "aria-invalid=\"true\"" in html
     assert "role=\"alert\"" in html
+
+
+def test_locality_form_saves_geological_times(locality_user):
+    form = LocalityForm(
+        data={
+            "abbreviation": "LF",
+            "name": "Locality Form",
+            "geological_times": [
+                Locality.GeologicalTime.MIOCENE,
+                Locality.GeologicalTime.HOLOCENE,
+            ],
+        }
+    )
+
+    assert form.is_valid()
+
+    try:
+        set_current_user(locality_user)
+        locality = form.save()
+    finally:
+        set_current_user(None)
+
+    assert locality.geological_times == [
+        Locality.GeologicalTime.MIOCENE,
+        Locality.GeologicalTime.HOLOCENE,
+    ]
+
+
+def test_locality_form_initializes_geological_times(locality_user):
+    try:
+        set_current_user(locality_user)
+        locality = Locality.objects.create(
+            abbreviation="LI",
+            name="Locality Initial",
+            geological_times=[
+                Locality.GeologicalTime.PLIOCENE,
+                Locality.GeologicalTime.PLEISTOCENE,
+            ],
+        )
+    finally:
+        set_current_user(None)
+
+    form = LocalityForm(instance=locality)
+
+    assert form.initial["geological_times"] == [
+        Locality.GeologicalTime.PLIOCENE,
+        Locality.GeologicalTime.PLEISTOCENE,
+    ]
