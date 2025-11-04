@@ -572,7 +572,7 @@ class GeologicalTimesWidget(Widget):
         normalized: list[str] = []
         invalid: list[str] = []
         label_map = {
-            geological_time.label.lower(): geological_time.value
+            str(geological_time.label).lower(): geological_time.value
             for geological_time in Locality.GeologicalTime
         }
         allowed_values = set(Locality.GeologicalTime.values)
@@ -589,7 +589,8 @@ class GeologicalTimesWidget(Widget):
         if invalid:
             allowed_codes = ", ".join(Locality.GeologicalTime.values)
             allowed_labels = ", ".join(
-                geological_time.label for geological_time in Locality.GeologicalTime
+                str(geological_time.label)
+                for geological_time in Locality.GeologicalTime
             )
             raise ValueError(
                 _(
@@ -610,9 +611,10 @@ class GeologicalTimesWidget(Widget):
             labels: list[str] = []
             for item in value:
                 try:
-                    labels.append(Locality.GeologicalTime(item).label)
+                    label = Locality.GeologicalTime(item).label
                 except ValueError:
-                    labels.append(str(item))
+                    label = item
+                labels.append(str(label))
             return self.separator.join(labels)
         return str(value)
 
