@@ -580,7 +580,7 @@ class GeologicalTimesWidget(Widget):
             )
         return selections
 
-    def render(self, value, obj=None):  # type: ignore[override]
+    def render(self, value, obj=None, **kwargs):  # type: ignore[override]
         if not value:
             return ""
         if isinstance(value, list):
