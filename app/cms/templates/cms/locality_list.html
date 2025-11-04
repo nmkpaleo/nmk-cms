@@ -83,7 +83,7 @@
                         <td><a href="{% url 'locality_detail' locality.pk %}">{{ locality.abbreviation }}</a></td>
                         <td>{{ locality.name }}</td>
                         <td>
-                            {% with times=locality.geological_times_abbreviation_display %}
+                            {% with times=locality.geological_times_label_display %}
                                 {% if times %}
                                     {{ times }}
                                 {% else %}

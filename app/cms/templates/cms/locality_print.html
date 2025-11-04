@@ -1,12 +1,68 @@
 {% extends "base_generic.html" %}
-{% load i18n %}
+{% load i18n static %}
 
 {% block title %}{% trans "Printable locality list" %}{% endblock %}
 
+{% block script %}
+{{ block.super }}
+<style>
+    .print-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1.5rem;
+        flex-wrap: wrap;
+        text-align: center;
+    }
+
+    .print-heading__title {
+        flex: 1 1 auto;
+        margin: 0;
+    }
+
+    .print-heading__logo {
+        flex: 0 0 auto;
+    }
+
+    .print-heading__logo img {
+        max-height: 96px;
+    }
+
+    @media (max-width: 600px) {
+        .print-heading {
+            justify-content: center;
+        }
+    }
+
+    @media print {
+        .site-header,
+        #primary-navigation,
+        #nav-toggle {
+            display: none !important;
+        }
+
+        body {
+            margin: 0;
+        }
+
+        .print-heading {
+            text-align: left;
+        }
+
+        .print-heading__logo img {
+            max-height: 72px;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <main class="w3-container w3-margin-top" role="main">
-    <header class="w3-center w3-margin-bottom">
-        <h1 class="w3-xxlarge w3-margin-bottom">{% trans "LIST OF CODE MARKS FOR KENYAN FOSSIL LOCALITIES" %}</h1>
+    <header class="w3-margin-bottom print-heading" role="banner">
+        <div class="print-heading__logo">
+            <img src="{% static 'images/logo.jpg' %}" alt="{% trans 'National Museums of Kenya logo' %}" />
+        </div>
+        <h1 class="w3-xxlarge print-heading__title">{% trans "LIST OF CODE MARKS FOR KENYAN FOSSIL LOCALITIES" %}</h1>
     </header>
     <section class="w3-responsive">
         <table class="w3-table-all w3-bordered">

@@ -44,9 +44,9 @@ def test_locality_list_includes_geological_times_and_accession_counts(client):
     target = next(loc for loc in rendered_localities if loc.pk == miocene.pk)
 
     assert target.accession_count == 2
-    assert target.geological_times_abbreviation_display() == "M/Pi"
+    assert target.geological_times_label_display() == "Miocene/Pliocene"
     content = response.content.decode()
-    assert "M/Pi" in content
+    assert "Miocene/Pliocene" in content
     assert ">2<" in content
 
 
@@ -84,4 +84,4 @@ def test_locality_detail_displays_geological_times(client):
     assert response.status_code == 200
     content = response.content.decode()
     assert "Geological time" in content
-    assert "M/Pi" in content
+    assert "Miocene/Pliocene" in content

@@ -3654,7 +3654,7 @@ class LocalityPrintView(TemplateView):
             {
                 "name": locality.name,
                 "abbreviation": locality.abbreviation,
-                "ages": "/".join(locality.geological_times),
+                "ages": "/".join(locality.get_geological_times_display()),
             }
             for locality in localities
         ]

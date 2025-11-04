@@ -707,7 +707,7 @@ class LocalityAdmin(HistoricalImportExportAdmin):
     list_display = (
         'abbreviation',
         'name',
-        'geological_times_abbreviation_display',
+        'geological_times_label_display',
     )
     search_fields = ('abbreviation', 'name')
     list_filter = (GeologicalTimeListFilter,)

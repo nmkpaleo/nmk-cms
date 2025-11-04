@@ -569,22 +569,51 @@ class GeologicalTimesWidget(Widget):
         if not text:
             return []
         selections = [part.strip() for part in text.split(self.separator) if part.strip()]
-        invalid = [item for item in selections if item not in Locality.GeologicalTime.values]
+        normalized: list[str] = []
+        invalid: list[str] = []
+        label_map = {
+            geological_time.label.lower(): geological_time.value
+            for geological_time in Locality.GeologicalTime
+        }
+        allowed_values = set(Locality.GeologicalTime.values)
+        for item in selections:
+            lower_item = item.lower()
+            if item in allowed_values:
+                normalized.append(item)
+                continue
+            mapped = label_map.get(lower_item)
+            if mapped:
+                normalized.append(mapped)
+                continue
+            invalid.append(item)
         if invalid:
-            allowed = ", ".join(Locality.GeologicalTime.values)
+            allowed_codes = ", ".join(Locality.GeologicalTime.values)
+            allowed_labels = ", ".join(
+                geological_time.label for geological_time in Locality.GeologicalTime
+            )
             raise ValueError(
                 _(
-                    "Invalid geological time value(s): %(invalid)s. Expected one of: %(allowed)s."
+                    "Invalid geological time value(s): %(invalid)s. Expected abbreviations (%(allowed_codes)s) or labels (%(allowed_labels)s)."
                 )
-                % {"invalid": ", ".join(invalid), "allowed": allowed}
+                % {
+                    "invalid": ", ".join(invalid),
+                    "allowed_codes": allowed_codes,
+                    "allowed_labels": allowed_labels,
+                }
             )
-        return selections
+        return normalized
 
     def render(self, value, obj=None, **kwargs):  # type: ignore[override]
         if not value:
             return ""
         if isinstance(value, list):
-            return self.separator.join(value)
+            labels: list[str] = []
+            for item in value:
+                try:
+                    labels.append(Locality.GeologicalTime(item).label)
+                except ValueError:
+                    labels.append(str(item))
+            return self.separator.join(labels)
         return str(value)
 
 

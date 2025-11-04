@@ -249,11 +249,14 @@ class Locality(BaseModel):
                 display_labels.append(value)
         return display_labels
 
+    def geological_times_label_display(self) -> str:
+        return "/".join(self.get_geological_times_display())
+
+    geological_times_label_display.short_description = _("Geological time(s)")
+    geological_times_label_display.admin_order_field = "geological_times"
+
     def geological_times_abbreviation_display(self) -> str:
         return "/".join(self.geological_times)
-
-    geological_times_abbreviation_display.short_description = _("Geological time(s)")
-    geological_times_abbreviation_display.admin_order_field = "geological_times"
 
 
 class Place(BaseModel):
