@@ -144,7 +144,7 @@ from django.db.models import Count
 from cms.merge import MERGE_REGISTRY, MergeMixin
 from cms.merge.fuzzy import score_candidates
 from cms.resources import FieldSlipResource
-from .utils import build_history_entries
+from .utils import build_accession_identification_maps, build_history_entries
 from cms.utils import generate_accessions_from_series
 from cms.upload_processing import process_file
 from cms.ocr_processing import process_pending_scans, describe_accession_conflicts
@@ -861,14 +861,14 @@ def prefetch_accession_related(qs):
     """Prefetch accession row data needed for taxon and element summaries."""
     accession_row_prefetch = Prefetch(
         'accessionrow_set',
-        queryset=AccessionRow.objects.prefetch_related(
+        queryset=AccessionRow.objects.select_related('storage').prefetch_related(
             Prefetch(
                 'natureofspecimen_set',
                 queryset=NatureOfSpecimen.objects.select_related('element')
             ),
             Prefetch(
                 'identification_set',
-                queryset=Identification.objects.all().order_by('-date_identified', '-id')
+                queryset=Identification.objects.select_related('taxon_record').order_by('-date_identified', '-id')
             ),
         )
     )
@@ -1538,56 +1538,71 @@ class AccessionDetailView(DetailView):
     context_object_name = 'accession'
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        qs = super().get_queryset().select_related(
+            'collection',
+            'specimen_prefix',
+            'accessioned_by',
+        )
         user = self.request.user
         if user.is_authenticated and (
             user.is_superuser or
             user.groups.filter(name__in=["Collection Managers", "Curators"]).exists()
         ):
-            return qs
-        return qs.filter(is_published=True)
+            filtered = qs
+        else:
+            filtered = qs.filter(is_published=True)
+
+        return prefetch_accession_related(filtered).prefetch_related(
+            Prefetch(
+                'fieldslip_links',
+                queryset=AccessionFieldSlip.objects.select_related('fieldslip'),
+            ),
+            Prefetch(
+                'specimen_geologies',
+                queryset=SpecimenGeology.objects.select_related(
+                    'earliest_geological_context',
+                    'latest_geological_context',
+                ),
+            ),
+            Prefetch(
+                'comments',
+                queryset=Comment.objects.select_related('subject').order_by('-created_on'),
+            ),
+            Prefetch(
+                'accessionreference_set',
+                queryset=AccessionReference.objects.select_related('reference'),
+            ),
+        )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["related_fieldslips"] = self.object.fieldslip_links.all()
-        context['references'] = AccessionReference.objects.filter(accession=self.object).select_related('reference')
-        context['geologies'] = SpecimenGeology.objects.filter(accession=self.object)
-        context['comments'] = Comment.objects.filter(specimen_no=self.object)
-        accession_rows = AccessionRow.objects.filter(accession=self.object).prefetch_related(
-            Prefetch(
-                'natureofspecimen_set',
-                queryset=NatureOfSpecimen.objects.select_related('element'),
-            )
-        )
+        accession = self.object
+        related_fieldslips = list(accession.fieldslip_links.all())
+        references = list(accession.accessionreference_set.all())
+        geologies = list(accession.specimen_geologies.all())
+        comments = list(accession.comments.all())
+        accession_rows = list(accession.accessionrow_set.all())
+
+        (
+            first_identifications,
+            identification_counts,
+            taxonomy_map,
+        ) = build_accession_identification_maps(accession_rows)
+
+        context["related_fieldslips"] = related_fieldslips
+        context['references'] = references
+        context['geologies'] = geologies
+        context['comments'] = comments
         # Form for adding existing FieldSlips
         context["add_fieldslip_form"] = AccessionFieldSlipForm()
-
-        # Store first identification and identification count per accession row
-        first_identifications = {}
-        identification_counts = {}
-        taxonomy_dict = {}
-
-        for accession_row in accession_rows:
-            # Get all identifications for this accession row (already sorted)
-            row_identifications = Identification.objects.filter(accession_row=accession_row).order_by('-date_identified')
-
-            # Store the first identification if available
-            first_identification = row_identifications.first()
-            if first_identification:
-                first_identifications[accession_row.id] = first_identification
-                identification_counts[accession_row.id] = row_identifications.count()
-
-                # Retrieve taxonomy based on taxon_name
-                taxon_name = first_identification.taxon
-                if taxon_name:
-                    taxonomy_dict[first_identification.id] = Taxon.objects.filter(taxon_name__iexact=taxon_name).first()
 
         # Pass filtered data to template
         context['accession_rows'] = accession_rows
         context['first_identifications'] = first_identifications  # First identifications per accession row
         context['identification_counts'] = identification_counts  # Number of identifications per accession row
-        context['taxonomy'] = taxonomy_dict  # Maps first identifications to Taxon objects
-        
+        context['taxonomy'] = taxonomy_map  # Maps first identifications to Taxon objects
+        context['taxonomy_map'] = taxonomy_map
+
         return context
 
 from django.contrib.auth.mixins import LoginRequiredMixin

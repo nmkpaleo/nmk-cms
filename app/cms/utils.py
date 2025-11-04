@@ -1,11 +1,19 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Dict, Iterable, Tuple
 
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Q
 
-from cms.models import Accession, AccessionNumberSeries
+from cms.models import (
+    Accession,
+    AccessionNumberSeries,
+    AccessionRow,
+    Identification,
+    Taxon,
+)
+
 
 def generate_accessions_from_series(series_user, count, collection, specimen_prefix, creator_user=None):
     try:
@@ -40,6 +48,7 @@ def generate_accessions_from_series(series_user, count, collection, specimen_pre
         acc.save()
 
     return accessions
+
 
 def get_active_series_for_user(user):
     return AccessionNumberSeries.objects.filter(user=user, is_active=True).first()
@@ -105,3 +114,70 @@ def normalise_yes_no(value: Any | None) -> bool:
         return False
     return str(value).strip().lower() in {"yes", "true", "1", "y", "t"}
 
+
+def build_accession_identification_maps(
+    rows: Iterable[AccessionRow],
+) -> Tuple[Dict[int, Identification], Dict[int, int], Dict[int, Taxon]]:
+    """Return cached identification metadata for accession rows.
+
+    The return value contains three dictionaries keyed by accession row ID and
+    identification ID respectively:
+
+    ``first_identifications``
+        Maps each row ID to its most recent identification (if any).
+
+    ``identification_counts``
+        Maps each row ID to the total number of related identifications.
+
+    ``taxonomy_map``
+        Maps the identification ID for the first identification to a resolved
+        :class:`Taxon` instance. The taxon is sourced from the
+        ``taxon_record`` relation when present and falls back to a batched
+        lookup on ``taxon`` values when that relation is absent.
+    """
+
+    first_identifications: Dict[int, Identification] = {}
+    identification_counts: Dict[int, int] = {}
+    taxonomy_map: Dict[int, Taxon] = {}
+    pending_taxa: Dict[int, str] = {}
+
+    for row in rows:
+        identifications = list(row.identification_set.all())
+        if not identifications:
+            continue
+
+        first_identification = identifications[0]
+        first_identifications[row.id] = first_identification
+        identification_counts[row.id] = len(identifications)
+
+        taxon_record = first_identification.taxon_record
+        if taxon_record is not None:
+            taxonomy_map[first_identification.id] = taxon_record
+            continue
+
+        taxon_name = (first_identification.taxon or "").strip()
+        if taxon_name:
+            pending_taxa[first_identification.id] = taxon_name
+
+    if pending_taxa:
+        query = Q()
+        seen_names = set()
+        for name in pending_taxa.values():
+            lowered = name.lower()
+            if lowered in seen_names:
+                continue
+            seen_names.add(lowered)
+            query |= Q(taxon_name__iexact=name)
+
+        if query:
+            matched_taxa = Taxon.objects.filter(query)
+            taxonomy_lookup: Dict[str, Taxon] = {}
+            for taxon in matched_taxa:
+                taxonomy_lookup.setdefault(taxon.taxon_name.lower(), taxon)
+
+            for identification_id, taxon_name in pending_taxa.items():
+                match = taxonomy_lookup.get(taxon_name.lower())
+                if match is not None:
+                    taxonomy_map[identification_id] = match
+
+    return first_identifications, identification_counts, taxonomy_map
