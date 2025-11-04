@@ -67,3 +67,21 @@ def test_locality_print_view_orders_two_columns_and_shows_legend(client):
     assert legend_codes == set(Locality.GeologicalTime.values)
     content = response.content.decode()
     assert "LIST OF CODE MARKS FOR KENYAN FOSSIL LOCALITIES" in content
+
+
+def test_locality_detail_displays_geological_times(client):
+    locality = create_locality(
+        abbreviation="LP",
+        name="Loop",
+        geological_times=[
+            Locality.GeologicalTime.MIOCENE,
+            Locality.GeologicalTime.PLIOCENE,
+        ],
+    )
+
+    response = client.get(reverse("locality_detail", args=[locality.pk]))
+
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert "Geological time" in content
+    assert "M/Pi" in content

@@ -2,7 +2,7 @@ from typing import Any
 
 from django.contrib import admin, messages
 from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
-from django.db.models import Count, OuterRef, Exists
+from django.db.models import Count, OuterRef, Exists, Q
 from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import redirect
@@ -709,9 +709,31 @@ class LocalityAdmin(HistoricalImportExportAdmin):
         'name',
         'geological_times_abbreviation_display',
     )
-    search_fields = ('abbreviation', 'name', 'geological_times__icontains')
+    search_fields = ('abbreviation', 'name')
     list_filter = (GeologicalTimeListFilter,)
     ordering = ('abbreviation', 'name')
+
+    def get_search_results(self, request, queryset, search_term):
+        queryset, use_distinct = super().get_search_results(
+            request, queryset, search_term
+        )
+        normalized = (search_term or "").strip().lower()
+        if not normalized:
+            return queryset, use_distinct
+
+        matches: list[str] = []
+        for geological_time in Locality.GeologicalTime:
+            if normalized in geological_time.value.lower() or normalized in geological_time.label.lower():
+                matches.append(geological_time.value)
+
+        if matches:
+            conditions = Q()
+            for value in matches:
+                conditions |= Q(geological_times__contains=[value])
+            queryset = queryset | self.model.objects.filter(conditions)
+            use_distinct = True
+
+        return queryset, use_distinct
 
 
 class PlaceAdmin(HistoricalImportExportAdmin):

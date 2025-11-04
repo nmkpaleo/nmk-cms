@@ -36,6 +36,16 @@
               <dt class="w3-text-gray">{% trans "Name" %}</dt>
               <dd class="w3-margin-0">{{ locality.name }}</dd>
             </div>
+            {% if locality.geological_times %}
+              <div class="w3-margin-bottom">
+                <dt class="w3-text-gray">{% trans "Geological time" %}</dt>
+                <dd class="w3-margin-0">
+                  <span title="{{ locality.get_geological_times_display|join:", " }}">
+                    {{ locality.geological_times_abbreviation_display }}
+                  </span>
+                </dd>
+              </div>
+            {% endif %}
             {% if locality.description %}
               <div class="w3-margin-bottom">
                 <dt class="w3-text-gray">{% trans "Description" %}</dt>
