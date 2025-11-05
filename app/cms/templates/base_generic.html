@@ -35,15 +35,14 @@
           <span class="sr-only">{% trans "National Museums of Kenya home" %}</span>
           <img src="{% static 'images/logo.jpg' %}" class="logo_image" alt="{% trans 'National Museums of Kenya logo' %}">
         </a>
-        <div class="nav-items w3-hide-small">
-          {% include "includes/navigation_links.html" with layout="desktop" %}
-        </div>
-        <button id="nav-toggle" class="w3-bar-item w3-button w3-hide-large w3-hide-medium" type="button" aria-expanded="false" aria-controls="primary-navigation">
-          <span class="fa fa-bars" aria-hidden="true"></span>
-          <span class="sr-only">{% trans "Toggle navigation" %}</span>
-        </button>
-
         {% block sidebar %}
+          <div class="nav-items w3-hide-small">
+            {% include "includes/navigation_links.html" with layout="desktop" %}
+          </div>
+          <button id="nav-toggle" class="w3-bar-item w3-button w3-hide-large w3-hide-medium" type="button" aria-expanded="false" aria-controls="primary-navigation">
+            <span class="fa fa-bars" aria-hidden="true"></span>
+            <span class="sr-only">{% trans "Toggle navigation" %}</span>
+          </button>
           <div id="primary-navigation" class="w3-bar-block w3-white w3-hide w3-hide-large w3-hide-medium" data-collapsed="true">
             {% include "includes/navigation_links.html" with layout="mobile" %}
           </div>
