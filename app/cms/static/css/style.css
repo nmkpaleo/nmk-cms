@@ -5,6 +5,51 @@
     height: auto;
 }
 
+/* Navigation: align desktop items on a single row while preserving mobile stacking */
+.site-navigation {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.site-navigation .nav-items {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-left: auto;
+}
+
+.site-navigation .nav-items .nav-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.site-navigation .nav-items .nav-dropdown {
+    display: inline-flex;
+    align-items: stretch;
+}
+
+.site-navigation .nav-items .nav-user-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.site-navigation .nav-items .nav-auth {
+    display: inline-flex;
+    align-items: stretch;
+}
+
+.site-navigation #nav-toggle {
+    margin-left: auto;
+}
+
+.site-navigation #primary-navigation {
+    flex-basis: 100%;
+}
+
 /* Navigation: strip default margins so the logout form sits flush in the W3 bar */
 .logout-form {
     margin: 0;
