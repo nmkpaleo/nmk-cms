@@ -269,7 +269,7 @@ Comprehensive documentation is available in the `docs/` directory:
 
 ## Common Pitfalls to Avoid
 
-1. **Line Endings:** Entrypoint scripts must use Unix (LF) line endings, not Windows (CRLF)
+1. **Line Endings:** Entrypoint scripts (`app/scripts/entrypoint.sh` and `app/scripts/entrypoint.prod.sh`) must use Unix (LF) line endings, not Windows (CRLF)
 2. **Migration Conflicts:** Always pull latest before creating migrations
 3. **Static Files:** Run `collectstatic` after changing CSS/JS in production
 4. **Database Queries:** Watch for N+1 problems; use `select_related`/`prefetch_related`
