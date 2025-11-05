@@ -32,6 +32,7 @@ from cms.views import (
     reference_create,
     reference_edit,
     LocalityListView,
+    LocalityPrintView,
     LocalityDetailView,
     locality_create,
     locality_edit,
@@ -139,6 +140,7 @@ urlpatterns = [
 
 
     path('localities/', LocalityListView.as_view(), name='locality_list'),
+    path('localities/print/', LocalityPrintView.as_view(), name='locality_print'),
     path('localities/new/', locality_create, name='locality_create'),
     path('localities/<int:pk>/', LocalityDetailView.as_view(), name='locality_detail'),
     path('localities/<int:pk>/edit/', locality_edit, name='locality_edit'),

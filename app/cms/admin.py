@@ -2,7 +2,7 @@ from typing import Any
 
 from django.contrib import admin, messages
 from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
-from django.db.models import Count, OuterRef, Exists
+from django.db.models import Count, OuterRef, Exists, Q
 from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import redirect
@@ -688,11 +688,52 @@ class IdentificationAdmin(HistoricalImportExportAdmin):
     ordering = ('accession_row', 'date_identified')
 
 # Locality Model
+class GeologicalTimeListFilter(admin.SimpleListFilter):
+    title = _("Geological time")
+    parameter_name = "geological_time"
+
+    def lookups(self, request, model_admin):
+        return Locality.GeologicalTime.choices
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if not value:
+            return queryset
+        return queryset.filter(geological_times__contains=[value])
+
+
 class LocalityAdmin(HistoricalImportExportAdmin):
     resource_class = LocalityResource
-    list_display = ('abbreviation', 'name')
+    list_display = (
+        'abbreviation',
+        'name',
+        'geological_times_label_display',
+    )
     search_fields = ('abbreviation', 'name')
+    list_filter = (GeologicalTimeListFilter,)
     ordering = ('abbreviation', 'name')
+
+    def get_search_results(self, request, queryset, search_term):
+        queryset, use_distinct = super().get_search_results(
+            request, queryset, search_term
+        )
+        normalized = (search_term or "").strip().lower()
+        if not normalized:
+            return queryset, use_distinct
+
+        matches: list[str] = []
+        for geological_time in Locality.GeologicalTime:
+            if normalized in geological_time.value.lower() or normalized in geological_time.label.lower():
+                matches.append(geological_time.value)
+
+        if matches:
+            conditions = Q()
+            for value in matches:
+                conditions |= Q(geological_times__contains=[value])
+            queryset = queryset | self.model.objects.filter(conditions)
+            use_distinct = True
+
+        return queryset, use_distinct
 
 
 class PlaceAdmin(HistoricalImportExportAdmin):

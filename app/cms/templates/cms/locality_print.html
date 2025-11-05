@@ -1,0 +1,156 @@
+{% extends "base_generic.html" %}
+{% load i18n static %}
+
+{% block title %}{% trans "Printable locality list" %}{% endblock %}
+
+{% block script %}
+{{ block.super }}
+<style>
+    .print-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1.5rem;
+        flex-wrap: wrap;
+        text-align: center;
+    }
+
+    .print-heading__title {
+        flex: 1 1 auto;
+        margin: 0;
+    }
+
+    .print-heading__logo {
+        flex: 0 0 auto;
+    }
+
+    .print-heading__logo img {
+        max-height: 96px;
+    }
+
+    .print-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 1.5rem;
+    }
+
+    @media (max-width: 600px) {
+        .print-heading {
+            justify-content: center;
+        }
+    }
+
+    @media print {
+        .site-header,
+        #primary-navigation,
+        #nav-toggle {
+            display: none !important;
+        }
+
+        body {
+            margin: 0;
+        }
+
+        .print-actions {
+            display: none !important;
+        }
+
+        .print-heading {
+            text-align: left;
+        }
+
+        .print-heading__logo img {
+            max-height: 72px;
+        }
+    }
+</style>
+<script>
+    window.addEventListener("DOMContentLoaded", function () {
+        const printButton = document.getElementById("locality-print-button");
+        if (printButton) {
+            printButton.addEventListener("click", function () {
+                window.print();
+            });
+        }
+    });
+</script>
+{% endblock %}
+
+{% block content %}
+<main class="w3-container w3-margin-top" role="main">
+    <header class="w3-margin-bottom print-heading" role="banner">
+        <div class="print-heading__logo">
+            <img src="{% static 'images/logo.jpg' %}" alt="{% trans 'National Museums of Kenya logo' %}" />
+        </div>
+        <h1 class="w3-xxlarge print-heading__title">{% trans "LIST OF CODE MARKS FOR KENYAN FOSSIL LOCALITIES" %}</h1>
+    </header>
+    <div class="print-actions" role="region" aria-label="{% trans 'Print controls' %}">
+        <button
+            type="button"
+            id="locality-print-button"
+            class="w3-button w3-blue w3-round"
+        >
+            <span class="fa fa-print" aria-hidden="true"></span>
+            <span class="w3-margin-left">{% trans "Print" %}</span>
+        </button>
+    </div>
+    <section class="w3-responsive">
+        <table class="w3-table-all w3-bordered">
+            <caption class="w3-hide">{% trans "Printable list of localities with abbreviations and geological ages" %}</caption>
+            <thead>
+                <tr>
+                    <th scope="col">{% trans "Locality" %}</th>
+                    <th scope="col">{% trans "Abr." %}</th>
+                    <th scope="col">{% trans "Age" %}</th>
+                    <th scope="col">{% trans "Locality" %}</th>
+                    <th scope="col">{% trans "Abr." %}</th>
+                    <th scope="col">{% trans "Age" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for left, right in locality_rows %}
+                    <tr>
+                        <td>{{ left.name }}</td>
+                        <td>{{ left.abbreviation }}</td>
+                        <td>
+                            {% if left.ages %}
+                                {{ left.ages }}
+                            {% else %}
+                                <span class="w3-text-grey">&mdash;</span>
+                            {% endif %}
+                        </td>
+                        {% if right %}
+                            <td>{{ right.name }}</td>
+                            <td>{{ right.abbreviation }}</td>
+                            <td>
+                                {% if right.ages %}
+                                    {{ right.ages }}
+                                {% else %}
+                                    <span class="w3-text-grey">&mdash;</span>
+                                {% endif %}
+                            </td>
+                        {% else %}
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                        {% endif %}
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="6" class="w3-center">{% trans "No localities available." %}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+    <footer class="w3-margin-top">
+        <p class="w3-small">
+            {% for item in geological_time_legend %}
+                <span>{{ item.code }} = {{ item.label }}{% if not forloop.last %}; {% endif %}</span>
+            {% empty %}
+                <span>{% trans "No geological times defined." %}</span>
+            {% endfor %}
+        </p>
+    </footer>
+</main>
+{% endblock %}

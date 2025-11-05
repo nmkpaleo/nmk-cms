@@ -34,9 +34,11 @@ from import_export.widgets import (
     DateTimeWidget,
     ForeignKeyWidget,
     ManyToManyWidget,
+    Widget,
 )
 from datetime import datetime
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 
 class DayFirstDateTimeWidget(DateTimeWidget):
@@ -557,14 +559,80 @@ class IdentificationResource(resources.ModelResource):
         )
 
 
+class GeologicalTimesWidget(Widget):
+    separator = "/"
+
+    def clean(self, value, row=None, *args, **kwargs):  # type: ignore[override]
+        if value is None:
+            return []
+        text = str(value).strip()
+        if not text:
+            return []
+        selections = [part.strip() for part in text.split(self.separator) if part.strip()]
+        normalized: list[str] = []
+        invalid: list[str] = []
+        label_map = {
+            str(geological_time.label).lower(): geological_time.value
+            for geological_time in Locality.GeologicalTime
+        }
+        allowed_values = set(Locality.GeologicalTime.values)
+        for item in selections:
+            lower_item = item.lower()
+            if item in allowed_values:
+                normalized.append(item)
+                continue
+            mapped = label_map.get(lower_item)
+            if mapped:
+                normalized.append(mapped)
+                continue
+            invalid.append(item)
+        if invalid:
+            allowed_codes = ", ".join(Locality.GeologicalTime.values)
+            allowed_labels = ", ".join(
+                str(geological_time.label)
+                for geological_time in Locality.GeologicalTime
+            )
+            raise ValueError(
+                _(
+                    "Invalid geological time value(s): %(invalid)s. Expected abbreviations (%(allowed_codes)s) or labels (%(allowed_labels)s)."
+                )
+                % {
+                    "invalid": ", ".join(invalid),
+                    "allowed_codes": allowed_codes,
+                    "allowed_labels": allowed_labels,
+                }
+            )
+        return normalized
+
+    def render(self, value, obj=None, **kwargs):  # type: ignore[override]
+        if not value:
+            return ""
+        if isinstance(value, list):
+            labels: list[str] = []
+            for item in value:
+                try:
+                    label = Locality.GeologicalTime(item).label
+                except ValueError:
+                    label = item
+                labels.append(str(label))
+            return self.separator.join(labels)
+        return str(value)
+
+
 class LocalityResource(resources.ModelResource):
+    geological_times = fields.Field(
+        column_name="geological_times",
+        attribute="geological_times",
+        widget=GeologicalTimesWidget(),
+    )
+
     class Meta:
         model = Locality
         skip_unchanged = True
         report_skipped = False
         import_id_fields = ("abbreviation",)
-        fields = ("name", "abbreviation")
-        export_order = ("abbreviation", "name")
+        fields = ("name", "abbreviation", "geological_times")
+        export_order = ("abbreviation", "name", "geological_times")
 
 
 class PlaceResource(resources.ModelResource):

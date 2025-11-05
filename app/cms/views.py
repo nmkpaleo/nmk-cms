@@ -3630,7 +3630,53 @@ class LocalityListView(FilterView):
     context_object_name = 'localities'
     paginate_by = 10
     filterset_class = LocalityFilter
+    ordering = ("name",)
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        return queryset.annotate(
+            accession_count=Count("accession", distinct=True)
+        ).order_by("name")
+
+
+class LocalityPrintView(TemplateView):
+    template_name = "cms/locality_print.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        localities = (
+            Locality.objects.all()
+            .order_by("name")
+            .annotate(accession_count=Count("accession", distinct=True))
+        )
+
+        locality_entries = [
+            {
+                "name": locality.name,
+                "abbreviation": locality.abbreviation,
+                "ages": "/".join(
+                    str(label) for label in locality.get_geological_times_display()
+                ),
+            }
+            for locality in localities
+        ]
+
+        rows = []
+        for index in range(0, len(locality_entries), 2):
+            left_entry = locality_entries[index]
+            right_entry = (
+                locality_entries[index + 1]
+                if index + 1 < len(locality_entries)
+                else None
+            )
+            rows.append((left_entry, right_entry))
+
+        context["locality_rows"] = rows
+        context["geological_time_legend"] = [
+            {"code": code, "label": str(label)}
+            for code, label in Locality.GeologicalTime.choices
+        ]
+        return context
 
 
 class LocalityDetailView(DetailView):

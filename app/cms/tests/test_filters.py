@@ -1,6 +1,6 @@
 import pytest
 
-from app.cms.filters import AccessionFilter, DrawerRegisterFilter
+from app.cms.filters import AccessionFilter, DrawerRegisterFilter, LocalityFilter
 from app.cms.models import (
     Accession,
     AccessionRow,
@@ -137,3 +137,63 @@ def test_drawer_register_filter_taxa_queryset_only_active_orders():
     assert order_taxon in taxa_queryset
     assert not taxa_queryset.filter(is_active=False).exists()
     assert not taxa_queryset.filter(status=TaxonStatus.SYNONYM).exists()
+
+
+def test_locality_filter_geological_times_returns_matching_localities():
+    alpha = Locality.objects.create(
+        abbreviation="LA",
+        name="Alpha",
+        geological_times=[Locality.GeologicalTime.MIOCENE],
+    )
+    beta = Locality.objects.create(
+        abbreviation="LB",
+        name="Beta",
+        geological_times=[Locality.GeologicalTime.HOLOCENE],
+    )
+    gamma = Locality.objects.create(
+        abbreviation="LC",
+        name="Gamma",
+        geological_times=[
+            Locality.GeologicalTime.MIOCENE,
+            Locality.GeologicalTime.PLIOCENE,
+        ],
+    )
+
+    filterset = LocalityFilter(
+        data={"geological_times": [Locality.GeologicalTime.MIOCENE]},
+        queryset=Locality.objects.all(),
+    )
+
+    assert set(filterset.qs) == {alpha, gamma}
+    assert beta not in filterset.qs
+
+
+def test_locality_filter_geological_times_accepts_multiple_values():
+    alpha = Locality.objects.create(
+        abbreviation="L1",
+        name="Alpha",
+        geological_times=[Locality.GeologicalTime.MIOCENE],
+    )
+    beta = Locality.objects.create(
+        abbreviation="L2",
+        name="Beta",
+        geological_times=[Locality.GeologicalTime.PLIOCENE],
+    )
+    gamma = Locality.objects.create(
+        abbreviation="L3",
+        name="Gamma",
+        geological_times=[Locality.GeologicalTime.PLEISTOCENE],
+    )
+
+    filterset = LocalityFilter(
+        data={
+            "geological_times": [
+                Locality.GeologicalTime.PLIOCENE,
+                Locality.GeologicalTime.PLEISTOCENE,
+            ]
+        },
+        queryset=Locality.objects.all(),
+    )
+
+    assert set(filterset.qs) == {beta, gamma}
+    assert alpha not in filterset.qs
