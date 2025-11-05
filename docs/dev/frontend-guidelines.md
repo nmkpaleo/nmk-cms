@@ -122,7 +122,7 @@ The matrix below expands on individual template expectations, context variables,
 ### Local Stylesheets
 | File | Path | Purpose | Consumers |
 | --- | --- | --- | --- |
-| CMS global styles | `app/cms/static/css/style.css` | Minimal overrides for header logo sizing, logout form alignment, Select2 width/stacking, and drag handles. | Loaded via `base_generic.html` for all CMS pages and public landing. |
+| CMS global styles | `app/cms/static/css/style.css` | Flex-aligns the header navigation so the logo, menu links, and auth controls sit on a single row at desktop widths; constrains the logo, resets logout form margin, and maintains Select2 width/stacking plus drag handles. | Loaded via `base_generic.html` for all CMS pages and public landing. |
 | — | — | — | The merge admin and reporting UIs now rely entirely on W3.CSS utilities; dedicated stylesheets were removed in favour of shared markup classes. |
 
 ### Redundancy and Consolidation Opportunities
@@ -149,6 +149,7 @@ The matrix below expands on individual template expectations, context variables,
 ## Custom CSS inventory
 The shared stylesheet `app/cms/static/css/style.css` intentionally remains small. Only the following helpers are allowed:
 
+- `.site-navigation`, `.nav-items`, `.nav-link`, `.nav-user-label`, `.nav-auth`, `.nav-dropdown` – convert the W3 bar into a flex toolbar so the logo, links, and auth controls remain on one row on larger screens while preserving mobile stacking.
 - `.logo_image` – constrains the navigation logo width so it fits within the bar.
 - `.logout-form` – removes default margins around the logout button’s form wrapper so it aligns with bar items.
 - `.sr-only` – provides an accessible screen-reader-only helper that W3.CSS does not supply.
