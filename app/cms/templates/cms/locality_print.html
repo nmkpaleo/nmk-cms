@@ -28,6 +28,12 @@
         max-height: 96px;
     }
 
+    .print-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 1.5rem;
+    }
+
     @media (max-width: 600px) {
         .print-heading {
             justify-content: center;
@@ -45,6 +51,10 @@
             margin: 0;
         }
 
+        .print-actions {
+            display: none !important;
+        }
+
         .print-heading {
             text-align: left;
         }
@@ -54,6 +64,16 @@
         }
     }
 </style>
+<script>
+    window.addEventListener("DOMContentLoaded", function () {
+        const printButton = document.getElementById("locality-print-button");
+        if (printButton) {
+            printButton.addEventListener("click", function () {
+                window.print();
+            });
+        }
+    });
+</script>
 {% endblock %}
 
 {% block content %}
@@ -64,6 +84,16 @@
         </div>
         <h1 class="w3-xxlarge print-heading__title">{% trans "LIST OF CODE MARKS FOR KENYAN FOSSIL LOCALITIES" %}</h1>
     </header>
+    <div class="print-actions" role="region" aria-label="{% trans 'Print controls' %}">
+        <button
+            type="button"
+            id="locality-print-button"
+            class="w3-button w3-blue w3-round"
+        >
+            <span class="fa fa-print" aria-hidden="true"></span>
+            <span class="w3-margin-left">{% trans "Print" %}</span>
+        </button>
+    </div>
     <section class="w3-responsive">
         <table class="w3-table-all w3-bordered">
             <caption class="w3-hide">{% trans "Printable list of localities with abbreviations and geological ages" %}</caption>
