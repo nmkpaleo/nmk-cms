@@ -26,6 +26,7 @@
     gap: 0.25rem;
 }
 
+/* Navigation: stretch dropdown to match W3.CSS button height for consistent bar alignment */
 .site-navigation .nav-items .nav-dropdown {
     display: inline-flex;
     align-items: stretch;
