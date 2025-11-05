@@ -14,8 +14,11 @@ def test_responsive_css_contains_large_screen_constraint():
     # Check for media query targeting large screens (993px+)
     assert "@media screen and (min-width: 993px)" in content
     
-    # Check for max-width constraint
-    assert "max-width: 900px" in content
+    # Check for max-width constraint (updated to 1280px for ~10% margins)
+    assert "max-width: 1280px" in content
+    
+    # Check for width percentage constraint
+    assert "width: 80%" in content
     
     # Check for centering with auto margins
     assert "margin-left: auto" in content
