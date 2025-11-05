@@ -89,3 +89,15 @@
 .drag-handle:active {
     cursor: grabbing;
 }
+
+/* Responsive layout: constrain content width on large screens for better readability */
+/* Apply to screens 993px and wider (W3.CSS large breakpoint) */
+/* Uses 80% width to maintain ~10% margins on each side */
+@media screen and (min-width: 993px) {
+    .site-main .container-fluid {
+        max-width: 1280px;
+        width: 80%;
+        margin-left: auto;
+        margin-right: auto;
+    }
+}
