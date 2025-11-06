@@ -101,3 +101,22 @@
         margin-right: auto;
     }
 }
+
+/* Accession media preview: floating enlarged image for hover/focus interactions */
+.accession-media-hover-preview {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    max-width: 360px;
+    pointer-events: none;
+}
+
+.accession-media-hover-preview.is-visible {
+    display: block;
+}
+
+.accession-media-hover-preview img {
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+}

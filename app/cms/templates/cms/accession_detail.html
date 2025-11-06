@@ -1,5 +1,5 @@
 {% extends "base_generic.html" %}
-{% load i18n custom_filters user_tags %}
+{% load i18n custom_filters user_tags static %}
 
 {% block title %}{% blocktrans with accession_number=accession %}Accession {{ accession_number }}{% endblocktrans %}{% endblock %}
 
@@ -86,13 +86,19 @@
     </div>
   {% endif %}
 
-  <div id="media-hover-preview" class="w3-card w3-round-large w3-white w3-padding" style="display: none; position: fixed; z-index: 10; max-width: 360px;" aria-hidden="true">
+  <div
+    id="media-hover-preview"
+    class="accession-media-hover-preview w3-card w3-round-large w3-white w3-padding"
+    role="tooltip"
+    aria-hidden="true"
+  >
     <img id="media-hover-preview-img" src="" alt="" class="w3-image" />
   </div>
 </main>
 {% endblock %}
 
 {% block extra_scripts %}
+<script src="{% static 'cms/js/accession_media_preview.js' %}" defer></script>
 <script>
   function openFieldSlipModal() {
     const url = "{% url 'accession_create_fieldslip' accession.pk %}";
@@ -109,75 +115,5 @@
     closeFieldSlipModal();
     location.reload();
   }
-
-  document.addEventListener("DOMContentLoaded", function () {
-    const previewContainer = document.getElementById("media-hover-preview");
-    const previewImage = document.getElementById("media-hover-preview-img");
-    const triggers = document.querySelectorAll(".media-preview-trigger");
-    const offset = 16;
-
-    function positionPreview(trigger, event) {
-      let x;
-      let y;
-
-      if (event.type === "mousemove" || event.type === "mouseenter") {
-        x = event.clientX + offset;
-        y = event.clientY + offset;
-      } else {
-        const rect = trigger.getBoundingClientRect();
-        x = rect.right + offset;
-        y = rect.top;
-      }
-
-      const containerRect = previewContainer.getBoundingClientRect();
-      const maxX = window.innerWidth - containerRect.width - offset;
-      const maxY = window.innerHeight - containerRect.height - offset;
-
-      const clampedX = Math.max(offset, Math.min(x, maxX));
-      const clampedY = Math.max(offset, Math.min(y, maxY));
-
-      previewContainer.style.left = `${clampedX}px`;
-      previewContainer.style.top = `${clampedY}px`;
-    }
-
-    function hidePreview() {
-      previewContainer.style.display = "none";
-      previewContainer.setAttribute("aria-hidden", "true");
-      previewImage.removeAttribute("src");
-      previewImage.setAttribute("alt", "");
-    }
-
-    function showPreview(event) {
-      const trigger = event.currentTarget;
-      const previewUrl = trigger.getAttribute("data-media-preview");
-
-      if (!previewUrl) {
-        return;
-      }
-
-      previewImage.setAttribute("src", previewUrl);
-      previewImage.setAttribute("alt", trigger.getAttribute("data-media-alt") || "");
-      previewContainer.style.display = "block";
-      previewContainer.setAttribute("aria-hidden", "false");
-      positionPreview(trigger, event);
-    }
-
-    triggers.forEach(function (trigger) {
-      trigger.addEventListener("mouseenter", showPreview);
-      trigger.addEventListener("mousemove", function (event) {
-        if (previewContainer.style.display === "block") {
-          positionPreview(trigger, event);
-        }
-      });
-      trigger.addEventListener("mouseleave", hidePreview);
-      trigger.addEventListener("focus", function (event) {
-        showPreview(event);
-        positionPreview(trigger, event);
-      });
-      trigger.addEventListener("blur", hidePreview);
-    });
-
-    window.addEventListener("scroll", hidePreview, true);
-  });
 </script>
 {% endblock %}
