@@ -24,7 +24,7 @@
 
   {% include "cms/partials/accession_preview_panel.html" with preview_mode=False %}
 
-  <section class="w3-margin-top" aria-labelledby="accession-comments-heading">
+  <section class="w3-margin-top accession-lower-area" aria-labelledby="accession-comments-heading">
     <header class="w3-row w3-padding-16">
       <div class="w3-col s12 m6">
         <h2 id="accession-comments-heading" class="w3-margin-0">
@@ -70,84 +70,25 @@
   </section>
 
   {% if user.is_superuser or user|has_group:"Collection Managers" %}
-    <section class="w3-margin-top" aria-labelledby="accession-fieldslip-links-heading">
-      <header class="w3-row w3-padding-16">
-        <div class="w3-col s12">
-          <h2 id="accession-fieldslip-links-heading" class="w3-margin-0">
-            <i class="fa-solid fa-link" aria-hidden="true"></i>
-            <span class="w3-margin-left">{% trans "Related field slips" %}</span>
-          </h2>
+    <div id="fieldSlipModal" class="w3-modal" role="dialog" aria-modal="true" aria-labelledby="fieldSlipModalTitle">
+      <div class="w3-modal-content w3-card-4 w3-animate-top" style="max-width: 800px;">
+        <header class="w3-container w3-blue">
+          <button type="button" onclick="closeFieldSlipModal()" class="w3-button w3-display-topright" aria-label="{% trans 'Close modal' %}">&times;</button>
+          <h2 id="fieldSlipModalTitle">{% trans "Create and link new field slip" %}</h2>
+        </header>
+        <div class="w3-container">
+          <iframe id="fieldSlipFrame" src="" width="100%" height="500" style="border: none;" title="{% trans 'Field slip form' %}"></iframe>
         </div>
-      </header>
-      <div class="w3-card w3-round w3-white w3-padding">
-        <div class="w3-responsive">
-          <table class="w3-table-all w3-hoverable w3-small">
-            <thead>
-              <tr>
-                <th scope="col">{% trans "Field number" %}</th>
-                <th scope="col">{% trans "Verbatim taxon" %}</th>
-                <th scope="col">{% trans "Verbatim element" %}</th>
-                <th scope="col">{% trans "Verbatim locality" %}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for relation in related_fieldslips %}
-                <tr>
-                  <td><a href="{% url 'fieldslip_detail' relation.fieldslip.pk %}">{{ relation.fieldslip.field_number }}</a></td>
-                  <td>{{ relation.fieldslip.verbatim_taxon|default:"—" }}</td>
-                  <td>{{ relation.fieldslip.verbatim_element|default:"—" }}</td>
-                  <td>{{ relation.fieldslip.verbatim_locality|default:"—" }}</td>
-                </tr>
-              {% empty %}
-                <tr>
-                  <td colspan="4" class="w3-center">{% trans "No field slips linked." %}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-
-        <div class="w3-row-padding w3-margin-top">
-          <div class="w3-col s12 m6">
-            <h3 class="w3-margin-top">{% trans "Add existing field slip" %}</h3>
-            {{ add_fieldslip_form.media }}
-            <form method="post" action="{% url 'accession_add_fieldslip' accession.pk %}" class="w3-margin-top">
-              {% csrf_token %}
-              <div class="w3-margin-bottom">
-                {{ add_fieldslip_form }}
-              </div>
-              <button type="submit" class="w3-button w3-blue w3-round">
-                <i class="fa-solid fa-link" aria-hidden="true"></i>
-                <span class="w3-margin-left">{% trans "Link field slip" %}</span>
-              </button>
-            </form>
-          </div>
-          <div class="w3-col s12 m6">
-            <h3 class="w3-margin-top">{% trans "Create and link new field slip" %}</h3>
-            <button type="button" onclick="openFieldSlipModal()" class="w3-button w3-green w3-round" aria-haspopup="dialog" aria-controls="fieldSlipModal">
-              <i class="fa-solid fa-plus" aria-hidden="true"></i>
-              <span class="w3-margin-left">{% trans "Add new field slip" %}</span>
-            </button>
-          </div>
-        </div>
+        <footer class="w3-container w3-padding w3-light-grey">
+          <button type="button" onclick="closeFieldSlipModal()" class="w3-button w3-red">{% trans "Cancel" %}</button>
+        </footer>
       </div>
-
-      <div id="fieldSlipModal" class="w3-modal" role="dialog" aria-modal="true" aria-labelledby="fieldSlipModalTitle">
-        <div class="w3-modal-content w3-card-4 w3-animate-top" style="max-width: 800px;">
-          <header class="w3-container w3-blue">
-            <span onclick="closeFieldSlipModal()" class="w3-button w3-display-topright" aria-label="{% trans 'Close modal' %}">&times;</span>
-            <h2 id="fieldSlipModalTitle">{% trans "Create and link new field slip" %}</h2>
-          </header>
-          <div class="w3-container">
-            <iframe id="fieldSlipFrame" src="" width="100%" height="500" style="border: none;" title="{% trans 'Field slip form' %}"></iframe>
-          </div>
-          <footer class="w3-container w3-padding w3-light-grey">
-            <button type="button" onclick="closeFieldSlipModal()" class="w3-button w3-red">{% trans "Cancel" %}</button>
-          </footer>
-        </div>
-      </div>
-    </section>
+    </div>
   {% endif %}
+
+  <div id="media-hover-preview" class="w3-card w3-round-large w3-white w3-padding" style="display: none; position: fixed; z-index: 10; max-width: 360px;" aria-hidden="true">
+    <img id="media-hover-preview-img" src="" alt="" class="w3-image" />
+  </div>
 </main>
 {% endblock %}
 
@@ -168,5 +109,75 @@
     closeFieldSlipModal();
     location.reload();
   }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    const previewContainer = document.getElementById("media-hover-preview");
+    const previewImage = document.getElementById("media-hover-preview-img");
+    const triggers = document.querySelectorAll(".media-preview-trigger");
+    const offset = 16;
+
+    function positionPreview(trigger, event) {
+      let x;
+      let y;
+
+      if (event.type === "mousemove" || event.type === "mouseenter") {
+        x = event.clientX + offset;
+        y = event.clientY + offset;
+      } else {
+        const rect = trigger.getBoundingClientRect();
+        x = rect.right + offset;
+        y = rect.top;
+      }
+
+      const containerRect = previewContainer.getBoundingClientRect();
+      const maxX = window.innerWidth - containerRect.width - offset;
+      const maxY = window.innerHeight - containerRect.height - offset;
+
+      const clampedX = Math.max(offset, Math.min(x, maxX));
+      const clampedY = Math.max(offset, Math.min(y, maxY));
+
+      previewContainer.style.left = `${clampedX}px`;
+      previewContainer.style.top = `${clampedY}px`;
+    }
+
+    function hidePreview() {
+      previewContainer.style.display = "none";
+      previewContainer.setAttribute("aria-hidden", "true");
+      previewImage.removeAttribute("src");
+      previewImage.setAttribute("alt", "");
+    }
+
+    function showPreview(event) {
+      const trigger = event.currentTarget;
+      const previewUrl = trigger.getAttribute("data-media-preview");
+
+      if (!previewUrl) {
+        return;
+      }
+
+      previewImage.setAttribute("src", previewUrl);
+      previewImage.setAttribute("alt", trigger.getAttribute("data-media-alt") || "");
+      previewContainer.style.display = "block";
+      previewContainer.setAttribute("aria-hidden", "false");
+      positionPreview(trigger, event);
+    }
+
+    triggers.forEach(function (trigger) {
+      trigger.addEventListener("mouseenter", showPreview);
+      trigger.addEventListener("mousemove", function (event) {
+        if (previewContainer.style.display === "block") {
+          positionPreview(trigger, event);
+        }
+      });
+      trigger.addEventListener("mouseleave", hidePreview);
+      trigger.addEventListener("focus", function (event) {
+        showPreview(event);
+        positionPreview(trigger, event);
+      });
+      trigger.addEventListener("blur", hidePreview);
+    });
+
+    window.addEventListener("scroll", hidePreview, true);
+  });
 </script>
 {% endblock %}
