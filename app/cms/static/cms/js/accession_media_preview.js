@@ -3,6 +3,8 @@
 
   var OFFSET = 16;
   var VISIBLE_CLASS = 'is-visible';
+  var CENTERED_CLASS = 'is-centered';
+  var LARGE_SCREEN_QUERY = '(min-width: 993px)';
 
   function ready(callback) {
     if (document.readyState === 'loading') {
@@ -42,7 +44,28 @@
     }
 
     var activeTrigger = null;
+    var largeScreenMedia =
+      typeof window.matchMedia === 'function'
+        ? window.matchMedia(LARGE_SCREEN_QUERY)
+        : null;
     var supportsPointerEvents = typeof window.PointerEvent !== 'undefined';
+
+    function isLargeScreen() {
+      if (largeScreenMedia) {
+        return largeScreenMedia.matches;
+      }
+      return window.innerWidth >= 993;
+    }
+
+    function centerPreview() {
+      previewContainer.classList.add(CENTERED_CLASS);
+      previewContainer.style.removeProperty('left');
+      previewContainer.style.removeProperty('top');
+    }
+
+    function uncenterPreview() {
+      previewContainer.classList.remove(CENTERED_CLASS);
+    }
 
     function hidePreview() {
       if (!previewContainer.classList.contains(VISIBLE_CLASS)) {
@@ -56,10 +79,15 @@
       previewImage.removeAttribute('src');
       previewImage.setAttribute('alt', '');
       activeTrigger = null;
+      uncenterPreview();
     }
 
     function positionPreview(trigger, event) {
       if (!trigger) {
+        return;
+      }
+
+      if (isLargeScreen()) {
         return;
       }
 
@@ -97,7 +125,12 @@
       );
       previewContainer.setAttribute('aria-hidden', 'false');
       previewContainer.classList.add(VISIBLE_CLASS);
-      positionPreview(trigger, event);
+      if (isLargeScreen()) {
+        centerPreview();
+      } else {
+        uncenterPreview();
+        positionPreview(trigger, event);
+      }
     }
 
     function onPointerEnter(event) {
@@ -110,6 +143,9 @@
 
     function onPointerMove(event) {
       if (!previewContainer.classList.contains(VISIBLE_CLASS)) {
+        return;
+      }
+      if (isLargeScreen()) {
         return;
       }
       if (event.pointerType === 'touch') {
@@ -130,6 +166,9 @@
 
         trigger.addEventListener('mousemove', function (event) {
           if (!previewContainer.classList.contains(VISIBLE_CLASS)) {
+            return;
+          }
+          if (isLargeScreen()) {
             return;
           }
           positionPreview(event.currentTarget, event);
@@ -165,6 +204,9 @@
         if (!activeTrigger) {
           return;
         }
+        if (isLargeScreen()) {
+          return;
+        }
         positionPreview(activeTrigger);
       },
       true
@@ -174,7 +216,35 @@
       if (!activeTrigger) {
         return;
       }
-      positionPreview(activeTrigger);
+      if (isLargeScreen()) {
+        centerPreview();
+      } else {
+        uncenterPreview();
+        positionPreview(activeTrigger);
+      }
     });
+
+    if (largeScreenMedia) {
+      var handleMediaChange = function (event) {
+        if (!previewContainer.classList.contains(VISIBLE_CLASS)) {
+          return;
+        }
+
+        if (event.matches) {
+          centerPreview();
+        } else {
+          uncenterPreview();
+          if (activeTrigger) {
+            positionPreview(activeTrigger);
+          }
+        }
+      };
+
+      if (typeof largeScreenMedia.addEventListener === 'function') {
+        largeScreenMedia.addEventListener('change', handleMediaChange);
+      } else if (typeof largeScreenMedia.addListener === 'function') {
+        largeScreenMedia.addListener(handleMediaChange);
+      }
+    }
   });
 })();

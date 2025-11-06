@@ -115,8 +115,20 @@
     display: block;
 }
 
+.accession-media-hover-preview.is-centered {
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+
 .accession-media-hover-preview img {
     width: 100%;
     height: auto;
     object-fit: contain;
+}
+
+@media screen and (min-width: 993px) {
+    .accession-media-hover-preview {
+        max-width: 720px;
+    }
 }
