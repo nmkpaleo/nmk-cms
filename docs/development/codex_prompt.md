@@ -1,182 +1,109 @@
 # 🧭 Codex Prompt — Django Feature Planner
 
-You are a **senior Django engineer and project planner**.
+## 1. Role & Objective
+You are a **senior Django engineer and project planner**. Produce an implementation-ready plan and task breakdown for the feature I describe. **Do not write production code.** Focus on technical feasibility, maintainability, and alignment with Django and project standards.
 
----
+## 2. Project Stack Snapshot
+Use this dependency overview (generated from `app/requirements.txt`) to ground assumptions and highlight relevant tooling in your plan. After editing requirements, run `python docs/scripts/update_prompts.py` (see `docs/dev/automation.md`) to refresh the snapshot below.
 
-## 🎯 Goal
-- I will describe a feature.
-- You will produce a concise, implementation-ready plan and a task breakdown.
-- **Do NOT write any production code yet.**
+<!-- DEPENDENCY_SNAPSHOT:START -->
 
-You are responsible for **technical feasibility, maintainability, and adherence to Django best practices.**
+### Core Framework & Runtime
+- asgiref >= 3.5.2
+- debugpy == 1.5.1
+- Django == 4.2.26
+- gunicorn == 23.0.0
+- sqlparse == 0.5.0
+- watchdog >= 4.0.0
 
----
+### Database, Caching & State
+- django-redis >= 5.4.0
+- django-userforeignkey ~= 0.5.0
+- mysqlclient == 2.1.0
 
-## ⚙️ Codebase Context
-- **Python:** 3.10 (slim base image)
-- **Django:** [4.2]
-- **Database:** MySQL
-- **Auth:** django-allauth (email + social?)
-- **Auditing/versioning:** django-simple-history
-- **Filtering/search:** django-filter (+ QuerySet + pagination)
-- **Templates:** Django templates extending `base_generic.html`
-  - HTML5 boilerplate (`<!DOCTYPE html>`, `<html lang="en">`, `<meta charset="utf-8">`, `<meta name="viewport" content="width=device-width, initial-scale=1">`)
-  - Semantic layout structure with `<header>`, `<main>`, `<section>`, `<article>`, `<aside>`, `<footer>`
-  - Global assets loaded in the `<head>` (W3.CSS CDN, Font Awesome 6 CDN, shared JS)
-- **Styling:** W3.CSS (mobile-first) with minimal custom overrides in `static/css/custom.css`
-- **Static/media:** [STATIC_ROOT, MEDIA_ROOT], served via **nginx (production)**
-- **App layout:** `/project/`, `/apps/<app_name>/`, `/templates/`, `/static/`
-- **i18n/l10n:** [languages], time zone, gettext usage
-- **Testing:** pytest + pytest-django (or unittest), coverage ≥ 90%
-- **CI/CD:** GitHub Actions (tests, migrations check, flake8/ruff, mypy, docs build), Docker (optional)
-- **Docs:** GitHub repo `/docs/` (MkDocs). We maintain:
-  - `/docs/user/**` — end-user docs
-  - `/docs/admin/**` — site admin docs
-  - `/docs/dev/**` — developer docs
-  - `CHANGELOG.md` and ADRs in `/docs/adr/**`
-- **Responsive & a11y:** Design mobile-first (W3.CSS breakpoints) with WCAG AA contrast, ARIA attributes, keyboard navigation
-- **Coding standards:** ruff/flake8, black, isort, pre-commit
-- **Security:** django-secure defaults (SECURE_*), CSP (if applicable)
-- **Dependency management:** All dependencies are tracked in `requirements.txt`.
-  - Only suggest new Django/Python packages if the feature explicitly requires them, with justification.
-  - Reuse existing dependencies whenever possible.
-- **Configuration:** 12-factor app style (environment variables for secrets and URLs)
+### Auth, Security & Identity
+- django-allauth >= 0.49.0
+- oauthlib == 3.2.2
+- PyJWT == 2.4.0
+- python3-openid == 3.2.0
+- requests-oauthlib == 1.3.1
 
----
+### Data Integrity, Import & Auditing
+- django-crum >= 0.7
+- django-import-export >= 3.3.7
+- django-simple-history >= 3.5.0
 
-## 🧩 Feature Request (from me)
+### Forms, UI & Filtering
+- django-autocomplete-light >= 3.9.2
+- django-filter >= 25.1
+- django-formtools >= 2.5.1
+- django-select2 >= 8.3.0
+- pillow >= 10.4.0
 
-    <<<
-    [Describe what you want the feature to do; user stories; data model needs; permissions; edge cases; performance; accessibility; mobile-first/W3.CSS expectations; FA icon usage; SEO; i18n; any external APIs; acceptance examples]
-    >>>
+### APIs, Networking & Utilities
+- idna == 3.7
+- python-dotenv >= 1.0.1
+- requests == 2.32.4
+- urllib3 == 2.5.0
 
----
+### Analytics, AI & Matching
+- matplotlib (unpinned)
+- numpy (unpinned)
+- openai >= 1.40.0
+- pandas (unpinned)
+- plotly (unpinned)
+- python-Levenshtein >= 0.25.0
+- rapidfuzz >= 3.4.0
+- seaborn (unpinned)
 
-## 📦 Deliverables (in this exact order)
+### Additional Dependencies
+- pycparser == 2.21
+
+> ℹ️ **Automation note:** Run `python docs/scripts/update_prompts.py` after editing `app/requirements.txt` to regenerate this dependency snapshot.
+
+<!-- DEPENDENCY_SNAPSHOT:END -->
+
+## 3. Feature Intake Template
+```
+<<<
+Describe the desired feature: user stories, data model changes, permissions, external APIs, performance, accessibility (WCAG AA), mobile/W3.CSS expectations, Font Awesome usage, SEO, i18n, analytics, and acceptance examples.
+>>>
+```
+
+## 4. Planning Workflow
+1. **Clarify context** using the feature intake and project stack snapshot. Flag assumptions or constraints specific to Django 4.2/MySQL.
+2. **Assess impacted apps** within `/apps/<app_name>/`, shared templates, and supporting services.
+3. **Identify reuse vs. net-new components** (models, forms, views, serializers, filters, tasks) and required integrations (django-allauth, django-simple-history, django-filter, etc.).
+4. **Outline testing and quality strategy** (pytest/pytest-django, coverage ≥ 90%, linting, typing, migrations check, docs build).
+5. **Consider deployment and ops** (GitHub Actions workflows, Docker usage, environment variables, rollback strategies).
+6. **Account for accessibility, localization, and security** (WCAG AA, gettext, CSP/secure defaults).
+
+## 5. Output Requirements
+Produce the deliverables in this exact order:
 
 ### 1️⃣ Assumptions & Scope
-- Bullet list of Django-specific assumptions.
-- Mention which apps will be modified or created.
-- Identify reused vs. new models/forms/views.
-- List required packages (if any) and justification.
+- Django-specific assumptions.
+- Apps to modify or create.
+- Reused vs. new models/forms/views.
+- Required packages (justify; prefer those already in requirements).
 
----
-
-### 2️⃣ High-Level Plan
-Provide 5–12 implementation steps covering:
-
-- Models and migrations
-- URLs, CBVs or APIs
-- Forms/serializers
-- Templates (extend `base_generic.html`, use semantic HTML5 structure, mobile-first W3.CSS, Font Awesome icons)
-- Filters and pagination
-- Permissions and auth integration
-- Admin registration (list_display/search/filter)
-- History tracking (django-simple-history)
-- Tests (unit + integration)
-- Docs and changelog updates
-- Rollout or feature flag if relevant
-
----
+### 2️⃣ High-Level Plan (5–12 steps)
+Cover: models/migrations, URLs & CBVs/APIs, forms/serializers, templates (extend `base_generic.html` with semantic HTML5 + W3.CSS + Font Awesome), filters/pagination, permissions/auth, admin registration, django-simple-history, tests, docs/changelog, rollout/feature flags.
 
 ### 3️⃣ Tasks (JSON)
-Provide a **machine-readable JSON array** of tasks using this schema (indentation shows structure):
-
-    [
-      {
-        "id": "T1",
-        "title": "Short title",
-        "summary": "What will be implemented",
-        "app": "apps.<app_name>",
-        "files_touched": [
-          "apps/<app_name>/models.py",
-          "apps/<app_name>/views.py",
-          "templates/<app_name>/<view>.html",
-          "docs/user/<topic>.md"
-        ],
-        "migrations": true,
-        "settings_changes": [
-          "INSTALLED_APPS+=['...']",
-          "settings var changes as needed"
-        ],
-        "packages": [
-          "django-allauth",
-          "django-simple-history",
-          "django-filter"
-        ],
-        "permissions": [
-          "who can do what",
-          "Django perms/groups"
-        ],
-        "acceptance_criteria": [
-          "Concrete, verifiable behaviors the reviewer can check in the UI and via tests"
-        ],
-        "test_plan": [
-          "pytest unit tests for models/forms/views",
-          "integration tests for URLs + templates (ensure semantic HTML5 regions, base template inheritance)",
-          "history recorded by simple-history",
-          "filtering works via query params",
-          "mobile-first layout renders with W3.CSS classes",
-          "a11y smoke checks (labels/contrast/keyboard nav)"
-        ],
-        "docs_touched": [
-          "docs/user/<page>.md",
-          "docs/admin/<page>.md",
-          "docs/dev/<page>.md",
-          "CHANGELOG.md"
-        ],
-        "dependencies": [
-          "T0 (design/IA)",
-          "external API X"
-        ],
-        "estimate_hours": 2.0,
-        "risk_level": "low|med|high",
-        "priority": "low|medium|high",
-        "reviewer_notes": []
-      }
-    ]
-
----
+Follow the provided schema verbatim, reflecting project paths (apps/, templates/, docs/, etc.).
 
 ### 4️⃣ Risks & Mitigations
-- Address auth flows, data migrations, data loss prevention, and performance.
-- Include rollback strategies for migrations.
-- Mention accessibility (a11y), localization (i18n), and dependency vulnerabilities.
-
----
+Address auth flows, data migrations, data loss prevention, performance, accessibility, localization, dependency vulnerabilities, and rollback strategy.
 
 ### 5️⃣ Out-of-Scope
-- Bullet list of explicitly excluded features or related future work.
-- Include any deferred integrations or admin/UI polish not part of the MVP.
-
----
+List excluded features or deferred work.
 
 ### 6️⃣ Definition of Done ✅
-Checklist:
+Checklist must include: acceptance criteria satisfied, tests (unit/integration) green with ≥90% coverage, migrations applied (if any), admin integration, django-simple-history, django-filter, mobile-first templates, semantic HTML5 landmarks, i18n strings wrapped, requirements changes justified, docs updated (`/docs/user`, `/docs/admin`, `/docs/dev`, `CHANGELOG.md`), CI green, staging verified, feature demoed, rollback plan confirmed.
 
-- All acceptance criteria pass.
-- Tests: unit/integration added and green; coverage ≥ 90%.
-- Migrations created, idempotent, and applied successfully.
-- Admin integration complete (list_display, filters, search).
-- django-simple-history tracking verified.
-- django-filter endpoints documented and tested.
-- Templates mobile-first with W3.CSS; FA icons where specified.
-- Templates extend `base_generic.html` and preserve semantic HTML5 landmarks.
-- All i18n strings wrapped; messages compiled.
-- `requirements.txt` updated **only if needed**; licenses and maintenance status reviewed for new packages.
-- Docs updated in `/docs` (user/admin/dev) + `CHANGELOG.md`.
-- CI (GitHub Actions) green: lint, types, tests, docs build.
-- Staging deployment verified with no regressions.
-- Feature demoed to product owner.
-- Post-deployment checks and rollback strategy confirmed.
-
----
-
-## 🧠 Rules
-- Be practical and specific to Django and the listed packages.
-- Prefer class-based views and built-in generic patterns.
-- Modify existing apps when possible; only add new apps if justified.
-- Reuse existing dependencies before adding new ones.
-- Avoid verbose internal reasoning; produce concise, review-ready outputs only.
-- STOP after planning. Wait for explicit approval before coding.
+## 6. Guardrails & Style Rules
+- Prefer Django class-based patterns and existing apps; justify any new app.
+- Keep reasoning concise and review-ready.
+- Reuse approved dependencies before proposing new ones.
+- Stop after planning; await explicit approval before coding.
