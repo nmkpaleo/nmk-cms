@@ -4,57 +4,64 @@
 You are a **senior Django engineer and project planner**. Produce an implementation-ready plan and task breakdown for the feature I describe. **Do not write production code.** Focus on technical feasibility, maintainability, and alignment with Django and project standards.
 
 ## 2. Project Stack Snapshot
-Use this dependency overview (sourced from `app/requirements.txt`) to ground assumptions and highlight relevant tooling in your plan. Update this section whenever requirements change.
+Use this dependency overview (generated from `app/requirements.txt`) to ground assumptions and highlight relevant tooling in your plan. After editing requirements, run `python docs/scripts/update_prompts.py` (see `docs/dev/automation.md`) to refresh the snapshot below.
+
+<!-- DEPENDENCY_SNAPSHOT:START -->
 
 ### Core Framework & Runtime
-- Django 4.2.26
-- asgiref ≥ 3.5.2
-- sqlparse 0.5.0
-- gunicorn 23.0.0
-- debugpy 1.5.1
-- watchdog ≥ 4.0.0
+- asgiref >= 3.5.2
+- debugpy == 1.5.1
+- Django == 4.2.26
+- gunicorn == 23.0.0
+- sqlparse == 0.5.0
+- watchdog >= 4.0.0
 
 ### Database, Caching & State
-- mysqlclient 2.1.0
-- django-redis ≥ 5.4.0
-- django-userforeignkey ≥ 0.5.0
+- django-redis >= 5.4.0
+- django-userforeignkey ~= 0.5.0
+- mysqlclient == 2.1.0
 
 ### Auth, Security & Identity
-- django-allauth ≥ 0.49.0
-- oauthlib 3.2.2
-- requests-oauthlib 1.3.1
-- python3-openid 3.2.0
-- PyJWT 2.4.0
+- django-allauth >= 0.49.0
+- oauthlib == 3.2.2
+- PyJWT == 2.4.0
+- python3-openid == 3.2.0
+- requests-oauthlib == 1.3.1
 
 ### Data Integrity, Import & Auditing
-- django-simple-history ≥ 3.5.0
-- django-import-export ≥ 3.3.7
-- django-crum ≥ 0.7
+- django-crum >= 0.7
+- django-import-export >= 3.3.7
+- django-simple-history >= 3.5.0
 
 ### Forms, UI & Filtering
-- django-filter ≥ 25.1
-- django-formtools ≥ 2.5.1
-- django-autocomplete-light ≥ 3.9.2
-- django-select2 ≥ 8.3.0
-- pillow ≥ 10.4.0
+- django-autocomplete-light >= 3.9.2
+- django-filter >= 25.1
+- django-formtools >= 2.5.1
+- django-select2 >= 8.3.0
+- pillow >= 10.4.0
 
 ### APIs, Networking & Utilities
-- requests 2.32.4
-- urllib3 2.5.0
-- idna 3.7
-- python-dotenv ≥ 1.0.1
+- idna == 3.7
+- python-dotenv >= 1.0.1
+- requests == 2.32.4
+- urllib3 == 2.5.0
 
 ### Analytics, AI & Matching
-- openai ≥ 1.40.0
-- plotly (latest)
-- numpy (latest)
-- pandas (latest)
-- matplotlib (latest)
-- seaborn (latest)
-- python-Levenshtein ≥ 0.25.0
-- rapidfuzz ≥ 3.4.0
+- matplotlib (unpinned)
+- numpy (unpinned)
+- openai >= 1.40.0
+- pandas (unpinned)
+- plotly (unpinned)
+- python-Levenshtein >= 0.25.0
+- rapidfuzz >= 3.4.0
+- seaborn (unpinned)
 
-> ℹ️ **Maintenance note:** Regenerate the dependency snapshot whenever `app/requirements.txt` changes so future planners stay aligned with the active stack.
+### Additional Dependencies
+- pycparser == 2.21
+
+> ℹ️ **Automation note:** Run `python docs/scripts/update_prompts.py` after editing `app/requirements.txt` to regenerate this dependency snapshot.
+
+<!-- DEPENDENCY_SNAPSHOT:END -->
 
 ## 3. Feature Intake Template
 ```

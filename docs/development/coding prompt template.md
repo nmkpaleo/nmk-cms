@@ -4,57 +4,64 @@
 You are a **senior Django engineer**. Implement **exactly one task** from an approved feature plan. Deliver production-quality code aligned with project standards and the specified task scope.
 
 ## 2. Project Stack Snapshot
-Ground your implementation decisions in this dependency list derived from `app/requirements.txt`. Refresh the snapshot whenever requirements are updated.
+Ground your implementation decisions in this dependency list generated from `app/requirements.txt`. After editing requirements, run `python docs/scripts/update_prompts.py` (documented in `docs/dev/automation.md`) to regenerate the snapshot below.
+
+<!-- DEPENDENCY_SNAPSHOT:START -->
 
 ### Core Framework & Runtime
-- Django 4.2.26
-- asgiref ≥ 3.5.2
-- sqlparse 0.5.0
-- gunicorn 23.0.0
-- debugpy 1.5.1
-- watchdog ≥ 4.0.0
+- asgiref >= 3.5.2
+- debugpy == 1.5.1
+- Django == 4.2.26
+- gunicorn == 23.0.0
+- sqlparse == 0.5.0
+- watchdog >= 4.0.0
 
 ### Database, Caching & State
-- mysqlclient 2.1.0
-- django-redis ≥ 5.4.0
-- django-userforeignkey ≥ 0.5.0
+- django-redis >= 5.4.0
+- django-userforeignkey ~= 0.5.0
+- mysqlclient == 2.1.0
 
 ### Auth, Security & Identity
-- django-allauth ≥ 0.49.0
-- oauthlib 3.2.2
-- requests-oauthlib 1.3.1
-- python3-openid 3.2.0
-- PyJWT 2.4.0
+- django-allauth >= 0.49.0
+- oauthlib == 3.2.2
+- PyJWT == 2.4.0
+- python3-openid == 3.2.0
+- requests-oauthlib == 1.3.1
 
 ### Data Integrity, Import & Auditing
-- django-simple-history ≥ 3.5.0
-- django-import-export ≥ 3.3.7
-- django-crum ≥ 0.7
+- django-crum >= 0.7
+- django-import-export >= 3.3.7
+- django-simple-history >= 3.5.0
 
 ### Forms, UI & Filtering
-- django-filter ≥ 25.1
-- django-formtools ≥ 2.5.1
-- django-autocomplete-light ≥ 3.9.2
-- django-select2 ≥ 8.3.0
-- pillow ≥ 10.4.0
+- django-autocomplete-light >= 3.9.2
+- django-filter >= 25.1
+- django-formtools >= 2.5.1
+- django-select2 >= 8.3.0
+- pillow >= 10.4.0
 
 ### APIs, Networking & Utilities
-- requests 2.32.4
-- urllib3 2.5.0
-- idna 3.7
-- python-dotenv ≥ 1.0.1
+- idna == 3.7
+- python-dotenv >= 1.0.1
+- requests == 2.32.4
+- urllib3 == 2.5.0
 
 ### Analytics, AI & Matching
-- openai ≥ 1.40.0
-- plotly (latest)
-- numpy (latest)
-- pandas (latest)
-- matplotlib (latest)
-- seaborn (latest)
-- python-Levenshtein ≥ 0.25.0
-- rapidfuzz ≥ 3.4.0
+- matplotlib (unpinned)
+- numpy (unpinned)
+- openai >= 1.40.0
+- pandas (unpinned)
+- plotly (unpinned)
+- python-Levenshtein >= 0.25.0
+- rapidfuzz >= 3.4.0
+- seaborn (unpinned)
 
-> ℹ️ **Maintenance note:** Keep this dependency list synchronized with `app/requirements.txt` so implementers act on the current stack.
+### Additional Dependencies
+- pycparser == 2.21
+
+> ℹ️ **Automation note:** Run `python docs/scripts/update_prompts.py` after editing `app/requirements.txt` to regenerate this dependency snapshot.
+
+<!-- DEPENDENCY_SNAPSHOT:END -->
 
 ## 3. Task Intake
 Paste the **exact** task object (T1/T2/…) from the approved plan into the JSON block below before coding.
