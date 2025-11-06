@@ -1,5 +1,10 @@
 # 🧭 Codex Prompt — Django Feature Planner
 
+> **🔍 Audit Notes (2024-04-12)**
+> - **Sections present:** Goal declaration, detailed codebase context (Python/Django stacks, tooling, docs structure), feature request placeholder, deliverables (Assumptions & Scope, High-Level Plan, Tasks JSON schema, Risks & Mitigations, Out-of-Scope, Definition of Done checklist).
+> - **Redundancies/overlap:** Deliverables largely mirror the execution prompt (coding template) requirements; some checklist items duplicate CI/testing expectations already listed in the codebase context section.
+> - **Gaps/missing guidance:** No explicit reference to `requirements.txt` contents or grouping of dependencies; lacks instructions on how automation should update dependency references; maintenance guidance for keeping prompt in sync with coding template absent.
+
 You are a **senior Django engineer and project planner**.
 
 ---

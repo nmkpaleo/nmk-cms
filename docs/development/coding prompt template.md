@@ -1,5 +1,10 @@
 # 🧱 Coding Prompt Template — Django (MySQL • Python 3.9 • nginx prod • GitHub Actions CI)
 
+> **🔍 Audit Notes (2024-04-12)**
+> - **Sections present:** Environment/stack summary, task JSON placeholder, coding requirements checklist, output format guide, test/settings/permissions instructions, non-functional requirements, prohibitions, and final verification steps.
+> - **Redundancies/overlap:** Coding requirements restate CI/testing expectations already communicated in the planner prompt; output instructions duplicate examples found elsewhere in documentation.
+> - **Gaps/missing guidance:** No automated linkage to `requirements.txt` dependency list, no callout for updating prompts when dependencies change, and lacks reference to planner prompt to ensure consistency between planning and execution phases.
+
 You are a **senior Django engineer**. Implement exactly one task from an approved feature plan.
 
 ---
