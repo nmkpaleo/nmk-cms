@@ -4,6 +4,7 @@
 - Automate dependency snapshots in the development planning and coding prompts via `docs/scripts/update_prompts.py`, including supporting tests and maintenance docs (T3).
 - Document geological time support across locality workflows, including admin import/export guidance, printable reporting expectations, and pytest coverage notes (T3).
 - Standardise CMS list and detail templates on semantic W3.CSS layouts, refreshed Font Awesome icons, and updated template tests; document the patterns in user and developer guides (T2).
+- Document the accession detail layout restructure and hover media preview workflow across user, admin, and developer guides (T5).
 - Expand CMS template audit with W3.CSS layout dependency summary and upload-view gaps in `docs/dev/frontend-guidelines.md` (T1).
 - Add end-user, admin, and developer documentation for the NOW taxonomy sync workflow and record the feature in the changelog (T5).
 - Refactor CMS form templates and dashboards to share the W3.CSS base form card, refreshed role tiles, and accessibility-focused regression tests; update user/admin/dev guides accordingly (T3).

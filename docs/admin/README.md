@@ -7,5 +7,6 @@
 - [References](references.md)
 - [Preparations](preparations.md)
 - [Scan Uploads](scan-uploads.md)
+- [Accession detail review](accessions-detail.md)
 - [Users](users.md)
 - [Merge Tool](merge-tool.md)

@@ -8,7 +8,7 @@ The CMS frontend now relies almost entirely on W3.CSS utilities and semantic HTM
 | View Type | Primary Templates | W3.CSS Usage | Local CSS / JS Touchpoints | Notes for Refactor |
 | --- | --- | --- | --- | --- |
 | List & Search | `cms/*_list.html` variants (accession, drawer, fieldslip, locality, place, preparation, reference, storage) | Shared header rows, filter accordions, and table shells lean on `w3-container`, `w3-row-padding`, `w3-table-all`, and `w3-responsive`.【F:app/cms/templates/cms/accession_list.html†L8-L108】【F:app/cms/templates/cms/reference_list.html†L8-L123】 | Each template embeds a small `toggleAccordion` helper and duplicates the accordion markup; no bespoke CSS classes beyond inherited typography utilities.【F:app/cms/templates/cms/accession_list.html†L24-L109】 | Extract accordion into an include and switch to a shared stimulus/alpine controller to avoid per-template JS duplication. |
-| Detail | `cms/*_detail.html` (accession, accession_row, drawerregister, fieldslip, locality, place, preparation, reference, storage) | Cards, summary grids, and related tables now standardise on `<main>/<section>` landmarks, `w3-card`, and Font Awesome section icons for quick scanning.【F:app/cms/templates/cms/accession_detail.html†L1-L135】【F:app/cms/templates/cms/preparation_detail.html†L1-L221】 | History tables and related lists share the same W3 table shell; no bespoke CSS classes remain. | Future enhancements: extract history table rows into a shared include and align curator action buttons with a button helper. |
+| Detail | `cms/*_detail.html` (accession, accession_row, drawerregister, fieldslip, locality, place, preparation, reference, storage) | Cards, summary grids, and related tables now standardise on `<main>/<section>` landmarks, `w3-card`, and Font Awesome section icons for quick scanning.【F:app/cms/templates/cms/accession_detail.html†L1-L135】【F:app/cms/templates/cms/preparation_detail.html†L1-L221】 | Accessions load the `accession_media_preview.js` controller and `.accession-media-hover-preview` styles to support the hover preview while every detail view continues to rely on the shared W3 table shell. | Future enhancements: extract history table rows into a shared include and align curator action buttons with a button helper. |
 | Detail + Sub-list | `cms/locality_detail.html`, `cms/storage_detail.html` | Combine W3 cards for the primary object with responsive related-object tables and Font Awesome headings.【F:app/cms/templates/cms/locality_detail.html†L1-L107】 | Manual pagination components mirror the helper used in list templates and rely solely on W3 bar/button classes.【F:app/cms/templates/cms/storage_detail.html†L108-L147】 | Align pagination markup with a single include referenced by both list and detail pages to reduce drift. |
 | Dashboard | `cms/dashboard.html`, `cms/qc/dashboard_queue.html` | Role cards now share W3 card wrappers, Font Awesome section icons, and responsive tables with semantic `<section>` landmarks.【F:app/cms/templates/cms/dashboard.html†L1-L240】【F:app/cms/templates/cms/qc/dashboard_queue.html†L1-L74】 | Queue partial still expects context dicts and renders CTA buttons; empty states reuse W3 alert panels. | Future enhancements: extract repeated role-card scaffolding into an include and expose queue metadata via dataclasses to trim template logic. |
 | Forms & Wizards | `cms/*_form.html`, `cms/*_wizard*.html`, `cms/add_accession_*` | All forms funnel through the refactored `base_form.html` card which applies W3 classes, ARIA labels, and Font Awesome submit icons; parent templates wrap the include in `<main>` with W3 button links.【F:app/cms/templates/includes/base_form.html†L1-L11】【F:app/cms/templates/includes/base_form_tag.html†L1-L44】【F:app/cms/templates/cms/preparation_form.html†L1-L23】 | Wizard templates continue to add per-step scripts via formset JS includes. | Keep wizard navigation consistent with the shared button styles and audit form-level accessibility when introducing new widgets. |
@@ -51,7 +51,7 @@ The matrix below expands on individual template expectations, context variables,
 ### Detail Views
 | Template | Path | Primary Use | Notes |
 | --- | --- | --- | --- |
-| Accession detail | `app/cms/templates/cms/accession_detail.html` | Full accession profile with related records. | Links to preview partial for nested relationships. |
+| Accession detail | `app/cms/templates/cms/accession_detail.html` | Full accession profile with related records. | Embeds the preview panel partial; large screens render a two-tier layout (overview left, specimens/right stack) and include the hover preview assets for media thumbnails.【F:app/cms/templates/cms/accession_detail.html†L1-L138】【F:app/cms/static/cms/js/accession_media_preview.js†L1-L124】 |
 | Accession row detail | `app/cms/templates/cms/accession_row_detail.html` | Single accession row detail, including identifications/specimens. | Used in QC preview and direct navigation. |
 | Drawer detail | `app/cms/templates/cms/drawerregister_detail.html` | Drawer metadata view with scanning details. | Shows aggregated counts and assigned users. |
 | Field slip detail | `app/cms/templates/cms/fieldslip_detail.html` | Field slip record detail page with attachments. | Displays aerial photo when present. |
@@ -100,7 +100,7 @@ The matrix below expands on individual template expectations, context variables,
 | QC reference card (partial) | `app/cms/templates/cms/qc/partials/reference_card.html` | Displays reference metadata inside QC flows. | Used within wizard review steps. |
 | QC row card (partial) | `app/cms/templates/cms/qc/partials/row_card.html` | Renders row comparison cards in QC steps. | Supports template row duplication. |
 | QC chip (partial) | `app/cms/templates/cms/qc/partials/chip.html` | Pills for representing nested forms. | Supports ident/specimen chips. |
-| Accession preview panel (partial) | `app/cms/templates/cms/partials/accession_preview_panel.html` | Full preview of accession, field slips, and identifications using stacked W3 cards, semantic sections, and action buttons. | Shared between wizard and detail contexts; honours `preview_mode` to hide mutating controls. |
+| Accession preview panel (partial) | `app/cms/templates/cms/partials/accession_preview_panel.html` | Full preview of accession, field slips, and identifications using stacked W3 cards, semantic sections, and action buttons. | Shared between wizard and detail contexts; honours `preview_mode`, supplies the upper grid layout, and wires media thumbnails with `media-preview-trigger` attributes for the hover controller.【F:app/cms/templates/cms/partials/accession_preview_panel.html†L1-L201】 |
 
 ### Admin Overrides & Utilities
 | Template | Path | Primary Use | Notes |
@@ -122,7 +122,7 @@ The matrix below expands on individual template expectations, context variables,
 ### Local Stylesheets
 | File | Path | Purpose | Consumers |
 | --- | --- | --- | --- |
-| CMS global styles | `app/cms/static/css/style.css` | Flex-aligns the header navigation so the logo, menu links, and auth controls sit on a single row at desktop widths; constrains the logo, resets logout form margin, and maintains Select2 width/stacking plus drag handles. | Loaded via `base_generic.html` for all CMS pages and public landing. |
+| CMS global styles | `app/cms/static/css/style.css` | Flex-aligns the header navigation so the logo, menu links, and auth controls sit on a single row at desktop widths; constrains the logo, resets logout form margin, maintains Select2 width/stacking plus drag handles, and exposes the `.accession-media-hover-preview` helper for enlarged media overlays.【F:app/cms/static/css/style.css†L1-L78】 | Loaded via `base_generic.html` for all CMS pages and public landing. |
 | — | — | — | The merge admin and reporting UIs now rely entirely on W3.CSS utilities; dedicated stylesheets were removed in favour of shared markup classes. |
 
 ### Redundancy and Consolidation Opportunities
@@ -155,6 +155,7 @@ The shared stylesheet `app/cms/static/css/style.css` intentionally remains small
 - `.sr-only` – provides an accessible screen-reader-only helper that W3.CSS does not supply.
 - `.django-select2`, `.select2-container`, `.select2-selection`, `.select2-dropdown` – ensure Select2 widgets span full width and stack above modals or dropdowns.
 - `.drag-handle` – keeps the grab cursor for drag-to-reorder handles; JavaScript toggles this on drawer lists.
+- `.accession-media-hover-preview` – fixed-position container for enlarged accession media previews, toggled by the dedicated JS controller.
 
 Do not add new selectors without first checking whether a W3 utility or an existing helper can cover the requirement. If a new override is unavoidable, document the rationale directly above the rule and update this guideline.
 
@@ -164,6 +165,7 @@ Certain scripts assume W3 classes are present:
 - `static/javascript.js` toggles `w3-show` and `w3-hide` to open the mobile navigation panel.
 - `static/js/merge_admin.js` generates search results using `w3-card-4`, `w3-padding`, and `w3-button` classes. Any markup changes must update both the template and script.
 - Inventory scanning scripts add contextual classes such as `w3-pale-green` to status elements. Keep those hooks stable.
+- `static/cms/js/accession_media_preview.js` looks for `.media-preview-trigger` elements with `data-media-preview` and `data-media-alt` attributes and toggles the `#media-hover-preview` container. Maintain these hooks when adjusting the media table markup.【F:app/cms/static/cms/js/accession_media_preview.js†L20-L124】
 
 ## Testing coverage
 Template regression tests live in `app/cms/tests/` and verify that W3 classes render as expected:
