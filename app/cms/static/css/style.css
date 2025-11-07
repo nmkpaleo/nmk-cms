@@ -101,3 +101,34 @@
         margin-right: auto;
     }
 }
+
+/* Accession media preview: floating enlarged image for hover/focus interactions */
+.accession-media-hover-preview {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    max-width: 360px;
+    pointer-events: none;
+}
+
+.accession-media-hover-preview.is-visible {
+    display: block;
+}
+
+.accession-media-hover-preview.is-centered {
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.accession-media-hover-preview img {
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+}
+
+@media screen and (min-width: 993px) {
+    .accession-media-hover-preview {
+        max-width: 720px;
+    }
+}
