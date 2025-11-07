@@ -282,6 +282,11 @@ class ReferenceFilter(django_filters.FilterSet):
 
 
 class FieldSlipFilter(django_filters.FilterSet):
+    field_number = django_filters.CharFilter(
+        lookup_expr="icontains",
+        label=_("Field Number"),
+        widget=forms.TextInput(attrs={"class": "w3-input"}),
+    )
     collector = django_filters.CharFilter(
         lookup_expr="icontains",
         label="Collector",
@@ -322,6 +327,7 @@ class FieldSlipFilter(django_filters.FilterSet):
     class Meta:
         model = FieldSlip
         fields = [
+            "field_number",
             "collector",
             "collection_date",
             "verbatim_locality",
