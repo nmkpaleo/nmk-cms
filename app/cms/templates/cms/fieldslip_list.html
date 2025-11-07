@@ -1,5 +1,5 @@
 {% extends "base_generic.html" %}
-{% load user_tags %}
+{% load i18n user_tags %}
 
 {% block title %}Field Slips{% endblock %}
 
@@ -29,6 +29,10 @@
         <form method="get" class="w3-container w3-padding-16" role="search">
             <div class="w3-row-padding">
                 <div class="w3-col s12 m6 l4 w3-margin-bottom">
+                    <label class="w3-text-grey" for="{{ filter.form.field_number.id_for_label }}">{% trans "Field Number" %}</label>
+                    {{ filter.form.field_number }}
+                </div>
+                <div class="w3-col s12 m6 l4 w3-margin-bottom">
                     <label class="w3-text-grey">Collector</label>
                     {{ filter.form.collector }}
                 </div>
@@ -36,7 +40,10 @@
                     <label class="w3-text-grey">Collection Date</label>
                     {{ filter.form.collection_date }}
                 </div>
-                <div class="w3-col s12 m6 l4 w3-margin-bottom">
+            </div>
+
+            <div class="w3-row-padding">
+                <div class="w3-col s12 w3-margin-bottom">
                     <label class="w3-text-grey">Verbatim Locality</label>
                     {{ filter.form.verbatim_locality }}
                 </div>
@@ -107,9 +114,12 @@
                         <td class="responsive-column w3-hide-small w3-hide-medium" data-hide-classes="w3-hide-small w3-hide-medium">{{ fieldslip.verbatim_horizon }}</td>
                         <td class="responsive-column w3-hide-small w3-hide-medium" data-hide-classes="w3-hide-small w3-hide-medium">
                             {% if fieldslip.aerial_photo %}
-                                <img src="{{ fieldslip.aerial_photo.url }}" alt="Aerial Photo" style="max-width: 100px; height:auto;">
+                                <span class="w3-tag w3-round w3-light-blue w3-text-black">
+                                    <i class="fa-solid fa-map-location-dot" aria-hidden="true"></i>
+                                    <span class="w3-margin-left">{{ fieldslip.aerial_photo }}</span>
+                                </span>
                             {% else %}
-                                No photo
+                                <span class="w3-text-grey">{% trans "Not provided" %}</span>
                             {% endif %}
                         </td>
                         <td></td>
