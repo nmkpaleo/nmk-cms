@@ -1527,6 +1527,7 @@ class FieldSlipListView(LoginRequiredMixin, UserPassesTestMixin, FilterView):
     template_name = 'cms/fieldslip_list.html'
     context_object_name = 'fieldslips'
     paginate_by = 10
+    filterset_class = FieldSlipFilter
 
     def test_func(self):
         user = self.request.user
