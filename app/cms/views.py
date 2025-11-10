@@ -115,6 +115,7 @@ from cms.models import (
     Taxon,
     Locality,
     Place,
+    PlaceType,
     PlaceRelation,
     PreparationStatus,
     InventoryStatus,
@@ -1658,6 +1659,136 @@ class AccessionRowDetailView(DetailView):
         )
         context['can_manage'] = context['can_edit']
         context['show_inventory_status'] = not is_public_user(self.request.user)
+        return context
+
+
+class AccessionRowPrintView(DetailView):
+    model = AccessionRow
+    template_name = 'cms/accession_row_print.html'
+    context_object_name = 'accessionrow'
+
+    def get_queryset(self):
+        return (
+            super()
+            .get_queryset()
+            .select_related(
+                "accession",
+                "accession__collection",
+                "accession__specimen_prefix",
+                "storage",
+            )
+            .prefetch_related(
+                Prefetch(
+                    "natureofspecimen_set",
+                    queryset=NatureOfSpecimen.objects.select_related("element").order_by("id"),
+                ),
+                Prefetch(
+                    "identification_set",
+                    queryset=Identification.objects.select_related("taxon_record").order_by(
+                        "-date_identified",
+                        "-created_on",
+                    ),
+                ),
+                Prefetch(
+                    "accession__accessionreference_set",
+                    queryset=AccessionReference.objects.select_related("reference").order_by(
+                        "reference__citation"
+                    ),
+                ),
+                Prefetch(
+                    "accession__specimen_prefix__places",
+                    queryset=Place.objects.select_related("related_place").order_by("name"),
+                ),
+            )
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        accession = self.object.accession
+        identifications = list(self.object.identification_set.all())
+        latest_identification = identifications[0] if identifications else None
+        taxon_record = latest_identification.taxon_record if latest_identification else None
+
+        taxonomy_values = {
+            "family": getattr(taxon_record, "family", "") if taxon_record else "",
+            "subfamily": getattr(taxon_record, "subfamily", "") if taxon_record else "",
+            "tribe": getattr(taxon_record, "tribe", "") if taxon_record else "",
+            "genus": getattr(taxon_record, "genus", "") if taxon_record else "",
+            "species": getattr(taxon_record, "species", "") if taxon_record else "",
+        }
+
+        taxonomy_rows = [
+            ("family", taxonomy_values["family"]),
+            ("subfamily", taxonomy_values["subfamily"]),
+            ("tribe", taxonomy_values["tribe"]),
+            ("genus", taxonomy_values["genus"]),
+            ("species", taxonomy_values["species"]),
+        ]
+
+        has_taxonomy_values = any(
+            bool(value and str(value).strip()) for value in taxonomy_values.values()
+        )
+
+        nature_of_specimens = list(self.object.natureofspecimen_set.all())
+        specimen_rows = [
+            {
+                "element": specimen.element.name if specimen.element else specimen.verbatim_element,
+                "side": specimen.side,
+                "portion": specimen.portion,
+                "condition": specimen.condition,
+                "fragments": specimen.fragments,
+            }
+            for specimen in nature_of_specimens
+        ]
+
+        locality = accession.specimen_prefix if accession else None
+        site = None
+        if locality is not None:
+            for place in locality.places.all():
+                if place.place_type == PlaceType.SITE:
+                    site = place
+                    break
+
+        accession_references = list(accession.accessionreference_set.all()) if accession else []
+        reference_entries = [
+            {
+                'reference': accession_reference.reference,
+                'page': accession_reference.page,
+                'citation': accession_reference.reference.citation,
+            }
+            for accession_reference in accession_references
+            if accession_reference.reference is not None
+        ]
+
+        context.update(
+            {
+                'latest_identification': latest_identification,
+                'taxonomy_values': taxonomy_values,
+                'taxonomy_rows': taxonomy_rows,
+                'has_taxonomy_values': has_taxonomy_values,
+                'taxonomy_fallback_value': (
+                    latest_identification.taxon.strip()
+                    if latest_identification
+                    and latest_identification.taxon
+                    and latest_identification.taxon.strip()
+                    else ''
+                ),
+                'identification_qualifier': (
+                    latest_identification.identification_qualifier.strip()
+                    if latest_identification
+                    and latest_identification.identification_qualifier
+                    and latest_identification.identification_qualifier.strip()
+                    else ''
+                ),
+                'specimen_rows': specimen_rows,
+                'nature_of_specimens': nature_of_specimens,
+                'locality': locality,
+                'site': site,
+                'reference_entries': reference_entries,
+            }
+        )
+
         return context
 
 
