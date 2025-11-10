@@ -1649,7 +1649,7 @@ class AccessionRowDetailView(DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['natureofspecimens'] = NatureOfSpecimen.objects.filter(accession_row=self.object)
-        context['identifications'] = Identification.objects.filter(accession_row=self.object).order_by('-created_at')
+        context['identifications'] = Identification.objects.filter(accession_row=self.object).order_by('-created_on')
         context['can_edit'] = (
             self.request.user.is_superuser or is_collection_manager(self.request.user)
         )

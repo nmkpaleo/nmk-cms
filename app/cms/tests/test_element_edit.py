@@ -380,7 +380,7 @@ def test_accession_row_detail_highlights_latest_identification(client, collectio
     
     # Create an older identification
     import time
-    time.sleep(0.01)  # Small delay to ensure different created_at times
+    time.sleep(0.01)  # Small delay to ensure different created_on times
     older_identification = Identification.objects.create(
         accession_row=accession_row,
         identified_by=person,
