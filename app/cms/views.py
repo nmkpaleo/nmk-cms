@@ -4371,22 +4371,24 @@ def add_specimen_to_accession_row(request, accession_row_id):
 
 @login_required
 @user_passes_test(is_collection_manager)
-def edit_specimen(request, specimen_id):
-    """Edit an existing NatureOfSpecimen (element) record."""
-    specimen = get_object_or_404(NatureOfSpecimen, id=specimen_id)
-    accession_row = specimen.accession_row
-
+def edit_specimen_element(request, element_id):
+    """Edit an existing specimen element (NatureOfSpecimen)."""
+    element = get_object_or_404(NatureOfSpecimen, id=element_id)
+    accession_row = element.accession_row
+    
     if request.method == 'POST':
-        form = AccessionRowSpecimenForm(request.POST, instance=specimen)
+        form = AccessionRowSpecimenForm(request.POST, instance=element)
         if form.is_valid():
             form.save()
             return redirect('accessionrow_detail', pk=accession_row.id)
-        else:
-            print("Form errors:", form.errors)
     else:
-        form = AccessionRowSpecimenForm(instance=specimen)
-
-    return render(request, 'cms/edit_specimen.html', {'form': form, 'specimen': specimen, 'accession_row': accession_row})
+        form = AccessionRowSpecimenForm(instance=element)
+    
+    return render(request, 'cms/edit_accession_row_specimen.html', {
+        'form': form, 
+        'accession_row': accession_row,
+        'element': element
+    })
 
 @login_required
 @user_passes_test(is_collection_manager)
@@ -4400,12 +4402,14 @@ def edit_identification(request, identification_id):
         if form.is_valid():
             form.save()
             return redirect('accessionrow_detail', pk=accession_row.id)
-        else:
-            print("Form errors:", form.errors)
     else:
         form = AccessionRowIdentificationForm(instance=identification)
-
-    return render(request, 'cms/edit_identification.html', {'form': form, 'identification': identification, 'accession_row': accession_row})
+    
+    return render(request, 'cms/edit_accession_row_identification.html', {
+        'form': form, 
+        'accession_row': accession_row,
+        'identification': identification
+    })
 
 @login_required
 @user_passes_test(is_collection_manager)

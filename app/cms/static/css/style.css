@@ -133,11 +133,11 @@
     }
 }
 
-/* Identification row highlighting: distinguish latest from older identifications */
+/* Identification highlighting: visually distinguish latest from older identifications */
 .identification--latest {
-    background-color: #e6ffed !important;
+    background-color: #e6ffed;
 }
 
 .identification--old {
-    background-color: #ffe6e6 !important;
+    background-color: #ffe6e6;
 }
