@@ -132,3 +132,12 @@
         max-width: 720px;
     }
 }
+
+/* Identification row highlighting: distinguish latest from older identifications */
+.identification--latest {
+    background-color: #e6ffed !important;
+}
+
+.identification--old {
+    background-color: #ffe6e6 !important;
+}
