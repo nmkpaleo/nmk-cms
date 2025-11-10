@@ -90,7 +90,7 @@
             <th scope="col">{% trans "Qualifier" %}</th>
             <th scope="col">{% trans "Remarks" %}</th>
             <th scope="col">{% trans "Reference" %}</th>
-            {% if can_edit %}
+            {% if can_manage %}
               <th scope="col">{% trans "Actions" %}</th>
             {% endif %}
           </tr>
@@ -105,17 +105,18 @@
               <td>{{ identification.identification_qualifier|default:"—" }}</td>
               <td>{{ identification.identification_remarks|default:"—" }}</td>
               <td>{{ identification.reference|default:"—" }}</td>
-              {% if can_edit %}
+              {% if can_manage %}
                 <td>
-                  <a href="{% url 'accessionrow_edit_identification' accessionrow.id identification.id %}" class="w3-button w3-small w3-blue w3-round" aria-label="{% trans 'Edit identification' %}">
+                  <a href="{% url 'identification_edit' identification.id %}" class="w3-button w3-small w3-blue w3-round" aria-label="{% trans 'Edit identification' %}">
                     <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+                    <span class="w3-hide-small w3-margin-left">{% trans "Edit" %}</span>
                   </a>
                 </td>
               {% endif %}
             </tr>
           {% empty %}
             <tr>
-              <td colspan="{% if can_edit %}8{% else %}7{% endif %}" class="w3-center">{% trans "No identifications recorded." %}</td>
+              <td colspan="{% if can_manage %}8{% else %}7{% endif %}" class="w3-center">{% trans "No identifications recorded." %}</td>
             </tr>
           {% endfor %}
         </tbody>
@@ -150,7 +151,7 @@
             <th scope="col">{% trans "Description" %}</th>
             <th scope="col">{% trans "Portion" %}</th>
             <th scope="col">{% trans "Fragments" %}</th>
-            {% if can_edit %}
+            {% if can_manage %}
               <th scope="col">{% trans "Actions" %}</th>
             {% endif %}
           </tr>
@@ -164,17 +165,18 @@
               <td>{{ specimen.verbatim_element|default:"—" }}</td>
               <td>{{ specimen.portion|default:"—" }}</td>
               <td>{{ specimen.fragments|default:"—" }}</td>
-              {% if can_edit %}
+              {% if can_manage %}
                 <td>
-                  <a href="{% url 'accessionrow_edit_specimen' accessionrow.id specimen.id %}" class="w3-button w3-small w3-blue w3-round" aria-label="{% trans 'Edit element' %}">
+                  <a href="{% url 'element_edit' specimen.id %}" class="w3-button w3-small w3-blue w3-round" aria-label="{% trans 'Edit element' %}">
                     <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+                    <span class="w3-hide-small w3-margin-left">{% trans "Edit" %}</span>
                   </a>
                 </td>
               {% endif %}
             </tr>
           {% empty %}
             <tr>
-              <td colspan="{% if can_edit %}7{% else %}6{% endif %}" class="w3-center">{% trans "No elements recorded." %}</td>
+              <td colspan="{% if can_manage %}7{% else %}6{% endif %}" class="w3-center">{% trans "No elements recorded." %}</td>
             </tr>
           {% endfor %}
         </tbody>

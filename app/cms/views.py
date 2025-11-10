@@ -4372,44 +4372,44 @@ def add_specimen_to_accession_row(request, accession_row_id):
 
 @login_required
 @user_passes_test(is_collection_manager)
-def edit_specimen(request, accession_row_id, specimen_id):
-    """Edit an existing NatureOfSpecimen (Element) record."""
-    accession_row = get_object_or_404(AccessionRow, id=accession_row_id)
-    specimen = get_object_or_404(NatureOfSpecimen, id=specimen_id, accession_row=accession_row)
-
+def edit_specimen_element(request, element_id):
+    """Edit an existing specimen element (NatureOfSpecimen)."""
+    element = get_object_or_404(NatureOfSpecimen, id=element_id)
+    accession_row = element.accession_row
+    
     if request.method == 'POST':
-        form = AccessionRowSpecimenForm(request.POST, instance=specimen)
+        form = AccessionRowSpecimenForm(request.POST, instance=element)
         if form.is_valid():
             form.save()
-            return redirect('accessionrow_detail', pk=accession_row_id)
+            return redirect('accessionrow_detail', pk=accession_row.id)
     else:
-        form = AccessionRowSpecimenForm(instance=specimen)
-
+        form = AccessionRowSpecimenForm(instance=element)
+    
     return render(request, 'cms/edit_accession_row_specimen.html', {
-        'form': form,
+        'form': form, 
         'accession_row': accession_row,
-        'specimen': specimen,
+        'element': element
     })
 
 @login_required
 @user_passes_test(is_collection_manager)
-def edit_identification(request, accession_row_id, identification_id):
+def edit_identification(request, identification_id):
     """Edit an existing Identification record."""
-    accession_row = get_object_or_404(AccessionRow, id=accession_row_id)
-    identification = get_object_or_404(Identification, id=identification_id, accession_row=accession_row)
+    identification = get_object_or_404(Identification, id=identification_id)
+    accession_row = identification.accession_row
 
     if request.method == 'POST':
         form = AccessionRowIdentificationForm(request.POST, instance=identification)
         if form.is_valid():
             form.save()
-            return redirect('accessionrow_detail', pk=accession_row_id)
+            return redirect('accessionrow_detail', pk=accession_row.id)
     else:
         form = AccessionRowIdentificationForm(instance=identification)
-
+    
     return render(request, 'cms/edit_accession_row_identification.html', {
-        'form': form,
+        'form': form, 
         'accession_row': accession_row,
-        'identification': identification,
+        'identification': identification
     })
 
 @login_required
