@@ -394,7 +394,7 @@ def test_accession_row_detail_highlights_latest_identification(client, collectio
     assert response.status_code == 200
     content = response.content.decode()
     
-    # Check for CSS classes
-    assert 'identification--latest' in content
-    assert 'identification--old' in content
+    # Check for W3.CSS classes
+    assert 'w3-pale-green' in content
+    assert 'w3-pale-red' in content
 
