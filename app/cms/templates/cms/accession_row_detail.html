@@ -97,7 +97,7 @@
         </thead>
         <tbody>
           {% for identification in identifications %}
-            <tr class="{% if forloop.first %}identification--latest{% else %}identification--old{% endif %}">
+            <tr class="{% if forloop.first %}w3-pale-green{% else %}w3-pale-red{% endif %}">
               <td>{{ identification.identified_by|default:"—" }}</td>
               <td>{{ identification.date_identified|default:"—" }}</td>
               <td>{{ identification.verbatim_identification|default:"—" }}</td>

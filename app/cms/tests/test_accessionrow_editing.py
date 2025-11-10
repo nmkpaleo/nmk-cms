@@ -342,7 +342,7 @@ class TestIdentificationRowCSSClasses:
     """Test CSS classes applied to identification rows."""
 
     def test_first_identification_has_latest_class(self, client, accession_row, person):
-        """Verify the first identification row has .identification--latest class."""
+        """Verify the first identification row has w3-pale-green class."""
         from datetime import date
         
         # Create two identifications
@@ -365,27 +365,13 @@ class TestIdentificationRowCSSClasses:
         assert response.status_code == 200
         content = response.content.decode()
         
-        # Check that the CSS classes are present
-        assert 'identification--latest' in content
-        assert 'identification--old' in content
+        # Check that the W3.CSS classes are present
+        assert 'w3-pale-green' in content
+        assert 'w3-pale-red' in content
         
-        # The most recent (id1) should have latest class
+        # The most recent (id1) should have w3-pale-green class
         # We can't easily verify which specific row has which class without parsing HTML,
         # but we can verify both classes are present in the rendered output
-
-    def test_css_classes_defined_in_stylesheet(self):
-        """Verify CSS classes are defined in the stylesheet."""
-        import os
-        css_path = '/home/runner/work/nmk-cms/nmk-cms/app/cms/static/css/style.css'
-        
-        if os.path.exists(css_path):
-            with open(css_path, 'r') as f:
-                css_content = f.read()
-            
-            assert 'identification--latest' in css_content
-            assert 'identification--old' in css_content
-            assert '#e6ffed' in css_content  # Light green background
-            assert '#ffe6e6' in css_content  # Light red background
 
 
 class TestEditLinksInDetailPage:

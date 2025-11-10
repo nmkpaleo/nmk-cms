@@ -1649,6 +1649,7 @@ class AccessionRowDetailView(DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['natureofspecimens'] = NatureOfSpecimen.objects.filter(accession_row=self.object)
+        # Order identifications by date_identified DESC (nulls last), then created_on DESC
         context['identifications'] = Identification.objects.filter(
             accession_row=self.object
         ).order_by('-date_identified', '-created_on')
