@@ -89,6 +89,9 @@
             <th scope="col">{% trans "Description" %}</th>
             <th scope="col">{% trans "Portion" %}</th>
             <th scope="col">{% trans "Fragments" %}</th>
+            {% if can_manage %}
+              <th scope="col">{% trans "Actions" %}</th>
+            {% endif %}
           </tr>
         </thead>
         <tbody>
@@ -100,10 +103,18 @@
               <td>{{ specimen.verbatim_element|default:"—" }}</td>
               <td>{{ specimen.portion|default:"—" }}</td>
               <td>{{ specimen.fragments|default:"—" }}</td>
+              {% if can_manage %}
+                <td>
+                  <a href="{% url 'element_edit' specimen.id %}" class="w3-button w3-small w3-blue w3-round" aria-label="{% trans 'Edit element' %}">
+                    <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+                    <span class="w3-hide-small w3-margin-left">{% trans "Edit" %}</span>
+                  </a>
+                </td>
+              {% endif %}
             </tr>
           {% empty %}
             <tr>
-              <td colspan="6" class="w3-center">{% trans "No elements recorded." %}</td>
+              <td colspan="{% if can_manage %}7{% else %}6{% endif %}" class="w3-center">{% trans "No elements recorded." %}</td>
             </tr>
           {% endfor %}
         </tbody>

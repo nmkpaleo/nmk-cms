@@ -4369,6 +4369,27 @@ def add_specimen_to_accession_row(request, accession_row_id):
 
 @login_required
 @user_passes_test(is_collection_manager)
+def edit_specimen_element(request, element_id):
+    """Edit an existing specimen element (NatureOfSpecimen)."""
+    element = get_object_or_404(NatureOfSpecimen, id=element_id)
+    accession_row = element.accession_row
+    
+    if request.method == 'POST':
+        form = AccessionRowSpecimenForm(request.POST, instance=element)
+        if form.is_valid():
+            form.save()
+            return redirect('accessionrow_detail', pk=accession_row.id)
+    else:
+        form = AccessionRowSpecimenForm(instance=element)
+    
+    return render(request, 'cms/edit_accession_row_specimen.html', {
+        'form': form, 
+        'accession_row': accession_row,
+        'element': element
+    })
+
+@login_required
+@user_passes_test(is_collection_manager)
 def add_geology_to_accession(request, accession_id):
     accession = get_object_or_404(Accession, id=accession_id)
 
