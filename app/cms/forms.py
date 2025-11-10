@@ -983,12 +983,12 @@ class AccessionRowSpecimenForm(BaseW3ModelForm):
     class Meta:
         model = NatureOfSpecimen
         fields = [
+            "verbatim_element",
             "element",
             "side",
-            "condition",
-            "verbatim_element",
             "portion",
             "fragments",
+            "condition",
         ]
 
 

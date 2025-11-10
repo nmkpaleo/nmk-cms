@@ -18,7 +18,9 @@
 
   <header class="w3-margin-bottom w3-border-bottom w3-padding-16">
     <h1 id="{{ resolved_heading_id }}" class="w3-xxlarge w3-margin-0">
-      {% if instance and instance.pk %}
+      {% if custom_heading %}
+        {{ custom_heading }}
+      {% elif instance and instance.pk %}
         {% blocktrans with label=title %}Edit {{ label }}{% endblocktrans %}
       {% else %}
         {% blocktrans with label=title %}New {{ label }}{% endblocktrans %}
