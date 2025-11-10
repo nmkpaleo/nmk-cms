@@ -1649,7 +1649,7 @@ class AccessionRowDetailView(DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['natureofspecimens'] = NatureOfSpecimen.objects.filter(accession_row=self.object)
-        context['identifications'] = Identification.objects.filter(accession_row=self.object)
+        context['identifications'] = Identification.objects.filter(accession_row=self.object).order_by('-created_on')
         context['can_edit'] = (
             self.request.user.is_superuser or is_collection_manager(self.request.user)
         )
@@ -4366,6 +4366,48 @@ def add_specimen_to_accession_row(request, accession_row_id):
         form = AccessionRowSpecimenForm()
 
     return render(request, 'cms/add_accession_row_specimen.html', {'form': form, 'accession_row': accession_row})
+
+@login_required
+@user_passes_test(is_collection_manager)
+def edit_specimen_element(request, element_id):
+    """Edit an existing specimen element (NatureOfSpecimen)."""
+    element = get_object_or_404(NatureOfSpecimen, id=element_id)
+    accession_row = element.accession_row
+    
+    if request.method == 'POST':
+        form = AccessionRowSpecimenForm(request.POST, instance=element)
+        if form.is_valid():
+            form.save()
+            return redirect('accessionrow_detail', pk=accession_row.id)
+    else:
+        form = AccessionRowSpecimenForm(instance=element)
+    
+    return render(request, 'cms/edit_accession_row_specimen.html', {
+        'form': form, 
+        'accession_row': accession_row,
+        'element': element
+    })
+
+@login_required
+@user_passes_test(is_collection_manager)
+def edit_identification(request, identification_id):
+    """Edit an existing identification."""
+    identification = get_object_or_404(Identification, id=identification_id)
+    accession_row = identification.accession_row
+    
+    if request.method == 'POST':
+        form = AccessionRowIdentificationForm(request.POST, instance=identification)
+        if form.is_valid():
+            form.save()
+            return redirect('accessionrow_detail', pk=accession_row.id)
+    else:
+        form = AccessionRowIdentificationForm(instance=identification)
+    
+    return render(request, 'cms/edit_accession_row_identification.html', {
+        'form': form, 
+        'accession_row': accession_row,
+        'identification': identification
+    })
 
 @login_required
 @user_passes_test(is_collection_manager)
