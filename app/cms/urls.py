@@ -129,6 +129,7 @@ urlpatterns = [
     path('accessionrows/<int:pk>/edit/', AccessionRowUpdateView.as_view(), name='accessionrow_edit'),
     path('accessionrows/<int:accession_row_id>/add-specimen/', add_specimen_to_accession_row, name='accessionrow_add_specimen'),
     path('accessionrows/<int:accession_row_id>/add-identification/', add_identification_to_accession_row, name='accessionrow_add_identification'),
+    path('specimens/<int:element_id>/edit/', edit_specimen_element, name='specimen_edit'),
     path('elements/<int:element_id>/edit/', edit_specimen_element, name='element_edit'),
     path('identifications/<int:identification_id>/edit/', edit_identification, name='identification_edit'),
     path("accessions/generate-batch/", generate_accession_batch, name="accession_generate_batch"),
