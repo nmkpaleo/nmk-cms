@@ -1649,7 +1649,9 @@ class AccessionRowDetailView(DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['natureofspecimens'] = NatureOfSpecimen.objects.filter(accession_row=self.object)
-        context['identifications'] = Identification.objects.filter(accession_row=self.object).order_by('-created_on')
+        context['identifications'] = Identification.objects.filter(
+            accession_row=self.object
+        ).order_by('-date_identified', '-created_on')
         context['can_edit'] = (
             self.request.user.is_superuser or is_collection_manager(self.request.user)
         )
@@ -4391,10 +4393,10 @@ def edit_specimen_element(request, element_id):
 @login_required
 @user_passes_test(is_collection_manager)
 def edit_identification(request, identification_id):
-    """Edit an existing identification."""
+    """Edit an existing Identification record."""
     identification = get_object_or_404(Identification, id=identification_id)
     accession_row = identification.accession_row
-    
+
     if request.method == 'POST':
         form = AccessionRowIdentificationForm(request.POST, instance=identification)
         if form.is_valid():
