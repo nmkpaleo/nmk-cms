@@ -267,6 +267,48 @@ Comprehensive documentation is available in the `docs/` directory:
   - Development: `app/scripts/entrypoint.sh`
   - Production: `app/scripts/entrypoint.prod.sh`
 
+## Git Workflow and PR Practices
+
+### Branch Naming
+- Feature branches: `feature/<short-description>` or `<username>/<feature-name>`
+- Bug fixes: `bugfix/<issue-number>-<short-description>`
+- Hotfixes: `hotfix/<description>`
+- Never commit directly to `main`, `staging`, or `prod`
+
+### Commit Messages
+- Use clear, descriptive commit messages
+- Start with a verb in present tense (e.g., "Add", "Fix", "Update", "Remove")
+- Reference issue numbers when applicable: "Fix #123: Resolve migration conflict"
+- Keep first line under 72 characters
+
+### Pull Request Workflow
+1. Create a feature branch from the latest `main`
+2. Make focused, atomic commits
+3. Push changes and open a PR with a clear description
+4. Ensure all CI checks pass before requesting review
+5. Address review feedback promptly
+6. Squash commits if requested before merging
+
+## CI/CD and Quality Checks
+
+### Automated Checks
+- **Docker Build:** CI builds the Docker image on every push
+- **Tests:** Run via `docker compose exec web python manage.py test`
+- **Linting:** Follow PEP 8; use tools like `black`, `isort`, `flake8` if configured
+- **Security:** Check for vulnerabilities in dependencies
+
+### Local Verification Before Push
+```bash
+# Run tests
+docker compose exec web python manage.py test
+
+# Check for migration issues
+docker compose exec web python manage.py makemigrations --dry-run --check
+
+# Verify static files collect properly
+docker compose exec web python manage.py collectstatic --noinput --dry-run
+```
+
 ## Common Pitfalls to Avoid
 
 1. **Line Endings:** Entrypoint scripts (`app/scripts/entrypoint.sh` and `app/scripts/entrypoint.prod.sh`) must use Unix (LF) line endings, not Windows (CRLF)
@@ -276,6 +318,114 @@ Comprehensive documentation is available in the `docs/` directory:
 5. **Template Inheritance:** Always extend `base_generic.html` for consistency
 6. **Custom CSS:** Prefix with `.nmk-` to avoid W3.CSS conflicts
 7. **Test Data:** Don't commit test data or personal information
+8. **Docker Context:** Always use `docker compose exec web` for Django commands, not `python manage.py` directly
+
+## Code Examples: Dos and Don'ts
+
+### ✅ DO: Use QuerySet Optimization
+```python
+# Good - Uses select_related to avoid N+1 queries
+def get_queryset(self):
+    return Specimen.objects.select_related(
+        'accession', 'locality', 'taxon'
+    ).prefetch_related('preparations')
+```
+
+### ❌ DON'T: Cause N+1 Query Problems
+```python
+# Bad - Will cause N+1 queries
+def get_queryset(self):
+    return Specimen.objects.all()  # Related objects fetched one by one
+```
+
+### ✅ DO: Use Class-Based Views with Mixins
+```python
+# Good - Reusable, testable, follows Django patterns
+class SpecimenListView(LoginRequiredMixin, FilterView):
+    model = Specimen
+    template_name = 'cms/specimen_list.html'
+    filterset_class = SpecimenFilter
+    paginate_by = 10
+```
+
+### ❌ DON'T: Put Business Logic in Views
+```python
+# Bad - Business logic in view instead of model
+def update_specimen(request, pk):
+    specimen = Specimen.objects.get(pk=pk)
+    specimen.catalog_number = generate_catalog_number()  # Should be in model
+    specimen.save()
+```
+
+### ✅ DO: Validate in Forms
+```python
+# Good - Validation in form's clean method
+class AccessionForm(forms.ModelForm):
+    def clean_accession_number(self):
+        number = self.cleaned_data['accession_number']
+        if not re.match(r'^\d{4}-\d{3}$', number):
+            raise ValidationError('Invalid format. Use YYYY-NNN')
+        return number
+```
+
+### ✅ DO: Use Semantic HTML5 and W3.CSS
+```html
+<!-- Good - Semantic HTML5 with W3.CSS -->
+<main class="w3-container">
+  <header class="w3-row">
+    <h1 class="w3-col s12">Specimens</h1>
+  </header>
+  <section class="w3-responsive">
+    <table class="w3-table-all w3-hoverable">
+      <!-- table content -->
+    </table>
+  </section>
+</main>
+```
+
+### ❌ DON'T: Use Inline Styles or Generic Divs
+```html
+<!-- Bad - No semantic meaning, inline styles -->
+<div style="padding: 20px;">
+  <div style="font-size: 24px;">Specimens</div>
+  <div>
+    <table style="width: 100%;">
+      <!-- table content -->
+    </table>
+  </div>
+</div>
+```
+
+## Troubleshooting Common Issues
+
+### Docker Container Won't Start
+- Check logs: `docker compose logs web`
+- Verify environment variables in `.env` file
+- Ensure database is running: `docker compose ps`
+- Check for port conflicts: `docker compose down && docker compose up`
+
+### Database Migration Errors
+- Check migration status: `docker compose exec web python manage.py showmigrations`
+- Reset migrations (development only): Delete migration files and `db.sqlite3`, then `makemigrations` and `migrate`
+- For conflicts: Merge migration files or use `--merge` flag
+
+### Static Files Not Loading
+- Run: `docker compose exec web python manage.py collectstatic`
+- Check `STATIC_ROOT` and `STATIC_URL` in settings
+- Verify nginx configuration in production
+- Clear browser cache
+
+### Tests Failing
+- Run specific test: `docker compose exec web python manage.py test cms.tests.test_views.SpecimenListViewTest`
+- Check for database state issues: Use `TransactionTestCase` if needed
+- Verify test isolation: Ensure tests don't depend on execution order
+- Check fixtures and factory data
+
+### Template Not Found Errors
+- Verify template path matches app structure: `<app_name>/templates/<app_name>/<template_name>.html`
+- Ensure app is in `INSTALLED_APPS`
+- Check template inheritance: Template must extend `base_generic.html`
+- Verify template name in view matches file name
 
 ## When Making Changes
 
