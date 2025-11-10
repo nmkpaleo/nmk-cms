@@ -148,7 +148,7 @@ class TestSpecimenFormFieldOrdering:
     def test_edit_form_field_order_verbatim_first_condition_last(self, client, collection_manager_user, accession_row, specimen):
         """Test that verbatim_element is first and condition is last in the edit form."""
         client.force_login(collection_manager_user)
-        url = reverse('accessionrow_edit_specimen', args=[accession_row.id, specimen.id])
+        url = reverse('element_edit', args=[specimen.id])
         response = client.get(url)
         
         assert response.status_code == 200
@@ -165,7 +165,7 @@ class TestElementEdit:
     def test_edit_specimen_page_loads_existing_data(self, client, collection_manager_user, accession_row, specimen):
         """Test that the edit page loads existing Element data."""
         client.force_login(collection_manager_user)
-        url = reverse('accessionrow_edit_specimen', args=[accession_row.id, specimen.id])
+        url = reverse('element_edit', args=[specimen.id])
         response = client.get(url)
         
         assert response.status_code == 200
@@ -176,7 +176,7 @@ class TestElementEdit:
     def test_edit_specimen_saves_updates(self, client, collection_manager_user, accession_row, specimen):
         """Test that editing an Element saves updates correctly."""
         client.force_login(collection_manager_user)
-        url = reverse('accessionrow_edit_specimen', args=[accession_row.id, specimen.id])
+        url = reverse('element_edit', args=[specimen.id])
         
         data = {
             'element': specimen.element.id,
@@ -200,7 +200,7 @@ class TestElementEdit:
 
     def test_edit_specimen_requires_authentication(self, client, accession_row, specimen):
         """Test that editing requires authentication."""
-        url = reverse('accessionrow_edit_specimen', args=[accession_row.id, specimen.id])
+        url = reverse('element_edit', args=[specimen.id])
         response = client.get(url)
         
         assert response.status_code == 302
@@ -213,7 +213,7 @@ class TestIdentificationEdit:
     def test_edit_identification_page_loads_existing_data(self, client, collection_manager_user, accession_row, identification):
         """Test that the edit page loads existing Identification data."""
         client.force_login(collection_manager_user)
-        url = reverse('accessionrow_edit_identification', args=[accession_row.id, identification.id])
+        url = reverse('identification_edit', args=[identification.id])
         response = client.get(url)
         
         assert response.status_code == 200
@@ -224,7 +224,7 @@ class TestIdentificationEdit:
     def test_edit_identification_saves_updates(self, client, collection_manager_user, accession_row, identification):
         """Test that editing an Identification saves updates correctly."""
         client.force_login(collection_manager_user)
-        url = reverse('accessionrow_edit_identification', args=[accession_row.id, identification.id])
+        url = reverse('identification_edit', args=[identification.id])
         
         data = {
             'identified_by': identification.identified_by.id,
@@ -246,7 +246,7 @@ class TestIdentificationEdit:
 
     def test_edit_identification_requires_authentication(self, client, accession_row, identification):
         """Test that editing requires authentication."""
-        url = reverse('accessionrow_edit_identification', args=[accession_row.id, identification.id])
+        url = reverse('identification_edit', args=[identification.id])
         response = client.get(url)
         
         assert response.status_code == 302
@@ -363,7 +363,7 @@ class TestAccessionRowDetailEditLinks:
         assert response.status_code == 200
         content = response.content.decode()
         
-        edit_url = reverse('accessionrow_edit_specimen', args=[accession_row.id, specimen.id])
+        edit_url = reverse('element_edit', args=[specimen.id])
         assert edit_url in content
 
     def test_identification_edit_link_present_for_collection_manager(self, client, collection_manager_user, accession_row, identification):
@@ -375,5 +375,5 @@ class TestAccessionRowDetailEditLinks:
         assert response.status_code == 200
         content = response.content.decode()
         
-        edit_url = reverse('accessionrow_edit_identification', args=[accession_row.id, identification.id])
+        edit_url = reverse('identification_edit', args=[identification.id])
         assert edit_url in content
