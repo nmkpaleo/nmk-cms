@@ -103,9 +103,12 @@
           <h2 id="fieldslip-media-heading" class="w3-margin-top">{% trans "Aerial photo" %}</h2>
           <div class="w3-margin-top">
             {% if fieldslip.aerial_photo %}
-              <img src="{{ fieldslip.aerial_photo.url }}" alt="{% trans 'Aerial photograph' %}" class="w3-image" style="max-height:220px; object-fit:cover;" />
+              <p class="w3-tag w3-light-blue w3-round w3-text-black w3-padding-small">
+                <i class="fa-solid fa-map-location-dot" aria-hidden="true"></i>
+                <span class="w3-margin-left">{{ fieldslip.aerial_photo }}</span>
+              </p>
             {% else %}
-              <p class="w3-text-gray">{% trans "No aerial photo uploaded." %}</p>
+              <p class="w3-text-gray">{% trans "No aerial photo information provided." %}</p>
             {% endif %}
           </div>
         </div>
