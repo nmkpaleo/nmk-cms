@@ -12,14 +12,26 @@
       </h1>
       <p class="w3-text-gray">{{ accessionrow.accession }}</p>
     </div>
-    {% if can_edit %}
-      <div class="w3-col s12 m4 w3-right-align w3-margin-top">
-        <a href="{% url 'accessionrow_edit' accessionrow.pk %}" class="w3-button w3-blue w3-round" aria-label="{% trans 'Edit specimen' %}">
-          <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
-          <span class="w3-hide-small w3-margin-left">{% trans "Edit Specimen" %}</span>
-        </a>
+    <div class="w3-col s12 m4 w3-right-align w3-margin-top">
+      <div class="w3-bar w3-right-align">
+        {% if can_edit %}
+          <a
+            href="{% url 'accessionrow_print' accessionrow.pk %}"
+            class="w3-button w3-light-grey w3-round w3-margin-left w3-margin-bottom"
+            target="_blank"
+            rel="noopener"
+            aria-label="{% trans 'Open printable specimen card in a new tab' %}"
+          >
+            <i class="fa-solid fa-print" aria-hidden="true"></i>
+            <span class="w3-hide-small w3-margin-left">{% trans "Print card" %}</span>
+          </a>
+          <a href="{% url 'accessionrow_edit' accessionrow.pk %}" class="w3-button w3-blue w3-round w3-margin-left w3-margin-bottom" aria-label="{% trans 'Edit specimen' %}">
+            <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+            <span class="w3-hide-small w3-margin-left">{% trans "Edit Specimen" %}</span>
+          </a>
+        {% endif %}
       </div>
-    {% endif %}
+    </div>
   </header>
 
   <section class="w3-margin-top" aria-labelledby="specimen-overview-heading">
@@ -38,10 +50,12 @@
                   <th scope="row">{% trans "Specimen suffix" %}</th>
                   <td>{{ accessionrow.specimen_suffix }}</td>
                 </tr>
-                <tr>
-                  <th scope="row">{% trans "Storage" %}</th>
-                  <td>{{ accessionrow.storage|default:"—" }}</td>
-                </tr>
+                {% if can_edit %}
+                  <tr>
+                    <th scope="row">{% trans "Storage" %}</th>
+                    <td>{{ accessionrow.storage|default:"—" }}</td>
+                  </tr>
+                {% endif %}
                 {% if show_inventory_status %}
                   <tr>
                     <th scope="row">{% trans "Inventory status" %}</th>
