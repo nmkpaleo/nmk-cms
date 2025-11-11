@@ -1605,6 +1605,12 @@ class AccessionDetailView(DetailView):
         context['taxonomy'] = taxonomy_map  # Maps first identifications to Taxon objects
         context['taxonomy_map'] = taxonomy_map
 
+        can_edit_accession_rows = self.request.user.is_authenticated and (
+            self.request.user.is_superuser or is_collection_manager(self.request.user)
+        )
+        context['can_edit_accession_rows'] = can_edit_accession_rows
+        context['specimen_table_empty_colspan'] = 11 if can_edit_accession_rows else 10
+
         return context
 
 from django.contrib.auth.mixins import LoginRequiredMixin

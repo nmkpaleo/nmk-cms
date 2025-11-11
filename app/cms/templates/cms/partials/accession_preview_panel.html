@@ -34,8 +34,6 @@
       </div>
     </article>
 
-    {% with can_edit_accession_rows=user.is_authenticated and (user.is_superuser or user|has_group:"Collection Managers") %}
-      {% with empty_colspan=can_edit_accession_rows|yesno:"11,10" %}
     <div class="w3-col s12 l7" aria-labelledby="accession-specimens-heading">
       <section class="w3-margin-bottom" aria-labelledby="accession-specimens-heading">
         <header class="w3-row w3-padding-16">
@@ -147,7 +145,7 @@
                   {% endwith %}
                 {% empty %}
                   <tr>
-                    <td colspan="{{ empty_colspan }}" class="w3-center">{% trans "No specimen rows recorded." %}</td>
+                    <td colspan="{{ specimen_table_empty_colspan|default:10 }}" class="w3-center">{% trans "No specimen rows recorded." %}</td>
                   </tr>
                 {% endfor %}
               {% endwith %}
@@ -327,8 +325,6 @@
         </div>
       </section>
     </div>
-      {% endwith %}
-    {% endwith %}
   </div>
 
   <div class="w3-margin-top accession-lower-area">

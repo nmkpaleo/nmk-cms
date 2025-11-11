@@ -511,7 +511,7 @@
       {% if qc_preview %}
       <div class="qc-preview-panel">
         <h3 class="w3-margin-top w3-margin-bottom">Preview accession</h3>
-        {% include "cms/partials/accession_preview_panel.html" with accession=qc_preview.accession geologies=qc_preview.geologies accession_rows=qc_preview.accession_rows first_identifications=qc_preview.first_identifications identification_counts=qc_preview.identification_counts taxonomy=qc_preview.taxonomy references=qc_preview.references fieldslips=qc_preview.fieldslips preview_mode=True %}
+        {% include "cms/partials/accession_preview_panel.html" with accession=qc_preview.accession geologies=qc_preview.geologies accession_rows=qc_preview.accession_rows first_identifications=qc_preview.first_identifications identification_counts=qc_preview.identification_counts taxonomy=qc_preview.taxonomy references=qc_preview.references fieldslips=qc_preview.fieldslips preview_mode=True can_edit_accession_rows=True specimen_table_empty_colspan=11 %}
       </div>
       {% endif %}
       <div class="qc-history-panel">
