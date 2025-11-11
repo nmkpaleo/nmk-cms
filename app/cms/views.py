@@ -1706,25 +1706,28 @@ class AccessionRowPrintView(DetailView):
         context = super().get_context_data(**kwargs)
 
         accession = self.object.accession
-        identifications = list(self.object.identification_set.all())
-        latest_identification = identifications[0] if identifications else None
+
+        (
+            first_identifications,
+            _identification_counts,
+            taxonomy_map,
+        ) = build_accession_identification_maps([self.object])
+
+        latest_identification = first_identifications.get(self.object.id)
         taxon_record = latest_identification.taxon_record if latest_identification else None
+        resolved_taxon = None
+        if latest_identification is not None:
+            resolved_taxon = taxonomy_map.get(latest_identification.id)
+        if resolved_taxon is None:
+            resolved_taxon = taxon_record
 
         taxonomy_values = {
-            "family": getattr(taxon_record, "family", "") if taxon_record else "",
-            "subfamily": getattr(taxon_record, "subfamily", "") if taxon_record else "",
-            "tribe": getattr(taxon_record, "tribe", "") if taxon_record else "",
-            "genus": getattr(taxon_record, "genus", "") if taxon_record else "",
-            "species": getattr(taxon_record, "species", "") if taxon_record else "",
+            "family": getattr(resolved_taxon, "family", "") if resolved_taxon else "",
+            "subfamily": getattr(resolved_taxon, "subfamily", "") if resolved_taxon else "",
+            "tribe": getattr(resolved_taxon, "tribe", "") if resolved_taxon else "",
+            "genus": getattr(resolved_taxon, "genus", "") if resolved_taxon else "",
+            "species": getattr(resolved_taxon, "species", "") if resolved_taxon else "",
         }
-
-        taxonomy_rows = [
-            ("family", taxonomy_values["family"]),
-            ("subfamily", taxonomy_values["subfamily"]),
-            ("tribe", taxonomy_values["tribe"]),
-            ("genus", taxonomy_values["genus"]),
-            ("species", taxonomy_values["species"]),
-        ]
 
         has_taxonomy_values = any(
             bool(value and str(value).strip()) for value in taxonomy_values.values()
@@ -1765,7 +1768,6 @@ class AccessionRowPrintView(DetailView):
             {
                 'latest_identification': latest_identification,
                 'taxonomy_values': taxonomy_values,
-                'taxonomy_rows': taxonomy_rows,
                 'has_taxonomy_values': has_taxonomy_values,
                 'taxonomy_fallback_value': (
                     latest_identification.taxon.strip()
