@@ -1,6 +1,8 @@
 import itertools
 
 import pytest
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.urls import reverse
 
 from app.cms.models import (
@@ -17,6 +19,9 @@ from app.cms.models import (
 )
 
 pytestmark = pytest.mark.django_db
+
+
+User = get_user_model()
 
 
 def create_locality(*, abbreviation: str, name: str, geological_times: list[str] | None = None) -> Locality:
@@ -53,6 +58,13 @@ def create_accession_row(*, accession: Accession, specimen_suffix: str) -> Acces
         storage=create_storage(),
         specimen_suffix=specimen_suffix,
     )
+
+
+def create_collection_manager_user(*, username: str = "manager") -> User:
+    user = User.objects.create_user(username=username, password="password123")
+    group, _ = Group.objects.get_or_create(name="Collection Managers")
+    user.groups.add(group)
+    return user
 
 
 def create_taxon(
@@ -236,10 +248,13 @@ def test_accession_row_print_view_uses_taxon_fallback_when_unresolved(client):
     assert response.context["identification_qualifier"] == "aff."
 
 
-def test_accession_row_detail_includes_print_button(client):
+def test_accession_row_detail_includes_print_button_for_editors(client):
     locality = create_locality(abbreviation="PD", name="Print Delta")
     accession = create_accession(locality=locality, specimen_no=104)
     accession_row = create_accession_row(accession=accession, specimen_suffix="D")
+
+    user = create_collection_manager_user()
+    client.force_login(user)
 
     response = client.get(reverse("accessionrow_detail", args=[accession_row.pk]))
 
@@ -247,3 +262,16 @@ def test_accession_row_detail_includes_print_button(client):
     content = response.content.decode()
     print_url = reverse("accessionrow_print", args=[accession_row.pk])
     assert f'href="{print_url}"' in content
+
+
+def test_accession_row_detail_hides_print_button_for_read_only_users(client):
+    locality = create_locality(abbreviation="PE", name="Print Echo")
+    accession = create_accession(locality=locality, specimen_no=105)
+    accession_row = create_accession_row(accession=accession, specimen_suffix="E")
+
+    response = client.get(reverse("accessionrow_detail", args=[accession_row.pk]))
+
+    assert response.status_code == 200
+    content = response.content.decode()
+    print_url = reverse("accessionrow_print", args=[accession_row.pk])
+    assert f'href="{print_url}"' not in content
