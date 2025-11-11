@@ -41,6 +41,7 @@ def create_accession(*, locality: Locality, specimen_no: int = 1) -> Accession:
         collection=collection,
         specimen_prefix=locality,
         specimen_no=specimen_no,
+        is_published=True,
     )
 
 
@@ -201,6 +202,10 @@ def test_accession_row_print_view_populates_taxonomy_and_references(client):
     assert reference_entries[0]["reference"] == reference
     assert reference_entries[0]["page"] == "42"
     assert reference_entries[0]["citation"] == "Researcher 2024"
+    assert response.context["can_edit"] is False
+
+    content = response.content.decode()
+    assert "<th scope=\"row\" class=\"print-summary__label--narrow\">Storage</th>" not in content
 
 
 def test_accession_row_print_view_resolves_taxonomy_by_name_when_no_record(client):
@@ -248,6 +253,23 @@ def test_accession_row_print_view_uses_taxon_fallback_when_unresolved(client):
     assert response.context["identification_qualifier"] == "aff."
 
 
+def test_accession_row_print_shows_storage_for_editors(client):
+    locality = create_locality(abbreviation="PS", name="Print Storage")
+    accession = create_accession(locality=locality, specimen_no=106)
+    accession_row = create_accession_row(accession=accession, specimen_suffix="F")
+
+    user = create_collection_manager_user(username="manager-print")
+    client.force_login(user)
+
+    response = client.get(reverse("accessionrow_print", args=[accession_row.pk]))
+
+    assert response.status_code == 200
+    assert response.context["can_edit"] is True
+
+    content = response.content.decode()
+    assert "<th scope=\"row\" class=\"print-summary__label--narrow\">Storage</th>" in content
+
+
 def test_accession_row_detail_includes_print_button_for_editors(client):
     locality = create_locality(abbreviation="PD", name="Print Delta")
     accession = create_accession(locality=locality, specimen_no=104)
@@ -262,6 +284,7 @@ def test_accession_row_detail_includes_print_button_for_editors(client):
     content = response.content.decode()
     print_url = reverse("accessionrow_print", args=[accession_row.pk])
     assert f'href="{print_url}"' in content
+    assert "<th scope=\"row\">Storage</th>" in content
 
 
 def test_accession_row_detail_hides_print_button_for_read_only_users(client):
@@ -275,3 +298,31 @@ def test_accession_row_detail_hides_print_button_for_read_only_users(client):
     content = response.content.decode()
     print_url = reverse("accessionrow_print", args=[accession_row.pk])
     assert f'href="{print_url}"' not in content
+    assert "<th scope=\"row\">Storage</th>" not in content
+
+
+def test_accession_detail_hides_storage_column_for_read_only_users(client):
+    locality = create_locality(abbreviation="AD", name="Accession Delta")
+    accession = create_accession(locality=locality, specimen_no=107)
+    create_accession_row(accession=accession, specimen_suffix="G")
+
+    response = client.get(reverse("accession_detail", args=[accession.pk]))
+
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert "<th scope=\"col\">Storage</th>" not in content
+
+
+def test_accession_detail_shows_storage_column_for_editors(client):
+    locality = create_locality(abbreviation="AE", name="Accession Echo")
+    accession = create_accession(locality=locality, specimen_no=108)
+    create_accession_row(accession=accession, specimen_suffix="H")
+
+    user = create_collection_manager_user(username="manager-accession")
+    client.force_login(user)
+
+    response = client.get(reverse("accession_detail", args=[accession.pk]))
+
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert "<th scope=\"col\">Storage</th>" in content

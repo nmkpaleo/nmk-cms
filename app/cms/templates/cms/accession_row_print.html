@@ -180,15 +180,25 @@
       </header>
 
       <section class="print-card__section" aria-labelledby="taxonomy-heading">
-        <h2 id="taxonomy-heading" class="w3-large w3-border-bottom w3-padding-small">{% trans "Taxonomy & storage" %}</h2>
+        <h2 id="taxonomy-heading" class="w3-large w3-border-bottom w3-padding-small">
+          {% if can_edit %}
+            {% trans "Taxonomy & storage" %}
+          {% else %}
+            {% trans "Taxonomy" %}
+          {% endif %}
+        </h2>
         <div class="w3-responsive w3-margin-top">
           <table class="print-summary">
             <tbody>
               <tr>
                 <th scope="row" class="print-summary__label--narrow">{% trans "Family" %}</th>
-                <td>{{ taxonomy_values.family|default:"—" }}</td>
-                <th scope="row" class="print-summary__label--narrow">{% trans "Storage" %}</th>
-                <td>{{ accessionrow.storage|default:"—" }}</td>
+                {% if can_edit %}
+                  <td>{{ taxonomy_values.family|default:"—" }}</td>
+                  <th scope="row" class="print-summary__label--narrow">{% trans "Storage" %}</th>
+                  <td>{{ accessionrow.storage|default:"—" }}</td>
+                {% else %}
+                  <td colspan="3">{{ taxonomy_values.family|default:"—" }}</td>
+                {% endif %}
               </tr>
               <tr>
                 <th scope="row">{% trans "Subfamily" %}</th>

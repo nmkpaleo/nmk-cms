@@ -34,6 +34,8 @@
       </div>
     </article>
 
+    {% with can_edit_accession_rows=user.is_authenticated and (user.is_superuser or user|has_group:"Collection Managers") %}
+      {% with empty_colspan=can_edit_accession_rows|yesno:"11,10" %}
     <div class="w3-col s12 l7" aria-labelledby="accession-specimens-heading">
       <section class="w3-margin-bottom" aria-labelledby="accession-specimens-heading">
         <header class="w3-row w3-padding-16">
@@ -59,7 +61,9 @@
             <thead>
               <tr>
                 <th scope="col">{% trans "Specimen" %}</th>
-                <th scope="col">{% trans "Storage" %}</th>
+                {% if can_edit_accession_rows %}
+                  <th scope="col">{% trans "Storage" %}</th>
+                {% endif %}
                 <th scope="col">{% trans "Element" %}</th>
                 <th scope="col">{% trans "Side" %}</th>
                 <th scope="col">{% trans "Description" %}</th>
@@ -83,7 +87,9 @@
                           <a href="{% url 'accessionrow_detail' accessionrow.pk %}">{{ accessionrow.specimen_suffix }}</a>
                         {% endif %}
                       </td>
-                      <td>{{ accessionrow.storage|default:"—" }}</td>
+                      {% if can_edit_accession_rows %}
+                        <td>{{ accessionrow.storage|default:"—" }}</td>
+                      {% endif %}
                       <td>
                         {% if specimens %}
                           {% for specimen in specimens %}
@@ -141,7 +147,7 @@
                   {% endwith %}
                 {% empty %}
                   <tr>
-                    <td colspan="11" class="w3-center">{% trans "No specimen rows recorded." %}</td>
+                    <td colspan="{{ empty_colspan }}" class="w3-center">{% trans "No specimen rows recorded." %}</td>
                   </tr>
                 {% endfor %}
               {% endwith %}
@@ -321,6 +327,8 @@
         </div>
       </section>
     </div>
+      {% endwith %}
+    {% endwith %}
   </div>
 
   <div class="w3-margin-top accession-lower-area">

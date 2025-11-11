@@ -50,10 +50,12 @@
                   <th scope="row">{% trans "Specimen suffix" %}</th>
                   <td>{{ accessionrow.specimen_suffix }}</td>
                 </tr>
-                <tr>
-                  <th scope="row">{% trans "Storage" %}</th>
-                  <td>{{ accessionrow.storage|default:"—" }}</td>
-                </tr>
+                {% if can_edit %}
+                  <tr>
+                    <th scope="row">{% trans "Storage" %}</th>
+                    <td>{{ accessionrow.storage|default:"—" }}</td>
+                  </tr>
+                {% endif %}
                 {% if show_inventory_status %}
                   <tr>
                     <th scope="row">{% trans "Inventory status" %}</th>

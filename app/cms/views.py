@@ -1766,6 +1766,10 @@ class AccessionRowPrintView(DetailView):
 
         context.update(
             {
+                'can_edit': (
+                    self.request.user.is_superuser
+                    or is_collection_manager(self.request.user)
+                ),
                 'latest_identification': latest_identification,
                 'taxonomy_values': taxonomy_values,
                 'has_taxonomy_values': has_taxonomy_values,
