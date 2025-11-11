@@ -1653,13 +1653,45 @@ class AccessionRowDetailView(DetailView):
     template_name = 'cms/accession_row_detail.html'
     context_object_name = 'accessionrow'
 
+    def get_queryset(self):
+        qs = (
+            super()
+            .get_queryset()
+            .select_related(
+                "accession",
+                "accession__collection",
+                "accession__specimen_prefix",
+                "storage",
+            )
+            .prefetch_related(
+                Prefetch(
+                    "natureofspecimen_set",
+                    queryset=NatureOfSpecimen.objects.select_related("element").order_by("id"),
+                ),
+                Prefetch(
+                    "identification_set",
+                    queryset=Identification.objects.select_related("taxon_record").order_by(
+                        "-date_identified",
+                        "-created_on",
+                    ),
+                ),
+            )
+        )
+
+        user = self.request.user
+        if user.is_authenticated and (
+            user.is_superuser
+            or user.groups.filter(name__in=["Collection Managers", "Curators"]).exists()
+        ):
+            return qs
+
+        return qs.filter(accession__is_published=True)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['natureofspecimens'] = NatureOfSpecimen.objects.filter(accession_row=self.object)
+        context['natureofspecimens'] = list(self.object.natureofspecimen_set.all())
         # Order identifications by date_identified DESC (nulls last), then created_on DESC
-        context['identifications'] = Identification.objects.filter(
-            accession_row=self.object
-        ).order_by('-date_identified', '-created_on')
+        context['identifications'] = list(self.object.identification_set.all())
         context['can_edit'] = (
             self.request.user.is_superuser or is_collection_manager(self.request.user)
         )

@@ -32,7 +32,9 @@ def create_locality(*, abbreviation: str, name: str, geological_times: list[str]
     )
 
 
-def create_accession(*, locality: Locality, specimen_no: int = 1) -> Accession:
+def create_accession(
+    *, locality: Locality, specimen_no: int = 1, is_published: bool = True
+) -> Accession:
     collection, _ = Collection.objects.get_or_create(
         abbreviation="COL",
         defaults={"description": "Collection"},
@@ -41,7 +43,7 @@ def create_accession(*, locality: Locality, specimen_no: int = 1) -> Accession:
         collection=collection,
         specimen_prefix=locality,
         specimen_no=specimen_no,
-        is_published=True,
+        is_published=is_published,
     )
 
 
@@ -206,6 +208,29 @@ def test_accession_row_print_view_populates_taxonomy_and_references(client):
     assert reference_entries[0]["page"] == "42"
     assert reference_entries[0]["citation"] == "Researcher 2024"
     assert response.context["can_edit"] is True
+
+
+def test_accession_row_detail_hides_unpublished_accessions_from_public_users(client):
+    locality = create_locality(abbreviation="PU", name="Print Unpublished")
+    accession = create_accession(locality=locality, specimen_no=201, is_published=False)
+    accession_row = create_accession_row(accession=accession, specimen_suffix="U")
+
+    response = client.get(reverse("accessionrow_detail", args=[accession_row.pk]))
+
+    assert response.status_code == 404
+
+
+def test_accession_row_detail_shows_unpublished_accessions_to_editors(client):
+    locality = create_locality(abbreviation="PE", name="Print Editor")
+    accession = create_accession(locality=locality, specimen_no=202, is_published=False)
+    accession_row = create_accession_row(accession=accession, specimen_suffix="E")
+
+    user = create_collection_manager_user(username="manager-unpublished-accession")
+    client.force_login(user)
+
+    response = client.get(reverse("accessionrow_detail", args=[accession_row.pk]))
+
+    assert response.status_code == 200
 
 
 def test_accession_row_print_view_resolves_taxonomy_by_name_when_no_record(client):
