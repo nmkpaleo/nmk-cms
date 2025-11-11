@@ -1701,12 +1701,18 @@ class AccessionRowDetailView(DetailView):
 
 
 class AccessionRowPrintView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
+    """Render a print-friendly card for a single accession row."""
+
     model = AccessionRow
     template_name = 'cms/accession_row_print.html'
     context_object_name = 'accessionrow'
 
+    def _user_can_edit(self) -> bool:
+        user = self.request.user
+        return user.is_superuser or is_collection_manager(user)
+
     def test_func(self):
-        return self.request.user.is_superuser or is_collection_manager(self.request.user)
+        return self._user_can_edit()
 
     def get_queryset(self):
         return (
@@ -1724,6 +1730,12 @@ class AccessionRowPrintView(LoginRequiredMixin, UserPassesTestMixin, DetailView)
                     queryset=NatureOfSpecimen.objects.select_related("element").order_by("id"),
                 ),
                 Prefetch(
+                    "accession__fieldslip_links",
+                    queryset=AccessionFieldSlip.objects.select_related("fieldslip").order_by(
+                        "fieldslip__field_number"
+                    ),
+                ),
+                Prefetch(
                     "identification_set",
                     queryset=Identification.objects.select_related("taxon_record").order_by(
                         "-date_identified",
@@ -1732,8 +1744,10 @@ class AccessionRowPrintView(LoginRequiredMixin, UserPassesTestMixin, DetailView)
                 ),
                 Prefetch(
                     "accession__accessionreference_set",
-                    queryset=AccessionReference.objects.select_related("reference").order_by(
-                        "reference__citation"
+                    queryset=(
+                        AccessionReference.objects.select_related("reference")
+                        .filter(reference__isnull=False)
+                        .order_by("reference__citation")
                     ),
                 ),
                 Prefetch(
@@ -1774,7 +1788,7 @@ class AccessionRowPrintView(LoginRequiredMixin, UserPassesTestMixin, DetailView)
             bool(value and str(value).strip()) for value in taxonomy_values.values()
         )
 
-        nature_of_specimens = list(self.object.natureofspecimen_set.all())
+        nature_of_specimens = self.object.natureofspecimen_set.all()
         specimen_rows = [
             {
                 "element": specimen.element.name if specimen.element else specimen.verbatim_element,
@@ -1787,14 +1801,17 @@ class AccessionRowPrintView(LoginRequiredMixin, UserPassesTestMixin, DetailView)
         ]
 
         locality = accession.specimen_prefix if accession else None
-        site = None
-        if locality is not None:
-            for place in locality.places.all():
-                if place.place_type == PlaceType.SITE:
-                    site = place
-                    break
+        site = (
+            next((place for place in locality.places.all() if place.place_type == PlaceType.SITE), None)
+            if locality is not None
+            else None
+        )
 
-        accession_references = list(accession.accessionreference_set.all()) if accession else []
+        accession_references = (
+            accession.accessionreference_set.all()
+            if accession
+            else AccessionReference.objects.none()
+        )
         reference_entries = [
             {
                 'reference': accession_reference.reference,
@@ -1802,15 +1819,11 @@ class AccessionRowPrintView(LoginRequiredMixin, UserPassesTestMixin, DetailView)
                 'citation': accession_reference.reference.citation,
             }
             for accession_reference in accession_references
-            if accession_reference.reference is not None
         ]
 
         context.update(
             {
-                'can_edit': (
-                    self.request.user.is_superuser
-                    or is_collection_manager(self.request.user)
-                ),
+                'can_edit': self._user_can_edit(),
                 'latest_identification': latest_identification,
                 'taxonomy_values': taxonomy_values,
                 'has_taxonomy_values': has_taxonomy_values,
@@ -1829,7 +1842,6 @@ class AccessionRowPrintView(LoginRequiredMixin, UserPassesTestMixin, DetailView)
                     else ''
                 ),
                 'specimen_rows': specimen_rows,
-                'nature_of_specimens': nature_of_specimens,
                 'locality': locality,
                 'site': site,
                 'reference_entries': reference_entries,
