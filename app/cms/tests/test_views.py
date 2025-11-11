@@ -159,6 +159,9 @@ def test_accession_row_print_view_populates_taxonomy_and_references(client):
     accession = create_accession(locality=locality, specimen_no=101)
     accession_row = create_accession_row(accession=accession, specimen_suffix="A")
 
+    user = create_collection_manager_user(username="manager-print-ridge")
+    client.force_login(user)
+
     taxon = create_taxon(
         taxon_name="Panthera leo",
         family="Felidae",
@@ -202,16 +205,16 @@ def test_accession_row_print_view_populates_taxonomy_and_references(client):
     assert reference_entries[0]["reference"] == reference
     assert reference_entries[0]["page"] == "42"
     assert reference_entries[0]["citation"] == "Researcher 2024"
-    assert response.context["can_edit"] is False
-
-    content = response.content.decode()
-    assert "<th scope=\"row\" class=\"print-summary__label--narrow\">Storage</th>" not in content
+    assert response.context["can_edit"] is True
 
 
 def test_accession_row_print_view_resolves_taxonomy_by_name_when_no_record(client):
     locality = create_locality(abbreviation="PN", name="Print Narrows")
     accession = create_accession(locality=locality, specimen_no=102)
     accession_row = create_accession_row(accession=accession, specimen_suffix="B")
+
+    user = create_collection_manager_user(username="manager-print-narrows")
+    client.force_login(user)
 
     create_taxon(
         taxon_name="Panthera tigris",
@@ -239,6 +242,9 @@ def test_accession_row_print_view_uses_taxon_fallback_when_unresolved(client):
     accession = create_accession(locality=locality, specimen_no=103)
     accession_row = create_accession_row(accession=accession, specimen_suffix="C")
 
+    user = create_collection_manager_user(username="manager-print-unknown")
+    client.force_login(user)
+
     Identification.objects.create(
         accession_row=accession_row,
         taxon="Mystery specimen",
@@ -251,6 +257,30 @@ def test_accession_row_print_view_uses_taxon_fallback_when_unresolved(client):
     assert response.context["has_taxonomy_values"] is False
     assert response.context["taxonomy_fallback_value"] == "Mystery specimen"
     assert response.context["identification_qualifier"] == "aff."
+
+
+def test_accession_row_print_view_redirects_anonymous_user(client):
+    locality = create_locality(abbreviation="PZ", name="Print Zero")
+    accession = create_accession(locality=locality, specimen_no=109)
+    accession_row = create_accession_row(accession=accession, specimen_suffix="I")
+
+    response = client.get(reverse("accessionrow_print", args=[accession_row.pk]))
+
+    assert response.status_code == 302
+    assert "login" in response.headers["Location"]
+
+
+def test_accession_row_print_view_forbids_read_only_user(client):
+    locality = create_locality(abbreviation="PY", name="Print Yankee")
+    accession = create_accession(locality=locality, specimen_no=110)
+    accession_row = create_accession_row(accession=accession, specimen_suffix="J")
+
+    user = User.objects.create_user(username="read-only", password="password123")
+    client.force_login(user)
+
+    response = client.get(reverse("accessionrow_print", args=[accession_row.pk]))
+
+    assert response.status_code == 403
 
 
 def test_accession_row_print_shows_storage_for_editors(client):

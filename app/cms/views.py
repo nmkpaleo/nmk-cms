@@ -1662,10 +1662,13 @@ class AccessionRowDetailView(DetailView):
         return context
 
 
-class AccessionRowPrintView(DetailView):
+class AccessionRowPrintView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
     model = AccessionRow
     template_name = 'cms/accession_row_print.html'
     context_object_name = 'accessionrow'
+
+    def test_func(self):
+        return self.request.user.is_superuser or is_collection_manager(self.request.user)
 
     def get_queryset(self):
         return (
