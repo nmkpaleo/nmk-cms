@@ -18,3 +18,6 @@ The accession detail page provides a comprehensive overview of a single accessio
 
 - The Comments table and the field slip management modal behave as before. The new layout simply gives more room to the upper summary cards while leaving forms and modals untouched.
 - If you need to download a media asset, continue to use the thumbnail link. The hover preview is read-only and does not replace the existing download behaviour.
+- Use the **Print specimen card** button in the accession row header to open a compact, print-ready card. The card groups taxonomy (Family, Subfamily, Tribe, Genus, Species), specimen element details (Element, Side, Portion, Condition, Fragments), locality/site information, and accession/field numbers into a bordered layout that mirrors the in-app detail view.
+- When an identification only includes a free-text taxon, the print layout automatically fills the taxonomy table with the resolved family, subfamily, tribe, genus, and species—matching what you see in the accession detail view—so nothing prints blank.
+- The print window includes its own **Print** button and launches in a new tab (`target="_blank"`) so you can keep the accession page open while sending the card to paper or PDF.
