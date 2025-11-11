@@ -115,6 +115,7 @@ from cms.models import (
     Taxon,
     Locality,
     Place,
+    PlaceType,
     PlaceRelation,
     PreparationStatus,
     InventoryStatus,
@@ -1604,6 +1605,12 @@ class AccessionDetailView(DetailView):
         context['taxonomy'] = taxonomy_map  # Maps first identifications to Taxon objects
         context['taxonomy_map'] = taxonomy_map
 
+        can_edit_accession_rows = self.request.user.is_authenticated and (
+            self.request.user.is_superuser or is_collection_manager(self.request.user)
+        )
+        context['can_edit_accession_rows'] = can_edit_accession_rows
+        context['specimen_table_empty_colspan'] = 11 if can_edit_accession_rows else 10
+
         return context
 
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -1646,18 +1653,201 @@ class AccessionRowDetailView(DetailView):
     template_name = 'cms/accession_row_detail.html'
     context_object_name = 'accessionrow'
 
+    def get_queryset(self):
+        qs = (
+            super()
+            .get_queryset()
+            .select_related(
+                "accession",
+                "accession__collection",
+                "accession__specimen_prefix",
+                "storage",
+            )
+            .prefetch_related(
+                Prefetch(
+                    "natureofspecimen_set",
+                    queryset=NatureOfSpecimen.objects.select_related("element").order_by("id"),
+                ),
+                Prefetch(
+                    "identification_set",
+                    queryset=Identification.objects.select_related("taxon_record").order_by(
+                        "-date_identified",
+                        "-created_on",
+                    ),
+                ),
+            )
+        )
+
+        user = self.request.user
+        if user.is_authenticated and (
+            user.is_superuser
+            or user.groups.filter(name__in=["Collection Managers", "Curators"]).exists()
+        ):
+            return qs
+
+        return qs.filter(accession__is_published=True)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['natureofspecimens'] = NatureOfSpecimen.objects.filter(accession_row=self.object)
+        context['natureofspecimens'] = list(self.object.natureofspecimen_set.all())
         # Order identifications by date_identified DESC (nulls last), then created_on DESC
-        context['identifications'] = Identification.objects.filter(
-            accession_row=self.object
-        ).order_by('-date_identified', '-created_on')
+        context['identifications'] = list(self.object.identification_set.all())
         context['can_edit'] = (
             self.request.user.is_superuser or is_collection_manager(self.request.user)
         )
         context['can_manage'] = context['can_edit']
         context['show_inventory_status'] = not is_public_user(self.request.user)
+        return context
+
+
+class AccessionRowPrintView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
+    """Render a print-friendly card for a single accession row."""
+
+    model = AccessionRow
+    template_name = 'cms/accession_row_print.html'
+    context_object_name = 'accessionrow'
+
+    def _user_can_edit(self) -> bool:
+        user = self.request.user
+        return user.is_superuser or is_collection_manager(user)
+
+    def test_func(self):
+        return self._user_can_edit()
+
+    def get_queryset(self):
+        return (
+            super()
+            .get_queryset()
+            .select_related(
+                "accession",
+                "accession__collection",
+                "accession__specimen_prefix",
+                "storage",
+            )
+            .prefetch_related(
+                Prefetch(
+                    "natureofspecimen_set",
+                    queryset=NatureOfSpecimen.objects.select_related("element").order_by("id"),
+                ),
+                Prefetch(
+                    "accession__fieldslip_links",
+                    queryset=AccessionFieldSlip.objects.select_related("fieldslip").order_by(
+                        "fieldslip__field_number"
+                    ),
+                ),
+                Prefetch(
+                    "identification_set",
+                    queryset=Identification.objects.select_related("taxon_record").order_by(
+                        "-date_identified",
+                        "-created_on",
+                    ),
+                ),
+                Prefetch(
+                    "accession__accessionreference_set",
+                    queryset=(
+                        AccessionReference.objects.select_related("reference")
+                        .filter(reference__isnull=False)
+                        .order_by("reference__citation")
+                    ),
+                ),
+                Prefetch(
+                    "accession__specimen_prefix__places",
+                    queryset=Place.objects.select_related("related_place").order_by("name"),
+                ),
+            )
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        accession = self.object.accession
+
+        (
+            first_identifications,
+            _identification_counts,
+            taxonomy_map,
+        ) = build_accession_identification_maps([self.object])
+
+        latest_identification = first_identifications.get(self.object.id)
+        taxon_record = latest_identification.taxon_record if latest_identification else None
+        resolved_taxon = None
+        if latest_identification is not None:
+            resolved_taxon = taxonomy_map.get(latest_identification.id)
+        if resolved_taxon is None:
+            resolved_taxon = taxon_record
+
+        taxonomy_values = {
+            "family": getattr(resolved_taxon, "family", "") if resolved_taxon else "",
+            "subfamily": getattr(resolved_taxon, "subfamily", "") if resolved_taxon else "",
+            "tribe": getattr(resolved_taxon, "tribe", "") if resolved_taxon else "",
+            "genus": getattr(resolved_taxon, "genus", "") if resolved_taxon else "",
+            "species": getattr(resolved_taxon, "species", "") if resolved_taxon else "",
+        }
+
+        has_taxonomy_values = any(
+            bool(value and str(value).strip()) for value in taxonomy_values.values()
+        )
+
+        nature_of_specimens = self.object.natureofspecimen_set.all()
+        specimen_rows = [
+            {
+                "element": specimen.element.name if specimen.element else specimen.verbatim_element,
+                "side": specimen.side,
+                "portion": specimen.portion,
+                "condition": specimen.condition,
+                "fragments": specimen.fragments,
+            }
+            for specimen in nature_of_specimens
+        ]
+
+        locality = accession.specimen_prefix if accession else None
+        site = (
+            next((place for place in locality.places.all() if place.place_type == PlaceType.SITE), None)
+            if locality is not None
+            else None
+        )
+
+        accession_references = (
+            accession.accessionreference_set.all()
+            if accession
+            else AccessionReference.objects.none()
+        )
+        reference_entries = [
+            {
+                'reference': accession_reference.reference,
+                'page': accession_reference.page,
+                'citation': accession_reference.reference.citation,
+            }
+            for accession_reference in accession_references
+        ]
+
+        context.update(
+            {
+                'can_edit': self._user_can_edit(),
+                'latest_identification': latest_identification,
+                'taxonomy_values': taxonomy_values,
+                'has_taxonomy_values': has_taxonomy_values,
+                'taxonomy_fallback_value': (
+                    latest_identification.taxon.strip()
+                    if latest_identification
+                    and latest_identification.taxon
+                    and latest_identification.taxon.strip()
+                    else ''
+                ),
+                'identification_qualifier': (
+                    latest_identification.identification_qualifier.strip()
+                    if latest_identification
+                    and latest_identification.identification_qualifier
+                    and latest_identification.identification_qualifier.strip()
+                    else ''
+                ),
+                'specimen_rows': specimen_rows,
+                'locality': locality,
+                'site': site,
+                'reference_entries': reference_entries,
+            }
+        )
+
         return context
 
 

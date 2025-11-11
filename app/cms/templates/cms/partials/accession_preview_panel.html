@@ -59,7 +59,9 @@
             <thead>
               <tr>
                 <th scope="col">{% trans "Specimen" %}</th>
-                <th scope="col">{% trans "Storage" %}</th>
+                {% if can_edit_accession_rows %}
+                  <th scope="col">{% trans "Storage" %}</th>
+                {% endif %}
                 <th scope="col">{% trans "Element" %}</th>
                 <th scope="col">{% trans "Side" %}</th>
                 <th scope="col">{% trans "Description" %}</th>
@@ -83,7 +85,9 @@
                           <a href="{% url 'accessionrow_detail' accessionrow.pk %}">{{ accessionrow.specimen_suffix }}</a>
                         {% endif %}
                       </td>
-                      <td>{{ accessionrow.storage|default:"—" }}</td>
+                      {% if can_edit_accession_rows %}
+                        <td>{{ accessionrow.storage|default:"—" }}</td>
+                      {% endif %}
                       <td>
                         {% if specimens %}
                           {% for specimen in specimens %}
@@ -141,7 +145,7 @@
                   {% endwith %}
                 {% empty %}
                   <tr>
-                    <td colspan="11" class="w3-center">{% trans "No specimen rows recorded." %}</td>
+                    <td colspan="{{ specimen_table_empty_colspan|default:10 }}" class="w3-center">{% trans "No specimen rows recorded." %}</td>
                   </tr>
                 {% endfor %}
               {% endwith %}
