@@ -8,7 +8,7 @@ from django.contrib.messages import get_messages
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.db import models
-from django.test import RequestFactory, TestCase, override_settings
+from django.test import RequestFactory, TransactionTestCase, override_settings
 from django.urls import reverse
 from unittest.mock import patch
 
@@ -25,7 +25,7 @@ from cms.models import (
 )
 
 
-class FieldSlipMergeDeduplicationTests(TestCase):
+class FieldSlipMergeDeduplicationTests(TransactionTestCase):
 
     def setUp(self) -> None:
         user_model = get_user_model()
@@ -68,19 +68,23 @@ class FieldSlipMergeDeduplicationTests(TestCase):
         self._impersonation.__exit__(None, None, None)
         super().tearDown()
 
-    def test_merge_skips_duplicate_accession_links(self) -> None:
-        AccessionFieldSlip.objects.create(
+    def _create_accession_links(self) -> tuple[AccessionFieldSlip, AccessionFieldSlip, AccessionFieldSlip]:
+        target_link = AccessionFieldSlip.objects.create(
             accession=self.accession_one,
             fieldslip=self.target,
         )
-        AccessionFieldSlip.objects.create(
+        duplicate_link = AccessionFieldSlip.objects.create(
             accession=self.accession_one,
             fieldslip=self.source,
         )
-        AccessionFieldSlip.objects.create(
+        unique_link = AccessionFieldSlip.objects.create(
             accession=self.accession_two,
             fieldslip=self.source,
         )
+        return target_link, duplicate_link, unique_link
+
+    def test_merge_skips_duplicate_accession_links(self) -> None:
+        self._create_accession_links()
 
         result = merge_records(
             self.source,
@@ -110,6 +114,55 @@ class FieldSlipMergeDeduplicationTests(TestCase):
         self.assertEqual(relation_log.get("updated"), 1)
         self.assertEqual(relation_log.get("deleted"), 1)
         self.assertEqual(relation_log.get("skipped"), 1)
+
+    def test_merge_dry_run_preserves_accession_links(self) -> None:
+        self._create_accession_links()
+
+        result = merge_records(
+            self.source,
+            self.target,
+            strategy_map=None,
+            dry_run=True,
+            archive=False,
+        )
+
+        target_links = list(
+            AccessionFieldSlip.objects.filter(fieldslip=self.target)
+            .order_by("accession_id")
+            .values_list("accession_id", flat=True)
+        )
+        self.assertEqual(target_links, [self.accession_one.id])
+        source_links = list(
+            AccessionFieldSlip.objects.filter(fieldslip=self.source)
+            .order_by("accession_id")
+            .values_list("accession_id", flat=True)
+        )
+        self.assertEqual(
+            source_links,
+            [self.accession_one.id, self.accession_two.id],
+        )
+        relation_log = result.relation_actions.get("accession_links", {})
+        self.assertEqual(relation_log.get("updated"), 1)
+        self.assertEqual(relation_log.get("skipped"), 1)
+        self.assertEqual(relation_log.get("would_delete"), 1)
+
+    def test_merge_records_emit_history_for_removed_duplicates(self) -> None:
+        _, duplicate_link, _ = self._create_accession_links()
+
+        merge_records(
+            self.source,
+            self.target,
+            strategy_map=None,
+            archive=False,
+        )
+
+        history_entries = list(
+            AccessionFieldSlip.history.filter(id=duplicate_link.id)
+            .order_by("-history_date")
+            .values_list("history_type", flat=True)
+        )
+        self.assertGreaterEqual(len(history_entries), 2)
+        self.assertIn("-", history_entries)
 
     @override_settings(MERGE_TOOL_FEATURE=True)
     def test_admin_merge_reports_duplicate_resolution(self) -> None:
