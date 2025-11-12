@@ -1154,6 +1154,64 @@ class DrawerRegisterTests(TestCase):
         form = DrawerRegisterForm(instance=drawer)
         self.assertEqual(set(form.fields["taxa"].queryset), {order_taxon, family_taxon})
 
+
+class DrawerRegisterViewTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.superuser = User.objects.create_superuser(
+            username="admin",
+            email="admin@example.com",
+            password="pass",
+        )
+        self.client.force_login(self.superuser)
+
+    def _create_taxon(self, *, name: str, rank: str = "Order") -> Taxon:
+        return Taxon.objects.create(
+            taxon_rank=rank,
+            taxon_name=name,
+            kingdom="Animalia",
+            phylum="Chordata",
+            class_name="Mammalia",
+            order=name if rank == "Order" else "Primates",
+            family="Hominidae",
+            genus="Homo",
+            species="sapiens",
+        )
+
+    def test_detail_view_lists_related_localities_and_taxa(self):
+        locality = Locality.objects.create(abbreviation="L1", name="Locality One")
+        taxon = self._create_taxon(name="Primates", rank="Order")
+        drawer = DrawerRegister.objects.create(
+            code="DR1",
+            description="Drawer detail",
+            estimated_documents=1,
+        )
+        drawer.localities.add(locality)
+        drawer.taxa.add(taxon)
+
+        response = self.client.get(reverse("drawerregister_detail", args=[drawer.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, locality.name)
+        self.assertContains(response, taxon.taxon_name)
+
+    def test_edit_view_renders_with_preselected_non_order_taxa(self):
+        order_taxon = self._create_taxon(name="Primates", rank="Order")
+        family_taxon = self._create_taxon(name="Hominidae", rank="Family")
+        drawer = DrawerRegister.objects.create(
+            code="DR2",
+            description="Drawer edit",
+            estimated_documents=2,
+        )
+        drawer.taxa.add(family_taxon)
+
+        response = self.client.get(reverse("drawerregister_edit", args=[drawer.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        taxa_field = response.context["form"].fields["taxa"].queryset
+        self.assertIn(order_taxon, taxa_field)
+        self.assertIn(family_taxon, taxa_field)
+
     def test_filter_taxa_field_limited_to_orders(self):
         order_taxon = Taxon.objects.create(
             taxon_rank="Order",
