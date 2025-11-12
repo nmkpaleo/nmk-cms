@@ -1,10 +1,20 @@
 from __future__ import annotations
 
+from django.contrib import admin
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.contrib.auth.models import Permission
+from django.contrib.contenttypes.models import ContentType
+from django.contrib.messages import get_messages
+from django.contrib.messages.storage.fallback import FallbackStorage
+from django.contrib.sessions.middleware import SessionMiddleware
+from django.db import models
+from django.test import RequestFactory, TestCase, override_settings
+from django.urls import reverse
+from unittest.mock import patch
 
 from crum import impersonate
 
+from cms.merge.constants import MergeStrategy
 from cms.merge.engine import merge_records
 from cms.models import (
     Accession,
@@ -20,6 +30,7 @@ class FieldSlipMergeDeduplicationTests(TestCase):
     def setUp(self) -> None:
         user_model = get_user_model()
         self.user = user_model.objects.create(username="merge-admin")
+        self.factory = RequestFactory()
 
         self._impersonation = impersonate(self.user)
         self._impersonation.__enter__()
@@ -99,3 +110,82 @@ class FieldSlipMergeDeduplicationTests(TestCase):
         self.assertEqual(relation_log.get("updated"), 1)
         self.assertEqual(relation_log.get("deleted"), 1)
         self.assertEqual(relation_log.get("skipped"), 1)
+
+    @override_settings(MERGE_TOOL_FEATURE=True)
+    def test_admin_merge_reports_duplicate_resolution(self) -> None:
+        staff_user = get_user_model().objects.create_user(
+            username="fieldslip-admin",
+            password="test-pass",
+            is_staff=True,
+        )
+        permission = Permission.objects.get(
+            codename="can_merge",
+            content_type=ContentType.objects.get_for_model(FieldSlip),
+        )
+        staff_user.user_permissions.add(permission)
+
+        admin_instance = admin.site._registry[FieldSlip]
+
+        AccessionFieldSlip.objects.create(
+            accession=self.accession_one,
+            fieldslip=self.target,
+        )
+        AccessionFieldSlip.objects.create(
+            accession=self.accession_one,
+            fieldslip=self.source,
+        )
+        AccessionFieldSlip.objects.create(
+            accession=self.accession_two,
+            fieldslip=self.source,
+        )
+
+        merge_fields = admin_instance.get_mergeable_fields()
+        form_data: dict[str, str] = {
+            "selected_ids": f"{self.target.pk},{self.source.pk}",
+            "source": str(self.source.pk),
+            "target": str(self.target.pk),
+        }
+        for field in merge_fields:
+            strategy_name = admin_instance.merge_form_class.strategy_field_name(field.name)
+            manual_name = admin_instance.merge_form_class.value_field_name(field.name)
+            form_data[strategy_name] = MergeStrategy.PREFER_NON_NULL.value
+            value = getattr(self.target, field.name, "")
+            if isinstance(value, models.Model):
+                form_data[manual_name] = str(value.pk)
+            elif value in (None, ""):
+                form_data[manual_name] = ""
+            else:
+                form_data[manual_name] = str(value)
+
+        request = self.factory.post("/admin/cms/fieldslip/merge/", data=form_data)
+        SessionMiddleware(lambda req: None).process_request(request)
+        request.session.save()
+        request.user = staff_user
+        setattr(request, "_messages", FallbackStorage(request))
+
+        with patch("cms.admin_merge.reverse") as mock_reverse, patch(
+            "cms.merge.engine._log_merge"
+        ) as mock_log_merge:
+            def fake_reverse(name: str, *args, **kwargs) -> str:
+                if name == "merge_candidate_search":
+                    return "/admin/cms/fieldslip/merge/search/"
+                return reverse(name, *args, **kwargs)
+
+            mock_reverse.side_effect = fake_reverse
+            mock_log_merge.return_value = None
+            response = admin_instance.merge_view(request)
+        self.assertEqual(response.status_code, 302)
+
+        target_links = list(
+            AccessionFieldSlip.objects.filter(fieldslip=self.target)
+            .order_by("accession_id")
+            .values_list("accession_id", flat=True)
+        )
+        self.assertEqual(
+            target_links,
+            [self.accession_one.id, self.accession_two.id],
+        )
+
+        messages = [message.message for message in get_messages(request)]
+        self.assertTrue(any("Relation updates" in message for message in messages))
+        self.assertTrue(any("deleted" in message for message in messages))

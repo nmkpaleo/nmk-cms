@@ -4,6 +4,7 @@
 {% block extrastyle %}
   {{ block.super }}
   <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 {% endblock %}
 
 {% block content %}
@@ -19,6 +20,13 @@
 
   <div class="w3-panel w3-pale-blue w3-leftbar w3-border-blue w3-round w3-margin-bottom">
     <p class="w3-margin-0">{% trans "Use this tool to review and merge duplicate records. Select a source and target, choose strategies for each field, then confirm the merge." %}</p>
+  </div>
+
+  <div class="w3-panel w3-pale-green w3-leftbar w3-border-green w3-round w3-margin-bottom" role="note">
+    <p class="w3-margin-0">
+      <span class="fa fa-link" aria-hidden="true"></span>
+      <span class="w3-margin-left">{% trans "When both records reference the same accession, the merge will keep a single shared link and report how many duplicates were skipped." %}</span>
+    </p>
   </div>
 
   <section class="w3-margin-bottom">

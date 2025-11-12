@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Mapping
 
 from django.contrib import admin, messages
 from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
@@ -374,8 +374,9 @@ class MergeAdminActionMixin:
 
         user = getattr(request, "user", None) if request is not None else None
         sources = [obj for obj in selected if obj.pk != getattr(target, "pk", None)]
+        relation_logs: list[Mapping[str, Mapping[str, Any]]] = []
         for source in sources:
-            merge_records(
+            result = merge_records(
                 source,
                 target,
                 strategy_map or {},
@@ -383,13 +384,29 @@ class MergeAdminActionMixin:
                 dry_run=dry_run,
                 archive=archive,
             )
+            relation_logs.append(result.relation_actions)
 
         if request is not None:
+            base_message = _("Merged %(count)d record(s) into %(target)s") % {
+                "count": len(sources),
+                "target": target,
+            }
             self.message_user(
                 request,
-                f"Merged {len(sources)} record(s) into {target}",
+                base_message,
                 level=logging.INFO,
             )
+            relation_summary = []
+            summarize = getattr(self, "_summarize_relation_actions", None)
+            if callable(summarize):
+                relation_summary = summarize(relation_logs)
+            if relation_summary:
+                self.message_user(
+                    request,
+                    _("Relation updates: %(summary)s")
+                    % {"summary": "; ".join(relation_summary)},
+                    level=messages.INFO,
+                )
 
     merge_records_action.short_description = "Merge selected records (manual invocation)"
     merge_records_action.allowed_permissions = ("change",)
