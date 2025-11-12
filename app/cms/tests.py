@@ -1328,6 +1328,49 @@ class DrawerRegisterTests(TestCase):
             drawer.scanning_users.order_by("id"), [user1, user2], transform=lambda x: x
         )
 
+    def test_export_uses_taxon_name_for_taxa(self):
+        with patch("cms.models.Taxon.clean", return_value=None):
+            taxon1 = Taxon.objects.create(
+                taxon_rank="Order",
+                taxon_name="Order1",
+                kingdom="k",
+                phylum="p",
+                class_name="c",
+                order="Order1",
+                family="",
+                genus="",
+                species="",
+            )
+            taxon2 = Taxon.objects.create(
+                taxon_rank="Order",
+                taxon_name="Order2",
+                kingdom="k",
+                phylum="p",
+                class_name="c",
+                order="Order2",
+                family="",
+                genus="",
+                species="",
+            )
+
+        drawer = DrawerRegister.objects.create(
+            code="TAXA-EXPORT",
+            description="Drawer",
+            estimated_documents=1,
+        )
+        drawer.taxa.set([taxon1, taxon2])
+
+        resource = DrawerRegisterResource()
+        dataset = resource.export(DrawerRegister.objects.filter(pk=drawer.pk))
+
+        self.assertEqual(len(dataset), 1)
+        exported_row = dataset.dict[0]
+        exported_taxa = [
+            value.strip() for value in exported_row["taxa"].split(";") if value.strip()
+        ]
+
+        self.assertEqual(set(exported_taxa), {taxon1.taxon_name, taxon2.taxon_name})
+
 
 class ScanningTests(TestCase):
     def setUp(self):

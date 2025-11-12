@@ -1316,7 +1316,7 @@ class DrawerRegisterResource(resources.ModelResource):
     taxa = fields.Field(
         column_name="taxa",
         attribute="taxa",
-        widget=SemicolonManyToManyWidget(Taxon, field="name", separator=";"),
+        widget=SemicolonManyToManyWidget(Taxon, field="taxon_name", separator=";"),
     )
     scanning_users = fields.Field(
         column_name="scanning_users",
