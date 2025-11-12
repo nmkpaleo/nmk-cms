@@ -629,6 +629,12 @@ class FieldSlip(MergeMixin, BaseModel):
         "verbatim_taxon": MergeStrategy.PREFER_NON_NULL,
         "verbatim_element": MergeStrategy.PREFER_NON_NULL,
     }
+    relation_strategies = {
+        "accession_links": {
+            "action": "reassign",
+            "deduplicate": True,
+        }
+    }
     field_number = models.CharField(max_length=100, null=False, blank=False, help_text="Field number assigned to the specimen.")
     discoverer = models.CharField(max_length=255, null=True, blank=True, help_text="Person who discovered the specimen.")
     collector = models.CharField(max_length=255, null=True, blank=True, help_text="Person who collected the specimen.")

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, Iterable, Mapping, MutableMapping, Optional, cast
 
 from django.contrib.contenttypes.models import ContentType
-from django.db import transaction
+from django.db import models, transaction
 from django.db.models import Model
 from django.db.models.fields.related import (
     ForeignObjectRel,
@@ -136,6 +136,66 @@ def _normalise_relation_spec(field: Any, raw_value: Any) -> RelationDirective:
     return RelationDirective(action=action, options=options, callback=callback)
 
 
+def _unique_constraint_combinations(
+    model: type[Model], related_field_name: str
+) -> list[tuple[str, ...]]:
+    """Return unique constraint field combinations including ``related_field_name``."""
+
+    opts = model._meta
+    combinations: list[tuple[str, ...]] = []
+
+    unique_together = getattr(opts, "unique_together", []) or []
+    for fields in unique_together:
+        if not fields:
+            continue
+        if related_field_name in fields:
+            combinations.append(tuple(fields))
+
+    for constraint in getattr(opts, "constraints", []):
+        if not isinstance(constraint, models.UniqueConstraint):
+            continue
+        constraint_fields = getattr(constraint, "fields", None) or []
+        if related_field_name in constraint_fields:
+            combinations.append(tuple(constraint_fields))
+
+    return combinations
+
+
+def _build_unique_lookup(
+    *,
+    combination: tuple[str, ...],
+    related_field: models.Field,
+    related_object: Model,
+    target: MergeMixin,
+) -> Dict[str, Any]:
+    """Return a lookup dict for ``combination`` reflecting reassignment to ``target``."""
+
+    lookup: Dict[str, Any] = {}
+    opts = related_object._meta
+
+    for field_name in combination:
+        try:
+            model_field = opts.get_field(field_name)
+        except Exception:
+            # If the field definition cannot be resolved we skip the lookup,
+            # allowing the caller to ignore empty dictionaries.
+            return {}
+
+        if isinstance(model_field, models.ForeignKey):
+            attname = model_field.attname
+            if field_name == related_field.name:
+                lookup[attname] = target.pk
+            else:
+                lookup[attname] = getattr(related_object, attname)
+        else:
+            if field_name == related_field.name:
+                lookup[field_name] = getattr(target, field_name, target.pk)
+            else:
+                lookup[field_name] = getattr(related_object, field_name)
+
+    return lookup
+
+
 def _reassign_related_objects(
     *,
     field: ForeignObjectRel | OneToOneRel,
@@ -184,11 +244,79 @@ def _reassign_related_objects(
         log_payload["updated"] = 0
         return log_payload
 
-    if not dry_run:
-        update_kwargs = {attname: target.pk}
-        queryset.update(**update_kwargs)
+    deduplicate = bool(
+        options.get("deduplicate")
+        or options.get("skip_conflicts")
+        or options.get("deduplicate_conflicts")
+    )
+    delete_conflicts = bool(options.get("delete_conflicts", True))
 
-    log_payload["updated"] = total
+    update_ids: list[Any]
+    conflict_ids: list[Any] = []
+
+    if deduplicate:
+        related_model = queryset.model
+        combinations = list(
+            _unique_constraint_combinations(related_model, related_field.name)
+        )
+
+        extra_combinations = options.get("unique_fields")
+        if isinstance(extra_combinations, (list, tuple)):
+            for combo in extra_combinations:
+                if not isinstance(combo, (list, tuple)):
+                    continue
+                if related_field.name not in combo:
+                    continue
+                combinations.append(tuple(combo))
+
+        related_objects = list(queryset)
+        update_ids = []
+
+        if combinations:
+            for related_object in related_objects:
+                has_conflict = False
+                for combination in combinations:
+                    lookup = _build_unique_lookup(
+                        combination=combination,
+                        related_field=related_field,
+                        related_object=related_object,
+                        target=target,
+                    )
+                    if not lookup:
+                        continue
+                    existing_qs = (
+                        related_model._default_manager.select_for_update()
+                        .filter(**lookup)
+                        .exclude(pk=related_object.pk)
+                    )
+                    if existing_qs.exists():
+                        has_conflict = True
+                        break
+                if has_conflict:
+                    conflict_ids.append(related_object.pk)
+                else:
+                    update_ids.append(related_object.pk)
+        else:
+            update_ids = [obj.pk for obj in related_objects if obj.pk is not None]
+    else:
+        update_ids = list(queryset.values_list("pk", flat=True))
+
+    updated_count = len(update_ids)
+
+    if not dry_run and conflict_ids and delete_conflicts:
+        queryset.model._default_manager.filter(pk__in=conflict_ids).delete()
+        log_payload["deleted"] = len(conflict_ids)
+    elif dry_run and conflict_ids and delete_conflicts:
+        log_payload["would_delete"] = len(conflict_ids)
+
+    if conflict_ids:
+        log_payload["skipped"] = len(conflict_ids)
+
+    if not dry_run and update_ids:
+        update_kwargs = {attname: target.pk}
+        queryset.model._default_manager.filter(pk__in=update_ids).update(**update_kwargs)
+
+    log_payload["updated"] = updated_count
     return log_payload
 
 
