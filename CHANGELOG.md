@@ -2,6 +2,7 @@
 
 ## Unreleased
 - Automate dependency snapshots in the development planning and coding prompts via `docs/scripts/update_prompts.py`, including supporting tests and maintenance docs (T3).
+- Document Drawer Register admin export behavior to clarify that taxa values use the primary taxon name (T3.2).
 - Document geological time support across locality workflows, including admin import/export guidance, printable reporting expectations, and pytest coverage notes (T3).
 - Standardise CMS list and detail templates on semantic W3.CSS layouts, refreshed Font Awesome icons, and updated template tests; document the patterns in user and developer guides (T2).
 - Document the accession detail layout restructure and hover media preview workflow across user, admin, and developer guides (T5).

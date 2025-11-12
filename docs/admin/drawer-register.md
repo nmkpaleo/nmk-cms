@@ -12,7 +12,7 @@ Administrators can manage drawers and their scanning status through the Django a
 
 ## Importing and Exporting
 1. From the **Drawer Registers** changelist, use the **Import** and **Export** buttons to bulk load or download entries.
-2. CSV files use a semicolon (`;`) to separate multiple localities, taxa, or scanning users.
+2. CSV files use a semicolon (`;`) to separate multiple localities, taxa, or scanning users. Exported taxa values always use the primary taxon name stored on each `Taxon` record, which matches the value required for successful re-imports.
 3. After uploading an import file, review the preview and confirm to apply the changes.
 
 ## Viewing Change Logs
