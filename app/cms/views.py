@@ -43,6 +43,7 @@ from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
 from django.conf import settings
 
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.mixins import (
@@ -5088,6 +5089,35 @@ class DrawerRegisterReorderView(LoginRequiredMixin, DrawerRegisterAccessMixin, V
 class DrawerRegisterDetailView(LoginRequiredMixin, DrawerRegisterAccessMixin, DetailView):
     model = DrawerRegister
     template_name = "cms/drawerregister_detail.html"
+
+    def get_queryset(self):
+        user_model = get_user_model()
+        return (
+            super()
+            .get_queryset()
+            .prefetch_related(
+                Prefetch(
+                    "localities",
+                    queryset=Locality.objects.order_by("name", "pk"),
+                ),
+                Prefetch(
+                    "taxa",
+                    queryset=Taxon.objects.order_by("taxon_name", "pk"),
+                ),
+                Prefetch(
+                    "scanning_users",
+                    queryset=user_model.objects.order_by(
+                        "last_name", "first_name", "pk"
+                    ),
+                ),
+                Prefetch(
+                    "scans",
+                    queryset=Scanning.objects.select_related("user").order_by(
+                        "-start_time", "pk"
+                    ),
+                ),
+            )
+        )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

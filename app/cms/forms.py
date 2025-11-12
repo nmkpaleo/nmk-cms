@@ -1078,15 +1078,24 @@ class DrawerRegisterForm(BaseW3ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Allow both legacy rank data and new accepted taxonomy schema
-        qs = Taxon.objects.filter(
-            Q(taxon_rank=TaxonRank.ORDER) | Q(taxon_rank__iexact="order"),
-            status=TaxonStatus.ACCEPTED,
-            is_active=True,
-        ).distinct()
+        # Allow both legacy rank data and new accepted taxonomy schema without
+        # mixing distinct/non-distinct querysets that trigger TypeError on MySQL.
+        accepted_orders_q = (
+            Q(taxon_rank=TaxonRank.ORDER) | Q(taxon_rank__iexact=TaxonRank.ORDER)
+        ) & Q(status=TaxonStatus.ACCEPTED, is_active=True)
+
+        filter_q = accepted_orders_q
         if self.instance.pk:
-            qs = qs | self.instance.taxa.all()
-        self.fields["taxa"].queryset = qs.distinct()
+            selected_ids = list(self.instance.taxa.values_list("pk", flat=True))
+            if selected_ids:
+                filter_q = filter_q | Q(pk__in=selected_ids)
+
+        queryset = (
+            Taxon.objects.filter(filter_q)
+            .distinct()
+            .order_by("taxon_name", "pk")
+        )
+        self.fields["taxa"].queryset = queryset
 
     def clean(self):
         cleaned_data = super().clean()

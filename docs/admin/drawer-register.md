@@ -8,7 +8,7 @@ Administrators can manage drawers and their scanning status through the Django a
 3. Use the **Add Drawer Register** button or select an existing entry to edit.
 4. Provide a three-letter code, description, and any related localities or taxa.
 5. When the scanning status is set to *In progress*, at least one scanning user must be selected.
-6. Save the entry. Status and user changes are recorded in the log automatically.
+6. Save the entry. Status and user changes are recorded in the log automatically. The public drawer detail page now shows Locality and Taxon cards, so confirm each entry is accurate before saving.
 
 ## Importing and Exporting
 1. From the **Drawer Registers** changelist, use the **Import** and **Export** buttons to bulk load or download entries.

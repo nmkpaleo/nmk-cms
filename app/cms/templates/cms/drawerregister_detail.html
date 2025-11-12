@@ -86,6 +86,50 @@
     </div>
   </section>
 
+  <section class="w3-margin-top" aria-labelledby="drawer-related-heading">
+    <div class="w3-row-padding">
+      <article class="w3-col s12 m6" aria-labelledby="drawer-localities-heading">
+        <div class="w3-card w3-round w3-white w3-padding">
+          <header class="w3-display-container">
+            <h2 id="drawer-localities-heading" class="w3-margin-top">
+              <i class="fa-solid fa-map-location-dot" aria-hidden="true"></i>
+              <span class="w3-margin-left">{% trans "Localities" %}</span>
+            </h2>
+          </header>
+          <main aria-labelledby="drawer-localities-heading">
+            <ul class="w3-ul w3-margin-top" aria-label="{% trans 'Drawer localities list' %}">
+              {% for locality in object.localities.all %}
+                <li class="w3-padding-small">{{ locality }}</li>
+              {% empty %}
+                <li class="w3-padding-small w3-text-gray">{% trans "No localities assigned." %}</li>
+              {% endfor %}
+            </ul>
+          </main>
+        </div>
+      </article>
+
+      <article class="w3-col s12 m6" aria-labelledby="drawer-taxa-heading">
+        <div class="w3-card w3-round w3-white w3-padding">
+          <header class="w3-display-container">
+            <h2 id="drawer-taxa-heading" class="w3-margin-top">
+              <i class="fa-solid fa-leaf" aria-hidden="true"></i>
+              <span class="w3-margin-left">{% trans "Taxa" %}</span>
+            </h2>
+          </header>
+          <main aria-labelledby="drawer-taxa-heading">
+            <ul class="w3-ul w3-margin-top" aria-label="{% trans 'Drawer taxa list' %}">
+              {% for taxon in object.taxa.all %}
+                <li class="w3-padding-small">{{ taxon }}</li>
+              {% empty %}
+                <li class="w3-padding-small w3-text-gray">{% trans "No taxa assigned." %}</li>
+              {% endfor %}
+            </ul>
+          </main>
+        </div>
+      </article>
+    </div>
+  </section>
+
   <section class="w3-margin-top" aria-labelledby="drawer-history-heading">
     <header class="w3-padding-16">
       <h2 id="drawer-history-heading" class="w3-margin-0">

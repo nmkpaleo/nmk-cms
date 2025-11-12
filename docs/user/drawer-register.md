@@ -19,4 +19,5 @@ Collection Managers can track scanning of drawers and document folders.
 
 ## Updating or Reviewing
 - Select a drawer code to view details and the change log.
-- Use the edit icon to update a drawer. Status and user updates are recorded automatically.
+- Review the **Localities** and **Taxa** cards to confirm the drawer's related records. Each card lists all linked entries and displays an accessible empty state when nothing is attached.
+- Use the edit icon to update a drawer. Status and user updates are recorded automatically, and the Localities and Taxa selections remain available for adjustment.
