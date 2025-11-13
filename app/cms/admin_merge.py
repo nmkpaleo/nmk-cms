@@ -15,7 +15,8 @@ from django.db import models
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import redirect, render
 from django.urls import path, reverse
-from django.utils.translation import gettext_lazy as _
+from django.utils.text import capfirst
+from django.utils.translation import gettext_lazy as _, ngettext
 
 from .merge import merge_records
 from .merge.constants import MERGE_STRATEGY_CHOICES, MergeStrategy
@@ -373,6 +374,13 @@ class MergeAdminMixin:
             else:
                 target = merge_result.target
                 source = form.cleaned_data["source"]
+                base_message = _(
+                    "Merged %(source)s into %(target)s (%(count)s fields updated)."
+                ) % {
+                    "source": source,
+                    "target": target,
+                    "count": len(merge_result.resolved_values),
+                }
                 self.log_change(
                     request,
                     target,
@@ -380,14 +388,19 @@ class MergeAdminMixin:
                 )
                 self.message_user(
                     request,
-                    _("Merged %(source)s into %(target)s (%(count)s fields updated).")
-                    % {
-                        "source": source,
-                        "target": target,
-                        "count": len(merge_result.resolved_values),
-                    },
+                    base_message,
                     level=messages.SUCCESS,
                 )
+                relation_summary_text = self._relation_summary_text(
+                    [merge_result.relation_actions]
+                )
+                if relation_summary_text:
+                    self.message_user(
+                        request,
+                        _("Relation updates: %(summary)s")
+                        % {"summary": relation_summary_text},
+                        level=messages.INFO,
+                    )
                 info = self.model._meta.app_label, self.model._meta.model_name
                 return redirect(f"admin:{info[0]}_{info[1]}_change", target.pk)
 
@@ -459,6 +472,59 @@ class MergeAdminMixin:
             "model_label": f"{opts.app_label}.{opts.model_name}",
         }
         return context
+
+    def _relation_summary_text(
+        self,
+        relation_logs: Iterable[Mapping[str, Mapping[str, Any]]],
+    ) -> str:
+        return "; ".join(self._summarize_relation_actions(relation_logs))
+
+    def _summarize_relation_actions(
+        self,
+        relation_logs: Iterable[Mapping[str, Mapping[str, Any]]],
+    ) -> list[str]:
+        totals: dict[str, dict[str, int | str]] = {}
+        for relation_actions in relation_logs:
+            for name, payload in relation_actions.items():
+                aggregate = totals.setdefault(name, {"action": payload.get("action", "")})
+                for key in ("updated", "added", "deleted", "would_delete", "skipped"):
+                    value = payload.get(key)
+                    if isinstance(value, int):
+                        aggregate[key] = int(aggregate.get(key, 0)) + value
+
+        summaries: list[str] = []
+        for name, aggregate in totals.items():
+            label = self._relation_label(name)
+            fragments: list[str] = []
+            for key, singular, plural in (
+                ("updated", "%(count)d updated", "%(count)d updated"),
+                ("added", "%(count)d added", "%(count)d added"),
+                ("deleted", "%(count)d deleted", "%(count)d deleted"),
+                ("would_delete", "%(count)d would delete", "%(count)d would delete"),
+                ("skipped", "%(count)d skipped", "%(count)d skipped"),
+            ):
+                count = int(aggregate.get(key, 0) or 0)
+                if count:
+                    fragments.append(
+                        ngettext(singular, plural, count) % {"count": count}
+                    )
+
+            action_value = aggregate.get("action")
+            if not fragments and action_value:
+                fragments.append(str(action_value))
+
+            if fragments:
+                summaries.append(f"{label} — {', '.join(fragments)}")
+
+        return summaries
+
+    def _relation_label(self, relation_name: str) -> str:
+        try:
+            field = self.model._meta.get_field(relation_name)
+            verbose = getattr(field, "verbose_name", relation_name)
+        except Exception:
+            verbose = relation_name.replace("_", " ")
+        return capfirst(str(verbose))
 
     def _serialise_objects(self, ids: Iterable[str]) -> list[dict[str, Any]]:
         objects = self.model._default_manager.filter(pk__in=ids)
