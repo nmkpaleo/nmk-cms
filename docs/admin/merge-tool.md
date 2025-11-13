@@ -85,6 +85,16 @@ If a merge needs to be reversed after the fact:
 
 Behind the scenes the merge engine reassigns relations, archives the source snapshot, deletes the source record, and records the result in `MergeLog`. Refer to `app/cms/tests/test_admin_merge.py` and `app/cms/tests/test_merge_engine.py` for concrete examples of the full workflow.
 
+### FieldSlip accession-link reconciliation
+
+When merging FieldSlips the admin will now see an additional info panel describing the automatic reconciliation of duplicate accession links. The merge engine analyses the `AccessionFieldSlip` join table inside the same transaction as the merge, deleting conflicting rows before reassigning the remaining links to the target slip. The confirmation screen surfaces how many duplicates were skipped or deleted so staff do not need to manually clean up accessions before finalising the merge.
+
+Key takeaways for staff users:
+
+- No IntegrityError will block the merge when both FieldSlips already reference the same accession; the duplicate link is removed automatically.
+- Relation summaries appear alongside the standard merge success banner, making it easier to audit which accessions moved, were skipped, or were deleted.
+- The audit trail in `MergeLog` captures these relation actions so administrators can review the conflict handling at any time.
+
 ## Configuring Strategies
 
 Merge strategies determine how conflicting field values resolve:
