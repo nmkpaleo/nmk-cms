@@ -81,6 +81,15 @@
     z-index: 10000;
 }
 
+/* Modal overlays: raise W3.CSS modal layers above elevated widgets */
+.w3-modal {
+    z-index: 11000;
+}
+
+.w3-modal .w3-modal-content {
+    z-index: 11001;
+}
+
 /* Drag-and-drop: preserve grab affordance for drawer reorder handles */
 .drag-handle {
     cursor: grab;
