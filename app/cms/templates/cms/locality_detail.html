@@ -81,62 +81,9 @@
     </div>
   </section>
 
-  <section class="w3-margin-top" aria-labelledby="locality-accessions-heading">
-    <header class="w3-padding-16">
-      <h2 id="locality-accessions-heading" class="w3-margin-0">
-        <i class="fa-solid fa-box-archive" aria-hidden="true"></i>
-        <span class="w3-margin-left">{% trans "Associated accessions" %}</span>
-      </h2>
-    </header>
-    <div class="w3-responsive">
-      <table class="w3-table-all w3-hoverable w3-small">
-        <thead>
-          <tr>
-            <th scope="col">{% trans "Collection" %}</th>
-            <th scope="col">{% trans "Specimen prefix" %}</th>
-            <th scope="col">{% trans "Specimen number" %}</th>
-            <th scope="col">{% trans "Taxon" %}</th>
-            <th scope="col">{% trans "Element" %}</th>
-            {% if user.is_superuser or user|has_group:"Collection Managers" %}
-              <th scope="col">{% trans "Accessioned by" %}</th>
-            {% endif %}
-          </tr>
-        </thead>
-        <tbody>
-          {% for accession in accessions %}
-            <tr>
-              <td>{{ accession.collection.abbreviation }}</td>
-              <td>{{ accession.specimen_prefix.abbreviation }}</td>
-              <td><a href="{% url 'accession_detail' accession.pk %}">{{ accession.specimen_no }}</a></td>
-              <td>
-                {% if accession.taxa_list %}
-                  {{ accession.taxa_list|join:", " }}
-                {% else %}
-                  &mdash;
-                {% endif %}
-              </td>
-              <td>
-                {% if accession.element_list %}
-                  {{ accession.element_list|join:", " }}
-                {% else %}
-                  &mdash;
-                {% endif %}
-              </td>
-              {% if user.is_superuser or user|has_group:"Collection Managers" %}
-                <td>{{ accession.accessioned_by }}</td>
-              {% endif %}
-            </tr>
-          {% empty %}
-            <tr>
-              <td colspan="{% if user.is_superuser or user|has_group:"Collection Managers" %}6{% else %}5{% endif %}" class="w3-center">
-                {% trans "No accessions found." %}
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </section>
+  {% blocktrans asvar associated_accessions_title %}Associated accessions{% endblocktrans %}
+  {% blocktrans asvar associated_accessions_empty %}No accessions found.{% endblocktrans %}
+  {% include "cms/partials/accession_basic_list.html" with accessions=accessions section_id="locality-accessions" section_title=associated_accessions_title empty_message=associated_accessions_empty show_staff_columns=show_accession_staff_columns %}
 </main>
 {% endblock %}
 

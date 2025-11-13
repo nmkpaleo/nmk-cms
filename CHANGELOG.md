@@ -9,6 +9,7 @@
 - Document the accession detail layout restructure and hover media preview workflow across user, admin, and developer guides (T5).
 - Capture the accession detail QA checklist, coverage command, and rollout/rollback guidance following the layout restructure (T6).
 - Document the accession row print card workflow, including taxonomy fallback handling, print controls, and permission parity with edit actions, in the user guide (T6).
+- Add a reusable Field Slip related accessions section and document the visibility rules for collection managers and superusers (T4).
 - Expand CMS template audit with W3.CSS layout dependency summary and upload-view gaps in `docs/dev/frontend-guidelines.md` (T1).
 - Add end-user, admin, and developer documentation for the NOW taxonomy sync workflow and record the feature in the changelog (T5).
 - Refactor CMS form templates and dashboards to share the W3.CSS base form card, refreshed role tiles, and accessibility-focused regression tests; update user/admin/dev guides accordingly (T3).
