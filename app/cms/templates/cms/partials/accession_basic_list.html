@@ -1,4 +1,4 @@
-{% load i18n user_tags %}
+{% load i18n %}
 <section class="w3-margin-top" aria-labelledby="{{ section_id|default:'accessions-section' }}-heading">
   <header class="w3-padding-16 w3-white w3-round-large">
     <h2 id="{{ section_id|default:'accessions-section' }}-heading" class="w3-margin-0">
@@ -13,6 +13,7 @@
     </h2>
   </header>
   <div class="w3-responsive w3-margin-top">
+    {% with show_staff=show_staff_columns|default:False %}
     <table class="w3-table-all w3-hoverable w3-small">
       <thead>
         <tr>
@@ -21,7 +22,7 @@
           <th scope="col">{% trans "Specimen number" %}</th>
           <th scope="col">{% trans "Taxon" %}</th>
           <th scope="col">{% trans "Element" %}</th>
-          {% if user.is_authenticated and (user.is_superuser or ((allow_collection_managers|default:True) and user|has_group:"Collection Managers") or ((allow_curators|default:True) and user|has_group:"Curators")) %}
+          {% if show_staff %}
             <th scope="col">{% trans "Accessioned by" %}</th>
           {% endif %}
         </tr>
@@ -48,13 +49,13 @@
                 &mdash;
               {% endif %}
             </td>
-            {% if user.is_authenticated and (user.is_superuser or ((allow_collection_managers|default:True) and user|has_group:"Collection Managers") or ((allow_curators|default:True) and user|has_group:"Curators")) %}
+            {% if show_staff %}
               <td>{{ accession.accessioned_by|default:"—" }}</td>
             {% endif %}
           </tr>
         {% empty %}
           <tr>
-            <td colspan="{% if user.is_authenticated and (user.is_superuser or ((allow_collection_managers|default:True) and user|has_group:"Collection Managers") or ((allow_curators|default:True) and user|has_group:"Curators")) %}6{% else %}5{% endif %}" class="w3-center w3-text-gray">
+            <td colspan="{% if show_staff %}6{% else %}5{% endif %}" class="w3-center w3-text-gray">
               {% if empty_message %}
                 {{ empty_message }}
               {% else %}
@@ -65,5 +66,6 @@
         {% endfor %}
       </tbody>
     </table>
+    {% endwith %}
   </div>
 </section>

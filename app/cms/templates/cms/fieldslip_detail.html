@@ -118,7 +118,7 @@
 
   {% blocktrans asvar related_accessions_title %}Related accessions{% endblocktrans %}
   {% blocktrans asvar related_accessions_empty %}No related accessions recorded for this field slip.{% endblocktrans %}
-  {% include "cms/partials/accession_basic_list.html" with accessions=accessions section_id="fieldslip-related-accessions" section_icon="fa-diagram-project" section_title=related_accessions_title empty_message=related_accessions_empty %}
+  {% include "cms/partials/accession_basic_list.html" with accessions=accessions section_id="fieldslip-related-accessions" section_icon="fa-diagram-project" section_title=related_accessions_title empty_message=related_accessions_empty show_staff_columns=show_accession_staff_columns %}
 </main>
 {% endblock %}
 

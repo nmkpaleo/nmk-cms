@@ -1560,6 +1560,7 @@ class FieldSlipDetailView(DetailView):
 
         context["accessions"] = accessions
         context["can_view_unpublished_accessions"] = can_view_unpublished
+        context["show_accession_staff_columns"] = can_view_unpublished
 
         return context
 
@@ -3922,12 +3923,12 @@ class LocalityDetailView(DetailView):
         context = super().get_context_data(**kwargs)
         user = self.request.user
         accessions = self.object.accession_set.all()
-        if not (
-            user.is_authenticated and (
-                user.is_superuser or
-                user.groups.filter(name__in=["Collection Managers", "Curators"]).exists()
-            )
-        ):
+        can_view_restricted = user.is_authenticated and (
+            user.is_superuser
+            or user.groups.filter(name__in=["Collection Managers", "Curators"]).exists()
+        )
+
+        if not can_view_restricted:
             accessions = accessions.filter(is_published=True)
 
         accessions = prefetch_accession_related(accessions)
@@ -3941,6 +3942,7 @@ class LocalityDetailView(DetailView):
         context['accessions'] = accessions
         context['page_obj'] = accessions
         context['is_paginated'] = accessions.paginator.num_pages > 1
+        context['show_accession_staff_columns'] = can_view_restricted
 
         return context
 

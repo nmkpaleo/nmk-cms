@@ -83,7 +83,7 @@
 
   {% blocktrans asvar associated_accessions_title %}Associated accessions{% endblocktrans %}
   {% blocktrans asvar associated_accessions_empty %}No accessions found.{% endblocktrans %}
-  {% include "cms/partials/accession_basic_list.html" with accessions=accessions section_id="locality-accessions" section_title=associated_accessions_title empty_message=associated_accessions_empty allow_curators=False %}
+  {% include "cms/partials/accession_basic_list.html" with accessions=accessions section_id="locality-accessions" section_title=associated_accessions_title empty_message=associated_accessions_empty show_staff_columns=show_accession_staff_columns %}
 </main>
 {% endblock %}
 
