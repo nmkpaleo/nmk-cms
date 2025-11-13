@@ -1,0 +1,69 @@
+{% load i18n user_tags %}
+<section class="w3-margin-top" aria-labelledby="{{ section_id|default:'accessions-section' }}-heading">
+  <header class="w3-padding-16 w3-white w3-round-large">
+    <h2 id="{{ section_id|default:'accessions-section' }}-heading" class="w3-margin-0">
+      <i class="fa-solid {{ section_icon|default:'fa-box-archive' }}" aria-hidden="true"></i>
+      <span class="w3-margin-left">
+        {% if section_title %}
+          {{ section_title }}
+        {% else %}
+          {% trans "Associated accessions" %}
+        {% endif %}
+      </span>
+    </h2>
+  </header>
+  <div class="w3-responsive w3-margin-top">
+    <table class="w3-table-all w3-hoverable w3-small">
+      <thead>
+        <tr>
+          <th scope="col">{% trans "Collection" %}</th>
+          <th scope="col">{% trans "Specimen prefix" %}</th>
+          <th scope="col">{% trans "Specimen number" %}</th>
+          <th scope="col">{% trans "Taxon" %}</th>
+          <th scope="col">{% trans "Element" %}</th>
+          {% if user.is_authenticated and (user.is_superuser or ((allow_collection_managers|default:True) and user|has_group:"Collection Managers") or ((allow_curators|default:True) and user|has_group:"Curators")) %}
+            <th scope="col">{% trans "Accessioned by" %}</th>
+          {% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for accession in accessions %}
+          <tr>
+            <td>{{ accession.collection.abbreviation|default:"—" }}</td>
+            <td>{{ accession.specimen_prefix.abbreviation|default:"—" }}</td>
+            <td>
+              <a href="{% url 'accession_detail' accession.pk %}">{{ accession.specimen_no }}</a>
+            </td>
+            <td>
+              {% if accession.taxa_list %}
+                {{ accession.taxa_list|join:", " }}
+              {% else %}
+                &mdash;
+              {% endif %}
+            </td>
+            <td>
+              {% if accession.element_list %}
+                {{ accession.element_list|join:", " }}
+              {% else %}
+                &mdash;
+              {% endif %}
+            </td>
+            {% if user.is_authenticated and (user.is_superuser or ((allow_collection_managers|default:True) and user|has_group:"Collection Managers") or ((allow_curators|default:True) and user|has_group:"Curators")) %}
+              <td>{{ accession.accessioned_by|default:"—" }}</td>
+            {% endif %}
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="{% if user.is_authenticated and (user.is_superuser or ((allow_collection_managers|default:True) and user|has_group:"Collection Managers") or ((allow_curators|default:True) and user|has_group:"Curators")) %}6{% else %}5{% endif %}" class="w3-center w3-text-gray">
+              {% if empty_message %}
+                {{ empty_message }}
+              {% else %}
+                {% trans "No accessions found." %}
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
