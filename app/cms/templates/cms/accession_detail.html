@@ -70,10 +70,24 @@
   </section>
 
   {% if user.is_superuser or user|has_group:"Collection Managers" %}
-    <div id="fieldSlipModal" class="w3-modal" role="dialog" aria-modal="true" aria-labelledby="fieldSlipModalTitle">
+    <div
+      id="fieldSlipModal"
+      class="w3-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="fieldSlipModalTitle"
+      aria-hidden="true"
+      data-create-url="{% url 'accession_create_fieldslip' accession.pk %}"
+    >
       <div class="w3-modal-content w3-card-4 w3-animate-top" style="max-width: 800px;">
         <header class="w3-container w3-blue">
-          <button type="button" onclick="closeFieldSlipModal()" class="w3-button w3-display-topright" aria-label="{% trans 'Close modal' %}">&times;</button>
+          <button
+            id="fieldSlipModalCloseButton"
+            type="button"
+            onclick="closeFieldSlipModal()"
+            class="w3-button w3-display-topright"
+            aria-label="{% trans 'Close modal' %}"
+          >&times;</button>
           <h2 id="fieldSlipModalTitle">{% trans "Create and link new field slip" %}</h2>
         </header>
         <div class="w3-container">
@@ -100,20 +114,105 @@
 {% block extra_scripts %}
 <script src="{% static 'cms/js/accession_media_preview.js' %}" defer></script>
 <script>
-  function openFieldSlipModal() {
-    const url = "{% url 'accession_create_fieldslip' accession.pk %}";
-    document.getElementById("fieldSlipFrame").src = url;
-    document.getElementById("fieldSlipModal").style.display = "block";
-  }
+  (function () {
+    const modal = document.getElementById("fieldSlipModal");
+    const modalFrame = document.getElementById("fieldSlipFrame");
+    const closeButton = document.getElementById("fieldSlipModalCloseButton");
+    const backgroundRegion = document.getElementById("accession-fieldslip-actions");
+    let previouslyFocusedElement = null;
 
-  function closeFieldSlipModal() {
-    document.getElementById("fieldSlipModal").style.display = "none";
-    document.getElementById("fieldSlipFrame").src = "";
-  }
+    const select2jQuery = window.jQuery || (window.django && window.django.jQuery);
 
-  function closeModalAndRefresh() {
-    closeFieldSlipModal();
-    location.reload();
-  }
+    function closeSelect2Dropdowns() {
+      if (select2jQuery) {
+        select2jQuery(".django-select2").each(function () {
+          const instance = select2jQuery(this);
+          if (instance.data("select2")) {
+            instance.select2("close");
+          }
+        });
+      }
+
+      document
+        .querySelectorAll(".select2-container--open")
+        .forEach((container) => container.classList.remove("select2-container--open"));
+      document
+        .querySelectorAll(".select2-dropdown")
+        .forEach((dropdown) => {
+          dropdown.setAttribute("aria-hidden", "true");
+          dropdown.style.display = "none";
+        });
+    }
+
+    function showModal() {
+      if (!modal || !modalFrame) {
+        return;
+      }
+
+      closeSelect2Dropdowns();
+
+      previouslyFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+      const createUrl = modal.dataset.createUrl;
+      if (createUrl) {
+        modalFrame.src = createUrl;
+      }
+
+      modal.style.display = "block";
+      modal.setAttribute("aria-hidden", "false");
+
+      if (backgroundRegion) {
+        backgroundRegion.setAttribute("aria-hidden", "true");
+        backgroundRegion.setAttribute("inert", "");
+      }
+
+      if (closeButton) {
+        closeButton.focus();
+      }
+    }
+
+    function hideModal() {
+      if (!modal || !modalFrame) {
+        return;
+      }
+
+      modal.style.display = "none";
+      modal.setAttribute("aria-hidden", "true");
+      modalFrame.src = "";
+
+      if (backgroundRegion) {
+        backgroundRegion.removeAttribute("aria-hidden");
+        backgroundRegion.removeAttribute("inert");
+      }
+
+      if (previouslyFocusedElement && document.body.contains(previouslyFocusedElement)) {
+        previouslyFocusedElement.focus();
+      }
+
+      previouslyFocusedElement = null;
+    }
+
+    if (modal) {
+      modal.addEventListener("click", (event) => {
+        if (event.target === modal) {
+          hideModal();
+        }
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && modal.style.display === "block") {
+          event.preventDefault();
+          hideModal();
+        }
+      });
+    }
+
+    window.openFieldSlipModal = showModal;
+    window.closeFieldSlipModal = hideModal;
+    window.closeModalAndRefresh = function () {
+      hideModal();
+      window.location.reload();
+    };
+  })();
 </script>
 {% endblock %}
