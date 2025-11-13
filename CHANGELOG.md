@@ -18,3 +18,4 @@
 - Convert the admin merge workflow and reporting dashboards to W3.CSS-only markup, drop bespoke CSS bundles, refresh merge tooling JS, and document the new patterns.
 - Consolidate residual custom CSS to navigation, Select2, and drag-handle helpers while migrating account entrance flows to W3.CSS cards and backfill template tests plus docs covering the W3 regression expectations.
 - Document FieldSlip merge deduplication, including admin messaging and developer guidance for relation conflict handling, and update merge-tool docs accordingly (T5).
+- Record FieldSlip merge QA execution results, lint/test observations, and rollout guidance for operations teams (T6).

@@ -21,3 +21,7 @@ The FieldSlip merge confirmation template now renders an informational panel des
 ## Operational considerations
 - The deduplication routine relies on database-level locking to avoid race conditions. Keep merge operations quick and avoid long-running tasks inside the transaction.
 - Because conflicting rows are deleted, ensure production backups remain in place to restore accidentally removed links if required. Merge logs include the source snapshot for auditing and potential rollback.
+
+## Next Steps
+
+- Refer to `docs/dev/fieldslip_merge_rollout.md` for the executed QA commands, coverage summary, and rollout guidance.
