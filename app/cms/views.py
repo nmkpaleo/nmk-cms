@@ -1524,6 +1524,45 @@ class FieldSlipDetailView(DetailView):
     template_name = 'cms/fieldslip_detail.html'
     context_object_name = 'fieldslip'
 
+    def get_queryset(self):
+        accession_link_prefetch = Prefetch(
+            "accession_links",
+            queryset=AccessionFieldSlip.objects.select_related("accession"),
+        )
+
+        accession_prefetch = Prefetch(
+            "accession_links__accession",
+            queryset=prefetch_accession_related(Accession.objects.all()),
+        )
+
+        return (
+            super()
+            .get_queryset()
+            .prefetch_related(accession_link_prefetch, accession_prefetch)
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        user = self.request.user
+        can_view_unpublished = user.is_authenticated and (
+            user.is_superuser
+            or user.groups.filter(name__in=["Collection Managers", "Curators"]).exists()
+        )
+
+        accessions = Accession.objects.filter(fieldslip_links__fieldslip=self.object)
+
+        if not can_view_unpublished:
+            accessions = accessions.filter(is_published=True)
+
+        accessions = prefetch_accession_related(accessions)
+        attach_accession_summaries(accessions)
+
+        context["accessions"] = accessions
+        context["can_view_unpublished_accessions"] = can_view_unpublished
+
+        return context
+
 class FieldSlipListView(LoginRequiredMixin, UserPassesTestMixin, FilterView):
     model = FieldSlip
     template_name = 'cms/fieldslip_list.html'
