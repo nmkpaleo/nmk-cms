@@ -196,6 +196,7 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
     count = forms.IntegerField(
         label="Count",
         min_value=1,
+        max_value=100,
         required=True,
         help_text="Number of accession numbers to generate.",
     )
@@ -210,12 +211,14 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
         ]  # exclude 'count'
 
     def __init__(self, *args, **kwargs):
+        request_user = kwargs.pop("request_user", None)
         super().__init__(*args, **kwargs)
 
         # Always add count to the form manually
         self.fields["count"] = forms.IntegerField(
             label="Count",
             min_value=1,
+            max_value=100,
             required=True,
             help_text="Number of accession numbers to generate or total range size.",
         )
@@ -234,9 +237,14 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
             for field_name in ["start_from", "current_number"]:
                 if field_name in self.fields:
                     self.fields[field_name].widget.attrs["readonly"] = True
+                    self.fields[field_name].disabled = True
                     self.fields[field_name].required = False
             self.fields["is_active"].initial = True
             self.fields["is_active"].widget = forms.HiddenInput()
+
+        for field_name in ["collection", "specimen_prefix"]:
+            if field_name in self.fields:
+                self.fields[field_name].required = False
 
         # Inject JS data for user field
         if "user" in self.fields:
@@ -244,6 +252,11 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
             self.fields["user"].label_from_instance = (
                 lambda obj: obj.username
             )  # ensure username shown
+
+            if request_user is not None:
+                self.fields["user"].queryset = User.objects.filter(pk=request_user.pk)
+                self.fields["user"].initial = request_user
+                self.fields["user"].widget = forms.HiddenInput()
 
     @classmethod
     def _next_start_for_pool(cls, *, is_tbi_pool):
@@ -295,6 +308,13 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
     def clean(self):
         cleaned_data = super().clean()
         user = cleaned_data.get("user")
+        count = cleaned_data.get("count")
+
+        if count and count > 100:
+            self.add_error(
+                "count",
+                _("You can generate up to 100 accession numbers at a time."),
+            )
 
         if not self.instance.pk and user:
             # Ensure unique active series per user
