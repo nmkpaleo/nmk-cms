@@ -7,6 +7,7 @@
 - Document geological time support across locality workflows, including admin import/export guidance, printable reporting expectations, and pytest coverage notes (T3).
 - Standardise CMS list and detail templates on semantic W3.CSS layouts, refreshed Font Awesome icons, and updated template tests; document the patterns in user and developer guides (T2).
 - Document the accession detail layout restructure and hover media preview workflow across user, admin, and developer guides (T5).
+- Record the accession field slip modal overlay fix, including accessibility updates to close Select2 dropdowns and hide background content while the dialog is open (CMS-ACC-UI-004).
 - Capture the accession detail QA checklist, coverage command, and rollout/rollback guidance following the layout restructure (T6).
 - Document the accession row print card workflow, including taxonomy fallback handling, print controls, and permission parity with edit actions, in the user guide (T6).
 - Add a reusable Field Slip related accessions section and document the visibility rules for collection managers and superusers (T4).
