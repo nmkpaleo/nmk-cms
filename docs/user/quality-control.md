@@ -136,6 +136,15 @@ highlighted fields before retrying.
   instance or update the existing record before continuing. The wizard still
   blocks re-approval once the media already owns accessions to avoid duplicates.
 
+### Managing references
+
+Each reference card shows a **Delete reference** button with a trash icon so you
+can remove entries that were misinterpreted or are no longer needed. Clicking
+the button toggles the formset delete flag for that card and visually marks it
+for removal; saving the wizard completes the deletion. Use **Undo delete** to
+restore a card before saving if you clicked delete by mistake. The control is
+always available on the expert wizard—no feature flag is required.
+
 ### Leaving reviewer comments
 
 The expert wizard includes a **Reviewer comment** textarea and a history list of
