@@ -131,7 +131,7 @@
       </section>
     {% endif %}
 
-    {% if is_collection_manager %}
+    {% if user.is_superuser or is_collection_manager %}
       <section class="w3-section w3-animate-opacity">
         <article class="w3-card-4 w3-white w3-round-large w3-padding-large">
           <header class="w3-margin-bottom">
@@ -140,102 +140,110 @@
               <span class="w3-margin-left">{% trans "Collection management" %}</span>
             </h2>
           </header>
-          {% if has_active_series %}
-            <div class="w3-margin-bottom w3-bar w3-small">
-              <a href="{% url 'accession-wizard' %}" class="w3-bar-item w3-button w3-blue w3-round-large">
-                <i class="fa-solid fa-circle-plus" aria-hidden="true"></i>
-                <span class="w3-margin-left">{% trans "Create single accession" %}</span>
-              </a>
-              <a href="{% url 'accession_generate_batch' %}" class="w3-bar-item w3-button w3-blue w3-round-large">
-                <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
-                <span class="w3-margin-left">{% trans "Generate batch" %}</span>
-              </a>
-            </div>
-          {% else %}
+          <div class="w3-margin-bottom w3-bar w3-small">
+            <a href="{% url 'accession-wizard' %}" class="w3-bar-item w3-button w3-blue w3-round-large">
+              <i class="fa-solid fa-circle-plus" aria-hidden="true"></i>
+              <span class="w3-margin-left">{% trans "Create single accession" %}</span>
+            </a>
+            <a
+              {% if not (is_collection_manager and has_active_series) %}href="{% url 'accession_generate_batch' %}"{% endif %}
+              class="w3-bar-item w3-button w3-blue w3-round-large{% if is_collection_manager and has_active_series %} w3-disabled{% endif %}"
+              aria-disabled="{% if is_collection_manager and has_active_series %}true{% else %}false{% endif %}"
+              {% if is_collection_manager and has_active_series %}tabindex="-1"{% endif %}
+            >
+              <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+              <span class="w3-margin-left">{% trans "Generate batch" %}</span>
+            </a>
+          </div>
+          {% if is_collection_manager and has_active_series %}
+            <p class="w3-text-gray">{% trans "You currently have an active accession number series. Complete it before generating a new batch." %}</p>
+          {% elif is_collection_manager %}
             <p class="w3-text-gray">{% trans "You do not currently have an active accession number series." %}</p>
           {% endif %}
 
-          <div class="w3-row-padding">
-            <div class="w3-col s12 m6 l4 w3-margin-bottom">
-              <h3 class="w3-large">
-                <i class="fa-solid fa-person-circle-question" aria-hidden="true"></i>
-                <span class="w3-margin-left">{% trans "Unassigned accessions" %}</span>
-              </h3>
-              {% if unassigned_accessions %}
-                <div class="w3-responsive">
-                  <table class="w3-table-all w3-small" aria-label="{% trans "Unassigned accessions" %}">
-                    <thead>
-                      <tr>
-                        <th scope="col">{% trans "Accession" %}</th>
-                        <th scope="col">{% trans "Actions" %}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {% for acc in unassigned_accessions %}
+          {% if is_collection_manager %}
+            <div class="w3-row-padding">
+              <div class="w3-col s12 m6 l4 w3-margin-bottom">
+                <h3 class="w3-large">
+                  <i class="fa-solid fa-person-circle-question" aria-hidden="true"></i>
+                  <span class="w3-margin-left">{% trans "Unassigned accessions" %}</span>
+                </h3>
+                {% if unassigned_accessions %}
+                  <div class="w3-responsive">
+                    <table class="w3-table-all w3-small" aria-label="{% trans "Unassigned accessions" %}">
+                      <thead>
                         <tr>
-                          <td>{{ acc }}</td>
-                          <td>
-                            <a href="{% url 'accession_detail' acc.id %}" class="w3-button w3-small w3-blue w3-round-large">
-                              <i class="fa-solid fa-eye" aria-hidden="true"></i>
-                              <span class="w3-margin-left">{% trans "View" %}</span>
-                            </a>
-                          </td>
+                          <th scope="col">{% trans "Accession" %}</th>
+                          <th scope="col">{% trans "Actions" %}</th>
                         </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
-                </div>
-              {% else %}
-                <p class="w3-text-gray">{% trans "No unassigned accessions." %}</p>
-              {% endif %}
-            </div>
+                      </thead>
+                      <tbody>
+                        {% for acc in unassigned_accessions %}
+                          <tr>
+                            <td>{{ acc }}</td>
+                            <td>
+                              <a href="{% url 'accession_detail' acc.id %}" class="w3-button w3-small w3-blue w3-round-large">
+                                <i class="fa-solid fa-eye" aria-hidden="true"></i>
+                                <span class="w3-margin-left">{% trans "View" %}</span>
+                              </a>
+                            </td>
+                          </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
+                {% else %}
+                  <p class="w3-text-gray">{% trans "No unassigned accessions." %}</p>
+                {% endif %}
+              </div>
 
-            <div class="w3-col s12 m6 l4 w3-margin-bottom">
-              <h3 class="w3-large">
-                <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
-                <span class="w3-margin-left">{% trans "My latest accessions" %}</span>
-              </h3>
-              {% if latest_accessions %}
-                <div class="w3-responsive">
-                  <table class="w3-table-all w3-small" aria-label="{% trans "Latest accessions" %}">
-                    <thead>
-                      <tr>
-                        <th scope="col">{% trans "Accession" %}</th>
-                        <th scope="col">{% trans "Last activity" %}</th>
-                        <th scope="col">{% trans "Actions" %}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {% for acc in latest_accessions %}
+              <div class="w3-col s12 m6 l4 w3-margin-bottom">
+                <h3 class="w3-large">
+                  <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+                  <span class="w3-margin-left">{% trans "My latest accessions" %}</span>
+                </h3>
+                {% if latest_accessions %}
+                  <div class="w3-responsive">
+                    <table class="w3-table-all w3-small" aria-label="{% trans "Latest accessions" %}">
+                      <thead>
                         <tr>
-                          <td>{{ acc }}</td>
-                          <td>{{ acc.last_activity|date:"Y-m-d H:i" }}</td>
-                          <td>
-                            <a href="{% url 'accession_detail' acc.id %}" class="w3-button w3-small w3-blue w3-round-large">
-                              <i class="fa-solid fa-eye" aria-hidden="true"></i>
-                              <span class="w3-margin-left">{% trans "View" %}</span>
-                            </a>
-                          </td>
+                          <th scope="col">{% trans "Accession" %}</th>
+                          <th scope="col">{% trans "Last activity" %}</th>
+                          <th scope="col">{% trans "Actions" %}</th>
                         </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
-                </div>
-              {% else %}
-                <p class="w3-text-gray">{% trans "No recent accessions." %}</p>
-              {% endif %}
-            </div>
+                      </thead>
+                      <tbody>
+                        {% for acc in latest_accessions %}
+                          <tr>
+                            <td>{{ acc }}</td>
+                            <td>{{ acc.last_activity|date:"Y-m-d H:i" }}</td>
+                            <td>
+                              <a href="{% url 'accession_detail' acc.id %}" class="w3-button w3-small w3-blue w3-round-large">
+                                <i class="fa-solid fa-eye" aria-hidden="true"></i>
+                                <span class="w3-margin-left">{% trans "View" %}</span>
+                              </a>
+                            </td>
+                          </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
+                {% else %}
+                  <p class="w3-text-gray">{% trans "No recent accessions." %}</p>
+                {% endif %}
+              </div>
 
-            <div class="w3-col s12 m12 l4 w3-margin-bottom">
-              <h3 class="w3-large">
-                <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
-                <span class="w3-margin-left">{% trans "Quality control queues" %}</span>
-              </h3>
-              <div class="w3-margin-top">
-                {% include "cms/qc/dashboard_queue.html" %}
+              <div class="w3-col s12 m12 l4 w3-margin-bottom">
+                <h3 class="w3-large">
+                  <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                  <span class="w3-margin-left">{% trans "Quality control queues" %}</span>
+                </h3>
+                <div class="w3-margin-top">
+                  {% include "cms/qc/dashboard_queue.html" %}
+                </div>
               </div>
             </div>
-          </div>
+          {% endif %}
         </article>
       </section>
     {% endif %}
