@@ -1,18 +1,26 @@
+{% load i18n %}
 {% with ref_form.DELETE.value as delete_flag %}
-  <div class="qc-card" data-qc-reference{% if delete_flag %} data-reference-deleted="true"{% endif %}>
+  <article class="qc-card" data-qc-reference{% if delete_flag %} data-reference-deleted="true"{% endif %}>
     {% for hidden in ref_form.hidden_fields %}
       {{ hidden }}
     {% endfor %}
-    <div class="w3-right-align w3-margin-bottom" data-reference-actions{% if delete_flag %} hidden{% endif %}>
-      <button
-        type="button"
-        class="w3-button w3-tiny w3-red w3-round"
-        data-action="click->qc-references#deleteReference"
-        data-reference-delete
-      >
-        Delete reference
-      </button>
-    </div>
+    <header class="w3-row-padding w3-small w3-margin-bottom" data-reference-actions{% if delete_flag %} hidden{% endif %}>
+      <div class="w3-col s12 m8 l9">
+        <h4 class="w3-margin-0">{% trans "Reference" %}</h4>
+      </div>
+      <div class="w3-col s12 m4 l3 w3-right-align">
+        <button
+          type="button"
+          class="w3-button w3-tiny w3-red w3-round"
+          data-action="click->qc-references#deleteReference"
+          data-reference-delete
+          aria-label="{% trans 'Delete reference' %}"
+        >
+          <i class="fa fa-trash" aria-hidden="true"></i>
+          <span class="w3-margin-left">{% trans "Delete reference" %}</span>
+        </button>
+      </div>
+    </header>
     <div class="qc-field-grid" data-reference-body{% if delete_flag %} hidden{% endif %}>
       <div class="qc-field qc-field--full">
         <label class="qc-label" for="{{ ref_form.first_author.id_for_label }}">{{ ref_form.first_author.label }}:</label>
@@ -48,15 +56,15 @@
       data-reference-deleted-message
       {% if not delete_flag %}hidden{% endif %}
     >
-      <p class="w3-margin-top w3-margin-bottom">This reference will be deleted when you save.</p>
+      <p class="w3-margin-top w3-margin-bottom">{% trans "This reference will be deleted when you save." %}</p>
       <button
         type="button"
         class="w3-button w3-tiny w3-light-grey w3-round"
         data-action="click->qc-references#restoreReference"
         data-reference-restore
       >
-        Undo delete
+        {% trans "Undo delete" %}
       </button>
     </div>
-  </div>
+  </article>
 {% endwith %}

@@ -35,12 +35,54 @@
     return value === 'on' || value === 'true' || value === '1';
   }
 
-  function setDeleteValue(card, deleted) {
+  function extractIndexFromCard(card, prefix) {
+    if (!card || !prefix) {
+      return null;
+    }
+
+    const indexedField = card.querySelector(`[name^="${prefix}-"]`);
+
+    if (!indexedField || !indexedField.name) {
+      return null;
+    }
+
+    const match = indexedField.name.match(new RegExp(`^${prefix}-(\\d+)-`));
+    if (!match) {
+      return null;
+    }
+
+    return match[1];
+  }
+
+  function ensureDeleteInput(card, prefix) {
+    if (!card) {
+      return null;
+    }
+
+    const existing = card.querySelector('input[name$="-DELETE"]');
+    if (existing) {
+      return existing;
+    }
+
+    const formIndex = extractIndexFromCard(card, prefix);
+    if (formIndex === null) {
+      return null;
+    }
+
+    const deleteInput = document.createElement('input');
+    deleteInput.type = 'hidden';
+    deleteInput.name = `${prefix}-${formIndex}-DELETE`;
+    deleteInput.value = '';
+    card.prepend(deleteInput);
+    return deleteInput;
+  }
+
+  function setDeleteValue(card, deleted, prefix) {
     if (!card) {
       return;
     }
 
-    const deleteInput = card.querySelector('input[name$="-DELETE"]');
+    const deleteInput = ensureDeleteInput(card, prefix);
     if (!deleteInput) {
       return;
     }
@@ -117,7 +159,7 @@
         return;
       }
 
-      setDeleteValue(card, false);
+      setDeleteValue(card, false, this.prefix);
       toggleCardPresentation(card, false);
 
       this.containerTarget.appendChild(card);
@@ -144,7 +186,7 @@
         return;
       }
 
-      setDeleteValue(card, true);
+      setDeleteValue(card, true, this.prefix);
       toggleCardPresentation(card, true);
       this._updateEmptyMessage();
     }
@@ -163,13 +205,14 @@
         return;
       }
 
-      setDeleteValue(card, false);
+      setDeleteValue(card, false, this.prefix);
       toggleCardPresentation(card, false);
       this._updateEmptyMessage();
     }
 
     _applyInitialState() {
       this._cards().forEach((card) => {
+        ensureDeleteInput(card, this.prefix);
         const deleted = readDeleteValue(card);
         toggleCardPresentation(card, deleted);
       });
@@ -216,4 +259,31 @@
   }
 
   global.QcReferencesController = QcReferencesController;
+
+  function tryAutoRegister() {
+    if (!global.Stimulus || !global.Stimulus.Application) {
+      return;
+    }
+
+    let app = global.StimulusApp;
+    if (!app && typeof global.Stimulus.Application.start === 'function') {
+      app = global.Stimulus.Application.start();
+      global.StimulusApp = app;
+    }
+
+    if (!app || typeof app.register !== 'function') {
+      return;
+    }
+
+    try {
+      app.register('qc-references', QcReferencesController);
+    } catch (error) {
+      const message = String(error || '');
+      if (message.indexOf('already been registered') === -1) {
+        console.error(error);
+      }
+    }
+  }
+
+  tryAutoRegister();
 })(typeof window !== 'undefined' ? window : this);
