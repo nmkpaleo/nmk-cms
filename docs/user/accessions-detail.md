@@ -16,7 +16,7 @@ The accession detail page provides a comprehensive overview of a single accessio
 
 ## Related workflows
 
-- The Comments table and the field slip management modal behave as before. The new layout simply gives more room to the upper summary cards while leaving forms and modals untouched.
+- The Comments table and the field slip management modal behave as before, but the **Create and link new field slip** dialog now hides the underlying Select2 dropdown and background form while it is open.
 - If you need to download a media asset, continue to use the thumbnail link. The hover preview is read-only and does not replace the existing download behaviour.
 - Use the **Print specimen card** button in the accession row header to open a compact, print-ready card. The card groups taxonomy (Family, Subfamily, Tribe, Genus, Species), specimen element details (Element, Side, Portion, Condition, Fragments), locality/site information, and accession/field numbers into a bordered layout that mirrors the in-app detail view.
 - The print action is limited to the same roles that may **Edit specimen**; collection managers and other read-only accounts will not see the print button until they gain edit access.
