@@ -1,6 +1,7 @@
 from django.urls import include, path
 from django.conf.urls.static import static
 from django.conf import settings
+from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required as staff_login_required
 from django_filters.views import FilterView
 from cms.models import Accession
@@ -27,7 +28,7 @@ from cms.views import (
     FieldSlipListView,
     fieldslip_export,
     fieldslip_import,
-    generate_accession_batch,
+    GenerateAccessionBatchView,
     AccessionListView,
     AccessionDetailView,
     ReferenceListView,
@@ -134,7 +135,11 @@ urlpatterns = [
     path('specimens/<int:element_id>/edit/', edit_specimen_element, name='specimen_edit'),
     path('elements/<int:element_id>/edit/', edit_specimen_element, name='element_edit'),
     path('identifications/<int:identification_id>/edit/', edit_identification, name='identification_edit'),
-    path("accessions/generate-batch/", generate_accession_batch, name="accession_generate_batch"),
+    path(
+        "accessions/generate-batch/",
+        login_required(GenerateAccessionBatchView.as_view()),
+        name="accession-generate-batch",
+    ),
     path('accession-wizard/', AccessionWizard.as_view([AccessionNumberSelectForm, AccessionForm,
                                                        SpecimenCompositeForm]), name='accession-wizard'),
     path('references/', ReferenceListView.as_view(), name='reference_list'),

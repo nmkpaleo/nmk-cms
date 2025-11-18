@@ -952,6 +952,33 @@ class DashboardViewCollectionManagerTests(TestCase):
         response = self.client.get(reverse("dashboard"))
         self.assertFalse(response.context["has_active_series"])
 
+    def test_generate_batch_button_disabled_when_series_active(self):
+        response = self.client.get(reverse("dashboard"))
+
+        self.assertContains(response, "Generate batch")
+        self.assertContains(response, 'aria-disabled="true"')
+        self.assertNotContains(response, reverse("accession-generate-batch"))
+
+    def test_generate_batch_button_enabled_without_active_series(self):
+        AccessionNumberSeries.objects.filter(user=self.manager).update(is_active=False)
+
+        response = self.client.get(reverse("dashboard"))
+
+        self.assertContains(response, 'href="{}"'.format(reverse("accession-generate-batch")))
+        self.assertContains(response, 'aria-disabled="false"')
+
+    def test_generate_batch_button_enabled_for_admin(self):
+        User = get_user_model()
+        admin = User.objects.create_superuser(username="admin", password="pass")
+
+        self.client.logout()
+        self.client.login(username="admin", password="pass")
+
+        response = self.client.get(reverse("dashboard"))
+
+        self.assertContains(response, 'href="{}"'.format(reverse("accession-generate-batch")))
+        self.assertContains(response, 'aria-disabled="false"')
+
 
 class DashboardViewPreparatorTests(TestCase):
     def setUp(self):

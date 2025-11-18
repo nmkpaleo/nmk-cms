@@ -1,12 +1,15 @@
 {% extends "base_generic.html" %}
-{% load i18n %}
+{% load i18n form_helpers static %}
 
 {% block title %}{% trans "Generate Accession Numbers" %}{% endblock %}
 
 {% block content %}
   {% trans "Create accessions" as create_accessions_label %}
   {% trans "Batch generation" as batch_generation_label %}
-  {% trans "Users with active series are available for selection. Use the count field to reserve numbers." as batch_generation_description %}
+  {% trans "Use this form to reserve accession numbers. The user is preselected and hidden." as batch_generation_description %}
+  {% trans "Starting number" as starting_number_label %}
+  {% trans "Current number" as current_number_label %}
+  {% trans "Assigned automatically based on your accession pool." as auto_assigned_note %}
   <main class="w3-container w3-margin-top w3-margin-bottom" role="main">
     <section class="w3-section">
       <header class="w3-margin-bottom">
@@ -14,15 +17,112 @@
           <i class="fa-solid fa-hashtag" aria-hidden="true"></i>
           <span class="w3-margin-left">{% trans "Generate Accession Numbers" %}</span>
         </h1>
-        <p class="w3-text-gray">{% trans "Select a preparator and quantity to allocate a new accession series." %}</p>
+        <p class="w3-text-gray">{% trans "Select a quantity to allocate a new accession series." %}</p>
       </header>
-      {% include "includes/base_form.html" with form=form submit_label=create_accessions_label submit_icon="fa-plus-circle" method="post" action=request.path title=batch_generation_label heading_id="accession-batch-form" description=batch_generation_description series_remaining=series_remaining series_range=series_range %}
+
+      {% if form.media %}
+        {{ form.media }}
+      {% endif %}
+
+      {% if form.non_field_errors %}
+        <div class="w3-panel w3-pale-red w3-leftbar w3-border-red w3-round-large" role="alert">
+          <p class="w3-large w3-text-red">
+            <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
+            <span class="w3-margin-left">{% trans "Please review the highlighted issues." %}</span>
+          </p>
+          <ul class="w3-text-red w3-small w3-margin-left">
+            {% for error in form.non_field_errors %}
+              <li>{{ error }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+
+      <form
+        method="post"
+        action="{{ request.path }}"
+        class="w3-container w3-card-4 w3-white w3-round-large w3-padding-large"
+        role="form"
+        aria-labelledby="accession-batch-form"
+      >
+        {% csrf_token %}
+        {% for hidden_field in form.hidden_fields %}
+          {{ hidden_field }}
+        {% endfor %}
+
+        <header class="w3-margin-bottom w3-border-bottom w3-padding-16">
+          <h1 id="accession-batch-form" class="w3-xxlarge w3-margin-0">{{ batch_generation_label }}</h1>
+          <p class="w3-text-gray w3-small w3-margin-top">{{ batch_generation_description }}</p>
+        </header>
+
+        <div class="w3-row-padding w3-margin-bottom">
+          <article class="w3-half w3-margin-bottom">
+            <label class="w3-text-dark-gray w3-medium" for="{{ form.start_from.id_for_label }}">
+              {{ starting_number_label }}
+            </label>
+            <div class="w3-margin-top">
+              {% render_field_widget form.start_from invalid=form.start_from.errors %}
+            </div>
+            <p class="w3-small w3-text-gray w3-margin-top">{{ auto_assigned_note }}</p>
+            {% if form.start_from.errors %}
+              <ul id="{{ form.start_from.id_for_label }}-errors" class="w3-small w3-text-red w3-margin-top" role="alert">
+                {% for error in form.start_from.errors %}
+                  <li>{{ error }}</li>
+                {% endfor %}
+              </ul>
+            {% endif %}
+          </article>
+
+          <article class="w3-half w3-margin-bottom">
+            <label class="w3-text-dark-gray w3-medium" for="{{ form.current_number.id_for_label }}">
+              {{ current_number_label }}
+            </label>
+            <div class="w3-margin-top">
+              {% render_field_widget form.current_number invalid=form.current_number.errors %}
+            </div>
+            <p class="w3-small w3-text-gray w3-margin-top">{{ auto_assigned_note }}</p>
+            {% if form.current_number.errors %}
+              <ul id="{{ form.current_number.id_for_label }}-errors" class="w3-small w3-text-red w3-margin-top" role="alert">
+                {% for error in form.current_number.errors %}
+                  <li>{{ error }}</li>
+                {% endfor %}
+              </ul>
+            {% endif %}
+          </article>
+        </div>
+
+        <div class="w3-section">
+          {% for field in form.visible_fields %}
+            {% if field.name != "start_from" and field.name != "current_number" and field.name != "user" %}
+              {% include "includes/base_form_field.html" with field=field series_remaining=series_remaining series_range=series_range %}
+            {% endif %}
+          {% empty %}
+            <p class="w3-text-gray">{% trans "No fields available." %}</p>
+          {% endfor %}
+        </div>
+
+        <div class="w3-margin-top w3-right-align">
+          <button type="submit" class="w3-button w3-blue w3-round-large w3-padding-large w3-hover-indigo">
+            <span class="w3-margin-right">
+              <i class="fa-solid fa-plus-circle" aria-hidden="true"></i>
+            </span>
+            <span>{{ create_accessions_label }}</span>
+          </button>
+        </div>
+      </form>
     </section>
-    <div class="w3-margin-top">
+
+    <aside class="w3-margin-top" aria-label="{% trans 'Additional navigation' %}">
       <a href="{% url 'fieldslip_list' %}" class="w3-button w3-white w3-border w3-round-large w3-hover-light-grey">
         <i class="fa-solid fa-arrow-left-long" aria-hidden="true"></i>
         <span class="w3-margin-left">{% trans "Back to field slips" %}</span>
       </a>
-    </div>
+    </aside>
   </main>
+{% endblock %}
+
+{% block extra_scripts %}
+  {{ block.super }}
+  <script src="{% static 'js/set_start_from.js' %}"></script>
+  <script src="{% static 'js/accession_series_live_preview.js' %}"></script>
 {% endblock %}

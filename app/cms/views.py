@@ -64,6 +64,8 @@ from django.utils.timezone import now
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, FormView, TemplateView
 from django.core.serializers.json import DjangoJSONEncoder
 
+User = get_user_model()
+
 from cms.forms import (
     AccessionBatchForm,
     AccessionCommentForm,
@@ -71,6 +73,7 @@ from cms.forms import (
     AccessionFieldSlipForm,
     AccessionGeologyForm,
     AccessionNumberSelectForm,
+    AccessionNumberSeriesAdminForm,
     AccessionRowIdentificationForm,
     AccessionMediaUploadForm,
     AccessionRowSpecimenForm,
@@ -1396,50 +1399,6 @@ def fieldslip_edit(request, pk):
     else:
         form = FieldSlipForm(instance=fieldslip)
     return render(request, 'cms/fieldslip_form.html', {'form': form})
-
-@staff_member_required
-def generate_accession_batch(request):
-    form = AccessionBatchForm(request.POST or None)
-    series_remaining = None
-    series_range = None
-
-    if request.method == "POST" and form.is_valid():
-        user = form.cleaned_data['user']
-        try:
-            # Get user's active accession number series
-            series = AccessionNumberSeries.objects.get(user=user, is_active=True)
-            series_remaining = series.end_at - series.current_number + 1
-            series_range = f"from {series.current_number} to {series.end_at}"
-
-            # Try to generate accessions
-            try:
-                accessions = generate_accessions_from_series(
-                    series_user=user,
-                    count=form.cleaned_data['count'],
-                    collection=form.cleaned_data['collection'],
-                    specimen_prefix=form.cleaned_data['specimen_prefix'],
-                    creator_user=request.user
-                )
-                messages.success(
-                    request,
-                    f"Successfully created {len(accessions)} accessions for {user}."
-                )
-                return redirect("accession_list")
-
-            except ValueError as ve:
-                form.add_error('count', f"{ve} (Available range: {series_range})")
-
-        except AccessionNumberSeries.DoesNotExist:
-            form.add_error('user', "No active accession number series found for this user.")
-
-    return render(request, "cms/accession_batch_form.html", {
-        "form": form,
-        "series_remaining": series_remaining,
-        "series_range": series_range,
-        "title": "Accession Numbers",
-        "method": "post",
-        "action": request.path,
-    })
 
 def reference_create(request):
     if request.method == 'POST':
@@ -5018,6 +4977,77 @@ def inventory_log_unexpected(request):
 class CollectionManagerAccessMixin(UserPassesTestMixin):
     def test_func(self):
         return is_collection_manager(self.request.user) or self.request.user.is_superuser
+
+
+class GenerateAccessionBatchView(LoginRequiredMixin, CollectionManagerAccessMixin, FormView):
+    template_name = "cms/accession_batch_form.html"
+    form_class = AccessionNumberSeriesAdminForm
+    success_url = reverse_lazy("accession-wizard")
+
+    def dispatch(self, request, *args, **kwargs):
+        has_active_series = AccessionNumberSeries.objects.filter(
+            user=request.user, is_active=True
+        ).exists()
+
+        if has_active_series and not request.user.is_superuser:
+            messages.error(
+                request,
+                _("You already have an active accession number series."),
+            )
+            return redirect("dashboard")
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs.setdefault("initial", {})
+        kwargs["initial"]["user"] = self.request.user
+        kwargs["request_user"] = self.request.user
+        return kwargs
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+
+        user_field = form.fields.get("user")
+        if user_field:
+            user_field.queryset = User.objects.filter(pk=self.request.user.pk)
+            user_field.initial = self.request.user
+            if not user_field.widget.is_hidden:
+                user_field.widget = forms.HiddenInput(attrs=user_field.widget.attrs)
+
+        count_field = form.fields.get("count")
+        if count_field:
+            count_field.max_value = 100
+
+        return form
+
+    def form_valid(self, form):
+        count = form.cleaned_data.get("count")
+        if count and count > 100:
+            form.add_error(
+                "count",
+                _("You can generate up to 100 accession numbers at a time."),
+            )
+            return self.form_invalid(form)
+
+        form.instance.user = self.request.user
+        form.instance.is_active = True
+
+        self.object = form.save()
+        messages.success(
+            self.request,
+            _("Accession number series created successfully."),
+        )
+        return super().form_valid(form)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.setdefault("series_remaining", None)
+        context.setdefault("series_range", None)
+        context.setdefault("title", _("Accession Numbers"))
+        context.setdefault("method", "post")
+        context.setdefault("action", self.request.path)
+        return context
 
 
 class DrawerRegisterAccessMixin(CollectionManagerAccessMixin):
