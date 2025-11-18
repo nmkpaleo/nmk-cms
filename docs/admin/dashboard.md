@@ -20,7 +20,7 @@ The dashboard adapts to the signed-in staff member and now uses W3.CSS cards wit
 - The same creation shortcut is available for ad-hoc preparation entries.
 
 ### Collection managers
-- The card shows the accession creation shortcuts at the top. If the user lacks an active series, an informative message replaces the buttons.
+- The card shows the accession creation shortcuts at the top. The **Generate batch** button appears for both superusers and collection managers, but it is disabled for collection managers who already have an active accession number series (superusers can always generate a new batch). Managers who do not have an active series see the button enabled plus a note that no active range currently exists.
 - The grid below contains three columns: unassigned accessions, the user’s latest accessions (with last activity timestamps), and the embedded quality-control queue partial.
 
 ### Interns
