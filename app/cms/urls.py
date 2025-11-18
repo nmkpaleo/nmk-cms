@@ -1,6 +1,7 @@
 from django.urls import include, path
 from django.conf.urls.static import static
 from django.conf import settings
+from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required as staff_login_required
 from django_filters.views import FilterView
 from cms.models import Accession
@@ -136,7 +137,7 @@ urlpatterns = [
     path('identifications/<int:identification_id>/edit/', edit_identification, name='identification_edit'),
     path(
         "accessions/generate-batch/",
-        GenerateAccessionBatchView.as_view(),
+        login_required(GenerateAccessionBatchView.as_view()),
         name="accession_generate_batch",
     ),
     path('accession-wizard/', AccessionWizard.as_view([AccessionNumberSelectForm, AccessionForm,
