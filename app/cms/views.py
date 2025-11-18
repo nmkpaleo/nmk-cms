@@ -64,6 +64,8 @@ from django.utils.timezone import now
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, FormView, TemplateView
 from django.core.serializers.json import DjangoJSONEncoder
 
+User = get_user_model()
+
 from cms.forms import (
     AccessionBatchForm,
     AccessionCommentForm,
