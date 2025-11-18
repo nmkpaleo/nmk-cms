@@ -64,6 +64,47 @@ class DashboardGenerateBatchButtonStateTests(TestCase):
         self.assertIn('aria-disabled="false"', content)
 
 
+class DashboardCreateSingleButtonStateTests(TestCase):
+    def setUp(self):
+        self.User = get_user_model()
+        self.collection_manager_group = Group.objects.create(name="Collection Managers")
+
+    def _create_manager(self, username: str = "manager"):
+        user = self.User.objects.create_user(username=username, password="pass")
+        self.collection_manager_group.user_set.add(user)
+        return user
+
+    def test_collection_manager_without_active_series_sees_disabled_create_single(self):
+        manager = self._create_manager()
+        self.client.login(username=manager.username, password="pass")
+
+        response = self.client.get(reverse("dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn('aria-disabled="true"', content)
+        self.assertIn('tabindex="-1"', content)
+        self.assertNotIn(reverse("accession-wizard"), content)
+
+    def test_collection_manager_with_active_series_sees_enabled_create_single(self):
+        manager = self._create_manager()
+        AccessionNumberSeries.objects.create(
+            user=manager,
+            start_from=1,
+            end_at=10,
+            current_number=1,
+            is_active=True,
+        )
+
+        self.client.login(username=manager.username, password="pass")
+        response = self.client.get(reverse("dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn(reverse("accession-wizard"), content)
+        self.assertIn('aria-disabled="false"', content)
+
+
 class AccessionNumberSeriesAdminFormTests(TestCase):
     def setUp(self):
         self.User = get_user_model()
