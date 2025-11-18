@@ -37,6 +37,18 @@ class GenerateAccessionBatchViewTests(TestCase):
         self.assertTrue(form.fields["user"].widget.is_hidden)
         self.assertEqual(form.fields["count"].max_value, 100)
 
+    def test_start_and_current_numbers_prefilled(self):
+        self.client.login(username="manager", password="pass")
+        self.current_user = self.manager
+
+        response = self.client.get(self.url)
+
+        form = response.context["form"]
+        self.assertEqual(form.initial.get("start_from"), 1)
+        self.assertEqual(form.initial.get("current_number"), 1)
+        self.assertContains(response, "id_start_from")
+        self.assertContains(response, "value=\"1\"")
+
     def test_collection_manager_redirected_when_active_series_exists(self):
         self.current_user = self.manager
         AccessionNumberSeries.objects.create(

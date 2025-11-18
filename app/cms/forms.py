@@ -246,9 +246,10 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
             if field_name in self.fields:
                 self.fields[field_name].required = False
 
+        metadata = self._widget_metadata()
+
         # Inject JS data for user field
         if "user" in self.fields:
-            self.fields["user"].widget.attrs.update(self._widget_metadata())
             self.fields["user"].label_from_instance = (
                 lambda obj: obj.username
             )  # ensure username shown
@@ -256,7 +257,22 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
             if request_user is not None:
                 self.fields["user"].queryset = User.objects.filter(pk=request_user.pk)
                 self.fields["user"].initial = request_user
-                self.fields["user"].widget = forms.HiddenInput()
+                self.fields["user"].widget = forms.HiddenInput(attrs=metadata)
+            else:
+                self.fields["user"].widget.attrs.update(metadata)
+
+        if request_user is not None and not self.instance.pk:
+            next_start = self._next_start_for_user(request_user)
+
+            for field_name in ("start_from", "current_number"):
+                if field_name in self.fields:
+                    self.fields[field_name].initial = next_start
+            self.initial.setdefault("start_from", next_start)
+            self.initial.setdefault("current_number", next_start)
+            if not getattr(self.instance, "start_from", None):
+                self.instance.start_from = next_start
+            if not getattr(self.instance, "current_number", None):
+                self.instance.current_number = next_start
 
     @classmethod
     def _next_start_for_pool(cls, *, is_tbi_pool):

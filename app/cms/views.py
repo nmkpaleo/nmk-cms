@@ -5002,6 +5002,7 @@ class GenerateAccessionBatchView(LoginRequiredMixin, CollectionManagerAccessMixi
         kwargs = super().get_form_kwargs()
         kwargs.setdefault("initial", {})
         kwargs["initial"]["user"] = self.request.user
+        kwargs["request_user"] = self.request.user
         return kwargs
 
     def get_form(self, form_class=None):
@@ -5011,7 +5012,8 @@ class GenerateAccessionBatchView(LoginRequiredMixin, CollectionManagerAccessMixi
         if user_field:
             user_field.queryset = User.objects.filter(pk=self.request.user.pk)
             user_field.initial = self.request.user
-            user_field.widget = forms.HiddenInput()
+            if not user_field.widget.is_hidden:
+                user_field.widget = forms.HiddenInput(attrs=user_field.widget.attrs)
 
         count_field = form.fields.get("count")
         if count_field:

@@ -120,3 +120,9 @@
     </aside>
   </main>
 {% endblock %}
+
+{% block extra_scripts %}
+  {{ block.super }}
+  <script src="{% static 'js/set_start_from.js' %}"></script>
+  <script src="{% static 'js/accession_series_live_preview.js' %}"></script>
+{% endblock %}
