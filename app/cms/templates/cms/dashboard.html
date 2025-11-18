@@ -145,15 +145,21 @@
               <i class="fa-solid fa-circle-plus" aria-hidden="true"></i>
               <span class="w3-margin-left">{% trans "Create single accession" %}</span>
             </a>
-            <a
-              {% if not (is_collection_manager and has_active_series) %}href="{% url 'accession_generate_batch' %}"{% endif %}
-              class="w3-bar-item w3-button w3-blue w3-round-large{% if is_collection_manager and has_active_series %} w3-disabled{% endif %}"
-              aria-disabled="{% if is_collection_manager and has_active_series %}true{% else %}false{% endif %}"
-              {% if is_collection_manager and has_active_series %}tabindex="-1"{% endif %}
-            >
-              <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
-              <span class="w3-margin-left">{% trans "Generate batch" %}</span>
-            </a>
+            {% if is_collection_manager and has_active_series %}
+              <a
+                class="w3-bar-item w3-button w3-blue w3-round-large w3-disabled"
+                aria-disabled="true"
+                tabindex="-1"
+              >
+                <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+                <span class="w3-margin-left">{% trans "Generate batch" %}</span>
+              </a>
+            {% else %}
+              <a href="{% url 'accession_generate_batch' %}" class="w3-bar-item w3-button w3-blue w3-round-large">
+                <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+                <span class="w3-margin-left">{% trans "Generate batch" %}</span>
+              </a>
+            {% endif %}
           </div>
           {% if is_collection_manager and has_active_series %}
             <p class="w3-text-gray">{% trans "You currently have an active accession number series. Complete it before generating a new batch." %}</p>
