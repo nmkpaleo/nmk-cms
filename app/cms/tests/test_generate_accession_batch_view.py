@@ -16,7 +16,7 @@ class GenerateAccessionBatchViewTests(TestCase):
         )
         self.collection_manager_group = Group.objects.create(name="Collection Managers")
         self.collection_manager_group.user_set.add(self.manager)
-        self.url = reverse("accession_generate_batch")
+        self.url = reverse("accession-generate-batch")
 
         self.current_user = self.manager
         self.user_patcher = patch(

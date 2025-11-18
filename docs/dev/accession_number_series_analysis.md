@@ -11,7 +11,7 @@
 ## Views and routing
 - **Dashboard** (`cms.views.dashboard`): populates `has_active_series = AccessionNumberSeries.objects.filter(user=request.user, is_active=True).exists()` for Collection Managers. Template `cms/dashboard.html` shows the Collection Management card only for the group; within it, the “Generate batch” link appears only when `has_active_series` is true.
 - **Batch generation view** (`cms.views.generate_accession_batch`): `@staff_member_required`, uses `AccessionBatchForm`. On POST, it fetches the selected user’s active series and calculates remaining/range for template messaging. Accessions are created via `generate_accessions_from_series`; success redirects to `accession_list`, otherwise attaches errors to the form.
-- **URL**: routed at `/accessions/generate-batch/` via `accession_generate_batch` (in `cms/urls.py`).
+- **URL**: routed at `/accessions/generate-batch/` via `accession-generate-batch` (in `cms/urls.py`).
 
 ## Utilities and numbering
 - **`generate_accessions_from_series`** (`cms.utils`): fetches active series for the target user, validates the requested count against `end_at`, instantiates `Accession` objects for the given collection/prefix, advances `current_number` accordingly, saves all accessions individually, and returns the created list. Raises `ValueError` if no active series or range exhausted.

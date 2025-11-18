@@ -138,7 +138,7 @@ urlpatterns = [
     path(
         "accessions/generate-batch/",
         login_required(GenerateAccessionBatchView.as_view()),
-        name="accession_generate_batch",
+        name="accession-generate-batch",
     ),
     path('accession-wizard/', AccessionWizard.as_view([AccessionNumberSelectForm, AccessionForm,
                                                        SpecimenCompositeForm]), name='accession-wizard'),

@@ -193,14 +193,6 @@ class AccessionNumberSelectForm(BaseW3Form):
 class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
     TBI_USERNAME = "tbi"
 
-    count = forms.IntegerField(
-        label="Count",
-        min_value=1,
-        max_value=100,
-        required=True,
-        help_text="Number of accession numbers to generate.",
-    )
-
     class Meta:
         model = AccessionNumberSeries
         fields = [

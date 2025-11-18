@@ -27,7 +27,7 @@ class DashboardGenerateBatchButtonStateTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
-        self.assertIn(reverse("accession_generate_batch"), content)
+        self.assertIn(reverse("accession-generate-batch"), content)
         self.assertIn('aria-disabled="false"', content)
         self.assertNotIn("w3-disabled", content)
 
@@ -48,7 +48,7 @@ class DashboardGenerateBatchButtonStateTests(TestCase):
         content = response.content.decode()
         self.assertIn('aria-disabled="true"', content)
         self.assertIn('tabindex="-1"', content)
-        self.assertNotIn(reverse("accession_generate_batch"), content)
+        self.assertNotIn(reverse("accession-generate-batch"), content)
 
     def test_superuser_sees_enabled_generate_batch(self):
         admin = self.User.objects.create_superuser(
@@ -60,7 +60,7 @@ class DashboardGenerateBatchButtonStateTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
-        self.assertIn(reverse("accession_generate_batch"), content)
+        self.assertIn(reverse("accession-generate-batch"), content)
         self.assertIn('aria-disabled="false"', content)
 
 
