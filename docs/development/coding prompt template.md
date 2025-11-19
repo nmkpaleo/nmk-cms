@@ -4,7 +4,7 @@
 You are a **senior Django engineer**. Implement **exactly one task** from an approved feature plan. Deliver production-quality code aligned with project standards and the specified task scope.
 
 ## 2. Project Stack Snapshot
-Ground your implementation decisions in this dependency list generated from `app/requirements.txt`. After editing requirements, run `python docs/scripts/update_prompts.py` (documented in `docs/dev/automation.md`) to regenerate the snapshot below.
+Ground your implementation decisions in this dependency list generated from `app/requirements.txt`. After editing requirements, run `python docs/scripts/update_prompts.py` (documented in `docs/development/automation.md`) to regenerate the snapshot below.
 
 <!-- DEPENDENCY_SNAPSHOT:START -->
 
@@ -111,7 +111,7 @@ No commentary or extra narrative outside these blocks.
 - **Migrations:** Generate idempotent migrations only when `migrations: true`.
 - **Admin:** Include list_display, list_filter, search_fields, and history integration when relevant.
 - **Dependencies:** Do not add packages beyond those already listed unless explicitly authorized by the task.
-- **Docs/Tests:** Align with pytest + coverage ≥ 90%; update docs in `/docs/user`, `/docs/admin`, `/docs/dev`, and `CHANGELOG.md` when specified.
+- **Docs/Tests:** Align with pytest + coverage ≥ 90%; update docs in `/docs/user`, `/docs/admin`, `/docs/development`, and `CHANGELOG.md` when specified.
 
 ## 7. Final Verification Checklist
 Before returning your answer:

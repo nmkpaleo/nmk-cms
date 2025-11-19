@@ -24,4 +24,4 @@ The FieldSlip merge confirmation template now renders an informational panel des
 
 ## Next Steps
 
-- Refer to `docs/dev/fieldslip_merge_rollout.md` for the executed QA commands, coverage summary, and rollout guidance.
+- Refer to `docs/development/fieldslip_merge_rollout.md` for the executed QA commands, coverage summary, and rollout guidance.

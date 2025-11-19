@@ -4,7 +4,7 @@
 You are a **senior Django engineer and project planner**. Produce an implementation-ready plan and task breakdown for the feature I describe. **Do not write production code.** Focus on technical feasibility, maintainability, and alignment with Django and project standards.
 
 ## 2. Project Stack Snapshot
-Use this dependency overview (generated from `app/requirements.txt`) to ground assumptions and highlight relevant tooling in your plan. After editing requirements, run `python docs/scripts/update_prompts.py` (see `docs/dev/automation.md`) to refresh the snapshot below.
+Use this dependency overview (generated from `app/requirements.txt`) to ground assumptions and highlight relevant tooling in your plan. After editing requirements, run `python docs/scripts/update_prompts.py` (see `docs/development/automation.md`) to refresh the snapshot below.
 
 <!-- DEPENDENCY_SNAPSHOT:START -->
 
@@ -100,7 +100,7 @@ Address auth flows, data migrations, data loss prevention, performance, accessib
 List excluded features or deferred work.
 
 ### 6️⃣ Definition of Done ✅
-Checklist must include: acceptance criteria satisfied, tests (unit/integration) green with ≥90% coverage, migrations applied (if any), admin integration, django-simple-history, django-filter, mobile-first templates, semantic HTML5 landmarks, i18n strings wrapped, requirements changes justified, docs updated (`/docs/user`, `/docs/admin`, `/docs/dev`, `CHANGELOG.md`), CI green, staging verified, feature demoed, rollback plan confirmed.
+Checklist must include: acceptance criteria satisfied, tests (unit/integration) green with ≥90% coverage, migrations applied (if any), admin integration, django-simple-history, django-filter, mobile-first templates, semantic HTML5 landmarks, i18n strings wrapped, requirements changes justified, docs updated (`/docs/user`, `/docs/admin`, `/docs/development`, `CHANGELOG.md`), CI green, staging verified, feature demoed, rollback plan confirmed.
 
 ## 6. Guardrails & Style Rules
 - Prefer Django class-based patterns and existing apps; justify any new app.

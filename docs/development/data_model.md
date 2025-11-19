@@ -36,4 +36,4 @@ _Last updated: 2025-10-24_
   - Normalises lazily translated labels to plain strings before validation and export to avoid admin CSV errors.
 
 ## Testing Considerations
-- See `docs/dev/testing.md` for the specific pytest modules covering validation, filtering, view rendering, and import/export helpers for geological time support.
+- See `docs/development/testing.md` for the specific pytest modules covering validation, filtering, view rendering, and import/export helpers for geological time support.
