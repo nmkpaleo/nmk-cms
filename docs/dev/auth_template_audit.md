@@ -50,4 +50,4 @@ _Last updated: 2024-08-14_
 ## Regression tests
 
 - `tests/accounts/test_auth_templates.py` confirms the login page renders the shared hero (`w3-container w3-padding-64 w3-sand`) and the skull artwork.
-- The same module verifies the ORCID CTA appears with the branded `orchid log.png` asset and `w3-button w3-green` styling to guard against accidental markup regressions.
+- The same module verifies the ORCID CTA appears with the branded `orcid-logo.png` asset and `w3-button w3-green` styling to guard against accidental markup regressions.
