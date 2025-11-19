@@ -17,7 +17,7 @@
 7. **Dry-run Support**: Allow consumers to request diff-only previews without DB writes; ensure apply path can reuse diff results for performance.
 8. **Audit Logging**: Populate `TaxonomyImport` entries with counts, report payloads, source version, and success flag; expose helper to mark completion.
 9. **Testing**: Implement pytest suite `apps/cms/tests/test_sync_now.py` with fixtures for sample TSV content, mocking HTTP calls, verifying parsing, diff accuracy, idempotent apply, synonym link behavior, and issue reporting.
-10. **Documentation**: Update `/docs/dev/taxonomy.md` with architecture overview of sync services, configuration settings, and extension notes.
+10. **Documentation**: Update `/docs/development/taxonomy.md` with architecture overview of sync services, configuration settings, and extension notes.
 
 ## 3️⃣ Tasks (JSON)
 [
@@ -45,7 +45,7 @@
       "pytest unit tests covering parsing accuracy, diff outputs, apply idempotency, synonym link enforcement, and issue reporting."
     ],
     "docs_touched": [
-      "docs/dev/taxonomy.md"
+      "docs/development/taxonomy.md"
     ],
     "dependencies": [
       "T1"
@@ -93,7 +93,7 @@
     "summary": "Update developer documentation with guidance on service configuration and extension points.",
     "app": "docs",
     "files_touched": [
-      "docs/dev/taxonomy.md"
+      "docs/development/taxonomy.md"
     ],
     "migrations": false,
     "settings_changes": [],
@@ -106,7 +106,7 @@
       "Docs build via CI."
     ],
     "docs_touched": [
-      "docs/dev/taxonomy.md",
+      "docs/development/taxonomy.md",
       "CHANGELOG.md"
     ],
     "dependencies": [
@@ -139,5 +139,5 @@
 - Unit tests cover parsing, diffing, application, and edge cases with ≥90% coverage in new code.
 - Configuration settings documented and validated.
 - Code reviewed, merged, and deployed with monitoring plan; ability to rerun sync safely confirmed.
-- Documentation updated in `/docs/dev/taxonomy.md` (and CHANGELOG when code ships).
+- Documentation updated in `/docs/development/taxonomy.md` (and CHANGELOG when code ships).
 - CI green (lint, type-check, tests, docs) with mocks ensuring offline reliability.
