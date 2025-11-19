@@ -1,0 +1,22 @@
+{% load i18n allauth %}
+{% url 'account_logout' as action_url %}
+<div class="w3-padding-large">
+    <p class="w3-text-gray w3-medium">
+        {% trans "Confirm below to end your session on this device." %}
+    </p>
+    <form method="post"
+          action="{{ action_url }}"
+          class="w3-container w3-padding-16 w3-white"
+          aria-label="{% trans 'Sign out form' %}">
+        {% csrf_token %}
+        {{ redirect_field }}
+        <button type="submit"
+                class="w3-button w3-red w3-round-xlarge w3-block w3-padding-large">
+            <span class="fa-solid fa-arrow-right-from-bracket" aria-hidden="true"></span>
+            <span class="w3-margin-left">{% trans "Sign Out" %}</span>
+        </button>
+    </form>
+    <p class="w3-small w3-text-gray w3-margin-top">
+        {% trans "You will be redirected to the homepage after signing out." %}
+    </p>
+</div>
