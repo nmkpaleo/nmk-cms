@@ -5,7 +5,7 @@ Use the Django administration site to create accounts and control what each pers
 ## Authentication refresh
 
 - The django-allauth entrance and manage flows now inherit the CMS navigation and W3.CSS theme via the shared `_auth_layout.html` partial.
-- Staff can sign in with their NMK credentials or use the ORCID button, which is powered by the configured Social Application entry and the bundled `orchid log.png` logo.
+- Staff can sign in with their NMK credentials or use the ORCID button, which is powered by the configured Social Application entry and the bundled `orcid-logo.png` logo.
 - If you update password or signup copy, keep the semantic landmarks (`<section>`, `<article>`, `<aside>`) and W3 utility classes intact to avoid regressions.
 
 ## Adding a new user
