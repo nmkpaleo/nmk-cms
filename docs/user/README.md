@@ -9,3 +9,4 @@
 - [Preparations](preparations.md)
 - [Quality Control](quality-control.md)
 - [Scan Uploads](scan-uploads.md)
+- [Authentication Experience](authentication.md)

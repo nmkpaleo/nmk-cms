@@ -46,3 +46,8 @@ _Last updated: 2024-08-14_
 - Create a reusable partial for the auth hero layout to avoid duplicating the W3 container markup and to centralize the skull image usage.
 - Extend `socialaccount` snippets or inject a dedicated ORCID login button with the official logo to satisfy branding requirements.
 - Ensure any additional imagery or CDN assets comply with the project's Content Security Policy and are declared in the deployment manifests if needed.
+
+## Regression tests
+
+- `tests/accounts/test_auth_templates.py` confirms the login page renders the shared hero (`w3-container w3-padding-64 w3-sand`) and the skull artwork.
+- The same module verifies the ORCID CTA appears with the branded `orchid log.png` asset and `w3-button w3-green` styling to guard against accidental markup regressions.
