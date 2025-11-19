@@ -31,9 +31,6 @@
                              class="w3-image w3-round-xxlarge w3-card"
                              alt="{% trans 'Animal skull illustration' %}"
                              loading="lazy">
-                        <figcaption id="auth-layout-aside" class="w3-small w3-text-gray w3-margin-top">
-                            {% trans "Our museum-inspired identity keeps your data safe." %}
-                        </figcaption>
                     </figure>
                     <div class="w3-panel w3-round-large w3-pale-green w3-border w3-border-green">
                         <p class="w3-medium">
@@ -48,12 +45,12 @@
                                    rel="nofollow"
                                    aria-label='{% trans "Continue with ORCID" %}'>
                                     <span class="w3-margin-right" aria-hidden="true">
-                                        <svg width="24" height="24" viewBox="0 0 24 24" role="img" aria-hidden="true"
-                                             xmlns="http://www.w3.org/2000/svg">
-                                            <title>{% trans "ORCID" %}</title>
-                                            <circle cx="12" cy="12" r="12" fill="#A6CE39" />
-                                            <path fill="#fff" d="M10.54 6.12h1.52v11.76h-1.52zM8.05 17.88H6.5V6.12h3.09c2.56 0 4.14 1.68 4.14 3.88 0 2.23-1.63 3.96-4.16 3.88H8.05zM8.02 7.47v5.09h1.55c1.85 0 2.65-1 2.65-2.52 0-1.49-.87-2.57-2.65-2.57zM15.43 10.29a1.34 1.34 0 1 1 1.34 1.34 1.33 1.33 0 0 1-1.34-1.34zm.08 2.16h2.52v5.43h-2.52z" />
-                                        </svg>
+                                        <img src="{% static 'images/orchid log.png' %}"
+                                             width="32"
+                                             height="32"
+                                             alt="{% trans 'ORCID logo' %}"
+                                             class="w3-image"
+                                             loading="lazy">
                                     </span>
                                     <span class="w3-semibold">{% trans "Sign in with ORCID" %}</span>
                                 </a>
