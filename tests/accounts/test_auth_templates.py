@@ -54,5 +54,5 @@ def test_login_template_includes_orcid_cta(orcid_social_app):
     body = response.content.decode()
 
     assert "Sign in with ORCID" in body
-    assert "images/orchid%20log.png" in body
+    assert "images/orcid-logo.png" in body
     assert "w3-button w3-green" in body
