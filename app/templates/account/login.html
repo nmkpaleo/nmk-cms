@@ -1,71 +1,15 @@
 {% extends "account/base_entrance.html" %}
 {% load i18n %}
 {% load allauth account %}
+
 {% block head_title %}
     {% trans "Sign In" %}
 {% endblock head_title %}
 
 {% block content %}
-<section class="w3-container w3-padding-64 w3-light-grey">
-    <div class="w3-content">
-        <article class="w3-card-4 w3-round-xlarge w3-white w3-padding-32 w3-margin-top w3-margin-bottom w3-animate-opacity" aria-labelledby="login-heading">
-            <header class="w3-center w3-margin-bottom">
-                <span class="fa-solid fa-key w3-xxlarge" aria-hidden="true"></span>
-                <h1 id="login-heading" class="w3-xxlarge w3-margin-top">{% trans "Sign In" %}</h1>
-            </header>
-
-            {% if not SOCIALACCOUNT_ONLY %}
-                {% url 'account_login' as login_url %}
-                {% element form form=form method="post" action=login_url tags="entrance,login" class="w3-container w3-padding-16" %}
-                    {% slot body %}
-                        {% csrf_token %}
-                        <div class="w3-section">
-                            {% element fields form=form unlabeled=True %}
-                            {% endelement %}
-                        </div>
-                        {{ redirect_field }}
-                    {% endslot %}
-                    {% slot actions %}
-                        {% element button type="submit" class="w3-button w3-brown w3-round-large w3-block" tags="prominent,login" %}
-                            {% trans "Log In" %}
-                        {% endelement %}
-                    {% endslot %}
-                {% endelement %}
-            {% endif %}
-
-            {% if LOGIN_BY_CODE_ENABLED or PASSKEY_LOGIN_ENABLED %}
-                <div class="w3-section">
-                    {% element button_group vertical=True %}
-                        {% if PASSKEY_LOGIN_ENABLED %}
-                            {% element button type="submit" form="mfa_login" id="passkey_login" class="w3-button w3-border w3-round-large w3-white w3-block" tags="prominent,login,outline,primary" %}
-                                {% trans "Sign in with a passkey" %}
-                            {% endelement %}
-                        {% endif %}
-                        {% if LOGIN_BY_CODE_ENABLED %}
-                            {% element button href=request_login_code_url class="w3-button w3-border w3-round-large w3-white w3-block" tags="prominent,login,outline,primary" %}
-                                {% trans "Mail me a sign-in code" %}
-                            {% endelement %}
-                        {% endif %}
-                    {% endelement %}
-                </div>
-            {% endif %}
-
-            {% if SOCIALACCOUNT_ENABLED %}
-                {% include "socialaccount/snippets/login.html" with page_layout="entrance" %}
-            {% endif %}
-
-            {% if not SOCIALACCOUNT_ONLY %}
-                {% setvar link %}
-                    <a href="{{ signup_url }}" class="w3-text-brown w3-hover-text-black">
-                    {% endsetvar %}
-                    {% setvar end_link %}
-                    </a>
-                {% endsetvar %}
-                <p class="w3-small w3-center w3-margin-top">{% blocktranslate %}Don't have an account? {{ link }}Sign up{{ end_link }}.{% endblocktranslate %}</p>
-            {% endif %}
-        </article>
-    </div>
-</section>
+    {% with auth_layout_title=_("Sign In") auth_layout_subtitle=_("Welcome back to NMK") auth_layout_body_template="account/snippets/_login_form.html" %}
+        {% include "account/_auth_layout.html" %}
+    {% endwith %}
 {% endblock content %}
 
 {% block extra_body %}

@@ -4,53 +4,7 @@
     {% trans "Signup" %}
 {% endblock head_title %}
 {% block content %}
-<section class="w3-container w3-padding-64 w3-light-grey">
-    <div class="w3-content">
-        <article class="w3-card-4 w3-round-xlarge w3-white w3-padding-32 w3-margin-top w3-margin-bottom w3-animate-opacity" aria-labelledby="signup-heading">
-            <header class="w3-center w3-margin-bottom">
-                <span class="fa-solid fa-user w3-xxlarge" aria-hidden="true"></span>
-                <h1 id="signup-heading" class="w3-xxlarge w3-margin-top">{% trans "Sign Up" %}</h1>
-            </header>
-
-            {% if not SOCIALACCOUNT_ONLY %}
-                {% url 'account_signup' as action_url %}
-                {% element form form=form method="post" action=action_url tags="entrance,signup" class="w3-container w3-padding-16" %}
-                    {% slot body %}
-                        {% csrf_token %}
-                        <div class="w3-section">
-                            {% element fields form=form unlabeled=True %}
-                            {% endelement %}
-                        </div>
-                        {{ redirect_field }}
-                    {% endslot %}
-                    {% slot actions %}
-                        {% element button tags="prominent,signup" type="submit" class="w3-button w3-green w3-round-large w3-block" %}
-                            {% trans "Sign Up" %}
-                        {% endelement %}
-                    {% endslot %}
-                {% endelement %}
-            {% endif %}
-
-            {% if PASSKEY_SIGNUP_ENABLED %}
-                <div class="w3-section">
-                    {% element button href=signup_by_passkey_url tags="prominent,signup,outline,primary" class="w3-button w3-border w3-round-large w3-white w3-block" %}
-                        {% trans "Sign up using a passkey" %}
-                    {% endelement %}
-                </div>
-            {% endif %}
-
-            {% if SOCIALACCOUNT_ENABLED %}
-                {% include "socialaccount/snippets/login.html" with page_layout="entrance" %}
-            {% endif %}
-
-            {% setvar link %}
-                <a href="{{ login_url }}" class="w3-text-brown w3-hover-text-black">
-                {% endsetvar %}
-                {% setvar end_link %}
-                </a>
-            {% endsetvar %}
-            <p class="w3-small w3-center w3-margin-top">{% blocktranslate %}Already have an account? {{ link }}Sign In{{ end_link }}.{% endblocktranslate %}</p>
-        </article>
-    </div>
-</section>
+    {% with auth_layout_title=_("Sign Up") auth_layout_subtitle=_("Join the NMK community to access collections and services.") auth_layout_body_template="account/snippets/_signup_form.html" %}
+        {% include "account/_auth_layout.html" %}
+    {% endwith %}
 {% endblock content %}
