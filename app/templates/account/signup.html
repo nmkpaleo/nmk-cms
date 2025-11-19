@@ -4,9 +4,7 @@
     {% trans "Signup" %}
 {% endblock head_title %}
 {% block content %}
-    {% include "account/_auth_layout.html" with
-        auth_layout_title=_("Sign Up")
-        auth_layout_subtitle=_("Join the NMK community to access collections and services.")
-        auth_layout_body_template="account/snippets/_signup_form.html"
-    %}
+    {% with auth_layout_title=_("Sign Up") auth_layout_subtitle=_("Join the NMK community to access collections and services.") auth_layout_body_template="account/snippets/_signup_form.html" %}
+        {% include "account/_auth_layout.html" %}
+    {% endwith %}
 {% endblock content %}

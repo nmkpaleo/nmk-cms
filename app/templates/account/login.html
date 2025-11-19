@@ -7,11 +7,9 @@
 {% endblock head_title %}
 
 {% block content %}
-    {% include "account/_auth_layout.html" with
-        auth_layout_title=_("Sign In")
-        auth_layout_subtitle=_("Welcome back to NMK")
-        auth_layout_body_template="account/snippets/_login_form.html"
-    %}
+    {% with auth_layout_title=_("Sign In") auth_layout_subtitle=_("Welcome back to NMK") auth_layout_body_template="account/snippets/_login_form.html" %}
+        {% include "account/_auth_layout.html" %}
+    {% endwith %}
 {% endblock content %}
 
 {% block extra_body %}

@@ -4,9 +4,7 @@
     {% trans "Sign Out" %}
 {% endblock head_title %}
 {% block content %}
-    {% include "account/_auth_layout.html" with
-        auth_layout_title=_("Sign Out")
-        auth_layout_subtitle=_("Wrap up your session securely.")
-        auth_layout_body_template="account/snippets/_logout_panel.html"
-    %}
+    {% with auth_layout_title=_("Sign Out") auth_layout_subtitle=_("Wrap up your session securely.") auth_layout_body_template="account/snippets/_logout_panel.html" %}
+        {% include "account/_auth_layout.html" %}
+    {% endwith %}
 {% endblock content %}
