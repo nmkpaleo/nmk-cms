@@ -18,6 +18,6 @@ Collection Managers can track scanning of drawers and document folders.
 - The selections can be adjusted later by reopening the drawer for editing.
 
 ## Updating or Reviewing
-- Select a drawer code to view details and the change log.
+- Select a drawer code to view the detail page. The page now uses tabs—**Details** loads first, and the **Change log** tab shows the audit history powered by django-simple-history.
 - Review the **Localities** and **Taxa** cards to confirm the drawer's related records. Each card lists all linked entries and displays an accessible empty state when nothing is attached.
 - Use the edit icon to update a drawer. Status and user updates are recorded automatically, and the Localities and Taxa selections remain available for adjustment.
