@@ -4979,6 +4979,59 @@ class CollectionManagerAccessMixin(UserPassesTestMixin):
         return is_collection_manager(self.request.user) or self.request.user.is_superuser
 
 
+class HistoryTabContextMixin:
+    """Provide change history context and tab metadata when permitted."""
+
+    detail_tab_template: str = ""
+    history_tab_template: str = ""
+    tabs_context_key: str = "tabs"
+    detail_tab_id: str = "details"
+    history_tab_id: str = "history"
+    detail_tab_label: str = _("Details")
+    history_tab_label: str = _("Change log")
+    detail_tab_icon: str = "fa-circle-info"
+    history_tab_icon: str = "fa-clock-rotate-left"
+
+    def can_view_history(self) -> bool:
+        return is_collection_manager(self.request.user) or self.request.user.is_superuser
+
+    def get_history_entries(self):
+        if not self.can_view_history():
+            return []
+        return build_history_entries(self.object)
+
+    def get_detail_tab_definition(self):
+        return {
+            "id": self.detail_tab_id,
+            "label": self.detail_tab_label or _("Details"),
+            "icon": self.detail_tab_icon,
+            "template": self.detail_tab_template,
+            "active": True,
+        }
+
+    def get_history_tab_definition(self):
+        if not self.can_view_history():
+            return None
+        return {
+            "id": self.history_tab_id,
+            "label": self.history_tab_label,
+            "icon": self.history_tab_icon,
+            "template": self.history_tab_template,
+        }
+
+    def get_tab_definitions(self):
+        tabs = [self.get_detail_tab_definition()]
+        history_tab = self.get_history_tab_definition()
+        if history_tab:
+            tabs.append(history_tab)
+        return tabs
+
+    def add_history_tab_context(self, context):
+        context["history_entries"] = self.get_history_entries()
+        context[self.tabs_context_key] = self.get_tab_definitions()
+        return context
+
+
 class GenerateAccessionBatchView(LoginRequiredMixin, CollectionManagerAccessMixin, FormView):
     template_name = "cms/accession_batch_form.html"
     form_class = AccessionNumberSeriesAdminForm
@@ -5077,10 +5130,18 @@ class StorageListView(LoginRequiredMixin, CollectionManagerAccessMixin, FilterVi
         return context
 
 
-class StorageDetailView(LoginRequiredMixin, CollectionManagerAccessMixin, DetailView):
+class StorageDetailView(
+    LoginRequiredMixin, CollectionManagerAccessMixin, HistoryTabContextMixin, DetailView
+):
     model = Storage
     template_name = "cms/storage_detail.html"
     context_object_name = "storage"
+    tabs_context_key = "storage_tabs"
+    detail_tab_template = "cms/tabs/storage_details.html"
+    history_tab_template = "cms/tabs/storage_history.html"
+    detail_tab_id = "storage-details"
+    history_tab_id = "storage-history"
+    detail_tab_label = _("Details")
 
     def get_queryset(self):
         accession_rows = AccessionRow.objects.select_related(
@@ -5113,22 +5174,7 @@ class StorageDetailView(LoginRequiredMixin, CollectionManagerAccessMixin, Detail
         context["specimens"] = page_obj.object_list
         context["specimen_count"] = paginator.count
         context["children"] = getattr(self.object, "child_storages", [])
-        context["history_entries"] = build_history_entries(self.object)
-        context["storage_tabs"] = [
-            {
-                "id": "storage-details",
-                "label": _("Details"),
-                "icon": "fa-circle-info",
-                "template": "cms/tabs/storage_details.html",
-                "active": True,
-            },
-            {
-                "id": "storage-history",
-                "label": _("Change log"),
-                "icon": "fa-clock-rotate-left",
-                "template": "cms/tabs/storage_history.html",
-            },
-        ]
+        context = self.add_history_tab_context(context)
         return context
 
 
@@ -5172,9 +5218,17 @@ class DrawerRegisterReorderView(LoginRequiredMixin, DrawerRegisterAccessMixin, V
         return JsonResponse({"status": "ok"})
 
 
-class DrawerRegisterDetailView(LoginRequiredMixin, DrawerRegisterAccessMixin, DetailView):
+class DrawerRegisterDetailView(
+    LoginRequiredMixin, DrawerRegisterAccessMixin, HistoryTabContextMixin, DetailView
+):
     model = DrawerRegister
     template_name = "cms/drawerregister_detail.html"
+    tabs_context_key = "drawer_tabs"
+    detail_tab_template = "cms/tabs/drawerregister_details.html"
+    history_tab_template = "cms/tabs/drawerregister_history.html"
+    detail_tab_id = "drawer-details"
+    history_tab_id = "drawer-history"
+    detail_tab_label = _("Details")
 
     def get_queryset(self):
         user_model = get_user_model()
@@ -5210,22 +5264,7 @@ class DrawerRegisterDetailView(LoginRequiredMixin, DrawerRegisterAccessMixin, De
         context["can_edit"] = (
             is_collection_manager(self.request.user) or self.request.user.is_superuser
         )
-        context["history_entries"] = build_history_entries(self.object)
-        context["drawer_tabs"] = [
-            {
-                "id": "drawer-details",
-                "label": _("Details"),
-                "icon": "fa-circle-info",
-                "template": "cms/tabs/drawerregister_details.html",
-                "active": True,
-            },
-            {
-                "id": "drawer-history",
-                "label": _("Change log"),
-                "icon": "fa-clock-rotate-left",
-                "template": "cms/tabs/drawerregister_history.html",
-            },
-        ]
+        context = self.add_history_tab_context(context)
         return context
 
 
