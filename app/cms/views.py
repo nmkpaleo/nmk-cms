@@ -5114,6 +5114,21 @@ class StorageDetailView(LoginRequiredMixin, CollectionManagerAccessMixin, Detail
         context["specimen_count"] = paginator.count
         context["children"] = getattr(self.object, "child_storages", [])
         context["history_entries"] = build_history_entries(self.object)
+        context["storage_tabs"] = [
+            {
+                "id": "storage-details",
+                "label": _("Details"),
+                "icon": "fa-circle-info",
+                "template": "cms/tabs/storage_details.html",
+                "active": True,
+            },
+            {
+                "id": "storage-history",
+                "label": _("Change log"),
+                "icon": "fa-clock-rotate-left",
+                "template": "cms/tabs/storage_history.html",
+            },
+        ]
         return context
 
 
@@ -5196,6 +5211,21 @@ class DrawerRegisterDetailView(LoginRequiredMixin, DrawerRegisterAccessMixin, De
             is_collection_manager(self.request.user) or self.request.user.is_superuser
         )
         context["history_entries"] = build_history_entries(self.object)
+        context["drawer_tabs"] = [
+            {
+                "id": "drawer-details",
+                "label": _("Details"),
+                "icon": "fa-circle-info",
+                "template": "cms/tabs/drawerregister_details.html",
+                "active": True,
+            },
+            {
+                "id": "drawer-history",
+                "label": _("Change log"),
+                "icon": "fa-clock-rotate-left",
+                "template": "cms/tabs/drawerregister_history.html",
+            },
+        ]
         return context
 
 

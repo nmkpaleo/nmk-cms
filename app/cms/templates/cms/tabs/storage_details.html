@@ -1,0 +1,96 @@
+{% load i18n custom_filters %}
+
+<section class="w3-row-padding w3-margin-top" aria-labelledby="storage-details-overview">
+  <article class="w3-col s12 m6 l4">
+    <div class="w3-card w3-white w3-padding w3-round">
+      <h2 id="storage-details-overview" class="w3-margin-top">{% trans "Details" %}</h2>
+      <p><strong>{% trans "Area" %}:</strong> {{ storage.area }}</p>
+      <p>
+        <strong>{% trans "Parent Area" %}:</strong>
+        {% if storage.parent_area %}
+          <a href="{% url 'storage_detail' storage.parent_area.pk %}">{{ storage.parent_area.area }}</a>
+        {% else %}
+          <span class="w3-text-gray">{% trans "None" %}</span>
+        {% endif %}
+      </p>
+      <p><strong>{% trans "Total Specimens" %}:</strong> {{ specimen_count }}</p>
+    </div>
+  </article>
+
+  <article class="w3-col s12 m6 l8" aria-labelledby="storage-children-heading">
+    <div class="w3-card w3-white w3-padding w3-round">
+      <h2 id="storage-children-heading" class="w3-margin-top">{% trans "Child Storages" %}</h2>
+      {% if children %}
+        <ul class="w3-ul w3-margin-0" aria-label="{% trans 'Child storage list' %}">
+          {% for child in children %}
+            <li><a href="{% url 'storage_detail' child.pk %}">{{ child.area }}</a></li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="w3-text-gray w3-margin-0">{% trans "No child storages." %}</p>
+      {% endif %}
+    </div>
+  </article>
+</section>
+
+<section class="w3-margin-top" aria-labelledby="storage-specimens-heading">
+  <h2 id="storage-specimens-heading">{% trans "Specimens" %}</h2>
+  <div class="w3-responsive">
+    <table class="w3-table-all w3-hoverable">
+      <thead>
+        <tr>
+          <th scope="col">{% trans "Accession" %}</th>
+          <th scope="col">{% trans "Specimen" %}</th>
+          <th scope="col">{% trans "Inventory Status" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for specimen in specimens %}
+          <tr>
+            <td><a href="{% url 'accession_detail' specimen.accession.pk %}">{{ specimen.accession }}</a></td>
+            <td><a href="{% url 'accessionrow_detail' specimen.pk %}">{{ specimen.specimen_suffix|default:"-" }}</a></td>
+            <td>{{ specimen.get_status_display|default:_("Not recorded") }}</td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="3" class="w3-center">{% trans "No specimens recorded for this storage." %}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if specimen_page_obj.paginator.num_pages > 1 %}
+    <div class="w3-container w3-center w3-margin-top">
+      <div class="w3-bar w3-border w3-round-large w3-white w3-card" role="navigation" aria-label="{% trans 'Specimen pagination' %}">
+        {% if specimen_page_obj.has_previous %}
+          <a href="?{% querystring_replace page=specimen_page_obj.previous_page_number %}" class="w3-bar-item w3-button" aria-label="{% trans 'Previous page' %}">
+            <i class="fa-solid fa-angles-left" aria-hidden="true"></i>
+            <span class="w3-hide-small">{% trans "Previous" %}</span>
+          </a>
+        {% else %}
+          <span class="w3-bar-item w3-button w3-disabled">
+            <i class="fa-solid fa-angles-left" aria-hidden="true"></i>
+            <span class="w3-hide-small">{% trans "Previous" %}</span>
+          </span>
+        {% endif %}
+
+        <span class="w3-bar-item">
+          {% blocktrans with current=specimen_page_obj.number total=specimen_page_obj.paginator.num_pages %}Page {{ current }} of {{ total }}{% endblocktrans %}
+        </span>
+
+        {% if specimen_page_obj.has_next %}
+          <a href="?{% querystring_replace page=specimen_page_obj.next_page_number %}" class="w3-bar-item w3-button" aria-label="{% trans 'Next page' %}">
+            <span class="w3-hide-small">{% trans "Next" %}</span>
+            <i class="fa-solid fa-angles-right" aria-hidden="true"></i>
+          </a>
+        {% else %}
+          <span class="w3-bar-item w3-button w3-disabled">
+            <span class="w3-hide-small">{% trans "Next" %}</span>
+            <i class="fa-solid fa-angles-right" aria-hidden="true"></i>
+          </span>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+</section>
