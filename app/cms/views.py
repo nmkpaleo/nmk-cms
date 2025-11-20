@@ -1924,7 +1924,14 @@ class AccessionWizard(SessionWizardView):
         """
         Restore initial values for fields from storage if available.
         """
+        current_step = step or self.steps.current
         form = super().get_form(step, data, files)
+        if str(current_step) == "1" and "specimen_no" in form.fields:
+            specimen_field = form.fields["specimen_no"]
+            specimen_field.disabled = True
+            specimen_field.widget.attrs["readonly"] = "readonly"
+            specimen_field.widget.attrs["aria-readonly"] = "true"
+
         if step and data is None:
             initial = self.get_form_initial(step)
             if initial:
