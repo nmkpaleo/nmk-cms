@@ -5003,6 +5003,7 @@ class HistoryTabContextMixin:
     def get_detail_tab_definition(self):
         return {
             "id": self.detail_tab_id,
+            "slug": getattr(self, "detail_tab_slug", None) or self.detail_tab_id,
             "label": self.detail_tab_label or _("Details"),
             "icon": self.detail_tab_icon,
             "template": self.detail_tab_template,
@@ -5014,6 +5015,7 @@ class HistoryTabContextMixin:
             return None
         return {
             "id": self.history_tab_id,
+            "slug": getattr(self, "history_tab_slug", None) or self.history_tab_id,
             "label": self.history_tab_label,
             "icon": self.history_tab_icon,
             "template": self.history_tab_template,
