@@ -1,4 +1,5 @@
 {% extends "base_generic.html" %}
+{% load i18n %}
 
 {% block title %}New Accession{% endblock %}
 
@@ -6,33 +7,38 @@
   {{ wizard.form.media.css }}
 {% endblock %}
 {% block content %}
-  {% if wizard.steps.current == '0' %}
-    <div class="w3-container w3-card w3-white w3-round-large w3-padding-large">
-      <h2>Select Accession Number</h2>
-      <form action="" method="post">{% csrf_token %}
-        {{ wizard.management_form }}
-        <ul>
-          {% for val, label in wizard.form.fields.accession_number.choices %}
-            <li>
-              <a href="#" onclick="event.preventDefault(); document.getElementById('id_0-accession_number').value='{{ val }}'; this.closest('form').submit();">
-                {{ label }}
-              </a>
-            </li>
-          {% endfor %}
-        </ul>
-        <input type="hidden" name="0-accession_number" id="id_0-accession_number" value="">
-      </form>
-    </div>
-  {% else %}
-    <div class="w3-container w3-card w3-white w3-round-large w3-padding-large">
-        <h2>Step {{ wizard.steps.step1 }} of {{ wizard.steps.count }}</h2>
+  <main class="w3-container" role="main">
+    {% if wizard.steps.current == '0' %}
+      <section class="w3-card w3-white w3-round-large w3-padding-large" aria-labelledby="accession-number-header">
+        <header class="w3-margin-bottom">
+          <h2 id="accession-number-header"><i class="fa fa-list-ol" aria-hidden="true"></i> {% trans "Select Accession Number" %}</h2>
+        </header>
+        <form action="" method="post">{% csrf_token %}
+          {{ wizard.management_form }}
+          <ul class="w3-ul">
+            {% for val, label in wizard.form.fields.accession_number.choices %}
+              <li>
+                <a href="#" class="w3-text-blue" onclick="event.preventDefault(); document.getElementById('id_0-accession_number').value='{{ val }}'; this.closest('form').submit();">
+                  {{ label }}
+                </a>
+              </li>
+            {% endfor %}
+          </ul>
+          <input type="hidden" name="0-accession_number" id="id_0-accession_number" value="">
+        </form>
+      </section>
+    {% else %}
+      <section class="w3-card w3-white w3-round-large w3-padding-large" aria-labelledby="wizard-step-header">
+        <header class="w3-margin-bottom">
+          <h2 id="wizard-step-header"><i class="fa fa-clipboard-list" aria-hidden="true"></i> {% blocktrans %}Step {{ wizard.steps.step1 }} of {{ wizard.steps.count }}{% endblocktrans %}</h2>
+        </header>
         <form action="" method="post" enctype="multipart/form-data">{% csrf_token %}
           {{ wizard.management_form }}
           {% for field in wizard.form %}
             {% if field.is_hidden %}
               {{ field }}
             {% elif wizard.steps.current == '1' and field.name == 'specimen_no' %}
-              <div class="w3-margin-bottom">
+              <article class="w3-margin-bottom" aria-label="{{ field.label }}">
                 <label class="w3-text-blue"><b>{{ field.label }}</b></label>
                 <p class="w3-padding w3-light-grey w3-round w3-border" aria-readonly="true">
                   {{ field.value|default_if_none:"" }}
@@ -41,31 +47,31 @@
                 {% if field.errors %}
                   <div class="w3-text-red">{{ field.errors }}</div>
                 {% endif %}
-              </div>
+              </article>
             {% else %}
-              <div class="w3-margin-bottom">
+              <article class="w3-margin-bottom" aria-label="{{ field.label }}">
                 <label class="w3-text-blue"><b>{{ field.label }}</b></label>
                 {{ field }}
                 {% if field.errors %}
                   <div class="w3-text-red">{{ field.errors }}</div>
                 {% endif %}
-              </div>
+              </article>
             {% endif %}
           {% endfor %}
 
           <div class="w3-margin-top">
             {% if wizard.steps.prev %}
-                <button type="submit" class="w3-button w3-gray"
-                        name="wizard_goto_step" value="{{ wizard.steps.prev }}">
-                Previous
-                </button>
+              <button type="submit" class="w3-button w3-gray"
+                      name="wizard_goto_step" value="{{ wizard.steps.prev }}">
+                {% trans "Previous" %}
+              </button>
             {% endif %}
-            <button type="submit" class="w3-button w3-green">Next</button>
+            <button type="submit" class="w3-button w3-green">{% trans "Next" %}</button>
           </div>
         </form>
-      </div>
-  {% endif %}
-
+      </section>
+    {% endif %}
+  </main>
 {% endblock %}
 {% block extra_scripts %}
   {{ wizard.form.media.js }}
