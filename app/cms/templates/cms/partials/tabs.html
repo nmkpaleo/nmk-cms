@@ -11,7 +11,7 @@
 
   <div class="w3-bar w3-light-grey w3-round-large w3-margin-top" role="tablist" aria-label="{{ tablist_label|default:_('Content tabs') }}">
     {% for tab in tabs %}
-      {% with tab_id=tab.id|default:tab.slug|default:"tab"|add:'-'|add:forloop.counter %}
+      {% with tab_id=tab.slug|default:tab.id|default:'tab' %}
         {% with is_active=tab.active|default:forloop.first %}
           <button
             id="{{ tab_id }}-tab"
@@ -34,7 +34,7 @@
 
   <div class="w3-white w3-card w3-round-large w3-margin-top w3-padding">
     {% for tab in tabs %}
-      {% with tab_id=tab.id|default:tab.slug|default:"tab"|add:'-'|add:forloop.counter %}
+      {% with tab_id=tab.slug|default:tab.id|default:'tab' %}
         {% with is_active=tab.active|default:forloop.first %}
           <article
             id="{{ tab_id }}-panel"
