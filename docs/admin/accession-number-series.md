@@ -21,6 +21,8 @@ Collection managers and superusers can also start a new series directly from the
 3. Enter the **Count** of numbers to allocate (up to 100). Other fields such as collection or specimen prefix remain optional or hidden to mirror the admin add view defaults.
 4. Submit the form to create the series and jump to the **Accession wizard**, where the new numbers are immediately available for accession creation.
 
+When the wizard loads, the selected accession number is presented as display-only text with a hidden field so operators cannot accidentally edit it before submission. To use a different number, navigate back to the first step instead of modifying the value in-browser.
+
 ## Monitoring usage
 
 Whenever accession numbers are generated for the assigned user, the series automatically advances its **Current number**. You can review the remaining numbers by comparing **Current number** and **End at**, or open the history tab in the admin to see when the range changed. When the final number in the range is used the system marks the series as inactive for you.
