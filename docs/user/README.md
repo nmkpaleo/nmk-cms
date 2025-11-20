@@ -6,6 +6,7 @@
 - [Places](places.md)
 - [References](references.md)
 - [Accessions](accessions-detail.md)
+- [Accession wizard](accession-wizard.md)
 - [Preparations](preparations.md)
 - [Quality Control](quality-control.md)
 - [Scan Uploads](scan-uploads.md)
