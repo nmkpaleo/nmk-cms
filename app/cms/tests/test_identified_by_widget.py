@@ -22,7 +22,7 @@ class IdentifiedByWidgetTests(TestCase):
         return AccessionRowIdentificationForm(
             data={
                 "identified_by": identified_by,
-                "taxon": "",
+                "taxon_verbatim": "Unidentified taxon",
                 "reference": "",
                 "date_identified": "",
                 "identification_qualifier": "",

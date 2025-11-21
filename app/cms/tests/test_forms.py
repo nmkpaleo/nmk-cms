@@ -112,7 +112,7 @@ def test_identification_form_defaults_taxon_from_record():
     form = AccessionRowIdentificationForm(
         data={
             "identified_by": "",
-            "taxon": "",
+            "taxon_verbatim": "",
             "taxon_record": str(taxon.pk),
             "reference": "",
             "date_identified": "",
@@ -124,7 +124,7 @@ def test_identification_form_defaults_taxon_from_record():
     )
 
     assert form.is_valid()
-    assert form.cleaned_data["taxon"] == taxon.taxon_name
+    assert form.cleaned_data["taxon_verbatim"] == taxon.taxon_name
     assert form.cleaned_data["taxon_record"] == taxon
 
 
