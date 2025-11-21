@@ -898,7 +898,7 @@ def attach_accession_summaries(accessions):
 
         for row in accession.accessionrow_set.all():
             for identification in row.identification_set.all():
-                taxon = (identification.taxon or "").strip()
+                taxon = (identification.preferred_taxon_name or "").strip()
                 if taxon:
                     taxa.add(taxon)
             for specimen in row.natureofspecimen_set.all():
@@ -1828,10 +1828,10 @@ class AccessionRowPrintView(LoginRequiredMixin, UserPassesTestMixin, DetailView)
                 'taxonomy_values': taxonomy_values,
                 'has_taxonomy_values': has_taxonomy_values,
                 'taxonomy_fallback_value': (
-                    latest_identification.taxon.strip()
+                    latest_identification.preferred_taxon_name.strip()
                     if latest_identification
-                    and latest_identification.taxon
-                    and latest_identification.taxon.strip()
+                    and latest_identification.preferred_taxon_name
+                    and latest_identification.preferred_taxon_name.strip()
                     else ''
                 ),
                 'identification_qualifier': (
@@ -1980,7 +1980,7 @@ class AccessionWizard(SessionWizardView):
 
             Identification.objects.create(
                 accession_row=row,
-                taxon=specimen_form.cleaned_data['taxon'],
+                taxon_verbatim=specimen_form.cleaned_data['taxon'],
                 identified_by=specimen_form.cleaned_data['identified_by'],
             )
 
@@ -2527,10 +2527,25 @@ class MediaQCFormManager:
                 if reference_id
                 else None
             )
+            taxon_record_id = (ident_data.get("taxon_record") or {}).get(
+                "interpreted"
+            )
+            taxon_record_obj = (
+                Taxon.objects.filter(pk=taxon_record_id).first()
+                if taxon_record_id
+                else None
+            )
+            taxon_verbatim = (
+                ident_data.get("taxon_verbatim")
+                or ident_data.get("taxon")
+                or {}
+            ).get("interpreted")
+
             self.ident_initial.append(
                 {
                     "row_id": row_id,
-                    "taxon": (ident_data.get("taxon") or {}).get("interpreted"),
+                    "taxon_verbatim": taxon_verbatim,
+                    "taxon_record": taxon_record_obj.pk if taxon_record_obj else None,
                     "identification_qualifier": (
                         ident_data.get("identification_qualifier") or {}
                     ).get("interpreted"),
@@ -3041,7 +3056,20 @@ class MediaQCFormManager:
                     self.ident_payload_map.get(row_id, {})
                 )
                 _set_interpreted(
-                    original_ident, "taxon", ident_cleaned.get("taxon")
+                    original_ident,
+                    "taxon_verbatim",
+                    ident_cleaned.get("taxon_verbatim"),
+                )
+                _set_interpreted(
+                    original_ident,
+                    "taxon",
+                    ident_cleaned.get("taxon_verbatim"),
+                )
+                taxon_record_obj = ident_cleaned.get("taxon_record")
+                _set_interpreted(
+                    original_ident,
+                    "taxon_record",
+                    taxon_record_obj.pk if taxon_record_obj else None,
                 )
                 _set_interpreted(
                     original_ident,

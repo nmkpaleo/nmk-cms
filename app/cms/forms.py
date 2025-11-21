@@ -952,7 +952,7 @@ class AccessionRowIdentificationForm(BaseW3ModelForm):
         model = Identification
         fields = [
             "identified_by",
-            "taxon",
+            "taxon_verbatim",
             "taxon_record",
             "reference",
             "date_identified",
@@ -962,6 +962,7 @@ class AccessionRowIdentificationForm(BaseW3ModelForm):
         ]
         labels = {
             "identification_qualifier": "Taxon Qualifier",
+            "taxon_verbatim": "Taxon (verbatim or free text)",
             "verbatim_identification": "Taxon Verbatim",
             "identification_remarks": "Remarks",
         }
@@ -993,12 +994,21 @@ class AccessionRowIdentificationForm(BaseW3ModelForm):
 
         return self.cleaned_data.get("identified_by")
 
+    def clean_taxon_verbatim(self):
+        return coerce_stripped(self.cleaned_data.get("taxon_verbatim"))
+
     def clean(self):
         cleaned_data = super().clean()
         taxon_record = cleaned_data.get("taxon_record")
-        taxon_name = cleaned_data.get("taxon")
-        if taxon_record and not taxon_name:
-            cleaned_data["taxon"] = taxon_record.taxon_name
+        taxon_verbatim = cleaned_data.get("taxon_verbatim")
+
+        if taxon_record:
+            cleaned_data["taxon_verbatim"] = taxon_record.taxon_name
+        elif not taxon_verbatim:
+            self.add_error(
+                "taxon_verbatim",
+                _("Enter a taxon name or choose a controlled taxon."),
+            )
         return cleaned_data
 
 
