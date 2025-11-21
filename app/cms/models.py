@@ -1074,6 +1074,12 @@ class Identification(BaseModel):
         blank=True,
         help_text="Person who made the identification.",
     )
+    taxon_verbatim = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text=_("Verbatim taxon name provided during identification."),
+    )
     taxon = models.CharField(
         max_length=255,
         blank=True,
@@ -1082,7 +1088,7 @@ class Identification(BaseModel):
     )
     taxon_record = models.ForeignKey(
         "Taxon",
-        on_delete=models.SET_NULL,
+        on_delete=models.PROTECT,
         related_name="identifications",
         null=True,
         blank=True,
