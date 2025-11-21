@@ -1,0 +1,5 @@
+{% load i18n %}
+
+{% trans "Storage change log" as storage_history_caption %}
+{% trans "No changes logged." as storage_history_empty %}
+{% include "cms/history_table.html" with entries=history_entries table_id="storage-history-table" caption=storage_history_caption empty_message=storage_history_empty %}

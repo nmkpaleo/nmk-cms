@@ -4,9 +4,10 @@ The CMS exposes audit history in two places: model detail pages and the dedicate
 
 ## Detail page change logs
 
-- Drawer registers, preparations, and storage areas render the same `history_table.html` partial. Each row includes an icon for the action (create/update/delete), the timestamp, the user, and a list of field-level changes.
+- Drawer registers, preparations, and storage areas render the same `history_table.html` partial inside the **Change log** tab next to the default **Details** tab. Each row includes an icon for the action (create/update/delete), the timestamp, the user, and a list of field-level changes.
 - Empty states show a grey “No changes logged” message to avoid blank panels.
 - The table caption is customised per page to improve screen reader context; captions appear above the table in muted text.
+- Tab buttons and panels are linked with matching IDs to satisfy accessibility expectations; ensure new audited views follow the same pattern when they add tabs.
 
 ## Media QC history page
 

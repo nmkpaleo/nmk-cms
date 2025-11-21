@@ -1,0 +1,5 @@
+{% load i18n %}
+
+{% trans "Drawer change log" as drawer_history_caption %}
+{% trans "No changes logged." as drawer_history_empty %}
+{% include "cms/history_table.html" with entries=history_entries table_id="drawer-history-table" caption=drawer_history_caption empty_message=drawer_history_empty %}

@@ -25,3 +25,4 @@
 - Document FieldSlip merge deduplication, including admin messaging and developer guidance for relation conflict handling, and update merge-tool docs accordingly (T5).
 - Record FieldSlip merge QA execution results, lint/test observations, and rollout guidance for operations teams (T6).
 - Document the expert QC reference delete control, including save behavior and rollback expectations (T5).
+- Document the tabbed Change log UI for drawer and storage details, including user/admin guidance and updated development audit notes.
