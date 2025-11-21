@@ -1,4 +1,5 @@
 from decimal import Decimal, InvalidOperation
+import warnings
 
 from crum import get_current_user
 from django.db import models
@@ -1133,14 +1134,59 @@ class Identification(BaseModel):
         verbose_name_plural = "Identifications"
 
     def __str__(self):
+        display_name = self.preferred_taxon_name or ""
+        if display_name:
+            return f"Identification for AccessionRow {self.accession_row} ({display_name})"
         return f"Identification for AccessionRow {self.accession_row}"
 
     def clean(self):
         super().clean()
+        self._sync_taxon_fields()
+        if not self.taxon_verbatim:
+            raise ValidationError(
+                {"taxon_verbatim": _("Provide a verbatim taxon or select a linked taxon.")}
+            )
         if self.taxon_record and self.taxon_record.status != TaxonStatus.ACCEPTED:
             raise ValidationError(
                 {"taxon_record": _("Identifications must reference an accepted taxon.")}
             )
+
+    def save(self, *args, **kwargs):
+        self._sync_taxon_fields()
+        super().save(*args, **kwargs)
+
+    def _sync_taxon_fields(self) -> None:
+        """Keep legacy and unified taxon fields consistent."""
+
+        if not self.taxon_verbatim:
+            if self.taxon_record:
+                self.taxon_verbatim = self.taxon_record.taxon_name
+            elif self.taxon:
+                self.taxon_verbatim = self.taxon
+
+        if self.taxon_verbatim and self.taxon != self.taxon_verbatim:
+            # Keep legacy column populated for backwards compatibility while it exists.
+            self.taxon = self.taxon_verbatim
+
+    @property
+    def preferred_taxon_name(self) -> Optional[str]:
+        """Return the controlled taxon name if available, otherwise verbatim text."""
+
+        if self.taxon_record:
+            return self.taxon_record.taxon_name
+        return self.taxon_verbatim or self.taxon
+
+    @property
+    def has_controlled_taxon(self) -> bool:
+        return bool(self.taxon_record_id)
+
+    def deprecated_taxon_usage(self) -> str:
+        warnings.warn(
+            "Identification.taxon is deprecated; use taxon_verbatim for free-text values.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.taxon_verbatim or self.taxon or ""
 
 
 # Taxon Model
