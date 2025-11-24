@@ -1,5 +1,5 @@
 {% extends "base_generic.html" %}
-{% load i18n static %}
+{% load i18n static qr_code %}
 
 {% block title %}
   {% if is_small_card %}
@@ -16,7 +16,6 @@
 
 {% block script %}
   {{ block.super }}
-  <script src="{% static 'js/qrcode.min.js' %}"></script>
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       const button = document.getElementById("accession-row-print-button");
@@ -24,23 +23,6 @@
         button.addEventListener("click", function () {
           window.print();
         });
-      }
-
-      const qrContainer = document.getElementById("accession-row-qr");
-      if (qrContainer && typeof QRCode !== "undefined") {
-        const targetUrl = qrContainer.dataset.url;
-        if (targetUrl) {
-          while (qrContainer.firstChild) {
-            qrContainer.removeChild(qrContainer.firstChild);
-          }
-          new QRCode(qrContainer, {
-            text: targetUrl,
-            width: 112,
-            height: 112,
-            correctLevel: QRCode.CorrectLevel.M,
-            margin: 0,
-          });
-        }
       }
     });
   </script>
@@ -80,12 +62,9 @@
           id="accession-row-qr"
           class="nmk-print-card__qr"
           role="img"
-          data-url="{{ qr_target_url }}"
           aria-label="{% trans 'QR code linking to the specimen detail page' %}"
         >
-          <noscript>
-            <a href="{{ qr_target_url }}" class="w3-small">{% trans "Specimen link" %}</a>
-          </noscript>
+          {% qr_from_text qr_target_url image_format="svg" error_correction="M" border=0 %}
         </div>
       </header>
 
