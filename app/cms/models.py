@@ -1160,6 +1160,10 @@ class Identification(BaseModel):
     def _sync_taxon_fields(self) -> None:
         """Keep legacy and unified taxon fields consistent and auto-link controlled records."""
 
+        original_taxon = self.taxon
+        original_taxon_record_id = self.taxon_record_id
+        original_verbatim = self.taxon_verbatim
+
         if self.taxon_verbatim:
             self.taxon_verbatim = self.taxon_verbatim.strip()
 
@@ -1169,6 +1173,13 @@ class Identification(BaseModel):
 
         matched_taxon = self._match_controlled_taxon(self.taxon_verbatim)
         self.taxon_record = matched_taxon
+
+        if (
+            original_taxon != self.taxon
+            or original_taxon_record_id != self.taxon_record_id
+            or original_verbatim != self.taxon_verbatim
+        ):
+            self._change_reason = _("Taxonomy synchronized with unified taxon fields.")
 
     @property
     def preferred_taxon_name(self) -> Optional[str]:
