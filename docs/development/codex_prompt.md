@@ -57,6 +57,7 @@ Use this dependency overview (generated from `app/requirements.txt`) to ground a
 - seaborn (unpinned)
 
 ### Additional Dependencies
+- django-qr-code == 4.2.0
 - pycparser == 2.21
 
 > ℹ️ **Automation note:** Run `python docs/scripts/update_prompts.py` after editing `app/requirements.txt` to regenerate this dependency snapshot.
