@@ -75,8 +75,7 @@ def test_accession_filter_matches_taxon_record_name():
     )
     Identification.objects.create(
         accession_row=accession_row,
-        taxon=accepted.taxon_name,
-        taxon_record=accepted,
+        taxon_verbatim=accepted.taxon_name,
     )
     synonym = make_taxon(
         "Ferrequitherium junior",
@@ -91,6 +90,20 @@ def test_accession_filter_matches_taxon_record_name():
     assert accession in filterset.qs
 
 
+def test_accession_filter_matches_verbatim_taxon_name_without_record():
+    accession = make_accession()
+    accession_row = AccessionRow.objects.create(accession=accession)
+    Identification.objects.create(
+        accession_row=accession_row,
+        taxon_verbatim="Unmatchedus example",
+    )
+
+    qs = Accession.objects.all()
+    filterset = AccessionFilter(data={"taxon": "Unmatched"}, queryset=qs)
+
+    assert accession in filterset.qs
+
+
 def test_accession_filter_family_uses_taxon_record_attribute():
     accession = make_accession()
     accession_row = AccessionRow.objects.create(accession=accession)
@@ -101,8 +114,7 @@ def test_accession_filter_family_uses_taxon_record_attribute():
     )
     Identification.objects.create(
         accession_row=accession_row,
-        taxon=accepted.taxon_name,
-        taxon_record=accepted,
+        taxon_verbatim=accepted.taxon_name,
     )
 
     qs = Accession.objects.all()

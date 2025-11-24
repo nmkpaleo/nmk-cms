@@ -106,8 +106,11 @@ class AccessionFilter(django_filters.FilterSet):
     def filter_by_taxon(self, queryset, name, value):
         if not value:
             return queryset
-        taxon_q = Q(accessionrow__identification__taxon__icontains=value)
-        taxon_q |= Q(accessionrow__identification__taxon_record__taxon_name__icontains=value)
+        taxon_q = Q(accessionrow__identification__taxon_verbatim__icontains=value)
+        taxon_q |= Q(accessionrow__identification__taxon__icontains=value)
+        taxon_q |= Q(
+            accessionrow__identification__taxon_record__taxon_name__icontains=value
+        )
         taxon_q |= Q(
             accessionrow__identification__taxon_record__synonyms__taxon_name__icontains=value
         )
@@ -129,6 +132,9 @@ class AccessionFilter(django_filters.FilterSet):
         matching_names = _matching_taxon_names(attribute, value)
         name_filter = Q(**lookup)
         if matching_names:
+            name_filter |= Q(
+                accessionrow__identification__taxon_verbatim__in=matching_names
+            )
             name_filter |= Q(accessionrow__identification__taxon__in=matching_names)
         return queryset.filter(name_filter).distinct()
 
