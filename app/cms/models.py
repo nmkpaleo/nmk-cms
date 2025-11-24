@@ -1079,7 +1079,9 @@ class Identification(BaseModel):
         max_length=255,
         blank=True,
         null=True,
-        help_text=_("Verbatim taxon name provided during identification."),
+        help_text=_(
+            "Lowest level of taxonomy provided for the identification; matched to the controlled taxonomy when possible."
+        ),
     )
     taxon = models.CharField(
         max_length=255,
@@ -1144,7 +1146,7 @@ class Identification(BaseModel):
         self._sync_taxon_fields()
         if not self.taxon_verbatim:
             raise ValidationError(
-                {"taxon_verbatim": _("Provide a verbatim taxon or select a linked taxon.")}
+                {"taxon_verbatim": _("Provide the lowest taxon for this identification.")}
             )
         if self.taxon_record and self.taxon_record.status != TaxonStatus.ACCEPTED:
             raise ValidationError(
@@ -1156,17 +1158,17 @@ class Identification(BaseModel):
         super().save(*args, **kwargs)
 
     def _sync_taxon_fields(self) -> None:
-        """Keep legacy and unified taxon fields consistent."""
+        """Keep legacy and unified taxon fields consistent and auto-link controlled records."""
 
-        if not self.taxon_verbatim:
-            if self.taxon_record:
-                self.taxon_verbatim = self.taxon_record.taxon_name
-            elif self.taxon:
-                self.taxon_verbatim = self.taxon
+        if self.taxon_verbatim:
+            self.taxon_verbatim = self.taxon_verbatim.strip()
 
         if self.taxon_verbatim and self.taxon != self.taxon_verbatim:
             # Keep legacy column populated for backwards compatibility while it exists.
             self.taxon = self.taxon_verbatim
+
+        matched_taxon = self._match_controlled_taxon(self.taxon_verbatim)
+        self.taxon_record = matched_taxon
 
     @property
     def preferred_taxon_name(self) -> Optional[str]:
@@ -1174,7 +1176,7 @@ class Identification(BaseModel):
 
         if self.taxon_record:
             return self.taxon_record.taxon_name
-        return self.taxon_verbatim or self.taxon
+        return self.taxon or self.taxon_verbatim
 
     @property
     def has_controlled_taxon(self) -> bool:
@@ -1187,6 +1189,25 @@ class Identification(BaseModel):
             stacklevel=2,
         )
         return self.taxon_verbatim or self.taxon or ""
+
+    def _match_controlled_taxon(self, taxon_name: Optional[str]) -> Optional["Taxon"]:
+        """Return a unique accepted, active Taxon that matches the provided name."""
+
+        if not taxon_name:
+            return None
+
+        matches = list(
+            Taxon.objects.filter(
+                taxon_name__iexact=taxon_name,
+                status=TaxonStatus.ACCEPTED,
+                is_active=True,
+            )[:2]
+        )
+
+        if len(matches) == 1:
+            return matches[0]
+
+        return None
 
 
 # Taxon Model

@@ -91,10 +91,11 @@ def test_taxon_widget_queryset_filters_only_active_accepted():
 
 
 def _make_accession_row():
-    collection = Collection.objects.create(abbreviation="COL", description="Collection")
-    locality = Locality.objects.create(abbreviation="LC", name="Locality")
     user_model = get_user_model()
     user = user_model.objects.create(username="curator")
+    set_current_user(user)
+    collection = Collection.objects.create(abbreviation="COL", description="Collection")
+    locality = Locality.objects.create(abbreviation="LC", name="Locality")
     accession = Accession.objects.create(
         collection=collection,
         specimen_prefix=locality,
@@ -104,7 +105,7 @@ def _make_accession_row():
     return AccessionRow.objects.create(accession=accession)
 
 
-def test_identification_form_defaults_taxon_from_record():
+def test_identification_form_links_controlled_record_when_taxon_matches():
     accession_row = _make_accession_row()
     taxon = make_taxon(
         "Ferrequitherium sweeti", external_id="NOW:species:Ferrequitherium sweeti"
@@ -112,8 +113,7 @@ def test_identification_form_defaults_taxon_from_record():
     form = AccessionRowIdentificationForm(
         data={
             "identified_by": "",
-            "taxon_verbatim": "",
-            "taxon_record": str(taxon.pk),
+            "taxon_verbatim": taxon.taxon_name,
             "reference": "",
             "date_identified": "",
             "identification_qualifier": "",
@@ -124,8 +124,8 @@ def test_identification_form_defaults_taxon_from_record():
     )
 
     assert form.is_valid()
+    assert form.instance.taxon_record == taxon
     assert form.cleaned_data["taxon_verbatim"] == taxon.taxon_name
-    assert form.cleaned_data["taxon_record"] == taxon
 
 
 def test_drawer_register_form_limits_taxa_queryset():

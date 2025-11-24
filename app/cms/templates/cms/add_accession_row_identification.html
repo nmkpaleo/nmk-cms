@@ -12,7 +12,7 @@
         {% include "includes/base_form.html" with form=form submit_label=save_identification_label submit_icon="fa-dna" method="post" action=request.path title=taxon_to_specimen_label access=accession_row heading_id="specimen-identification-form" %}
       </article>
       <aside class="w3-col l4 m12 w3-margin-top">
-        {% include "cms/partials/taxon_summary_panel.html" with taxon_record=form.instance.taxon_record verbatim_name=form.instance.taxon_verbatim preferred_name=form.instance.preferred_taxon_name %}
+        {% include "cms/partials/taxon_summary_panel.html" with taxon_record=form.instance.taxon_record verbatim_name=form.instance.verbatim_identification preferred_name=form.instance.preferred_taxon_name %}
       </aside>
     </section>
     <footer class="w3-margin-top" aria-label="{% trans 'Identification navigation' %}">

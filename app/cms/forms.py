@@ -942,6 +942,12 @@ class AddSpecimenForm(BaseW3ModelForm):
 
 
 class AccessionRowIdentificationForm(BaseW3ModelForm):
+    taxon_record_display = forms.CharField(
+        label=_("Taxon record"),
+        required=False,
+        disabled=True,
+        help_text=_("Automatically linked when the taxon matches a controlled record."),
+    )
     reference = forms.ModelChoiceField(
         queryset=Reference.objects.order_by("first_author", "year", "title"),
         required=False,
@@ -953,7 +959,6 @@ class AccessionRowIdentificationForm(BaseW3ModelForm):
         fields = [
             "identified_by",
             "taxon_verbatim",
-            "taxon_record",
             "reference",
             "date_identified",
             "identification_qualifier",
@@ -962,14 +967,13 @@ class AccessionRowIdentificationForm(BaseW3ModelForm):
         ]
         labels = {
             "identification_qualifier": "Taxon Qualifier",
-            "taxon_verbatim": "Taxon (verbatim or free text)",
+            "taxon_verbatim": "Taxon (free text)",
             "verbatim_identification": "Taxon Verbatim",
             "identification_remarks": "Remarks",
         }
         widgets = {
             "identified_by": IdentifiedByWidget(),
             "date_identified": forms.DateInput(attrs={"type": "date"}),
-            "taxon_record": TaxonWidget(model=Taxon),
         }
 
     def __init__(self, *args, **kwargs):
@@ -977,13 +981,23 @@ class AccessionRowIdentificationForm(BaseW3ModelForm):
         self.fields["identified_by"].queryset = Person.objects.order_by(
             "last_name", "first_name"
         )
-        taxon_field = self.fields["taxon_record"]
-        taxon_field.queryset = Taxon.objects.filter(
-            status=TaxonStatus.ACCEPTED,
-            is_active=True,
-        ).order_by("taxon_name")
-        taxon_field.required = False
-        taxon_field.widget = TaxonWidget(model=Taxon)
+        taxon_record = getattr(self.instance, "taxon_record", None)
+        self.fields["taxon_record_display"].initial = (
+            taxon_record.taxon_name if taxon_record else ""
+        )
+        self.fields["taxon_record_display"].widget.attrs["readonly"] = True
+        self.order_fields(
+            [
+                "identified_by",
+                "taxon_verbatim",
+                "taxon_record_display",
+                "reference",
+                "date_identified",
+                "identification_qualifier",
+                "verbatim_identification",
+                "identification_remarks",
+            ]
+        )
 
     def clean_identified_by(self):
         widget = self.fields["identified_by"].widget
@@ -999,15 +1013,12 @@ class AccessionRowIdentificationForm(BaseW3ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
-        taxon_record = cleaned_data.get("taxon_record")
         taxon_verbatim = cleaned_data.get("taxon_verbatim")
 
-        if taxon_record:
-            cleaned_data["taxon_verbatim"] = taxon_record.taxon_name
-        elif not taxon_verbatim:
+        if not taxon_verbatim:
             self.add_error(
                 "taxon_verbatim",
-                _("Enter a taxon name or choose a controlled taxon."),
+                _("Enter the lowest level of taxonomy for this identification."),
             )
         return cleaned_data
 
