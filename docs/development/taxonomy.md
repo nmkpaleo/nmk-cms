@@ -39,6 +39,16 @@ Use a single nullable `ForeignKey` to `Taxon` named `taxon_record` for structure
 4. Deprecate legacy `taxon` column: remove from forms/admin exports, keep read-only property; add DB constraint to prevent NULL in `taxon_verbatim`.
 5. Final cleanup migration: drop `taxon` column after all consumers updated and monitoring confirms stability.
 
+### Operational rollout (current migrations)
+- Apply migrations `0069`–`0071` in order. They add `taxon_verbatim` to current and historical Identification tables, backfill verbatim text from legacy values or controlled taxa, and align null/blank semantics across history.
+- After migrating, confirm the data state via the regression test `tests/test_migrations_taxon_unification.py` and smoke-test the identification form filters (see `tests/test_taxon_workflow.py`).
+- Expect the application layer to keep legacy `taxon` in sync for the duration of the dual-write period; do not drop the legacy column until the follow-up cleanup migration is authored and deployed.
+
+### Rollback guidance
+- If a migration needs to be rolled back, reverse `0071`, `0070`, then `0069` in that order. The backwards migrations restore legacy `taxon` values and remove `taxon_verbatim` from live and historical tables.
+- When rolling back application code, disable any auto-linking or synchronization helpers that write to `taxon_verbatim` so new rows revert to legacy behavior.
+- Ensure backups exist before reversing schema changes; on MySQL, lock impact is minimal because the migrations avoid destructive column changes until the cleanup phase.
+
 ## Forms/serializers behavior
 - Render a select2/autocomplete widget for `taxon_record` limited to accepted taxa; include a free-text input for `taxon_verbatim` with help text explaining precedence.
 - In `clean()`, if `taxon_record` is set and `taxon_verbatim` empty, set verbatim to selected `taxon_record.taxon_name`.

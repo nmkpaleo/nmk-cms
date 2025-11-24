@@ -4,6 +4,7 @@
 - Document the dashboard Generate batch shortcut for accession number series, including access rules for collection managers and the self-service workflow that redirects to the accession wizard once numbers are reserved.
 - Record the accession wizard update that shows specimen numbers as display-only text while preserving the selected value through submission.
 - Fix Drawer Register edit form taxonomy queryset errors and surface Locality/Taxon cards on the drawer detail page; update user/admin guidance accordingly (CMS-001, CMS-003, CMS-005).
+- Document the unified identification taxonomy workflow, including cleaned vs verbatim taxon fields, automatic controlled-record linking, and rollback steps for the migration (CMS-TAX-UNIFY).
 - Automate dependency snapshots in the development planning and coding prompts via `docs/scripts/update_prompts.py`, including supporting tests and maintenance docs (T3).
 - Document Drawer Register admin export behavior to clarify that taxa values use the primary taxon name (T3.2).
 - Document geological time support across locality workflows, including admin import/export guidance, printable reporting expectations, and pytest coverage notes (T3).
