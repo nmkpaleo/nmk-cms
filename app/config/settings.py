@@ -83,6 +83,7 @@ INSTALLED_APPS = [
     "django.contrib.sites",
     "django.contrib.staticfiles",
     "django_filters",
+    "qr_code",
     'django_userforeignkey',
     'formtools',
     'import_export' ,
