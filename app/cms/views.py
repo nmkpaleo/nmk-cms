@@ -1822,6 +1822,10 @@ class BaseAccessionRowPrintView(LoginRequiredMixin, UserPassesTestMixin, DetailV
             for accession_reference in accession_references
         ]
 
+        qr_target_url = self.request.build_absolute_uri(
+            self.object.get_absolute_url()
+        )
+
         context.update(
             {
                 "can_edit": self._user_can_edit(),
@@ -1848,6 +1852,7 @@ class BaseAccessionRowPrintView(LoginRequiredMixin, UserPassesTestMixin, DetailV
                 "reference_entries": reference_entries,
                 "card_variant": self.card_variant,
                 "is_small_card": self.card_variant == "small",
+                "qr_target_url": qr_target_url,
             }
         )
 
