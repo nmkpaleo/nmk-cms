@@ -57,7 +57,6 @@ Ground your implementation decisions in this dependency list generated from `app
 - seaborn (unpinned)
 
 ### Additional Dependencies
-- django-qr-code == 3.1.1
 - pycparser == 2.21
 
 > ℹ️ **Automation note:** Run `python docs/scripts/update_prompts.py` after editing `app/requirements.txt` to regenerate this dependency snapshot.

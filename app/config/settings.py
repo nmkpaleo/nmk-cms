@@ -94,7 +94,6 @@ INSTALLED_APPS = [
     'dal',
     'dal_select2',
     'simple_history',
-    'qr_code',
 ]
 
 SITE_ID = 1
