@@ -7,12 +7,19 @@
   {% trans "Save changes" as save_changes_label %}
   {% trans "Identification" as identification_label %}
   <main class="w3-container w3-margin-top w3-margin-bottom" role="main">
-    {% include "includes/base_form.html" with form=form submit_label=save_changes_label submit_icon="fa-dna" method="post" action=request.path title=identification_label access=accession_row heading_id="specimen-identification-form" %}
-    <div class="w3-margin-top">
+    <section class="w3-row-padding" aria-labelledby="specimen-identification-form">
+      <article class="w3-col l8 m12">
+        {% include "includes/base_form.html" with form=form submit_label=save_changes_label submit_icon="fa-dna" method="post" action=request.path title=identification_label access=accession_row heading_id="specimen-identification-form" %}
+      </article>
+      <aside class="w3-col l4 m12 w3-margin-top">
+        {% include "cms/partials/taxon_summary_panel.html" with taxon_record=form.instance.taxon_record verbatim_name=form.instance.verbatim_identification preferred_name=form.instance.preferred_taxon_name %}
+      </aside>
+    </section>
+    <footer class="w3-margin-top" aria-label="{% trans 'Identification navigation' %}">
       <a href="{% url 'accessionrow_detail' accession_row.id %}" class="w3-button w3-white w3-border w3-round-large w3-hover-light-grey">
         <i class="fa-solid fa-arrow-left-long" aria-hidden="true"></i>
         <span class="w3-margin-left">{% trans "Back to specimen" %}</span>
       </a>
-    </div>
+    </footer>
   </main>
 {% endblock %}

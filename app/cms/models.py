@@ -1,4 +1,5 @@
 from decimal import Decimal, InvalidOperation
+import warnings
 
 from crum import get_current_user
 from django.db import models
@@ -1074,6 +1075,14 @@ class Identification(BaseModel):
         blank=True,
         help_text="Person who made the identification.",
     )
+    taxon_verbatim = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text=_(
+            "Lowest level of taxonomy provided for the identification; matched to the controlled taxonomy when possible."
+        ),
+    )
     taxon = models.CharField(
         max_length=255,
         blank=True,
@@ -1082,7 +1091,7 @@ class Identification(BaseModel):
     )
     taxon_record = models.ForeignKey(
         "Taxon",
-        on_delete=models.SET_NULL,
+        on_delete=models.PROTECT,
         related_name="identifications",
         null=True,
         blank=True,
@@ -1127,14 +1136,89 @@ class Identification(BaseModel):
         verbose_name_plural = "Identifications"
 
     def __str__(self):
+        display_name = self.preferred_taxon_name or ""
+        if display_name:
+            return f"Identification for AccessionRow {self.accession_row} ({display_name})"
         return f"Identification for AccessionRow {self.accession_row}"
 
     def clean(self):
         super().clean()
+        self._sync_taxon_fields()
+        if not self.taxon_verbatim:
+            raise ValidationError(
+                {"taxon_verbatim": _("Provide the lowest taxon for this identification.")}
+            )
         if self.taxon_record and self.taxon_record.status != TaxonStatus.ACCEPTED:
             raise ValidationError(
                 {"taxon_record": _("Identifications must reference an accepted taxon.")}
             )
+
+    def save(self, *args, **kwargs):
+        self._sync_taxon_fields()
+        super().save(*args, **kwargs)
+
+    def _sync_taxon_fields(self) -> None:
+        """Keep legacy and unified taxon fields consistent and auto-link controlled records."""
+
+        original_taxon = self.taxon
+        original_taxon_record_id = self.taxon_record_id
+        original_verbatim = self.taxon_verbatim
+
+        if self.taxon_verbatim:
+            self.taxon_verbatim = self.taxon_verbatim.strip()
+
+        if self.taxon_verbatim and self.taxon != self.taxon_verbatim:
+            # Keep legacy column populated for backwards compatibility while it exists.
+            self.taxon = self.taxon_verbatim
+
+        matched_taxon = self._match_controlled_taxon(self.taxon_verbatim)
+        self.taxon_record = matched_taxon
+
+        if (
+            original_taxon != self.taxon
+            or original_taxon_record_id != self.taxon_record_id
+            or original_verbatim != self.taxon_verbatim
+        ):
+            self._change_reason = _("Taxonomy synchronized with unified taxon fields.")
+
+    @property
+    def preferred_taxon_name(self) -> Optional[str]:
+        """Return the controlled taxon name if available, otherwise verbatim text."""
+
+        if self.taxon_record:
+            return self.taxon_record.taxon_name
+        return self.taxon or self.taxon_verbatim
+
+    @property
+    def has_controlled_taxon(self) -> bool:
+        return bool(self.taxon_record_id)
+
+    def deprecated_taxon_usage(self) -> str:
+        warnings.warn(
+            "Identification.taxon is deprecated; use taxon_verbatim for free-text values.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.taxon_verbatim or self.taxon or ""
+
+    def _match_controlled_taxon(self, taxon_name: Optional[str]) -> Optional["Taxon"]:
+        """Return a unique accepted, active Taxon that matches the provided name."""
+
+        if not taxon_name:
+            return None
+
+        matches = list(
+            Taxon.objects.filter(
+                taxon_name__iexact=taxon_name,
+                status=TaxonStatus.ACCEPTED,
+                is_active=True,
+            )[:2]
+        )
+
+        if len(matches) == 1:
+            return matches[0]
+
+        return None
 
 
 # Taxon Model

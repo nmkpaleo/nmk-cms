@@ -37,6 +37,13 @@ Previewing does not change the database—it is a safe dry-run.
 * Accepted taxa and synonyms remain active; any records missing from the source may be deactivated when `TAXON_SYNC_DEACTIVATE_MISSING` is enabled.
 * Identifications continue to point at accepted taxa. If a specimen still references an inactive or synonym record, contact the digitisation team to clean up the data.
 
+## Identification fields after the taxonomy update
+
+* The **Taxon (verbatim or free text)** field captures the lowest-level taxon you determined, even if it is not present in the controlled taxonomy. Enter the cleaned scientific name (for example, genus + species) rather than a literal transcription.
+* The **Taxon verbatim** field stores the original wording from field notes or labels; it remains unchanged when you edit the cleaned taxon value.
+* When the cleaned taxon exactly matches a single accepted entry in the taxonomy, the system automatically links the identification to that controlled **Taxon record** and shows it as read-only for confirmation. If no unique match exists, the Taxon record stays empty and can be revisited later.
+* Saving an identification keeps the cleaned taxon and any controlled link in sync with reports, filters, and print views. If you need to break an incorrect link, adjust the cleaned taxon text so it no longer matches the controlled record and resave.
+
 ## Troubleshooting
 
 | Symptom | Suggested action |

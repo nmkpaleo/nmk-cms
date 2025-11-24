@@ -697,12 +697,73 @@ class GeologicalContextAdmin(HistoricalImportExportAdmin):
     ordering = ('name',)
 
 # Identification Model
+class TaxonLinkStatusListFilter(admin.SimpleListFilter):
+    title = _("Taxon link status")
+    parameter_name = "taxon_link_status"
+
+    def lookups(self, request, model_admin):
+        return (
+            ("linked", _("Linked to controlled taxon")),
+            ("verbatim", _("Verbatim only")),
+        )
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if value == "linked":
+            return queryset.filter(taxon_record__isnull=False)
+        if value == "verbatim":
+            return queryset.filter(taxon_record__isnull=True)
+        return queryset
+
+
 class IdentificationAdmin(HistoricalImportExportAdmin):
     resource_class = IdentificationResource
-    list_display = ('accession_row', 'identification_qualifier', 'verbatim_identification', 'taxon', 'identified_by', 'date_identified', )
-    search_fields = ('accession_row__accession__specimen_no', 'verbatim_identification', 'taxon__taxon_name', 'identified_by__last_name')
-    list_filter = ('date_identified',)
-    ordering = ('accession_row', 'date_identified')
+    list_display = (
+        "accession_row",
+        "identification_qualifier",
+        "preferred_taxon_name_display",
+        "verbatim_taxon_display",
+        "identified_by",
+        "date_identified",
+    )
+    search_fields = (
+        "accession_row__accession__specimen_no",
+        "verbatim_identification",
+        "taxon_verbatim",
+        "taxon",
+        "taxon_record__taxon_name",
+        "taxon_record__accepted_taxon__taxon_name",
+        "identified_by__last_name",
+    )
+    list_filter = ("date_identified", TaxonLinkStatusListFilter)
+    ordering = ("accession_row", "date_identified")
+    readonly_fields = (
+        "taxon_record",
+        "preferred_taxon_name_display",
+        "verbatim_taxon_display",
+    )
+    fields = (
+        "accession_row",
+        "taxon_verbatim",
+        "preferred_taxon_name_display",
+        "taxon_record",
+        "identification_qualifier",
+        "verbatim_identification",
+        "reference",
+        "identified_by",
+        "date_identified",
+        "identification_remarks",
+    )
+
+    @admin.display(description=_("Preferred taxon name"))
+    def preferred_taxon_name_display(self, obj: Identification) -> str:
+        if obj.taxon_record:
+            return obj.taxon_record.taxon_name
+        return obj.taxon_verbatim or obj.taxon or "—"
+
+    @admin.display(description=_("Verbatim taxon"))
+    def verbatim_taxon_display(self, obj: Identification) -> str:
+        return obj.taxon_verbatim or obj.taxon or "—"
 
 # Locality Model
 class GeologicalTimeListFilter(admin.SimpleListFilter):

@@ -58,6 +58,12 @@ Import logs are managed by `django-simple-history`, allowing auditors to review 
 | Sync result shows `ok = False` | Investigate the associated import log. Nothing was committed; fix the issues and run again. |
 | Need to undo a sync | Locate the relevant `TaxonomyImport`, export the list of affected taxa, and restore them from backups or re-run the sync after correcting the upstream data. Because each sync runs in a single transaction, partial updates do not occur. |
 
+## Identification linkage checks
+
+- Identification forms now treat the cleaned **Taxon (verbatim or free text)** as the authoritative entry. The system auto-links to a controlled **Taxon record** only when the cleaned text uniquely matches an accepted taxon; the linked record renders as read-only in the admin and user forms.
+- If staff report incorrect links after a sync, verify whether the cleaned taxon text exactly matches multiple accepted taxa (for example, duplicates across ranks). Resolve the ambiguity by correcting the text or updating the taxonomy records, then resave the identification.
+- To roll back to pre-linking behavior temporarily, deploy code that disables the auto-link helper and reverse migrations `0071` → `0070` → `0069` so the legacy `taxon` column becomes the primary source again. Reapply the migrations once the taxonomy data is corrected.
+
 ## Security considerations
 
 Only grant `cms.can_sync` to trusted administrators. The sync process has write access to the taxonomy tables and can deactivate taxa when configured to do so.

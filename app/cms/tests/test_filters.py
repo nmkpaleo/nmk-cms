@@ -1,4 +1,6 @@
 import pytest
+from crum import set_current_user
+from django.contrib.auth import get_user_model
 
 from app.cms.filters import AccessionFilter, DrawerRegisterFilter, LocalityFilter
 from app.cms.models import (
@@ -26,6 +28,7 @@ def make_taxon(
     is_active: bool = True,
     external_id: str | None = None,
     accepted_taxon: Taxon | None = None,
+    scientific_name_authorship: str = "Author",
 ) -> Taxon:
     parts = name.split()
     genus = parts[0]
@@ -52,7 +55,7 @@ def make_taxon(
         genus=genus,
         species=species,
         infraspecific_epithet="",
-        scientific_name_authorship="Author",
+        scientific_name_authorship=scientific_name_authorship,
     )
 
 
@@ -75,8 +78,7 @@ def test_accession_filter_matches_taxon_record_name():
     )
     Identification.objects.create(
         accession_row=accession_row,
-        taxon=accepted.taxon_name,
-        taxon_record=accepted,
+        taxon_verbatim=accepted.taxon_name,
     )
     synonym = make_taxon(
         "Ferrequitherium junior",
@@ -91,6 +93,20 @@ def test_accession_filter_matches_taxon_record_name():
     assert accession in filterset.qs
 
 
+def test_accession_filter_matches_verbatim_taxon_name_without_record():
+    accession = make_accession()
+    accession_row = AccessionRow.objects.create(accession=accession)
+    Identification.objects.create(
+        accession_row=accession_row,
+        taxon_verbatim="Unmatchedus example",
+    )
+
+    qs = Accession.objects.all()
+    filterset = AccessionFilter(data={"taxon": "Unmatched"}, queryset=qs)
+
+    assert accession in filterset.qs
+
+
 def test_accession_filter_family_uses_taxon_record_attribute():
     accession = make_accession()
     accession_row = AccessionRow.objects.create(accession=accession)
@@ -101,12 +117,42 @@ def test_accession_filter_family_uses_taxon_record_attribute():
     )
     Identification.objects.create(
         accession_row=accession_row,
-        taxon=accepted.taxon_name,
-        taxon_record=accepted,
+        taxon_verbatim=accepted.taxon_name,
     )
 
     qs = Accession.objects.all()
     filterset = AccessionFilter(data={"family": "Testid"}, queryset=qs)
+
+    assert accession in filterset.qs
+
+
+def test_accession_filter_species_matches_verbatim_without_link():
+    user_model = get_user_model()
+    user = user_model.objects.create(username="filter-user")
+    set_current_user(user)
+
+    accession = make_accession()
+    accession_row = AccessionRow.objects.create(accession=accession)
+    make_taxon(
+        "Filtertaxon example",
+        external_id="NOW:species:Filtertaxon example",
+        scientific_name_authorship="Author One",
+    )
+    make_taxon(
+        "Filtertaxon example",
+        external_id="NOW:species:Filtertaxon example:dup",
+        scientific_name_authorship="Author Two",
+    )
+
+    Identification.objects.create(
+        accession_row=accession_row,
+        taxon_verbatim="Filtertaxon example",
+    )
+
+    set_current_user(None)
+
+    qs = Accession.objects.all()
+    filterset = AccessionFilter(data={"species": "example"}, queryset=qs)
 
     assert accession in filterset.qs
 
