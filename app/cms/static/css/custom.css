@@ -1,0 +1,213 @@
+.nmk-print-layout {
+  max-width: 960px;
+}
+
+.nmk-print-layout--small {
+  max-width: 760px;
+}
+
+.nmk-print-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 1.5rem;
+}
+
+.nmk-print-card {
+  border: 1px solid #ccc;
+  padding: 1.5rem;
+}
+
+.nmk-print-card--small {
+  padding: 1rem;
+  font-size: 0.95rem;
+}
+
+.nmk-print-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.nmk-print-card--small .nmk-print-card__header {
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.nmk-print-card__title {
+  margin: 0;
+}
+
+.nmk-print-card__meta {
+  margin: 0;
+  color: #555;
+}
+
+.nmk-print-card--small .nmk-print-card__meta {
+  font-size: 0.9rem;
+}
+
+.nmk-print-card__qr {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  margin-left: auto;
+  min-width: 120px;
+}
+
+.nmk-print-card__qr svg {
+  width: 120px;
+  height: 120px;
+  display: block;
+}
+
+.nmk-print-card--small .nmk-print-card__qr {
+  min-width: 96px;
+}
+
+.nmk-print-card--small .nmk-print-card__qr svg {
+  width: 96px;
+  height: 96px;
+}
+
+.nmk-print-card__section {
+  margin-top: 1rem;
+}
+
+.nmk-print-summary {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.nmk-print-card--small .nmk-print-summary {
+  font-size: 0.9rem;
+}
+
+.nmk-print-summary th,
+.nmk-print-summary td {
+  border: 1px solid #ccc;
+  padding: 0.75rem;
+  vertical-align: top;
+}
+
+.nmk-print-card--small .nmk-print-summary th,
+.nmk-print-card--small .nmk-print-summary td {
+  padding: 0.5rem;
+}
+
+.nmk-print-summary th {
+  background-color: #f3f3f3;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.8rem;
+}
+
+.nmk-print-card--small .nmk-print-summary th {
+  font-size: 0.75rem;
+}
+
+.nmk-print-summary__label--narrow {
+  width: 20%;
+}
+
+.nmk-print-card--small .nmk-print-summary__label--narrow {
+  width: 22%;
+}
+
+.nmk-print-summary__value-muted {
+  color: #777;
+}
+
+.nmk-print-elements-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.nmk-print-elements-table th,
+.nmk-print-elements-table td {
+  border: 1px solid #e0e0e0;
+  padding: 0.5rem;
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+.nmk-print-elements-table th {
+  background-color: #f9f9f9;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.75rem;
+}
+
+.nmk-print-card--small .nmk-print-elements-table th,
+.nmk-print-card--small .nmk-print-elements-table td {
+  padding: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.nmk-print-card--small .nmk-print-elements-table th {
+  font-size: 0.72rem;
+}
+
+.nmk-print-list {
+  margin: 0;
+  padding-left: 1.5rem;
+}
+
+.nmk-print-card--small .nmk-print-list {
+  padding-left: 1.25rem;
+}
+
+.nmk-print-list li {
+  margin-bottom: 0.4rem;
+}
+
+.nmk-print-card--small .nmk-print-list li {
+  margin-bottom: 0.25rem;
+}
+
+@media (max-width: 640px) {
+  .nmk-print-actions {
+    justify-content: center;
+  }
+
+  .nmk-print-card__qr {
+    min-width: 100px;
+  }
+
+  .nmk-print-card__qr svg {
+    width: 100px;
+    height: 100px;
+  }
+}
+
+@media print {
+  body {
+    margin: 0;
+  }
+
+  .site-header,
+  #primary-navigation,
+  #nav-toggle,
+  .site-footer,
+  .nmk-print-actions {
+    display: none !important;
+  }
+
+  .nmk-print-layout {
+    margin: 0;
+    max-width: none;
+  }
+
+  .nmk-print-card {
+    box-shadow: none;
+    border: 1px solid #000;
+  }
+
+  .nmk-print-summary th,
+  .nmk-print-summary td {
+    border-color: #000;
+  }
+}

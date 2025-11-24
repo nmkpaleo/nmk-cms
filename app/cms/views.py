@@ -1863,6 +1863,7 @@ class AccessionRowPrintView(BaseAccessionRowPrintView):
     """Render the big card printable view for an accession row."""
 
     card_variant = "big"
+    template_name = "cms/accession_row_print.html"
 
 
 class AccessionRowPrintSmallView(BaseAccessionRowPrintView):
