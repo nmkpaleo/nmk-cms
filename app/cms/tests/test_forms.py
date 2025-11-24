@@ -40,6 +40,7 @@ def make_taxon(
     is_active: bool = True,
     external_id: str | None = None,
     accepted_taxon: Taxon | None = None,
+    scientific_name_authorship: str = "Author",
 ) -> Taxon:
     parts = name.split()
     genus = parts[0]
@@ -66,7 +67,7 @@ def make_taxon(
         genus=genus,
         species=species,
         infraspecific_epithet="",
-        scientific_name_authorship="Author",
+        scientific_name_authorship=scientific_name_authorship,
     )
 
 
@@ -126,6 +127,62 @@ def test_identification_form_links_controlled_record_when_taxon_matches():
     assert form.is_valid()
     assert form.instance.taxon_record == taxon
     assert form.cleaned_data["taxon_verbatim"] == taxon.taxon_name
+
+
+def test_identification_form_does_not_link_inactive_taxa():
+    accession_row = _make_accession_row()
+    taxon = make_taxon(
+        "Dormant example", is_active=False, external_id="NOW:species:Dormant example"
+    )
+
+    form = AccessionRowIdentificationForm(
+        data={
+            "identified_by": "",
+            "taxon_verbatim": taxon.taxon_name,
+            "reference": "",
+            "date_identified": "",
+            "identification_qualifier": "",
+            "verbatim_identification": "",
+            "identification_remarks": "",
+        },
+        instance=Identification(accession_row=accession_row),
+    )
+
+    assert form.is_valid()
+    assert form.instance.taxon_record is None
+    assert form.cleaned_data["taxon_verbatim"] == taxon.taxon_name
+
+
+def test_identification_form_does_not_link_when_multiple_taxa_match():
+    accession_row = _make_accession_row()
+    make_taxon(
+        "Ambiguousus example",
+        external_id="NOW:species:Ambiguousus example",
+        scientific_name_authorship="Author One",
+    )
+    make_taxon(
+        "Ambiguousus example",
+        external_id="NOW:species:Ambiguousus example:dup",
+        status=TaxonStatus.ACCEPTED,
+        scientific_name_authorship="Author Two",
+    )
+
+    form = AccessionRowIdentificationForm(
+        data={
+            "identified_by": "",
+            "taxon_verbatim": "Ambiguousus example",
+            "reference": "",
+            "date_identified": "",
+            "identification_qualifier": "",
+            "verbatim_identification": "",
+            "identification_remarks": "",
+        },
+        instance=Identification(accession_row=accession_row),
+    )
+
+    assert form.is_valid()
+    assert form.instance.taxon_record is None
+    assert form.cleaned_data["taxon_verbatim"] == "Ambiguousus example"
 
 
 def test_drawer_register_form_limits_taxa_queryset():
