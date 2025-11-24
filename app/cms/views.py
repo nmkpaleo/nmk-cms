@@ -1869,6 +1869,7 @@ class AccessionRowPrintSmallView(BaseAccessionRowPrintView):
     """Render the small card printable view for an accession row."""
 
     card_variant = "small"
+    template_name = "cms/accession_row_print_small.html"
 
 
 class AccessionRowUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
