@@ -13,7 +13,8 @@
 - Record the accession field slip modal overlay fix, including accessibility updates to close Select2 dropdowns and hide background content while the dialog is open (CMS-ACC-UI-004).
 - Capture the accession detail QA checklist, coverage command, and rollout/rollback guidance following the layout restructure (T6).
 - Document the accession row print card workflow, including taxonomy fallback handling, print controls, and permission parity with edit actions, in the user guide (T6).
-- Add QR codes to accession row print cards (big and small) so printouts link back to the specimen detail page.
+- Add QR codes to accession row print cards (big and small) so printouts link back to the specimen detail page, now rendered
+  server-side with django-qr-code and paired with in-page print controls.
 - Add a reusable Field Slip related accessions section and document the visibility rules for collection managers and superusers (T4).
 - Expand CMS template audit with W3.CSS layout dependency summary and upload-view gaps in `docs/development/frontend-guidelines.md` (T1).
 - Add end-user, admin, and developer documentation for the NOW taxonomy sync workflow and record the feature in the changelog (T5).
