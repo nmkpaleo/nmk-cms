@@ -80,6 +80,7 @@ from cms.views import (
     MergeCandidateAdminView,
     MergeCandidateAPIView,
     ManualQCImportView,
+    AccessionRowPrintSmallView,
 )
 from .views import PreparationMediaUploadView
 from .views import FieldSlipAutocomplete, ReferenceAutocomplete
@@ -129,6 +130,7 @@ urlpatterns = [
     path('accessions/<int:accession_id>/upload-media/', upload_media, name='accession_upload_media'),
     path('accessionrows/<int:pk>/', AccessionRowDetailView.as_view(), name='accessionrow_detail'),
     path('accessionrows/<int:pk>/print/', AccessionRowPrintView.as_view(), name='accessionrow_print'),
+    path('accessionrows/<int:pk>/print/small/', AccessionRowPrintSmallView.as_view(), name='accessionrow_print_small'),
     path('accessionrows/<int:pk>/edit/', AccessionRowUpdateView.as_view(), name='accessionrow_edit'),
     path('accessionrows/<int:accession_row_id>/add-specimen/', add_specimen_to_accession_row, name='accessionrow_add_specimen'),
     path('accessionrows/<int:accession_row_id>/add-identification/', add_identification_to_accession_row, name='accessionrow_add_identification'),

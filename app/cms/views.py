@@ -1700,12 +1700,13 @@ class AccessionRowDetailView(DetailView):
         return context
 
 
-class AccessionRowPrintView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
+class BaseAccessionRowPrintView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
     """Render a print-friendly card for a single accession row."""
 
     model = AccessionRow
-    template_name = 'cms/accession_row_print.html'
-    context_object_name = 'accessionrow'
+    template_name = "cms/accession_row_print.html"
+    context_object_name = "accessionrow"
+    card_variant = "big"
 
     def _user_can_edit(self) -> bool:
         user = self.request.user
@@ -1814,41 +1815,55 @@ class AccessionRowPrintView(LoginRequiredMixin, UserPassesTestMixin, DetailView)
         )
         reference_entries = [
             {
-                'reference': accession_reference.reference,
-                'page': accession_reference.page,
-                'citation': accession_reference.reference.citation,
+                "reference": accession_reference.reference,
+                "page": accession_reference.page,
+                "citation": accession_reference.reference.citation,
             }
             for accession_reference in accession_references
         ]
 
         context.update(
             {
-                'can_edit': self._user_can_edit(),
-                'latest_identification': latest_identification,
-                'taxonomy_values': taxonomy_values,
-                'has_taxonomy_values': has_taxonomy_values,
-                'taxonomy_fallback_value': (
+                "can_edit": self._user_can_edit(),
+                "latest_identification": latest_identification,
+                "taxonomy_values": taxonomy_values,
+                "has_taxonomy_values": has_taxonomy_values,
+                "taxonomy_fallback_value": (
                     latest_identification.preferred_taxon_name.strip()
                     if latest_identification
                     and latest_identification.preferred_taxon_name
                     and latest_identification.preferred_taxon_name.strip()
-                    else ''
+                    else ""
                 ),
-                'identification_qualifier': (
+                "identification_qualifier": (
                     latest_identification.identification_qualifier.strip()
                     if latest_identification
                     and latest_identification.identification_qualifier
                     and latest_identification.identification_qualifier.strip()
-                    else ''
+                    else ""
                 ),
-                'specimen_rows': specimen_rows,
-                'locality': locality,
-                'site': site,
-                'reference_entries': reference_entries,
+                "specimen_rows": specimen_rows,
+                "locality": locality,
+                "site": site,
+                "reference_entries": reference_entries,
+                "card_variant": self.card_variant,
+                "is_small_card": self.card_variant == "small",
             }
         )
 
         return context
+
+
+class AccessionRowPrintView(BaseAccessionRowPrintView):
+    """Render the big card printable view for an accession row."""
+
+    card_variant = "big"
+
+
+class AccessionRowPrintSmallView(BaseAccessionRowPrintView):
+    """Render the small card printable view for an accession row."""
+
+    card_variant = "small"
 
 
 class AccessionRowUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
