@@ -107,6 +107,38 @@ class BaseModel(models.Model):
         super().delete(*args, **kwargs)
 
 
+def _resolve_user_organisation(user: User | None) -> Optional["Organisation"]:
+    """Return the organisation for a user when a membership exists."""
+
+    if user is None:
+        return None
+
+    membership = getattr(user, "organisation_membership", None)
+    if membership is None:
+        return None
+
+    return membership.organisation
+
+
+class AccessionNumberSeriesQuerySet(models.QuerySet):
+    """Query helpers for organisation-aware accession number series lookups."""
+
+    def for_user(self, user: User):
+        organisation = _resolve_user_organisation(user)
+        queryset = self.filter(user=user)
+        if organisation is not None:
+            queryset = queryset.filter(organisation=organisation)
+        return queryset
+
+    def active_for_user(self, user: User):
+        return self.for_user(user).filter(is_active=True)
+
+
+class AccessionNumberSeriesManager(models.Manager.from_queryset(AccessionNumberSeriesQuerySet)):
+    def get_queryset(self):
+        return super().get_queryset().select_related("organisation", "user")
+
+
 class Organisation(BaseModel):
     """Organisation grouping users and accession number series ownership."""
 
@@ -542,6 +574,8 @@ class Accession(BaseModel):
         unique_together = ('specimen_no', 'specimen_prefix', 'instance_number')
 
 class AccessionNumberSeries(BaseModel):
+    objects = AccessionNumberSeriesManager()
+
     organisation = models.ForeignKey(
         Organisation,
         on_delete=models.PROTECT,
@@ -578,31 +612,29 @@ class AccessionNumberSeries(BaseModel):
         if not hasattr(self, "user") or self.user is None:
             return  # Let the form validator complain that user is required
 
+        if self.organisation is None:
+            resolved_organisation = _resolve_user_organisation(self.user)
+            if resolved_organisation:
+                self.organisation = resolved_organisation
+        if self.organisation is None:
+            raise ValidationError(
+                _("An organisation is required for an accession number series."),
+            )
+
         if self.start_from is None or self.end_at is None:
             return
 
         if self.start_from >= self.end_at:
             raise ValidationError("Start number must be less than end number.")
         
-        # Determine if this is TBI or shared user series
-        is_tbi = self.user.username.strip().lower() == "tbi"
-
-        # Build appropriate queryset to check overlaps
-        if is_tbi:
-            # Only check overlap among TBI's series
-            conflicting_series = AccessionNumberSeries.objects.exclude(pk=self.pk).filter(
-                user__username__iexact="tbi",
+        conflicting_series = (
+            AccessionNumberSeries.objects.exclude(pk=self.pk)
+            .filter(
+                organisation=self.organisation,
                 start_from__lte=self.end_at,
                 end_at__gte=self.start_from,
             )
-        else:
-            # Shared users (everyone except TBI)
-            conflicting_series = AccessionNumberSeries.objects.exclude(pk=self.pk).exclude(
-                user__username__iexact="tbi"
-            ).filter(
-                start_from__lte=self.end_at,
-                end_at__gte=self.start_from,
-            )
+        )
 
         if conflicting_series.exists():
             raise ValidationError(
@@ -611,12 +643,14 @@ class AccessionNumberSeries(BaseModel):
 
         # Only allow one active series per user
         if self.is_active:
-            active_existing = AccessionNumberSeries.objects.exclude(pk=self.pk).filter(
-                user=self.user,
-                is_active=True
+            active_existing = (
+                AccessionNumberSeries.objects.exclude(pk=self.pk)
+                .filter(user=self.user, organisation=self.organisation, is_active=True)
             )
             if active_existing.exists():
-                raise ValidationError("This user already has an active accession number series.")
+                raise ValidationError(
+                    _("This user already has an active accession number series."),
+                )
 
     def save(self, *args, **kwargs):
         self.full_clean()

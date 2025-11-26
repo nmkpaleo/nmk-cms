@@ -192,6 +192,7 @@ class AccessionNumberSelectForm(BaseW3Form):
 
 class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
     TBI_USERNAME = "tbi"
+    TBI_ORG_CODE = "tbi"
 
     class Meta:
         model = AccessionNumberSeries
@@ -270,12 +271,12 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
     def _next_start_for_pool(cls, *, is_tbi_pool):
         if is_tbi_pool:
             queryset = AccessionNumberSeries.objects.filter(
-                user__username__iexact=cls.TBI_USERNAME
+                organisation__code__iexact=cls.TBI_ORG_CODE
             )
             base = 1_000_000
         else:
             queryset = AccessionNumberSeries.objects.exclude(
-                user__username__iexact=cls.TBI_USERNAME
+                organisation__code__iexact=cls.TBI_ORG_CODE
             )
             base = 1
 
@@ -286,6 +287,9 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
 
     @classmethod
     def _is_tbi_user(cls, user):
+        organisation = getattr(getattr(user, "organisation_membership", None), "organisation", None)
+        if organisation and getattr(organisation, "code", None):
+            return organisation.code.strip().lower() == cls.TBI_ORG_CODE
         if not user or not user.username:
             return False
         return user.username.strip().lower() == cls.TBI_USERNAME
@@ -326,7 +330,7 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
 
         if not self.instance.pk and user:
             # Ensure unique active series per user
-            if AccessionNumberSeries.objects.filter(user=user, is_active=True).exists():
+            if AccessionNumberSeries.objects.active_for_user(user).exists():
                 self.add_error(
                     "user", "This user already has an active accession number series."
                 )

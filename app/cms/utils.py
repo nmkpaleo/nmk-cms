@@ -17,9 +17,13 @@ from cms.models import (
 
 def generate_accessions_from_series(series_user, count, collection, specimen_prefix, creator_user=None):
     try:
-        series = AccessionNumberSeries.objects.get(user=series_user, is_active=True)
+        series = AccessionNumberSeries.objects.active_for_user(series_user).get()
     except AccessionNumberSeries.DoesNotExist:
-        raise ValueError(f"No active accession number series found for user {series_user.username}.")
+        organisation = getattr(getattr(series_user, "organisation_membership", None), "organisation", None)
+        org_display = f" in {organisation}" if organisation else ""
+        raise ValueError(
+            f"No active accession number series found for user {series_user.username}{org_display}."
+        )
 
     start = series.current_number
     end = start + count - 1
@@ -51,7 +55,7 @@ def generate_accessions_from_series(series_user, count, collection, specimen_pre
 
 
 def get_active_series_for_user(user):
-    return AccessionNumberSeries.objects.filter(user=user, is_active=True).first()
+    return AccessionNumberSeries.objects.active_for_user(user).first()
 
 
 def build_history_entries(instance):

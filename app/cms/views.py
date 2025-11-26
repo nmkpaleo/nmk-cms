@@ -1029,9 +1029,7 @@ def dashboard(request):
         role_context_added = True
 
     if user.groups.filter(name="Collection Managers").exists():
-        has_active_series = AccessionNumberSeries.objects.filter(
-            user=user, is_active=True
-        ).exists()
+        has_active_series = AccessionNumberSeries.objects.active_for_user(user).exists()
         unassigned_accessions = (
             Accession.objects.filter(accessioned_by=user)
             .annotate(row_count=Count("accessionrow"))
@@ -1896,7 +1894,7 @@ class AccessionWizard(SessionWizardView):
         if step == '0' or step == 0:
             user = self.request.user
             try:
-                series = AccessionNumberSeries.objects.get(user=user, is_active=True)
+                series = AccessionNumberSeries.objects.active_for_user(user).get()
                 used = set(
                     Accession.objects.filter(
                         accessioned_by=user,
@@ -5097,8 +5095,8 @@ class GenerateAccessionBatchView(LoginRequiredMixin, CollectionManagerAccessMixi
     success_url = reverse_lazy("accession-wizard")
 
     def dispatch(self, request, *args, **kwargs):
-        has_active_series = AccessionNumberSeries.objects.filter(
-            user=request.user, is_active=True
+        has_active_series = AccessionNumberSeries.objects.active_for_user(
+            request.user
         ).exists()
 
         if has_active_series and not request.user.is_superuser:
