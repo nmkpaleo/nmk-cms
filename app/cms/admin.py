@@ -626,7 +626,7 @@ class AccessionNumberSeriesAdmin(HistoricalAdmin):
         "is_active",
     )
     list_filter = ("organisation", "user", "is_active")
-    autocomplete_fields = ("organisation", "user")
+    autocomplete_fields = ("organisation",)
 
     fieldsets = (
         (None, {
@@ -673,6 +673,16 @@ class AccessionNumberSeriesAdmin(HistoricalAdmin):
                 logging.warning(f"Series mapping failed: {e}")
 
         return formfield
+
+    def get_form(self, request, obj=None, **kwargs):
+        base_form = super().get_form(request, obj, **kwargs)
+
+        class RequestUserAwareForm(base_form):  # type: ignore[misc,valid-type]
+            def __init__(self, *args, **inner_kwargs):
+                inner_kwargs.setdefault("request_user", request.user)
+                super().__init__(*args, **inner_kwargs)
+
+        return RequestUserAwareForm
 
 class AccessionReferenceAdmin(HistoricalImportExportAdmin):
     resource_class = AccessionReferenceResource
