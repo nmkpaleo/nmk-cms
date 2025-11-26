@@ -112,6 +112,28 @@ class GenerateAccessionBatchViewTests(TestCase):
         self.assertIn(self.manager.username, queryset_usernames)
         self.assertIn(self.tbi_user.username, queryset_usernames)
 
+    def test_allows_single_number_series(self):
+        self.client.login(username="manager", password="pass")
+        self.current_user = self.manager
+
+        response = self.client.post(
+            self.url,
+            {
+                "count": "1",
+                "start_from": "",
+                "current_number": "",
+                "is_active": "True",
+                "user": str(self.manager.pk),
+            },
+            follow=True,
+        )
+
+        self.assertRedirects(response, reverse("accession-wizard"))
+        series = AccessionNumberSeries.objects.get(user=self.manager)
+        self.assertEqual(series.start_from, 1)
+        self.assertEqual(series.end_at, 1)
+        self.assertEqual(series.current_number, 1)
+
     def test_superuser_can_create_series_for_other_organisation_user(self):
         self.client.login(username="admin", password="pass")
         self.current_user = self.superuser

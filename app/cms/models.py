@@ -624,8 +624,8 @@ class AccessionNumberSeries(BaseModel):
         if self.start_from is None or self.end_at is None:
             return
 
-        if self.start_from >= self.end_at:
-            raise ValidationError("Start number must be less than end number.")
+        if self.start_from > self.end_at:
+            raise ValidationError(_("Start number cannot exceed end number."))
         
         conflicting_series = (
             AccessionNumberSeries.objects.exclude(pk=self.pk)
