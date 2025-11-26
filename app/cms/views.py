@@ -172,6 +172,11 @@ def is_collection_manager(user):
     return user.is_superuser or user.groups.filter(name="Collection Managers").exists()
 
 
+class CollectionManagerAccessMixin(UserPassesTestMixin):
+    def test_func(self):
+        return is_collection_manager(self.request.user) or self.request.user.is_superuser
+
+
 @login_required
 @user_passes_test(is_collection_manager)
 def media_report_view(request):
@@ -1883,10 +1888,25 @@ class AccessionRowUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView
     def get_success_url(self):
         return self.object.get_absolute_url()
 
-class AccessionWizard(SessionWizardView):
+class AccessionWizard(LoginRequiredMixin, CollectionManagerAccessMixin, SessionWizardView):
     file_storage = FileSystemStorage(location=settings.MEDIA_ROOT)
     form_list = [AccessionNumberSelectForm, AccessionForm, SpecimenCompositeForm]
     template_name = 'cms/accession_wizard.html'
+
+
+    def dispatch(self, request, *args, **kwargs):
+        self.active_series = (
+            AccessionNumberSeries.objects.active_for_user(request.user).first()
+        )
+
+        if not self.active_series:
+            messages.error(
+                request,
+                _("You need an active accession number series to create accessions."),
+            )
+            return redirect("dashboard")
+
+        return super().dispatch(request, *args, **kwargs)
 
 
     def get_form_kwargs(self, step=None):
@@ -1894,7 +1914,9 @@ class AccessionWizard(SessionWizardView):
         if step == '0' or step == 0:
             user = self.request.user
             try:
-                series = AccessionNumberSeries.objects.active_for_user(user).get()
+                series = self.active_series
+                if series is None:
+                    raise AccessionNumberSeries.DoesNotExist
                 used = set(
                     Accession.objects.filter(
                         accessioned_by=user,
@@ -5027,12 +5049,6 @@ def inventory_log_unexpected(request):
         return JsonResponse({"success": False}, status=400)
     UnexpectedSpecimen.objects.create(identifier=identifier)
     return JsonResponse({"success": True})
-
-
-class CollectionManagerAccessMixin(UserPassesTestMixin):
-    def test_func(self):
-        return is_collection_manager(self.request.user) or self.request.user.is_superuser
-
 
 class HistoryTabContextMixin:
     """Provide change history context and tab metadata when permitted."""

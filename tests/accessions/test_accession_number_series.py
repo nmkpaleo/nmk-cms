@@ -43,6 +43,7 @@ class DashboardGenerateBatchButtonStateTests(TestCase):
             end_at=10,
             current_number=1,
             is_active=True,
+            organisation=self.nmk_org,
         )
 
         self.client.login(username=manager.username, password="pass")
@@ -102,6 +103,7 @@ class DashboardCreateSingleButtonStateTests(TestCase):
             end_at=10,
             current_number=1,
             is_active=True,
+            organisation=self.nmk_org,
         )
 
         self.client.login(username=manager.username, password="pass")
@@ -208,6 +210,7 @@ class AccessionNumberSeriesAdminFormTests(TestCase):
             end_at=10,
             current_number=5,
             is_active=True,
+            organisation=self.nmk_org,
         )
         AccessionNumberSeries.objects.create(
             user=tbi_user,
@@ -215,6 +218,7 @@ class AccessionNumberSeriesAdminFormTests(TestCase):
             end_at=1_000_004,
             current_number=1_000_002,
             is_active=True,
+            organisation=self.tbi_org,
         )
 
         shared_form = AccessionNumberSeriesAdminForm(

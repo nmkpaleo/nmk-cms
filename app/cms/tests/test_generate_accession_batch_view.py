@@ -62,6 +62,7 @@ class GenerateAccessionBatchViewTests(TestCase):
             end_at=10,
             current_number=1,
             is_active=True,
+            organisation=self.nmk_org,
         )
 
         self.client.login(username="manager", password="pass")
@@ -120,6 +121,7 @@ class GenerateAccessionBatchViewTests(TestCase):
             end_at=60,
             current_number=55,
             is_active=True,
+            organisation=self.nmk_org,
         )
 
         self.client.login(username="admin", password="pass")
