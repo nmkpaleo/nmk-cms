@@ -641,16 +641,7 @@ class AccessionNumberSeries(BaseModel):
                 "This accession number range overlaps with another range in the same series pool."
             )
 
-        # Only allow one active series per user
-        if self.is_active:
-            active_existing = (
-                AccessionNumberSeries.objects.exclude(pk=self.pk)
-                .filter(user=self.user, organisation=self.organisation, is_active=True)
-            )
-            if active_existing.exists():
-                raise ValidationError(
-                    _("This user already has an active accession number series."),
-                )
+        allow_multiple_active = getattr(self, "_allow_multiple_active", False)
 
     def save(self, *args, **kwargs):
         self.full_clean()

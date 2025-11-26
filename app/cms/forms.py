@@ -208,6 +208,7 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
 
     def __init__(self, *args, **kwargs):
         request_user = kwargs.pop("request_user", None)
+        self.request_user = request_user
         super().__init__(*args, **kwargs)
 
         # Always add count to the form manually
@@ -217,6 +218,11 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
             max_value=100,
             required=True,
             help_text="Number of accession numbers to generate or total range size.",
+            error_messages={
+                "max_value": _(
+                    "You can generate up to 100 accession numbers at a time."
+                ),
+            },
         )
 
         if self.instance.pk:
@@ -338,12 +344,6 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
         organisation = cleaned_data.get("organisation")
         count = cleaned_data.get("count")
 
-        if count and count > 100:
-            self.add_error(
-                "count",
-                _("You can generate up to 100 accession numbers at a time."),
-            )
-
         if user:
             resolved_org = organisation or _resolve_user_organisation(user)
             user_org = _resolve_user_organisation(user)
@@ -365,13 +365,15 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
             cleaned_data["organisation"] = resolved_org
             self.instance.organisation = resolved_org
 
-        if not self.instance.pk and user:
-            # Ensure unique active series per user
-            if AccessionNumberSeries.objects.active_for_user(user).exists():
-                self.add_error(
-                    "user", "This user already has an active accession number series."
-                )
+        allow_multiple_active = False
+        if self.request_user and self.request_user.is_superuser:
+            allow_multiple_active = True
+        elif user and user.is_superuser:
+            allow_multiple_active = True
 
+        self.instance._allow_multiple_active = allow_multiple_active
+
+        if not self.instance.pk and user:
             next_start = self._next_start_for_user(user)
             cleaned_data["start_from"] = next_start
             cleaned_data["current_number"] = next_start
