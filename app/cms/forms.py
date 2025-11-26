@@ -248,7 +248,11 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
             if self.instance.organisation and not organisation_field.initial:
                 organisation_field.initial = self.instance.organisation
             resolved_org = _resolve_user_organisation(request_user)
-            if resolved_org and not organisation_field.initial:
+            if (
+                resolved_org
+                and not organisation_field.initial
+                and not (request_user and request_user.is_superuser)
+            ):
                 organisation_field.initial = resolved_org
             if request_user and not request_user.is_superuser:
                 organisation_field.widget = forms.HiddenInput()
@@ -266,9 +270,14 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
             )  # ensure username shown
 
             if request_user is not None:
-                self.fields["user"].queryset = User.objects.filter(pk=request_user.pk)
-                self.fields["user"].initial = request_user
-                self.fields["user"].widget = forms.HiddenInput(attrs=metadata)
+                if request_user.is_superuser:
+                    self.fields["user"].queryset = User.objects.order_by("username")
+                    self.fields["user"].initial = request_user
+                    self.fields["user"].widget.attrs.update(metadata)
+                else:
+                    self.fields["user"].queryset = User.objects.filter(pk=request_user.pk)
+                    self.fields["user"].initial = request_user
+                    self.fields["user"].widget = forms.HiddenInput(attrs=metadata)
             else:
                 self.fields["user"].widget.attrs.update(metadata)
 

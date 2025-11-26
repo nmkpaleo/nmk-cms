@@ -5127,7 +5127,8 @@ class GenerateAccessionBatchView(LoginRequiredMixin, CollectionManagerAccessMixi
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs.setdefault("initial", {})
-        kwargs["initial"]["user"] = self.request.user
+        if not self.request.user.is_superuser:
+            kwargs["initial"]["user"] = self.request.user
         kwargs["request_user"] = self.request.user
         return kwargs
 
@@ -5136,10 +5137,13 @@ class GenerateAccessionBatchView(LoginRequiredMixin, CollectionManagerAccessMixi
 
         user_field = form.fields.get("user")
         if user_field:
-            user_field.queryset = User.objects.filter(pk=self.request.user.pk)
-            user_field.initial = self.request.user
-            if not user_field.widget.is_hidden:
-                user_field.widget = forms.HiddenInput(attrs=user_field.widget.attrs)
+            if self.request.user.is_superuser:
+                user_field.queryset = User.objects.order_by("username")
+            else:
+                user_field.queryset = User.objects.filter(pk=self.request.user.pk)
+                user_field.initial = self.request.user
+                if not user_field.widget.is_hidden:
+                    user_field.widget = forms.HiddenInput(attrs=user_field.widget.attrs)
 
         count_field = form.fields.get("count")
         if count_field:
@@ -5156,7 +5160,8 @@ class GenerateAccessionBatchView(LoginRequiredMixin, CollectionManagerAccessMixi
             )
             return self.form_invalid(form)
 
-        form.instance.user = self.request.user
+        target_user = form.cleaned_data.get("user") or self.request.user
+        form.instance.user = target_user
         form.instance.is_active = True
 
         self.object = form.save()
@@ -5165,6 +5170,15 @@ class GenerateAccessionBatchView(LoginRequiredMixin, CollectionManagerAccessMixi
             _("Accession number series created successfully."),
         )
         return super().form_valid(form)
+
+    def get_success_url(self):
+        if (
+            self.request.user.is_superuser
+            and getattr(self, "object", None)
+            and self.object.user != self.request.user
+        ):
+            return reverse("dashboard")
+        return super().get_success_url()
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
