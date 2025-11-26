@@ -1,4 +1,30 @@
 {% extends "admin/change_form.html" %}
+{% load i18n %}
+
+{% block form_top %}
+  <section
+    class="w3-panel w3-pale-blue w3-leftbar w3-border-blue w3-round-large"
+    aria-label="{% trans "Organisation context" %}"
+  >
+    <header class="w3-margin-bottom">
+      <h2 class="w3-large">
+        <i class="fa-solid fa-building-columns" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "Organisation context" %}</span>
+      </h2>
+    </header>
+    <p class="w3-text-black">
+      {% if original and original.organisation %}
+        {% blocktrans with org=original.organisation.name %}This accession number series belongs to {{ org }}.{% endblocktrans %}
+      {% elif adminform.form.initial.organisation %}
+        {% blocktrans with org=adminform.form.initial.organisation %}New series will be created for {{ org }}.{% endblocktrans %}
+      {% elif request.user.organisation_membership.organisation %}
+        {% blocktrans with org=request.user.organisation_membership.organisation %}You are creating a series for your organisation: {{ org }}.{% endblocktrans %}
+      {% else %}
+        {% trans "No organisation is associated with your account. Please assign one before creating a series." %}
+      {% endif %}
+    </p>
+  </section>
+{% endblock %}
 
 {% block submit_buttons_bottom %}
   {% if original %}
