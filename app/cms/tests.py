@@ -24,6 +24,8 @@ from cms.models import (
     Accession,
     AccessionNumberSeries,
     AccessionRow,
+    Organisation,
+    UserOrganisation,
     Storage,
     InventoryStatus,
     Collection,
@@ -499,6 +501,14 @@ class GenerateAccessionsFromSeriesTests(TestCase):
             username="creator", password="pass"
         )
 
+        self.nmk_org, _ = Organisation.objects.get_or_create(
+            code="nmk", defaults={"name": "NMK"}
+        )
+        UserOrganisation.objects.create(
+            user=self.series_user, organisation=self.nmk_org
+        )
+        UserOrganisation.objects.create(user=self.creator, organisation=self.nmk_org)
+
         # Patch get_current_user used in BaseModel to bypass authentication
         self.patcher = patch("cms.models.get_current_user", return_value=self.creator)
         self.patcher.start()
@@ -559,6 +569,19 @@ class AccessionNumberSeriesAdminFormTests(TestCase):
         self.tbi_user = User.objects.create_user(username="TBI", password="pass")
         self.shared_user = User.objects.create_user(username="shared", password="pass")
         self.other_shared_user = User.objects.create_user(username="shared2", password="pass")
+
+        self.tbi_org, _ = Organisation.objects.get_or_create(
+            code="tbi", defaults={"name": "TBI"}
+        )
+        self.nmk_org, _ = Organisation.objects.get_or_create(
+            code="nmk", defaults={"name": "NMK"}
+        )
+
+        UserOrganisation.objects.create(user=self.tbi_user, organisation=self.tbi_org)
+        UserOrganisation.objects.create(user=self.shared_user, organisation=self.nmk_org)
+        UserOrganisation.objects.create(
+            user=self.other_shared_user, organisation=self.nmk_org
+        )
 
     def test_form_exposes_widget_metadata_for_client_side(self):
         form = AccessionNumberSeriesAdminForm()
@@ -859,6 +882,14 @@ class DashboardViewCollectionManagerTests(TestCase):
             username="cm2", password="pass"
         )
 
+        self.nmk_org, _ = Organisation.objects.get_or_create(
+            code="nmk", defaults={"name": "NMK"}
+        )
+        UserOrganisation.objects.create(user=self.manager, organisation=self.nmk_org)
+        UserOrganisation.objects.create(
+            user=self.other_manager, organisation=self.nmk_org
+        )
+
         self.group = Group.objects.create(name="Collection Managers")
         self.group.user_set.add(self.manager, self.other_manager)
 
@@ -1028,6 +1059,11 @@ class DashboardViewMultipleRolesTests(TestCase):
         User = get_user_model()
 
         self.user = User.objects.create_user(username="multi", password="pass")
+
+        self.nmk_org, _ = Organisation.objects.get_or_create(
+            code="nmk", defaults={"name": "NMK"}
+        )
+        UserOrganisation.objects.create(user=self.user, organisation=self.nmk_org)
 
         self.prep_group = Group.objects.create(name="Preparators")
         self.cm_group = Group.objects.create(name="Collection Managers")

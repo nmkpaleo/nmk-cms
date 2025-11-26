@@ -4,7 +4,7 @@ from django.test import TestCase
 from django.urls import reverse
 from unittest.mock import patch
 
-from cms.models import AccessionNumberSeries
+from cms.models import AccessionNumberSeries, Organisation, UserOrganisation
 
 
 class GenerateAccessionBatchViewTests(TestCase):
@@ -14,6 +14,11 @@ class GenerateAccessionBatchViewTests(TestCase):
         self.superuser = User.objects.create_superuser(
             username="admin", email="admin@example.com", password="pass"
         )
+        self.nmk_org, _ = Organisation.objects.get_or_create(
+            code="nmk", defaults={"name": "NMK"}
+        )
+        UserOrganisation.objects.create(user=self.manager, organisation=self.nmk_org)
+        UserOrganisation.objects.create(user=self.superuser, organisation=self.nmk_org)
         self.collection_manager_group = Group.objects.create(name="Collection Managers")
         self.collection_manager_group.user_set.add(self.manager)
         self.url = reverse("accession-generate-batch")

@@ -45,6 +45,7 @@ from .models import (
     FieldSlip,
     Identification,
     Locality,
+    Organisation,
     Place,
     Media,
     NatureOfSpecimen,
@@ -57,6 +58,7 @@ from .models import (
     Taxon,
     TaxonRank,
     TaxonStatus,
+    _resolve_user_organisation,
 )
 
 import json
@@ -197,6 +199,7 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
     class Meta:
         model = AccessionNumberSeries
         fields = [
+            "organisation",
             "user",
             "start_from",
             "current_number",
@@ -234,6 +237,18 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
                     self.fields[field_name].required = False
             self.fields["is_active"].initial = True
             self.fields["is_active"].widget = forms.HiddenInput()
+
+        organisation_field = self.fields.get("organisation")
+        if organisation_field:
+            organisation_field.required = False
+            organisation_field.queryset = Organisation.objects.filter(is_active=True)
+            if self.instance.organisation and not organisation_field.initial:
+                organisation_field.initial = self.instance.organisation
+            resolved_org = _resolve_user_organisation(request_user)
+            if resolved_org and not organisation_field.initial:
+                organisation_field.initial = resolved_org
+            if request_user and not request_user.is_superuser:
+                organisation_field.widget = forms.HiddenInput()
 
         for field_name in ["collection", "specimen_prefix"]:
             if field_name in self.fields:
@@ -320,6 +335,7 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
     def clean(self):
         cleaned_data = super().clean()
         user = cleaned_data.get("user")
+        organisation = cleaned_data.get("organisation")
         count = cleaned_data.get("count")
 
         if count and count > 100:
@@ -327,6 +343,27 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
                 "count",
                 _("You can generate up to 100 accession numbers at a time."),
             )
+
+        if user:
+            resolved_org = organisation or _resolve_user_organisation(user)
+            user_org = _resolve_user_organisation(user)
+
+            if user_org and organisation and organisation != user_org:
+                self.add_error(
+                    "organisation",
+                    _("Selected organisation must match the user's organisation."),
+                )
+                return cleaned_data
+
+            if not resolved_org:
+                self.add_error(
+                    "organisation",
+                    _("An organisation is required for this user."),
+                )
+                return cleaned_data
+
+            cleaned_data["organisation"] = resolved_org
+            self.instance.organisation = resolved_org
 
         if not self.instance.pk and user:
             # Ensure unique active series per user

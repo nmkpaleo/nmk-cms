@@ -6,17 +6,21 @@ from django.test import TestCase
 from django.urls import reverse
 
 from cms.forms import AccessionNumberSeriesAdminForm
-from cms.models import AccessionNumberSeries
+from cms.models import AccessionNumberSeries, Organisation, UserOrganisation
 
 
 class DashboardGenerateBatchButtonStateTests(TestCase):
     def setUp(self):
         self.User = get_user_model()
         self.collection_manager_group = Group.objects.create(name="Collection Managers")
+        self.nmk_org, _ = Organisation.objects.get_or_create(
+            code="nmk", defaults={"name": "NMK"}
+        )
 
     def _create_manager(self, username: str = "manager"):
         user = self.User.objects.create_user(username=username, password="pass")
         self.collection_manager_group.user_set.add(user)
+        UserOrganisation.objects.create(user=user, organisation=self.nmk_org)
         return user
 
     def test_collection_manager_without_active_series_sees_enabled_generate_batch(self):
@@ -68,10 +72,14 @@ class DashboardCreateSingleButtonStateTests(TestCase):
     def setUp(self):
         self.User = get_user_model()
         self.collection_manager_group = Group.objects.create(name="Collection Managers")
+        self.nmk_org, _ = Organisation.objects.get_or_create(
+            code="nmk", defaults={"name": "NMK"}
+        )
 
     def _create_manager(self, username: str = "manager"):
         user = self.User.objects.create_user(username=username, password="pass")
         self.collection_manager_group.user_set.add(user)
+        UserOrganisation.objects.create(user=user, organisation=self.nmk_org)
         return user
 
     def test_collection_manager_without_active_series_sees_disabled_create_single(self):
@@ -109,6 +117,13 @@ class AccessionNumberSeriesAdminFormTests(TestCase):
     def setUp(self):
         self.User = get_user_model()
         self.manager = self.User.objects.create_user(username="manager", password="pass")
+        self.nmk_org, _ = Organisation.objects.get_or_create(
+            code="nmk", defaults={"name": "NMK"}
+        )
+        self.tbi_org, _ = Organisation.objects.get_or_create(
+            code="tbi", defaults={"name": "TBI"}
+        )
+        UserOrganisation.objects.create(user=self.manager, organisation=self.nmk_org)
 
     def test_count_cap_enforced(self):
         form = AccessionNumberSeriesAdminForm(
@@ -150,6 +165,14 @@ class AccessionNumberSeriesAdminFormTests(TestCase):
         self.assertFalse(form.fields["start_from"].required)
         self.assertFalse(form.fields["current_number"].required)
 
+    def test_organisation_defaults_to_user_membership(self):
+        form = AccessionNumberSeriesAdminForm(request_user=self.manager)
+
+        organisation_field = form.fields.get("organisation")
+        self.assertIsNotNone(organisation_field)
+        self.assertEqual(organisation_field.initial, self.nmk_org)
+        self.assertTrue(organisation_field.widget.is_hidden)
+
     def test_user_field_hidden_and_scoped_to_request_user(self):
         form = AccessionNumberSeriesAdminForm(request_user=self.manager)
 
@@ -158,9 +181,27 @@ class AccessionNumberSeriesAdminFormTests(TestCase):
         self.assertEqual(list(user_field.queryset), [self.manager])
         self.assertEqual(user_field.initial, self.manager)
 
+    def test_mismatched_organisation_rejected(self):
+        form = AccessionNumberSeriesAdminForm(
+            data={
+                "user": str(self.manager.pk),
+                "organisation": str(self.tbi_org.pk),
+                "count": "5",
+                "is_active": "True",
+                "start_from": "",
+                "current_number": "",
+            },
+            request_user=self.manager,
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("organisation", form.errors)
+
     def test_numbering_respects_shared_and_tbi_pools(self):
         shared_owner = self.User.objects.create_user(username="shared-owner", password="pass")
         tbi_user = self.User.objects.create_user(username="TBI", password="pass")
+        UserOrganisation.objects.create(user=shared_owner, organisation=self.nmk_org)
+        UserOrganisation.objects.create(user=tbi_user, organisation=self.tbi_org)
         AccessionNumberSeries.objects.create(
             user=shared_owner,
             start_from=1,

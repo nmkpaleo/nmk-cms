@@ -10,8 +10,10 @@ from cms.models import (
     Collection,
     Element,
     Locality,
+    Organisation,
     Person,
     Storage,
+    UserOrganisation,
 )
 
 
@@ -23,6 +25,10 @@ class AccessionWizardSpecimenNumberTests(TestCase):
             password="pass1234",
             email="wizard@example.com",
         )
+        self.nmk_org, _ = Organisation.objects.get_or_create(
+            code="nmk", defaults={"name": "NMK"}
+        )
+        UserOrganisation.objects.create(user=self.user, organisation=self.nmk_org)
         set_current_user(self.user)
         self.collection = Collection.objects.create(
             abbreviation="AB",
