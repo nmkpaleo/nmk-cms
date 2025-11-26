@@ -107,6 +107,72 @@ class BaseModel(models.Model):
         super().delete(*args, **kwargs)
 
 
+class Organisation(BaseModel):
+    """Organisation grouping users and accession number series ownership."""
+
+    name = models.CharField(
+        max_length=255,
+        unique=True,
+        help_text=_("Display name for the organisation."),
+    )
+    code = models.SlugField(
+        max_length=50,
+        unique=True,
+        help_text=_("Short code used to identify the organisation."),
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text=_("Whether the organisation can be assigned to users and series."),
+    )
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ["name"]
+        verbose_name = _("Organisation")
+        verbose_name_plural = _("Organisations")
+
+    def clean(self):
+        # Allow system-level creation where no request user is available (e.g. migrations).
+        user = get_current_user()
+        if not user or isinstance(user, AnonymousUser):
+            return None
+        return super().clean()
+
+    def __str__(self):
+        return self.name
+
+
+class UserOrganisation(BaseModel):
+    """One-to-one mapping connecting a user to an organisation."""
+
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name="organisation_membership",
+        help_text=_("User assigned to an organisation."),
+    )
+    organisation = models.ForeignKey(
+        Organisation,
+        on_delete=models.PROTECT,
+        related_name="memberships",
+        help_text=_("Organisation the user belongs to."),
+    )
+    history = HistoricalRecords()
+
+    class Meta:
+        verbose_name = _("User organisation")
+        verbose_name_plural = _("User organisations")
+
+    def clean(self):
+        user = get_current_user()
+        if not user or isinstance(user, AnonymousUser):
+            return None
+        return super().clean()
+
+    def __str__(self):
+        return f"{self.user} → {self.organisation}"
+
+
 class MergeLog(BaseModel):
     """Audit trail capturing the outcome of merge operations."""
 
@@ -476,6 +542,14 @@ class Accession(BaseModel):
         unique_together = ('specimen_no', 'specimen_prefix', 'instance_number')
 
 class AccessionNumberSeries(BaseModel):
+    organisation = models.ForeignKey(
+        Organisation,
+        on_delete=models.PROTECT,
+        related_name="accession_number_series",
+        null=True,
+        blank=True,
+        help_text="Organisation associated with this accession number range.",
+    )
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -498,7 +572,7 @@ class AccessionNumberSeries(BaseModel):
     history = HistoricalRecords()
 
     class Meta:
-        ordering = ['user', 'start_from']
+        ordering = ["organisation", "user", "start_from"]
 
     def clean(self):
         if not hasattr(self, "user") or self.user is None:
