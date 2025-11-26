@@ -196,6 +196,17 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
     TBI_USERNAME = "tbi"
     TBI_ORG_CODE = "tbi"
 
+    count = forms.IntegerField(
+        label=_("Count"),
+        min_value=1,
+        max_value=100,
+        required=True,
+        help_text=_("Number of accession numbers to generate or total range size."),
+        error_messages={
+            "max_value": _("You can generate up to 100 accession numbers at a time."),
+        },
+    )
+
     class Meta:
         model = AccessionNumberSeries
         fields = [
@@ -210,20 +221,6 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
         request_user = kwargs.pop("request_user", None)
         self.request_user = request_user
         super().__init__(*args, **kwargs)
-
-        # Always add count to the form manually
-        self.fields["count"] = forms.IntegerField(
-            label="Count",
-            min_value=1,
-            max_value=100,
-            required=True,
-            help_text="Number of accession numbers to generate or total range size.",
-            error_messages={
-                "max_value": _(
-                    "You can generate up to 100 accession numbers at a time."
-                ),
-            },
-        )
 
         if self.instance.pk:
             # Change view: show disabled count value
