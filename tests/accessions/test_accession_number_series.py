@@ -292,3 +292,21 @@ class AccessionNumberSeriesAdminFormTests(TestCase):
         self.assertEqual(
             option.get("attrs", {}).get("data-organisation"), str(self.tbi_org.pk)
         )
+
+    def test_superuser_add_form_defaults_to_blank_user_and_organisation(self):
+        superuser = self.User.objects.create_superuser(
+            username="admin", email="admin@example.com", password="pass"
+        )
+        other_user = self.User.objects.create_user(username="other", password="pass")
+        UserOrganisation.objects.create(user=other_user, organisation=self.tbi_org)
+
+        form = AccessionNumberSeriesAdminForm(request_user=superuser)
+
+        self.assertIsNone(form.initial.get("organisation"))
+        self.assertIsNone(form.initial.get("user"))
+
+        user_choices = list(form.fields["user"].widget.choices)
+        self.assertTrue(user_choices)
+        first_value, first_label = user_choices[0]
+        self.assertEqual(first_value, "")
+        self.assertEqual(first_label, "---------")

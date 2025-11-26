@@ -50,17 +50,30 @@
       }
 
       const baseOptions = Array.from(userField.options).map(option => option.cloneNode(true));
+      const placeholder = baseOptions.find(option => option.value === '') || new Option('---------', '');
 
       function filterUsers() {
         const selectedOrg = organisationField.value;
+        const currentValue = userField.value;
+
         const matching = baseOptions.filter(option => {
+          if (!option.value) {
+            return false;
+          }
           const optionOrg = option.dataset ? option.dataset.organisation : '';
-          return !selectedOrg || optionOrg === selectedOrg;
+          return selectedOrg && optionOrg === selectedOrg;
         });
 
-        const optionsToUse = matching.length ? matching : baseOptions;
         userField.innerHTML = '';
-        optionsToUse.forEach(option => userField.appendChild(option.cloneNode(true)));
+        userField.appendChild(placeholder.cloneNode(true));
+        matching.forEach(option => userField.appendChild(option.cloneNode(true)));
+
+        if (selectedOrg) {
+          const hasMatch = matching.some(option => option.value === currentValue);
+          userField.value = hasMatch ? currentValue : '';
+        } else {
+          userField.value = '';
+        }
       }
 
       organisationField.addEventListener('change', filterUsers);
