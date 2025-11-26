@@ -304,6 +304,7 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
                     user_field.queryset = queryset
                     user_field.initial = request_user
                     user_field.widget = UserOrganisationSelect(user_org_map=user_org_map)
+                    user_field.widget.choices = user_field.choices
                     user_field.widget.attrs.update(metadata)
                 else:
                     user_field.queryset = User.objects.filter(pk=request_user.pk)

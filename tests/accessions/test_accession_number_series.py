@@ -278,6 +278,10 @@ class AccessionNumberSeriesAdminFormTests(TestCase):
             lambda user: user.pk,
         )
 
+        self.assertIn(
+            (other_user.pk, str(other_user)), list(form.fields["user"].widget.choices)
+        )
+
         option = form.fields["user"].widget.create_option(
             "user",
             other_user.pk,
