@@ -54,6 +54,7 @@ from .models import (
     Reference,
     SpecimenGeology,
     DrawerRegister,
+    UserOrganisation,
     Storage,
     Taxon,
     TaxonRank,
@@ -192,6 +193,21 @@ class AccessionNumberSelectForm(BaseW3Form):
         self.fields["accession_number"].choices = [(n, n) for n in available_numbers]
 
 
+class UserOrganisationSelect(forms.Select):
+    """Select widget that exposes the user's organisation for client-side filtering."""
+
+    def __init__(self, *args, user_org_map: dict[str, str] | None = None, **kwargs):
+        self.user_org_map = user_org_map or {}
+        super().__init__(*args, **kwargs)
+
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        option = super().create_option(name, value, label, selected, index, subindex=subindex, attrs=attrs)
+        if value:
+            organisation_id = self.user_org_map.get(str(value))
+            option.setdefault("attrs", {})["data-organisation"] = organisation_id or ""
+        return option
+
+
 class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
     TBI_USERNAME = "tbi"
     TBI_ORG_CODE = "tbi"
@@ -242,6 +258,7 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
             self.fields["is_active"].widget = forms.HiddenInput()
 
         organisation_field = self.fields.get("organisation")
+        selected_organisation = None
         if organisation_field:
             organisation_field.required = False
             organisation_field.queryset = Organisation.objects.filter(is_active=True)
@@ -257,6 +274,8 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
             if request_user and not request_user.is_superuser:
                 organisation_field.widget = forms.HiddenInput()
 
+            selected_organisation = self._resolve_selected_organisation(organisation_field)
+
         for field_name in ["collection", "specimen_prefix"]:
             if field_name in self.fields:
                 self.fields[field_name].required = False
@@ -265,21 +284,33 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
 
         # Inject JS data for user field
         if "user" in self.fields:
-            self.fields["user"].label_from_instance = (
-                lambda obj: obj.username
-            )  # ensure username shown
+            user_field = self.fields["user"]
+            user_field.label_from_instance = lambda obj: obj.username
+
+            user_org_map = {
+                str(user_id): str(org_id)
+                for user_id, org_id in UserOrganisation.objects.values_list(
+                    "user_id", "organisation_id"
+                )
+            }
 
             if request_user is not None:
                 if request_user.is_superuser:
-                    self.fields["user"].queryset = User.objects.order_by("username")
-                    self.fields["user"].initial = request_user
-                    self.fields["user"].widget.attrs.update(metadata)
+                    queryset = User.objects.order_by("username")
+                    if selected_organisation:
+                        queryset = queryset.filter(
+                            organisation_membership__organisation=selected_organisation
+                        )
+                    user_field.queryset = queryset
+                    user_field.initial = request_user
+                    user_field.widget = UserOrganisationSelect(user_org_map=user_org_map)
+                    user_field.widget.attrs.update(metadata)
                 else:
-                    self.fields["user"].queryset = User.objects.filter(pk=request_user.pk)
-                    self.fields["user"].initial = request_user
-                    self.fields["user"].widget = forms.HiddenInput(attrs=metadata)
+                    user_field.queryset = User.objects.filter(pk=request_user.pk)
+                    user_field.initial = request_user
+                    user_field.widget = forms.HiddenInput(attrs=metadata)
             else:
-                self.fields["user"].widget.attrs.update(metadata)
+                user_field.widget.attrs.update(metadata)
 
         if request_user is not None and not self.instance.pk:
             next_start = self._next_start_for_user(request_user)
@@ -399,6 +430,26 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
                 self.instance.current_number = start_from
                 self.instance.end_at = start_from + count - 1
         return super().save(commit=commit)
+
+    def _resolve_selected_organisation(self, organisation_field: forms.ModelChoiceField):
+        """Resolve the currently selected organisation from bound data or initial values."""
+
+        org_value = None
+        if self.data:
+            org_value = self.data.get(self.add_prefix("organisation"))
+        if not org_value:
+            org_value = organisation_field.initial or getattr(self.instance, "organisation", None)
+
+        if not org_value:
+            return None
+
+        if isinstance(org_value, Organisation):
+            return org_value
+
+        try:
+            return organisation_field.queryset.get(pk=org_value)
+        except (Organisation.DoesNotExist, ValueError, TypeError):
+            return None
 
 
 class AccessionRowWidget(s2forms.ModelSelect2Widget):

@@ -252,3 +252,39 @@ class AccessionNumberSeriesAdminFormTests(TestCase):
         self.assertEqual(tbi_series.start_from, 1_000_005)
         self.assertEqual(tbi_series.current_number, 1_000_005)
         self.assertEqual(tbi_series.end_at, 1_000_006)
+
+    def test_superuser_user_queryset_scoped_to_selected_organisation(self):
+        superuser = self.User.objects.create_superuser(
+            username="admin", email="admin@example.com", password="pass"
+        )
+        other_user = self.User.objects.create_user(username="other", password="pass")
+        UserOrganisation.objects.create(user=other_user, organisation=self.tbi_org)
+
+        form = AccessionNumberSeriesAdminForm(
+            data={
+                "organisation": str(self.tbi_org.pk),
+                "user": str(other_user.pk),
+                "count": "5",
+                "is_active": "True",
+                "start_from": "",
+                "current_number": "",
+            },
+            request_user=superuser,
+        )
+
+        self.assertQuerysetEqual(
+            form.fields["user"].queryset.order_by("pk"),
+            [other_user.pk],
+            lambda user: user.pk,
+        )
+
+        option = form.fields["user"].widget.create_option(
+            "user",
+            other_user.pk,
+            str(other_user),
+            False,
+            0,
+        )
+        self.assertEqual(
+            option.get("attrs", {}).get("data-organisation"), str(self.tbi_org.pk)
+        )

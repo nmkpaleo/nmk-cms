@@ -37,3 +37,34 @@
     {{ block.super }}
   {% endif %}
 {% endblock %}
+
+{% block extrahead %}
+  {{ block.super }}
+  <script>
+    (function() {
+      const organisationField = document.getElementById('id_organisation');
+      const userField = document.getElementById('id_user');
+
+      if (!organisationField || !userField) {
+        return;
+      }
+
+      const baseOptions = Array.from(userField.options).map(option => option.cloneNode(true));
+
+      function filterUsers() {
+        const selectedOrg = organisationField.value;
+        const matching = baseOptions.filter(option => {
+          const optionOrg = option.dataset ? option.dataset.organisation : '';
+          return !selectedOrg || optionOrg === selectedOrg;
+        });
+
+        const optionsToUse = matching.length ? matching : baseOptions;
+        userField.innerHTML = '';
+        optionsToUse.forEach(option => userField.appendChild(option.cloneNode(true)));
+      }
+
+      organisationField.addEventListener('change', filterUsers);
+      filterUsers();
+    })();
+  </script>
+{% endblock %}
