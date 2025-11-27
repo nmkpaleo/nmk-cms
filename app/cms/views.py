@@ -1064,7 +1064,6 @@ def dashboard(request):
         context.update(
             {
                 "is_collection_manager": True,
-                "has_active_series": has_active_series,
                 "unassigned_accessions": unassigned_accessions,
                 "latest_accessions": latest_accessions,
             }
