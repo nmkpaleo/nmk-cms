@@ -4,7 +4,7 @@ from django.test import TestCase
 from django.urls import reverse
 from unittest.mock import patch
 
-from cms.models import AccessionNumberSeries
+from cms.models import AccessionNumberSeries, Organisation, UserOrganisation
 
 
 class GenerateAccessionBatchViewTests(TestCase):
@@ -14,6 +14,16 @@ class GenerateAccessionBatchViewTests(TestCase):
         self.superuser = User.objects.create_superuser(
             username="admin", email="admin@example.com", password="pass"
         )
+        self.tbi_user = User.objects.create_user(username="tbi-user", password="pass")
+        self.nmk_org, _ = Organisation.objects.get_or_create(
+            code="nmk", defaults={"name": "NMK"}
+        )
+        self.tbi_org, _ = Organisation.objects.get_or_create(
+            code="tbi", defaults={"name": "TBI"}
+        )
+        UserOrganisation.objects.create(user=self.manager, organisation=self.nmk_org)
+        UserOrganisation.objects.create(user=self.superuser, organisation=self.nmk_org)
+        UserOrganisation.objects.create(user=self.tbi_user, organisation=self.tbi_org)
         self.collection_manager_group = Group.objects.create(name="Collection Managers")
         self.collection_manager_group.user_set.add(self.manager)
         self.url = reverse("accession-generate-batch")
@@ -57,6 +67,7 @@ class GenerateAccessionBatchViewTests(TestCase):
             end_at=10,
             current_number=1,
             is_active=True,
+            organisation=self.nmk_org,
         )
 
         self.client.login(username="manager", password="pass")
@@ -87,6 +98,64 @@ class GenerateAccessionBatchViewTests(TestCase):
         self.assertEqual(series.current_number, 1)
         self.assertEqual(series.end_at, 5)
 
+    def test_superuser_can_select_any_user(self):
+        self.client.login(username="admin", password="pass")
+        self.current_user = self.superuser
+
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+
+        form = response.context["form"]
+        user_field = form.fields.get("user")
+        self.assertFalse(user_field.widget.is_hidden)
+        queryset_usernames = set(user_field.queryset.values_list("username", flat=True))
+        self.assertIn(self.manager.username, queryset_usernames)
+        self.assertIn(self.tbi_user.username, queryset_usernames)
+
+    def test_allows_single_number_series(self):
+        self.client.login(username="manager", password="pass")
+        self.current_user = self.manager
+
+        response = self.client.post(
+            self.url,
+            {
+                "count": "1",
+                "start_from": "",
+                "current_number": "",
+                "is_active": "True",
+                "user": str(self.manager.pk),
+            },
+            follow=True,
+        )
+
+        self.assertRedirects(response, reverse("accession-wizard"))
+        series = AccessionNumberSeries.objects.get(user=self.manager)
+        self.assertEqual(series.start_from, 1)
+        self.assertEqual(series.end_at, 1)
+        self.assertEqual(series.current_number, 1)
+
+    def test_superuser_can_create_series_for_other_organisation_user(self):
+        self.client.login(username="admin", password="pass")
+        self.current_user = self.superuser
+
+        response = self.client.post(
+            self.url,
+            {
+                "count": "2",
+                "start_from": "",
+                "current_number": "",
+                "is_active": "True",
+                "user": str(self.tbi_user.pk),
+            },
+            follow=True,
+        )
+
+        self.assertRedirects(response, reverse("dashboard"))
+        series = AccessionNumberSeries.objects.get(user=self.tbi_user)
+        self.assertEqual(series.start_from, 1_000_000)
+        self.assertEqual(series.end_at, 1_000_001)
+        self.assertEqual(series.organisation, self.tbi_org)
+
     def test_rejects_counts_above_cap(self):
         self.client.login(username="manager", password="pass")
         self.current_user = self.manager
@@ -115,6 +184,7 @@ class GenerateAccessionBatchViewTests(TestCase):
             end_at=60,
             current_number=55,
             is_active=True,
+            organisation=self.nmk_org,
         )
 
         self.client.login(username="admin", password="pass")

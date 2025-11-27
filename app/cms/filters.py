@@ -4,13 +4,14 @@ from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 from .models import (
     Accession,
+    DrawerRegister,
+    FieldSlip,
     Locality,
+    Organisation,
     Place,
     PlaceType,
     Preparation,
     Reference,
-    FieldSlip,
-    DrawerRegister,
     Storage,
     Taxon,
     TaxonRank,
@@ -28,6 +29,24 @@ def _matching_taxon_names(attribute: str, value: str) -> set[str]:
         **{f"{attribute}__icontains": value},
     )
     return set(taxa.values_list("taxon_name", flat=True))
+
+
+def _ensure_widget_has_w3_class(widget, fallback_class: str = "w3-input") -> None:
+    classes = widget.attrs.get("class", "")
+    tokens = [token for token in classes.split() if token]
+    if any(token.startswith("w3-") for token in tokens):
+        return
+    widget.attrs["class"] = " ".join(tokens + [fallback_class]).strip()
+
+
+def _ensure_filters_use_w3_styles(filters: dict[str, django_filters.Filter]) -> None:
+    for filter_field in filters.values():
+        widget = filter_field.field.widget
+        if hasattr(widget, "widgets"):
+            for subwidget in widget.widgets:
+                _ensure_widget_has_w3_class(subwidget)
+        else:
+            _ensure_widget_has_w3_class(widget)
 
 
 class AccessionFilter(django_filters.FilterSet):
@@ -87,6 +106,13 @@ class AccessionFilter(django_filters.FilterSet):
         widget=forms.TextInput(attrs={"class": "w3-input"}),
     )
 
+    organisation = django_filters.ModelChoiceFilter(
+        queryset=Organisation.objects.none(),
+        label=_("Organisation"),
+        method="filter_by_organisation",
+        widget=forms.Select(attrs={"class": "w3-select"}),
+    )
+
     class Meta:
         model = Accession
         fields = [
@@ -101,7 +127,38 @@ class AccessionFilter(django_filters.FilterSet):
             "tribe",
             "genus",
             "species",
+            "organisation",
         ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        organisation_filter = self.filters["organisation"]
+        organisation_filter.queryset = Organisation.objects.filter(is_active=True).order_by(
+            "name"
+        )
+
+        request = getattr(self, "request", None)
+        if not request or not getattr(request, "user", None):
+            return
+
+        user = request.user
+        if user.is_superuser:
+            return
+
+        membership = getattr(user, "organisation_membership", None)
+        organisation = getattr(membership, "organisation", None)
+        if organisation is None:
+            return
+
+        organisation_filter.queryset = organisation_filter.queryset.filter(pk=organisation.pk)
+
+    def filter_by_organisation(self, queryset, name, value):
+        if not value:
+            return queryset
+
+        return queryset.filter(
+            accessioned_by__organisation_membership__organisation=value
+        ).distinct()
 
     def filter_by_taxon(self, queryset, name, value):
         if not value:
@@ -193,6 +250,7 @@ class PreparationFilter(django_filters.FilterSet):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.filters["preparator"].queryset = User.objects.all()
+        _ensure_filters_use_w3_styles(self.filters)
 
     class Meta:
         model = Preparation
@@ -288,6 +346,10 @@ class ReferenceFilter(django_filters.FilterSet):
 
 
 class FieldSlipFilter(django_filters.FilterSet):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        _ensure_filters_use_w3_styles(self.filters)
     field_number = django_filters.CharFilter(
         lookup_expr="icontains",
         label=_("Field Number"),

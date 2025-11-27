@@ -172,6 +172,11 @@ def is_collection_manager(user):
     return user.is_superuser or user.groups.filter(name="Collection Managers").exists()
 
 
+class CollectionManagerAccessMixin(UserPassesTestMixin):
+    def test_func(self):
+        return is_collection_manager(self.request.user) or self.request.user.is_superuser
+
+
 @login_required
 @user_passes_test(is_collection_manager)
 def media_report_view(request):
@@ -1029,9 +1034,7 @@ def dashboard(request):
         role_context_added = True
 
     if user.groups.filter(name="Collection Managers").exists():
-        has_active_series = AccessionNumberSeries.objects.filter(
-            user=user, is_active=True
-        ).exists()
+        has_active_series = AccessionNumberSeries.objects.active_for_user(user).exists()
         unassigned_accessions = (
             Accession.objects.filter(accessioned_by=user)
             .annotate(row_count=Count("accessionrow"))
@@ -1885,10 +1888,25 @@ class AccessionRowUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView
     def get_success_url(self):
         return self.object.get_absolute_url()
 
-class AccessionWizard(SessionWizardView):
+class AccessionWizard(LoginRequiredMixin, CollectionManagerAccessMixin, SessionWizardView):
     file_storage = FileSystemStorage(location=settings.MEDIA_ROOT)
     form_list = [AccessionNumberSelectForm, AccessionForm, SpecimenCompositeForm]
     template_name = 'cms/accession_wizard.html'
+
+
+    def dispatch(self, request, *args, **kwargs):
+        self.active_series = (
+            AccessionNumberSeries.objects.active_for_user(request.user).first()
+        )
+
+        if not self.active_series:
+            messages.error(
+                request,
+                _("You need an active accession number series to create accessions."),
+            )
+            return redirect("dashboard")
+
+        return super().dispatch(request, *args, **kwargs)
 
 
     def get_form_kwargs(self, step=None):
@@ -1896,7 +1914,9 @@ class AccessionWizard(SessionWizardView):
         if step == '0' or step == 0:
             user = self.request.user
             try:
-                series = AccessionNumberSeries.objects.get(user=user, is_active=True)
+                series = self.active_series
+                if series is None:
+                    raise AccessionNumberSeries.DoesNotExist
                 used = set(
                     Accession.objects.filter(
                         accessioned_by=user,
@@ -5030,12 +5050,6 @@ def inventory_log_unexpected(request):
     UnexpectedSpecimen.objects.create(identifier=identifier)
     return JsonResponse({"success": True})
 
-
-class CollectionManagerAccessMixin(UserPassesTestMixin):
-    def test_func(self):
-        return is_collection_manager(self.request.user) or self.request.user.is_superuser
-
-
 class HistoryTabContextMixin:
     """Provide change history context and tab metadata when permitted."""
 
@@ -5097,8 +5111,8 @@ class GenerateAccessionBatchView(LoginRequiredMixin, CollectionManagerAccessMixi
     success_url = reverse_lazy("accession-wizard")
 
     def dispatch(self, request, *args, **kwargs):
-        has_active_series = AccessionNumberSeries.objects.filter(
-            user=request.user, is_active=True
+        has_active_series = AccessionNumberSeries.objects.active_for_user(
+            request.user
         ).exists()
 
         if has_active_series and not request.user.is_superuser:
@@ -5113,7 +5127,8 @@ class GenerateAccessionBatchView(LoginRequiredMixin, CollectionManagerAccessMixi
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs.setdefault("initial", {})
-        kwargs["initial"]["user"] = self.request.user
+        if not self.request.user.is_superuser:
+            kwargs["initial"]["user"] = self.request.user
         kwargs["request_user"] = self.request.user
         return kwargs
 
@@ -5122,10 +5137,13 @@ class GenerateAccessionBatchView(LoginRequiredMixin, CollectionManagerAccessMixi
 
         user_field = form.fields.get("user")
         if user_field:
-            user_field.queryset = User.objects.filter(pk=self.request.user.pk)
-            user_field.initial = self.request.user
-            if not user_field.widget.is_hidden:
-                user_field.widget = forms.HiddenInput(attrs=user_field.widget.attrs)
+            if self.request.user.is_superuser:
+                user_field.queryset = User.objects.order_by("username")
+            else:
+                user_field.queryset = User.objects.filter(pk=self.request.user.pk)
+                user_field.initial = self.request.user
+                if not user_field.widget.is_hidden:
+                    user_field.widget = forms.HiddenInput(attrs=user_field.widget.attrs)
 
         count_field = form.fields.get("count")
         if count_field:
@@ -5142,7 +5160,8 @@ class GenerateAccessionBatchView(LoginRequiredMixin, CollectionManagerAccessMixi
             )
             return self.form_invalid(form)
 
-        form.instance.user = self.request.user
+        target_user = form.cleaned_data.get("user") or self.request.user
+        form.instance.user = target_user
         form.instance.is_active = True
 
         self.object = form.save()
@@ -5151,6 +5170,15 @@ class GenerateAccessionBatchView(LoginRequiredMixin, CollectionManagerAccessMixi
             _("Accession number series created successfully."),
         )
         return super().form_valid(form)
+
+    def get_success_url(self):
+        if (
+            self.request.user.is_superuser
+            and getattr(self, "object", None)
+            and self.object.user != self.request.user
+        ):
+            return reverse("dashboard")
+        return super().get_success_url()
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

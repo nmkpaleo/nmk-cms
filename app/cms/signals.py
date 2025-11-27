@@ -33,7 +33,7 @@ def check_series_completion(sender, instance, **kwargs):
     if not user:
         return
 
-    active_series = AccessionNumberSeries.objects.filter(user=user, is_active=True).first()
+    active_series = AccessionNumberSeries.objects.active_for_user(user).first()
     if not active_series:
         return
 

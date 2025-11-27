@@ -53,6 +53,8 @@ from .models import (
     Scanning,
     UnexpectedSpecimen,
     MergeLog,
+    Organisation,
+    UserOrganisation,
 )
 from .resources import *
 
@@ -61,6 +63,7 @@ import logging
 from django import forms
 from django.utils.html import format_html, format_html_join
 from django.utils.timezone import now, localtime
+from django.contrib.auth import admin as auth_admin
 from django.contrib.auth import get_user_model
 
 from .taxonomy import NowTaxonomySyncService
@@ -421,6 +424,37 @@ class HistoricalAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
     """Base admin class for models using simple history."""
     pass
 
+
+@admin.register(Organisation)
+class OrganisationAdmin(HistoricalAdmin):
+    list_display = ("name", "code", "is_active")
+    list_filter = ("is_active",)
+    search_fields = ("name", "code")
+    ordering = ("name",)
+
+
+@admin.register(UserOrganisation)
+class UserOrganisationAdmin(HistoricalAdmin):
+    list_display = ("user", "organisation")
+    list_filter = ("organisation",)
+    search_fields = (
+        "user__username",
+        "user__first_name",
+        "user__last_name",
+        "user__email",
+        "organisation__name",
+        "organisation__code",
+    )
+    autocomplete_fields = ("user", "organisation")
+
+
+class UserOrganisationInline(admin.StackedInline):
+    model = UserOrganisation
+    can_delete = False
+    extra = 0
+    fk_name = "user"
+    verbose_name_plural = _("Organisation membership")
+
 class DuplicateFilter(admin.SimpleListFilter):
     title = 'By Duplicate specimen_no + prefix'
     parameter_name = 'duplicates'
@@ -583,12 +617,27 @@ class AccessionAdmin(HistoricalImportExportAdmin):
 class AccessionNumberSeriesAdmin(HistoricalAdmin):
     form = AccessionNumberSeriesAdminForm
     change_form_template = "admin/cms/accessionnumberseries/change_form.html"
-    list_display = ('user', 'start_from', 'end_at', 'current_number', 'is_active')
-    list_filter = ('is_active', 'user')
+    list_display = (
+        "organisation",
+        "user",
+        "start_from",
+        "end_at",
+        "current_number",
+        "is_active",
+    )
+    list_filter = ("organisation", "user", "is_active")
+    autocomplete_fields = ("organisation",)
 
     fieldsets = (
         (None, {
-            'fields': ('user', 'start_from', 'current_number', 'count', 'is_active')
+            'fields': (
+                'organisation',
+                'user',
+                'start_from',
+                'current_number',
+                'count',
+                'is_active',
+            )
         }),
     )
     
@@ -624,6 +673,16 @@ class AccessionNumberSeriesAdmin(HistoricalAdmin):
                 logging.warning(f"Series mapping failed: {e}")
 
         return formfield
+
+    def get_form(self, request, obj=None, **kwargs):
+        base_form = super().get_form(request, obj, **kwargs)
+
+        class RequestUserAwareForm(base_form):  # type: ignore[misc,valid-type]
+            def __init__(self, *args, **inner_kwargs):
+                inner_kwargs.setdefault("request_user", request.user)
+                super().__init__(*args, **inner_kwargs)
+
+        return RequestUserAwareForm
 
 class AccessionReferenceAdmin(HistoricalImportExportAdmin):
     resource_class = AccessionReferenceResource
@@ -1179,8 +1238,32 @@ class TaxonomyImportAdmin(HistoricalImportExportAdmin):
 # User Model
 class UserAdmin(HistoricalImportExportAdmin):
     resource_class = UserResource
-    list_display = ('username', 'first_name', 'last_name', 'email')
-    search_fields = ('username', 'first_name', 'last_name', 'email')
+    list_display = (
+        "username",
+        "first_name",
+        "last_name",
+        "email",
+        "organisation",
+    )
+    list_filter = ("organisation_membership__organisation",)
+    search_fields = (
+        "username",
+        "first_name",
+        "last_name",
+        "email",
+        "organisation_membership__organisation__name",
+        "organisation_membership__organisation__code",
+    )
+    inlines = [UserOrganisationInline]
+
+    def organisation(self, obj):
+        membership = getattr(obj, "organisation_membership", None)
+        if membership and membership.organisation:
+            return membership.organisation
+        return _("No organisation")
+
+    organisation.admin_order_field = "organisation_membership__organisation__name"
+    organisation.short_description = _("Organisation")
 
 class PreparationAdminForm(forms.ModelForm):
     """ Custom form for validation and dynamic field handling in admin. """
@@ -1303,7 +1386,7 @@ admin.site.register(Taxon, TaxonAdmin)
 if admin.site.is_registered(User):
     admin.site.unregister(User)
 # Optional: Register with custom admin if you need to modify
-    admin.site.register(User, UserAdmin)
+admin.site.register(User, UserAdmin)
 admin.site.register(Media, MediaAdmin)
 admin.site.register(SpecimenGeology, SpecimenGeologyAdmin)
 admin.site.register(GeologicalContext, GeologicalContextAdmin)

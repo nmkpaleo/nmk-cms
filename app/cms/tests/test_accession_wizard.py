@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 
@@ -10,8 +11,10 @@ from cms.models import (
     Collection,
     Element,
     Locality,
+    Organisation,
     Person,
     Storage,
+    UserOrganisation,
 )
 
 
@@ -23,6 +26,14 @@ class AccessionWizardSpecimenNumberTests(TestCase):
             password="pass1234",
             email="wizard@example.com",
         )
+        self.collection_manager_group, _ = Group.objects.get_or_create(
+            name="Collection Managers"
+        )
+        self.collection_manager_group.user_set.add(self.user)
+        self.nmk_org, _ = Organisation.objects.get_or_create(
+            code="nmk", defaults={"name": "NMK"}
+        )
+        UserOrganisation.objects.create(user=self.user, organisation=self.nmk_org)
         set_current_user(self.user)
         self.collection = Collection.objects.create(
             abbreviation="AB",
@@ -41,6 +52,7 @@ class AccessionWizardSpecimenNumberTests(TestCase):
             end_at=110,
             current_number=100,
             is_active=True,
+            organisation=self.nmk_org,
         )
 
     def tearDown(self):
@@ -75,6 +87,25 @@ class AccessionWizardSpecimenNumberTests(TestCase):
             html=False,
         )
         self.assertContains(response, "100")
+
+    def test_redirects_when_no_active_series(self):
+        user_model = get_user_model()
+        other_user = user_model.objects.create_user(
+            username="wizard-noseries",
+            password="pass1234",
+            email="noseries@example.com",
+        )
+        self.collection_manager_group.user_set.add(other_user)
+        UserOrganisation.objects.create(user=other_user, organisation=self.nmk_org)
+
+        self.client.login(username="wizard-noseries", password="pass1234")
+
+        response = self.client.get(reverse("accession-wizard"), follow=True)
+
+        self.assertRedirects(response, reverse("dashboard"))
+        self.assertContains(
+            response, "active accession number series", msg_prefix="shows error message"
+        )
 
     def test_specimen_number_saved_from_step_zero_selection(self):
         self.client.login(username="wizard-user", password="pass1234")

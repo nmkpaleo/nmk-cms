@@ -107,6 +107,104 @@ class BaseModel(models.Model):
         super().delete(*args, **kwargs)
 
 
+def _resolve_user_organisation(user: User | None) -> Optional["Organisation"]:
+    """Return the organisation for a user when a membership exists."""
+
+    if user is None:
+        return None
+
+    membership = getattr(user, "organisation_membership", None)
+    if membership is None:
+        return None
+
+    return membership.organisation
+
+
+class AccessionNumberSeriesQuerySet(models.QuerySet):
+    """Query helpers for organisation-aware accession number series lookups."""
+
+    def for_user(self, user: User):
+        organisation = _resolve_user_organisation(user)
+        queryset = self.filter(user=user)
+        if organisation is not None:
+            queryset = queryset.filter(organisation=organisation)
+        return queryset
+
+    def active_for_user(self, user: User):
+        return self.for_user(user).filter(is_active=True)
+
+
+class AccessionNumberSeriesManager(models.Manager.from_queryset(AccessionNumberSeriesQuerySet)):
+    def get_queryset(self):
+        return super().get_queryset().select_related("organisation", "user")
+
+
+class Organisation(BaseModel):
+    """Organisation grouping users and accession number series ownership."""
+
+    name = models.CharField(
+        max_length=255,
+        unique=True,
+        help_text=_("Display name for the organisation."),
+    )
+    code = models.SlugField(
+        max_length=50,
+        unique=True,
+        help_text=_("Short code used to identify the organisation."),
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text=_("Whether the organisation can be assigned to users and series."),
+    )
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ["name"]
+        verbose_name = _("Organisation")
+        verbose_name_plural = _("Organisations")
+
+    def clean(self):
+        # Allow system-level creation where no request user is available (e.g. migrations).
+        user = get_current_user()
+        if not user or isinstance(user, AnonymousUser):
+            return None
+        return super().clean()
+
+    def __str__(self):
+        return self.name
+
+
+class UserOrganisation(BaseModel):
+    """One-to-one mapping connecting a user to an organisation."""
+
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name="organisation_membership",
+        help_text=_("User assigned to an organisation."),
+    )
+    organisation = models.ForeignKey(
+        Organisation,
+        on_delete=models.PROTECT,
+        related_name="memberships",
+        help_text=_("Organisation the user belongs to."),
+    )
+    history = HistoricalRecords()
+
+    class Meta:
+        verbose_name = _("User organisation")
+        verbose_name_plural = _("User organisations")
+
+    def clean(self):
+        user = get_current_user()
+        if not user or isinstance(user, AnonymousUser):
+            return None
+        return super().clean()
+
+    def __str__(self):
+        return f"{self.user} → {self.organisation}"
+
+
 class MergeLog(BaseModel):
     """Audit trail capturing the outcome of merge operations."""
 
@@ -476,6 +574,16 @@ class Accession(BaseModel):
         unique_together = ('specimen_no', 'specimen_prefix', 'instance_number')
 
 class AccessionNumberSeries(BaseModel):
+    objects = AccessionNumberSeriesManager()
+
+    organisation = models.ForeignKey(
+        Organisation,
+        on_delete=models.PROTECT,
+        related_name="accession_number_series",
+        null=True,
+        blank=True,
+        help_text="Organisation associated with this accession number range.",
+    )
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -498,51 +606,42 @@ class AccessionNumberSeries(BaseModel):
     history = HistoricalRecords()
 
     class Meta:
-        ordering = ['user', 'start_from']
+        ordering = ["organisation", "user", "start_from"]
 
     def clean(self):
         if not hasattr(self, "user") or self.user is None:
             return  # Let the form validator complain that user is required
 
+        if self.organisation is None:
+            resolved_organisation = _resolve_user_organisation(self.user)
+            if resolved_organisation:
+                self.organisation = resolved_organisation
+        if self.organisation is None:
+            raise ValidationError(
+                _("An organisation is required for an accession number series."),
+            )
+
         if self.start_from is None or self.end_at is None:
             return
 
-        if self.start_from >= self.end_at:
-            raise ValidationError("Start number must be less than end number.")
+        if self.start_from > self.end_at:
+            raise ValidationError(_("Start number cannot exceed end number."))
         
-        # Determine if this is TBI or shared user series
-        is_tbi = self.user.username.strip().lower() == "tbi"
-
-        # Build appropriate queryset to check overlaps
-        if is_tbi:
-            # Only check overlap among TBI's series
-            conflicting_series = AccessionNumberSeries.objects.exclude(pk=self.pk).filter(
-                user__username__iexact="tbi",
+        conflicting_series = (
+            AccessionNumberSeries.objects.exclude(pk=self.pk)
+            .filter(
+                organisation=self.organisation,
                 start_from__lte=self.end_at,
                 end_at__gte=self.start_from,
             )
-        else:
-            # Shared users (everyone except TBI)
-            conflicting_series = AccessionNumberSeries.objects.exclude(pk=self.pk).exclude(
-                user__username__iexact="tbi"
-            ).filter(
-                start_from__lte=self.end_at,
-                end_at__gte=self.start_from,
-            )
+        )
 
         if conflicting_series.exists():
             raise ValidationError(
                 "This accession number range overlaps with another range in the same series pool."
             )
 
-        # Only allow one active series per user
-        if self.is_active:
-            active_existing = AccessionNumberSeries.objects.exclude(pk=self.pk).filter(
-                user=self.user,
-                is_active=True
-            )
-            if active_existing.exists():
-                raise ValidationError("This user already has an active accession number series.")
+        allow_multiple_active = getattr(self, "_allow_multiple_active", False)
 
     def save(self, *args, **kwargs):
         self.full_clean()
@@ -1426,7 +1525,7 @@ class Taxon(BaseModel):
                 raise ValidationError({"accepted_taxon": _("Synonyms must reference an accepted taxon.")})
         if self.status != TaxonStatus.SYNONYM and self.accepted_taxon_id:
             raise ValidationError({"accepted_taxon": _("Only synonym records may reference an accepted taxon.")})
-        if self.parent_id == self.pk:
+        if self.parent_id is not None and self.parent_id == self.pk:
             raise ValidationError({"parent": _("A taxon cannot be its own parent.")})
 
     def get_absolute_url(self):

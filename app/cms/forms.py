@@ -45,6 +45,7 @@ from .models import (
     FieldSlip,
     Identification,
     Locality,
+    Organisation,
     Place,
     Media,
     NatureOfSpecimen,
@@ -53,10 +54,12 @@ from .models import (
     Reference,
     SpecimenGeology,
     DrawerRegister,
+    UserOrganisation,
     Storage,
     Taxon,
     TaxonRank,
     TaxonStatus,
+    _resolve_user_organisation,
 )
 
 import json
@@ -190,12 +193,40 @@ class AccessionNumberSelectForm(BaseW3Form):
         self.fields["accession_number"].choices = [(n, n) for n in available_numbers]
 
 
+class UserOrganisationSelect(forms.Select):
+    """Select widget that exposes the user's organisation for client-side filtering."""
+
+    def __init__(self, *args, user_org_map: dict[str, str] | None = None, **kwargs):
+        self.user_org_map = user_org_map or {}
+        super().__init__(*args, **kwargs)
+
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        option = super().create_option(name, value, label, selected, index, subindex=subindex, attrs=attrs)
+        if value:
+            organisation_id = self.user_org_map.get(str(value))
+            option.setdefault("attrs", {})["data-organisation"] = organisation_id or ""
+        return option
+
+
 class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
     TBI_USERNAME = "tbi"
+    TBI_ORG_CODE = "tbi"
+
+    count = forms.IntegerField(
+        label=_("Count"),
+        min_value=1,
+        max_value=100,
+        required=True,
+        help_text=_("Number of accession numbers to generate or total range size."),
+        error_messages={
+            "max_value": _("You can generate up to 100 accession numbers at a time."),
+        },
+    )
 
     class Meta:
         model = AccessionNumberSeries
         fields = [
+            "organisation",
             "user",
             "start_from",
             "current_number",
@@ -204,16 +235,8 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
 
     def __init__(self, *args, **kwargs):
         request_user = kwargs.pop("request_user", None)
+        self.request_user = request_user
         super().__init__(*args, **kwargs)
-
-        # Always add count to the form manually
-        self.fields["count"] = forms.IntegerField(
-            label="Count",
-            min_value=1,
-            max_value=100,
-            required=True,
-            help_text="Number of accession numbers to generate or total range size.",
-        )
 
         if self.instance.pk:
             # Change view: show disabled count value
@@ -234,6 +257,25 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
             self.fields["is_active"].initial = True
             self.fields["is_active"].widget = forms.HiddenInput()
 
+        organisation_field = self.fields.get("organisation")
+        selected_organisation = None
+        if organisation_field:
+            organisation_field.required = False
+            organisation_field.queryset = Organisation.objects.filter(is_active=True)
+            if self.instance.organisation and not organisation_field.initial:
+                organisation_field.initial = self.instance.organisation
+            resolved_org = _resolve_user_organisation(request_user)
+            if (
+                resolved_org
+                and not organisation_field.initial
+                and not (request_user and request_user.is_superuser)
+            ):
+                organisation_field.initial = resolved_org
+            if request_user and not request_user.is_superuser:
+                organisation_field.widget = forms.HiddenInput()
+
+            selected_organisation = self._resolve_selected_organisation(organisation_field)
+
         for field_name in ["collection", "specimen_prefix"]:
             if field_name in self.fields:
                 self.fields[field_name].required = False
@@ -242,16 +284,33 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
 
         # Inject JS data for user field
         if "user" in self.fields:
-            self.fields["user"].label_from_instance = (
-                lambda obj: obj.username
-            )  # ensure username shown
+            user_field = self.fields["user"]
+            user_field.label_from_instance = lambda obj: obj.username
+
+            user_org_map = {
+                str(user_id): str(org_id)
+                for user_id, org_id in UserOrganisation.objects.values_list(
+                    "user_id", "organisation_id"
+                )
+            }
 
             if request_user is not None:
-                self.fields["user"].queryset = User.objects.filter(pk=request_user.pk)
-                self.fields["user"].initial = request_user
-                self.fields["user"].widget = forms.HiddenInput(attrs=metadata)
+                if request_user.is_superuser:
+                    queryset = User.objects.order_by("username")
+                    if selected_organisation:
+                        queryset = queryset.filter(
+                            organisation_membership__organisation=selected_organisation
+                        )
+                    user_field.queryset = queryset
+                    user_field.widget = UserOrganisationSelect(user_org_map=user_org_map)
+                    user_field.widget.choices = user_field.choices
+                    user_field.widget.attrs.update(metadata)
+                else:
+                    user_field.queryset = User.objects.filter(pk=request_user.pk)
+                    user_field.initial = request_user
+                    user_field.widget = forms.HiddenInput(attrs=metadata)
             else:
-                self.fields["user"].widget.attrs.update(metadata)
+                user_field.widget.attrs.update(metadata)
 
         if request_user is not None and not self.instance.pk:
             next_start = self._next_start_for_user(request_user)
@@ -270,12 +329,12 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
     def _next_start_for_pool(cls, *, is_tbi_pool):
         if is_tbi_pool:
             queryset = AccessionNumberSeries.objects.filter(
-                user__username__iexact=cls.TBI_USERNAME
+                organisation__code__iexact=cls.TBI_ORG_CODE
             )
             base = 1_000_000
         else:
             queryset = AccessionNumberSeries.objects.exclude(
-                user__username__iexact=cls.TBI_USERNAME
+                organisation__code__iexact=cls.TBI_ORG_CODE
             )
             base = 1
 
@@ -286,6 +345,9 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
 
     @classmethod
     def _is_tbi_user(cls, user):
+        organisation = getattr(getattr(user, "organisation_membership", None), "organisation", None)
+        if organisation and getattr(organisation, "code", None):
+            return organisation.code.strip().lower() == cls.TBI_ORG_CODE
         if not user or not user.username:
             return False
         return user.username.strip().lower() == cls.TBI_USERNAME
@@ -311,26 +373,53 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
         if dedicated_user_id is not None:
             metadata["data-dedicated-user-id"] = str(dedicated_user_id)
 
+        tbi_org_id = (
+            Organisation.objects.filter(code__iexact=cls.TBI_ORG_CODE)
+            .values_list("pk", flat=True)
+            .first()
+        )
+
+        if tbi_org_id is not None:
+            metadata["data-tbi-org-id"] = str(tbi_org_id)
+
         return metadata
 
     def clean(self):
         cleaned_data = super().clean()
         user = cleaned_data.get("user")
+        organisation = cleaned_data.get("organisation")
         count = cleaned_data.get("count")
 
-        if count and count > 100:
-            self.add_error(
-                "count",
-                _("You can generate up to 100 accession numbers at a time."),
-            )
+        if user:
+            resolved_org = organisation or _resolve_user_organisation(user)
+            user_org = _resolve_user_organisation(user)
+
+            if user_org and organisation and organisation != user_org:
+                self.add_error(
+                    "organisation",
+                    _("Selected organisation must match the user's organisation."),
+                )
+                return cleaned_data
+
+            if not resolved_org:
+                self.add_error(
+                    "organisation",
+                    _("An organisation is required for this user."),
+                )
+                return cleaned_data
+
+            cleaned_data["organisation"] = resolved_org
+            self.instance.organisation = resolved_org
+
+        allow_multiple_active = False
+        if self.request_user and self.request_user.is_superuser:
+            allow_multiple_active = True
+        elif user and user.is_superuser:
+            allow_multiple_active = True
+
+        self.instance._allow_multiple_active = allow_multiple_active
 
         if not self.instance.pk and user:
-            # Ensure unique active series per user
-            if AccessionNumberSeries.objects.filter(user=user, is_active=True).exists():
-                self.add_error(
-                    "user", "This user already has an active accession number series."
-                )
-
             next_start = self._next_start_for_user(user)
             cleaned_data["start_from"] = next_start
             cleaned_data["current_number"] = next_start
@@ -350,6 +439,26 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
                 self.instance.current_number = start_from
                 self.instance.end_at = start_from + count - 1
         return super().save(commit=commit)
+
+    def _resolve_selected_organisation(self, organisation_field: forms.ModelChoiceField):
+        """Resolve the currently selected organisation from bound data or initial values."""
+
+        org_value = None
+        if self.data:
+            org_value = self.data.get(self.add_prefix("organisation"))
+        if not org_value:
+            org_value = organisation_field.initial or getattr(self.instance, "organisation", None)
+
+        if not org_value:
+            return None
+
+        if isinstance(org_value, Organisation):
+            return org_value
+
+        try:
+            return organisation_field.queryset.get(pk=org_value)
+        except (Organisation.DoesNotExist, ValueError, TypeError):
+            return None
 
 
 class AccessionRowWidget(s2forms.ModelSelect2Widget):
