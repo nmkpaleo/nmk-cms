@@ -993,6 +993,7 @@ def dashboard(request):
     """Landing page that adapts content based on user roles."""
     user = request.user
     context = {}
+    has_active_series = False
     role_context_added = False
 
     if user.groups.filter(name="Preparators").exists():
@@ -1069,6 +1070,8 @@ def dashboard(request):
             }
         )
         role_context_added = True
+
+    context["has_active_series"] = has_active_series
 
     is_expert_user = is_qc_expert(user)
     if is_expert_user:
