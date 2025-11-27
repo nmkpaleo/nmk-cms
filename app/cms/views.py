@@ -1034,6 +1034,9 @@ def dashboard(request):
         role_context_added = True
 
     if user.groups.filter(name="Collection Managers").exists():
+        # The Collection Management actions in ``templates/cms/dashboard.html``
+        # ("Create single accession" / "Generate batch") rely on this flag to
+        # reflect whether the user has an active accession number series.
         has_active_series = AccessionNumberSeries.objects.active_for_user(user).exists()
         unassigned_accessions = (
             Accession.objects.filter(accessioned_by=user)
