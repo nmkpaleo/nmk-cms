@@ -49,41 +49,44 @@
           return;
         }
 
-        const baseOptions = Array.from(userField.options).map(option => option.cloneNode(true));
-        const placeholder = baseOptions.find(option => option.value === '') || new Option('---------', '');
+        const allOptions = Array.from(userField.options).map(function (option) {
+          return option.cloneNode(true);
+        });
+
+        const placeholder =
+          allOptions.find(function (option) {
+            return option.value === '';
+          }) || new Option('---------', '');
 
         function filterUsers() {
-          const selectedOrg = organisationField.value || '';
+          const selectedOrg = organisationField.value;
 
           userField.innerHTML = '';
           userField.appendChild(placeholder.cloneNode(true));
 
           if (!selectedOrg) {
-            baseOptions
-              .filter(option => option.value)
-              .forEach(option => userField.appendChild(option.cloneNode(true)));
             return;
           }
 
-          const matching = baseOptions.filter(option => {
-            if (!option.value) {
-              return false;
-            }
+          allOptions.forEach(function (option) {
+            const orgId = option.dataset ? option.dataset.organisation : null;
 
-            const optionOrg = option.dataset ? option.dataset.organisation : '';
-            return optionOrg === String(selectedOrg);
+            if (orgId && String(orgId) === String(selectedOrg)) {
+              userField.appendChild(option.cloneNode(true));
+            }
           });
 
-          matching.forEach(option => userField.appendChild(option.cloneNode(true)));
-        }
-
-        organisationField.addEventListener('change', filterUsers);
-
-        if (window.jQuery && jQuery.fn && jQuery.fn.select2) {
-          jQuery(organisationField).on('select2:select select2:clear', filterUsers);
+          userField.selectedIndex = 0;
         }
 
         filterUsers();
+
+        organisationField.addEventListener('change', filterUsers);
+
+        if (window.django && window.django.jQuery) {
+          const $ = window.django.jQuery;
+          $(organisationField).on('select2:select select2:clear', filterUsers);
+        }
       });
     </script>
   {% endblock %}
