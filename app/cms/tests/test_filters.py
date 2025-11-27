@@ -1,3 +1,5 @@
+import random
+
 from crum import get_current_user, set_current_user
 from django.contrib.auth import get_user_model
 from django.test import RequestFactory, TestCase
@@ -106,12 +108,16 @@ def make_accession(*, accessioned_by=None, created_by=None) -> Accession:
 
     set_current_user(creator)
     try:
-        collection = Collection.objects.create(abbreviation="COL", description="Collection")
-        locality = Locality.objects.create(abbreviation="LC", name="Locality")
+        collection, _ = Collection.objects.get_or_create(
+            abbreviation="COL", defaults={"description": "Collection"}
+        )
+        locality, _ = Locality.objects.get_or_create(
+            abbreviation="LC", defaults={"name": "Locality"}
+        )
         accession = Accession.objects.create(
             collection=collection,
             specimen_prefix=locality,
-            specimen_no=1,
+            specimen_no=random.randint(100000, 999999),
         )
         if accessioned_by:
             accession.accessioned_by = accessioned_by
@@ -123,6 +129,17 @@ def make_accession(*, accessioned_by=None, created_by=None) -> Accession:
 
 class AccessionFilterTests(TestCase):
     databases = {"default"}
+
+    def setUp(self):
+        user_model = get_user_model()
+        self.test_user, _ = user_model.objects.get_or_create(
+            username="filter-test-user",
+            defaults={"is_superuser": True, "is_staff": True}
+        )
+        set_current_user(self.test_user)
+
+    def tearDown(self):
+        set_current_user(None)
 
     def test_accession_filter_matches_taxon_record_name(self):
         accession = make_accession()
@@ -234,8 +251,8 @@ class AccessionFilterTests(TestCase):
                     )
 
     def test_accession_filter_limits_organisations_for_non_superusers(self):
-        organisation, _ = Organisation.objects.get_or_create(name="NMK", code="nmk")
-        Organisation.objects.get_or_create(name="TBI", code="tbi")
+        organisation, _ = Organisation.objects.get_or_create(code="nmk", defaults={"name": "NMK"})
+        Organisation.objects.get_or_create(code="tbi", defaults={"name": "TBI"})
         user_model = get_user_model()
         user = user_model.objects.create_user(username="org-user")
         UserOrganisation.objects.create(user=user, organisation=organisation)
@@ -251,8 +268,8 @@ class AccessionFilterTests(TestCase):
         self.assertEqual(list(organisation_field.queryset), [organisation])
 
     def test_accession_filter_by_organisation_matches_accessioned_user(self):
-        organisation, _ = Organisation.objects.get_or_create(name="NMK", code="nmk")
-        other_org, _ = Organisation.objects.get_or_create(name="TBI", code="tbi")
+        organisation, _ = Organisation.objects.get_or_create(code="nmk", defaults={"name": "NMK"})
+        other_org, _ = Organisation.objects.get_or_create(code="tbi", defaults={"name": "TBI"})
         user_model = get_user_model()
         nmk_user = user_model.objects.create_user(username="nmk-user")
         tbi_user = user_model.objects.create_user(username="tbi-user")
@@ -269,17 +286,21 @@ class AccessionFilterTests(TestCase):
         self.assertEqual(list(filterset.qs), [nmk_accession])
 
     def test_accession_list_view_paginates_with_organisation_filter(self):
-        organisation, _ = Organisation.objects.get_or_create(name="NMK", code="nmk")
+        organisation, _ = Organisation.objects.get_or_create(code="nmk", defaults={"name": "NMK"})
         user_model = get_user_model()
         user = user_model.objects.create_user(
             username="nmk-user", is_superuser=True, is_staff=True
         )
         UserOrganisation.objects.create(user=user, organisation=organisation)
 
-        for index in range(12):
-            accession = make_accession(accessioned_by=user)
-            accession.specimen_no = index + 1
-            accession.save(update_fields=["specimen_no"])
+        set_current_user(user)
+        try:
+            for index in range(12):
+                accession = make_accession(accessioned_by=user)
+                accession.specimen_no = index + 1
+                accession.save(update_fields=["specimen_no"])
+        finally:
+            set_current_user(None)
 
         factory = RequestFactory()
         request = factory.get(
