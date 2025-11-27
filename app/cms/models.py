@@ -1525,7 +1525,7 @@ class Taxon(BaseModel):
                 raise ValidationError({"accepted_taxon": _("Synonyms must reference an accepted taxon.")})
         if self.status != TaxonStatus.SYNONYM and self.accepted_taxon_id:
             raise ValidationError({"accepted_taxon": _("Only synonym records may reference an accepted taxon.")})
-        if self.parent_id == self.pk:
+        if self.parent_id is not None and self.parent_id == self.pk:
             raise ValidationError({"parent": _("A taxon cannot be its own parent.")})
 
     def get_absolute_url(self):
