@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Document that the dashboard disables the Create single accession action when a collection manager lacks an active accession number series, while leaving the Generate batch shortcut unchanged.
 - Document the dashboard Generate batch shortcut for accession number series, including access rules for collection managers and the self-service workflow that redirects to the accession wizard once numbers are reserved.
 - Record the accession wizard update that shows specimen numbers as display-only text while preserving the selected value through submission.
 - Fix Drawer Register edit form taxonomy queryset errors and surface Locality/Taxon cards on the drawer detail page; update user/admin guidance accordingly (CMS-001, CMS-003, CMS-005).
