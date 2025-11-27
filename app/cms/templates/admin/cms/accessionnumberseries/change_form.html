@@ -42,44 +42,48 @@
     {{ block.super }}
     <script>
       document.addEventListener('DOMContentLoaded', function () {
-        (function() {
-          const organisationField = document.getElementById('id_organisation');
-          const userField = document.getElementById('id_user');
+        const organisationField = document.getElementById('id_organisation');
+        const userField = document.getElementById('id_user');
 
-          if (!organisationField || !userField) {
+        if (!organisationField || !userField) {
+          return;
+        }
+
+        const baseOptions = Array.from(userField.options).map(option => option.cloneNode(true));
+        const placeholder = baseOptions.find(option => option.value === '') || new Option('---------', '');
+
+        function filterUsers() {
+          const selectedOrg = organisationField.value || '';
+
+          userField.innerHTML = '';
+          userField.appendChild(placeholder.cloneNode(true));
+
+          if (!selectedOrg) {
+            baseOptions
+              .filter(option => option.value)
+              .forEach(option => userField.appendChild(option.cloneNode(true)));
             return;
           }
 
-          const baseOptions = Array.from(userField.options).map(option => option.cloneNode(true));
-          const placeholder = baseOptions.find(option => option.value === '') || new Option('---------', '');
-
-          function filterUsers() {
-            const selectedOrg = organisationField.value;
-            const currentValue = userField.value;
-
-            const matching = baseOptions.filter(option => {
-              if (!option.value) {
-                return false;
-              }
-              const optionOrg = option.dataset ? option.dataset.organisation : '';
-              return selectedOrg && optionOrg === selectedOrg;
-            });
-
-            userField.innerHTML = '';
-            userField.appendChild(placeholder.cloneNode(true));
-            matching.forEach(option => userField.appendChild(option.cloneNode(true)));
-
-            if (selectedOrg) {
-              const hasMatch = matching.some(option => option.value === currentValue);
-              userField.value = hasMatch ? currentValue : '';
-            } else {
-              userField.value = '';
+          const matching = baseOptions.filter(option => {
+            if (!option.value) {
+              return false;
             }
-          }
 
-          organisationField.addEventListener('change', filterUsers);
-          filterUsers();
-        })();
+            const optionOrg = option.dataset ? option.dataset.organisation : '';
+            return optionOrg === String(selectedOrg);
+          });
+
+          matching.forEach(option => userField.appendChild(option.cloneNode(true)));
+        }
+
+        organisationField.addEventListener('change', filterUsers);
+
+        if (window.jQuery && jQuery.fn && jQuery.fn.select2) {
+          jQuery(organisationField).on('select2:select select2:clear', filterUsers);
+        }
+
+        filterUsers();
       });
     </script>
   {% endblock %}
