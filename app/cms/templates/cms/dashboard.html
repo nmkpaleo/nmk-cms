@@ -143,9 +143,10 @@
           <div class="w3-margin-bottom w3-bar w3-small">
             {% if is_collection_manager and not has_active_series %}
               <a
-                class="w3-bar-item w3-button w3-blue w3-round-large"
+                class="w3-bar-item w3-button w3-blue w3-round-large w3-disabled"
                 aria-disabled="true"
                 tabindex="-1"
+                title="{% trans "No active accession number series" %}"
               >
                 <i class="fa-solid fa-circle-plus" aria-hidden="true"></i>
                 <span class="w3-margin-left">{% trans "Create single accession" %}</span>
