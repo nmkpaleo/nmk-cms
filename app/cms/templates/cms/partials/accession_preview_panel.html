@@ -363,7 +363,13 @@
                 <tr>
                   <td>{{ ref.reference.year|default:"—" }}</td>
                   <td>{{ ref.reference.first_author|default:"—" }}</td>
-                  <td>{{ ref.reference.title|default:"—" }}</td>
+                  <td>
+                    {% if ref.reference %}
+                      <a href="{{ ref.reference.get_absolute_url }}">{{ ref.reference.title|default:"—" }}</a>
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
                   <td>{{ ref.page|default:"—" }}</td>
                 </tr>
               {% endfor %}

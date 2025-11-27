@@ -24,50 +24,52 @@
 
   {% include "cms/partials/accession_preview_panel.html" with preview_mode=False can_edit_accession_rows=can_edit_accession_rows specimen_table_empty_colspan=specimen_table_empty_colspan %}
 
-  <section class="w3-margin-top accession-lower-area" aria-labelledby="accession-comments-heading">
-    <header class="w3-row w3-padding-16">
-      <div class="w3-col s12 m6">
-        <h2 id="accession-comments-heading" class="w3-margin-0">
-          <i class="fa-solid fa-comments" aria-hidden="true"></i>
-          <span class="w3-margin-left">{% trans "Comments" %}</span>
-        </h2>
-      </div>
-      {% if user.is_authenticated and user|has_group:"Collection Managers" %}
-        <div class="w3-col s12 m6 w3-right-align">
-          <a href="{% url 'accession_add_comment' accession.id %}" class="w3-button w3-green w3-round">
-            <i class="fa-solid fa-plus" aria-hidden="true"></i>
-            <span class="w3-hide-small w3-margin-left">{% trans "Add comment" %}</span>
-          </a>
+  {% if user.is_authenticated %}
+    <section class="w3-margin-top accession-lower-area" aria-labelledby="accession-comments-heading">
+      <header class="w3-row w3-padding-16">
+        <div class="w3-col s12 m6">
+          <h2 id="accession-comments-heading" class="w3-margin-0">
+            <i class="fa-solid fa-comments" aria-hidden="true"></i>
+            <span class="w3-margin-left">{% trans "Comments" %}</span>
+          </h2>
         </div>
-      {% endif %}
-    </header>
-    {% if comments %}
-      <div class="w3-responsive">
-        <table class="w3-table-all w3-hoverable w3-small">
-          <thead>
-            <tr>
-              <th scope="col">{% trans "Subject" %}</th>
-              <th scope="col">{% trans "Comment" %}</th>
-              <th scope="col">{% trans "Comment by" %}</th>
-              <th scope="col">{% trans "Status" %}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for comment in comments %}
+        {% if user|has_group:"Collection Managers" %}
+          <div class="w3-col s12 m6 w3-right-align">
+            <a href="{% url 'accession_add_comment' accession.id %}" class="w3-button w3-green w3-round">
+              <i class="fa-solid fa-plus" aria-hidden="true"></i>
+              <span class="w3-hide-small w3-margin-left">{% trans "Add comment" %}</span>
+            </a>
+          </div>
+        {% endif %}
+      </header>
+      {% if comments %}
+        <div class="w3-responsive">
+          <table class="w3-table-all w3-hoverable w3-small">
+            <thead>
               <tr>
-                <td>{{ comment.subject|default:"—" }}</td>
-                <td>{{ comment.comment|default:"—" }}</td>
-                <td>{{ comment.comment_by|default:"—" }}</td>
-                <td>{{ comment.get_status_display|default:"—" }}</td>
+                <th scope="col">{% trans "Subject" %}</th>
+                <th scope="col">{% trans "Comment" %}</th>
+                <th scope="col">{% trans "Comment by" %}</th>
+                <th scope="col">{% trans "Status" %}</th>
               </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    {% else %}
-      <p class="w3-text-gray">{% trans "No comments recorded for this accession." %}</p>
-    {% endif %}
-  </section>
+            </thead>
+            <tbody>
+              {% for comment in comments %}
+                <tr>
+                  <td>{{ comment.subject|default:"—" }}</td>
+                  <td>{{ comment.comment|default:"—" }}</td>
+                  <td>{{ comment.comment_by|default:"—" }}</td>
+                  <td>{{ comment.get_status_display|default:"—" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="w3-text-gray">{% trans "No comments recorded for this accession." %}</p>
+      {% endif %}
+    </section>
+  {% endif %}
 
   {% if user.is_superuser or user|has_group:"Collection Managers" %}
     <div
