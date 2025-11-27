@@ -993,6 +993,7 @@ def dashboard(request):
     """Landing page that adapts content based on user roles."""
     user = request.user
     context = {}
+    has_active_series = False
     role_context_added = False
 
     if user.groups.filter(name="Preparators").exists():
@@ -1034,6 +1035,9 @@ def dashboard(request):
         role_context_added = True
 
     if user.groups.filter(name="Collection Managers").exists():
+        # The Collection Management actions in ``templates/cms/dashboard.html``
+        # ("Create single accession" / "Generate batch") rely on this flag to
+        # reflect whether the user has an active accession number series.
         has_active_series = AccessionNumberSeries.objects.active_for_user(user).exists()
         unassigned_accessions = (
             Accession.objects.filter(accessioned_by=user)
@@ -1060,12 +1064,13 @@ def dashboard(request):
         context.update(
             {
                 "is_collection_manager": True,
-                "has_active_series": has_active_series,
                 "unassigned_accessions": unassigned_accessions,
                 "latest_accessions": latest_accessions,
             }
         )
         role_context_added = True
+
+    context["has_active_series"] = has_active_series
 
     is_expert_user = is_qc_expert(user)
     if is_expert_user:
