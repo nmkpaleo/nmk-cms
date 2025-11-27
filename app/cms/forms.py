@@ -373,6 +373,15 @@ class AccessionNumberSeriesAdminForm(BaseW3ModelForm):
         if dedicated_user_id is not None:
             metadata["data-dedicated-user-id"] = str(dedicated_user_id)
 
+        tbi_org_id = (
+            Organisation.objects.filter(code__iexact=cls.TBI_ORG_CODE)
+            .values_list("pk", flat=True)
+            .first()
+        )
+
+        if tbi_org_id is not None:
+            metadata["data-tbi-org-id"] = str(tbi_org_id)
+
         return metadata
 
     def clean(self):

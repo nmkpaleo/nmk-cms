@@ -253,6 +253,31 @@ class AccessionNumberSeriesAdminFormTests(TestCase):
         self.assertEqual(tbi_series.current_number, 1_000_005)
         self.assertEqual(tbi_series.end_at, 1_000_006)
 
+    def test_tbi_pool_used_for_all_tbi_members(self):
+        tbi_member = self.User.objects.create_user(
+            username="tbi-member", password="pass"
+        )
+        UserOrganisation.objects.create(user=tbi_member, organisation=self.tbi_org)
+
+        form = AccessionNumberSeriesAdminForm(
+            data={
+                "user": str(tbi_member.pk),
+                "count": "2",
+                "is_active": "True",
+                "start_from": "",
+                "current_number": "",
+            },
+            request_user=tbi_member,
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        series = form.save()
+
+        self.assertEqual(series.start_from, 1_000_000)
+        self.assertEqual(series.current_number, 1_000_000)
+        self.assertEqual(series.end_at, 1_000_001)
+        self.assertEqual(series.organisation, self.tbi_org)
+
     def test_superuser_user_queryset_scoped_to_selected_organisation(self):
         superuser = self.User.objects.create_superuser(
             username="admin", email="admin@example.com", password="pass"
@@ -310,3 +335,10 @@ class AccessionNumberSeriesAdminFormTests(TestCase):
         first_value, first_label = user_choices[0]
         self.assertEqual(first_value, "")
         self.assertEqual(first_label, "---------")
+
+    def test_widget_metadata_exposes_tbi_organisation(self):
+        form = AccessionNumberSeriesAdminForm()
+
+        attrs = form.fields["user"].widget.attrs
+
+        self.assertEqual(attrs.get("data-tbi-org-id"), str(self.tbi_org.pk))
