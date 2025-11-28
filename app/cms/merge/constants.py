@@ -25,6 +25,9 @@ class MergeStrategy(str, Enum):
     USER_PROMPT = "user_prompt"
     """Defer to a human to resolve the field during the merge session."""
 
+    FIELD_SELECTION = "field_selection"
+    """Apply an explicit user-selected value for the field during merge."""
+
 
 #: Default strategy used when a field does not define explicit behaviour.
 DEFAULT_FIELD_STRATEGY: MergeStrategy = MergeStrategy.PREFER_NON_NULL

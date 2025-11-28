@@ -120,6 +120,51 @@ class StrategyResolverTests(SimpleTestCase):
         self.assertIn("not in whitelist", blocked.note.lower())
         self.assertEqual(blocked.as_log_payload()["status"], "unchanged")
 
+    def test_field_selection_prefers_user_choice_or_value(self):
+        explicit_resolver = StrategyResolver(
+            self.Model,
+            {
+                "name": {
+                    "strategy": MergeStrategy.FIELD_SELECTION,
+                    "value": "User Chosen",
+                }
+            },
+        )
+        explicit = explicit_resolver.resolve_field(
+            "name", source=self.Model(name="Source"), target=self.Model(name="Target")
+        )
+        self.assertEqual(explicit.value, "User Chosen")
+        self.assertIn("user-selected", explicit.note)
+
+        choice_resolver = StrategyResolver(
+            self.Model,
+            {
+                "description": {
+                    "strategy": MergeStrategy.FIELD_SELECTION,
+                    "selected_from": "source",
+                }
+            },
+        )
+        choice = choice_resolver.resolve_field(
+            "description",
+            source=self.Model(description="Source Description"),
+            target=self.Model(description="Target Description"),
+        )
+        self.assertEqual(choice.value, "Source Description")
+        self.assertIn("source", choice.note.lower())
+
+        fallback_resolver = StrategyResolver(
+            self.Model,
+            {"summary": {"strategy": MergeStrategy.FIELD_SELECTION}},
+        )
+        fallback = fallback_resolver.resolve_field(
+            "summary",
+            source=self.Model(summary="Source Summary"),
+            target=self.Model(summary="Target Summary"),
+        )
+        self.assertIs(fallback.value, UNCHANGED)
+        self.assertIn("unchanged", fallback.note.lower())
+
     @override_settings(
         MERGE_CUSTOM_STRATEGIES={
             "cms.StrategyModel": {
