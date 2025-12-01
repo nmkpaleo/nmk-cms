@@ -7,6 +7,9 @@ from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+import json
+
+from django.core.serializers.json import DjangoJSONEncoder
 from django.db import transaction
 from django.db.models import Model
 from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, JsonResponse
@@ -232,5 +235,9 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
             return [self._serialise_value(item) for item in value]
         if hasattr(value, "pk"):
             return getattr(value, "pk")
-        return value
+        try:
+            json.dumps(value, cls=DjangoJSONEncoder)
+            return value
+        except TypeError:
+            return str(value)
 
