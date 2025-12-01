@@ -1,13 +1,14 @@
 """Views supporting merge workflows and per-field selection flows."""
 from __future__ import annotations
 
-from typing import Iterable
+from typing import Iterable, Mapping
 
 from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
+from django.db.models import Model
 from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse
@@ -48,7 +49,12 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
 
         if self._wants_json(request):
             payload = {
-                "fields": form.field_options,
+                "fields": [
+                    self._serialise_value(
+                        {k: v for k, v in option.items() if k != "bound_field"}
+                    )
+                    for option in form.field_options
+                ],
                 "target": target.instance.pk,
                 "candidates": [candidate.key for candidate in candidates],
             }
@@ -121,8 +127,13 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
             return JsonResponse(
                 {
                     "target_id": result.target.pk,
-                    "resolved_fields": result.resolved_values,
-                    "relation_actions": result.relation_actions,
+                    "resolved_fields": self._serialise_value(
+                        {
+                            field: self._serialise_resolution(resolution)
+                            for field, resolution in result.resolved_values.items()
+                        }
+                    ),
+                    "relation_actions": self._serialise_value(result.relation_actions),
                 }
             )
 
@@ -202,4 +213,24 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
             if candidate.role == "source":
                 return candidate
         return None
+
+    def _serialise_resolution(self, resolution: object) -> object:
+        if hasattr(resolution, "as_log_payload"):
+            payload = resolution.as_log_payload()
+        elif isinstance(resolution, Mapping):
+            payload = dict(resolution)
+        else:
+            payload = {"value": resolution}
+        return self._serialise_value(payload)
+
+    def _serialise_value(self, value: object) -> object:
+        if isinstance(value, Model):
+            return getattr(value, "pk", str(value))
+        if isinstance(value, Mapping):
+            return {k: self._serialise_value(v) for k, v in value.items()}
+        if isinstance(value, (list, tuple, set)):
+            return [self._serialise_value(item) for item in value]
+        if hasattr(value, "pk"):
+            return getattr(value, "pk")
+        return value
 

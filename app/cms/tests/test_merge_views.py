@@ -10,6 +10,7 @@ from django.test import RequestFactory, SimpleTestCase, override_settings
 
 from cms.merge.forms import FieldSelectionCandidate, FieldSelectionForm
 from cms.merge.mixins import MergeMixin
+from cms.merge.strategies import StrategyResolution
 from cms.merge.views import FieldSelectionMergeView
 
 
@@ -119,4 +120,30 @@ class FieldSelectionMergeViewTests(SimpleTestCase):
         merge_mock.assert_called_once()
         payload = json.loads(response.content.decode())
         self.assertEqual(payload["target_id"], self.target.pk)
+
+    def test_post_serialises_model_values_in_json_response(self):
+        selection_field = FieldSelectionForm.selection_field_name("name")
+        request = self.factory.post(
+            "/merge/field-selection/",
+            {"model": "cms.DummyMergeModel", "target": 1, "candidates": "1,2", selection_field: "2"},
+            HTTP_ACCEPT="application/json",
+        )
+        request.user = self._dummy_user()
+
+        dummy_result = DummyMergeResult(
+            target=self.target,
+            resolved_values={"owner": StrategyResolution(value=request.user)},
+            relation_actions={"owners": [request.user]},
+        )
+
+        with (
+            mock.patch("cms.merge.views.merge_records", return_value=dummy_result),
+            mock.patch("cms.merge.views.transaction.atomic"),
+            mock.patch("django.contrib.messages.api.add_message"),
+        ):
+            response = self._build_view()(request)
+
+        payload = json.loads(response.content.decode())
+        self.assertEqual(payload["resolved_fields"]["owner"]["value"], request.user.pk)
+        self.assertEqual(payload["relation_actions"]["owners"], [request.user.pk])
 
