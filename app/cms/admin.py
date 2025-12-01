@@ -19,6 +19,7 @@ from simple_history.admin import SimpleHistoryAdmin
 from .forms import AccessionNumberSeriesAdminForm, DrawerRegisterForm
 from .admin_merge import MergeAdminMixin
 from .merge import merge_records
+from .merge.constants import MergeStrategy
 
 from .models import (
     AccessionNumberSeries,
@@ -274,6 +275,9 @@ class MergeAdminActionMixin:
             return
 
         selected = list(queryset)
+        opts = self.model._meta
+        changelist_url = reverse(f"admin:{opts.app_label}_{opts.model_name}_changelist")
+        requires_field_selection = self._model_requires_field_selection()
 
         if target is None:
             if request is None:
@@ -290,11 +294,6 @@ class MergeAdminActionMixin:
 
             target_id = request.POST.get("merge_target")
             if not target_id:
-                opts = self.model._meta
-                changelist_url = reverse(
-                    f"admin:{opts.app_label}_{opts.model_name}_changelist"
-                )
-
                 serializer = getattr(self, "_serialise_instance", None)
                 preview_columns: list[str] = []
                 serialised_rows: list[dict[str, Any]] = []
@@ -352,6 +351,11 @@ class MergeAdminActionMixin:
                     "merge_target_field": "merge_target",
                     "changelist_url": changelist_url,
                     "select_across": request.POST.get("select_across"),
+                    "requires_field_selection": requires_field_selection,
+                    "field_selection_help": _(
+                        "Field selection is required for some fields. After choosing a target, "
+                        "you'll be redirected to pick values before merging."
+                    ),
                 }
                 return render(
                     request,
@@ -378,6 +382,32 @@ class MergeAdminActionMixin:
         user = getattr(request, "user", None) if request is not None else None
         sources = [obj for obj in selected if obj.pk != getattr(target, "pk", None)]
         relation_logs: list[Mapping[str, Mapping[str, Any]]] = []
+
+        if request is not None and requires_field_selection:
+            field_selection_url = ""
+            if hasattr(self, "_build_field_selection_url"):
+                field_selection_url = self._build_field_selection_url(
+                    selected_ids=[str(obj.pk) for obj in selected],
+                    source_obj=sources[0] if sources else None,
+                    target_obj=target,
+                    cancel_url=changelist_url,
+                )
+            if field_selection_url:
+                self.message_user(
+                    request,
+                    _(
+                        "Field selection is required for this merge. "
+                        "Choose per-field values before continuing."
+                    ),
+                    level=messages.INFO,
+                )
+                return redirect(field_selection_url)
+            self.message_user(
+                request,
+                _("Field selection is required, but the selection screen is unavailable."),
+                level=messages.ERROR,
+            )
+            return redirect(changelist_url)
         for source in sources:
             result = merge_records(
                 source,
@@ -410,6 +440,37 @@ class MergeAdminActionMixin:
                     % {"summary": "; ".join(relation_summary)},
                     level=messages.INFO,
                 )
+
+    def _model_requires_field_selection(self) -> bool:
+        if not getattr(settings, "MERGE_TOOL_FEATURE", False):
+            return False
+
+        try:
+            mergeable_fields = (
+                list(self.get_mergeable_fields()) if hasattr(self, "get_mergeable_fields") else []
+            )
+        except Exception:
+            mergeable_fields = []
+        if not mergeable_fields:
+            for field in self.model._meta.concrete_fields:  # type: ignore[attr-defined]
+                if field.primary_key or not getattr(field, "editable", False):
+                    continue
+                mergeable_fields.append(field)
+
+        for field in mergeable_fields:
+            try:
+                strategy = self.model.get_merge_strategy_for_field(field.name)
+            except Exception:
+                strategy = MergeStrategy.PREFER_NON_NULL
+
+            try:
+                resolved = strategy if isinstance(strategy, MergeStrategy) else MergeStrategy(strategy)
+            except Exception:
+                continue
+            if resolved is MergeStrategy.FIELD_SELECTION:
+                return True
+
+        return False
 
     merge_records_action.short_description = "Merge selected records (manual invocation)"
     merge_records_action.allowed_permissions = ("change",)

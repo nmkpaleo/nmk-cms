@@ -7,6 +7,13 @@
 
 {% block content %}
 <div class="content">
+  {% if requires_field_selection %}
+    <ul class="messagelist">
+      <li class="warning">
+        {{ field_selection_help }}
+      </li>
+    </ul>
+  {% endif %}
   <p>{% trans "Select which record should receive the merged data. The remaining records will be merged into the chosen target." %}</p>
 
   <form method="post">

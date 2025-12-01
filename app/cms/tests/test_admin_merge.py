@@ -22,12 +22,14 @@ from django.test.utils import isolate_apps
 from django.urls import include, path
 from unittest.mock import patch
 from uuid import uuid4
+from crum import set_current_user
 
 from cms.admin import MergeAdminActionMixin
 from cms.admin_merge import MergeAdminMixin
 from cms.merge.constants import MergeStrategy
 from cms.merge.mixins import MergeMixin
 from cms.models import MergeLog
+from cms import models as cms_models
 
 
 test_admin_site = admin.site
@@ -59,7 +61,7 @@ class MergeAdminWorkflowTests(TransactionTestCase):
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
-        call_command("migrate", "sites", verbosity=0, run_syncdb=True)
+        call_command("migrate", "sites", verbosity=0)
         if not Site.objects.filter(pk=1).exists():
             Site.objects.create(pk=1, domain="example.com", name="example.com")
 
@@ -84,6 +86,7 @@ class MergeAdminWorkflowTests(TransactionTestCase):
             Session,
             MergeLog,
             LogEntry,
+            Site,
         ]
         existing_tables = set(connection.introspection.table_names())
         with connection.schema_editor(atomic=False) as schema_editor:
@@ -381,3 +384,185 @@ class MergeAdminWorkflowTests(TransactionTestCase):
             ),
         ):
             yield mock_reverse
+
+
+@override_settings(MERGE_TOOL_FEATURE=True)
+class FieldSelectionAdminActionRedirectTests(TransactionTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+
+        cls.factory = RequestFactory()
+        cls.admin_site = admin.site
+
+        call_command("migrate", "sites", verbosity=0)
+
+        core_models = [
+            ContentType,
+            Permission,
+            Group,
+            get_user_model(),
+            Session,
+            MergeLog,
+            LogEntry,
+        ]
+        existing_tables = set(connection.introspection.table_names())
+        with connection.schema_editor(atomic=False) as schema_editor:
+            for model in core_models:
+                if model._meta.db_table not in existing_tables:
+                    schema_editor.create_model(model)
+                    existing_tables.add(model._meta.db_table)
+
+            for model in (
+                cms_models.FieldSlip,
+                cms_models.FieldSlip.history.model,
+                cms_models.Storage,
+                cms_models.Storage.history.model,
+                cms_models.Reference,
+                cms_models.Reference.history.model,
+            ):
+                if model._meta.db_table not in existing_tables:
+                    schema_editor.create_model(model)
+                    existing_tables.add(model._meta.db_table)
+
+    def setUp(self):
+        super().setUp()
+        self.user = get_user_model().objects.create_user(
+            username=f"merge-user-{uuid4()}", email="merge@example.com", password="pass"
+        )
+        for model in (cms_models.FieldSlip, cms_models.Storage, cms_models.Reference):
+            content_type = ContentType.objects.get_for_model(model)
+            permission, _ = Permission.objects.get_or_create(
+                codename="can_merge",
+                content_type=content_type,
+                defaults={"name": "Can merge records"},
+            )
+            self.user.user_permissions.add(permission)
+
+    def tearDown(self):
+        set_current_user(None)
+        super().tearDown()
+
+    def _build_request(self, method: str, path: str, *, data=None, user=None):
+        request = getattr(self.factory, method)(path, data=data or {})
+        SessionMiddleware(lambda req: None).process_request(request)
+        request.session.save()
+        setattr(request, "_messages", FallbackStorage(request))
+        request._dont_enforce_csrf_checks = True
+        request.user = user
+        return request
+
+    @contextmanager
+    def _override_admin_urls(self, model):
+        app_label = model._meta.app_label
+        model_name = model._meta.model_name
+
+        def resolve(name, *args, **kwargs):
+            if name == f"admin:{app_label}_{model_name}_changelist":
+                return f"/admin/{app_label}/{model_name}/"
+            if name == f"admin:{app_label}_{model_name}_merge":
+                return f"/admin/{app_label}/{model_name}/merge/"
+            if name == "merge:merge_field_selection":
+                return "/merge/field-selection/"
+            return name
+
+        with patch("cms.admin.reverse", side_effect=resolve), patch(
+            "cms.admin.redirect",
+            side_effect=lambda to, *args, **kwargs: HttpResponseRedirect(
+                resolve(to, *args, **kwargs) if isinstance(to, str) else to
+            ),
+        ):
+            yield
+
+    def _build_objects(self, model, *, required_fields):
+        set_current_user(self.user)
+        target = model.objects.create(**required_fields["target"])
+        source = model.objects.create(**required_fields["source"])
+        set_current_user(None)
+        return target, source
+
+    def _assert_field_selection_redirect(self, model, *, required_fields):
+        admin_instance = self.admin_site._registry[model]
+        target, source = self._build_objects(model, required_fields=required_fields)
+
+        queryset = model._default_manager.filter(pk__in=[target.pk, source.pk]).order_by("pk")
+        post_data = {
+            "action": "merge_records_action",
+            ACTION_CHECKBOX_NAME: [str(target.pk), str(source.pk)],
+        }
+
+        action_request = self._build_request(
+            "post", f"/admin/{model._meta.app_label}/{model._meta.model_name}/", data=post_data, user=self.user
+        )
+
+        with self._override_admin_urls(model):
+            response = admin_instance.merge_records_action(action_request, queryset)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Field selection is required", response.content.decode())
+
+        confirm_data = {
+            "action": "merge_records_action",
+            ACTION_CHECKBOX_NAME: [str(target.pk), str(source.pk)],
+            "merge_confirmed": "yes",
+            "merge_target": str(target.pk),
+        }
+        confirm_request = self._build_request(
+            "post",
+            f"/admin/{model._meta.app_label}/{model._meta.model_name}/",
+            data=confirm_data,
+            user=self.user,
+        )
+
+        with self._override_admin_urls(model), patch("cms.merge.merge_records") as merge_mock:
+            response = admin_instance.merge_records_action(confirm_request, queryset)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/merge/field-selection/", response["Location"])
+        merge_mock.assert_not_called()
+
+    def test_field_selection_models_redirect_before_merge(self):
+        test_matrix = [
+            (
+                cms_models.FieldSlip,
+                {
+                    "target": {
+                        "field_number": "FS-001",
+                        "verbatim_taxon": "Target taxon",
+                        "verbatim_element": "Target element",
+                    },
+                    "source": {
+                        "field_number": "FS-002",
+                        "verbatim_taxon": "Source taxon",
+                        "verbatim_element": "Source element",
+                    },
+                },
+            ),
+            (
+                cms_models.Storage,
+                {
+                    "target": {"area": "Area A"},
+                    "source": {"area": "Area B"},
+                },
+            ),
+            (
+                cms_models.Reference,
+                {
+                    "target": {
+                        "title": "Target title",
+                        "citation": "Target citation",
+                        "first_author": "Author",
+                        "year": "2024",
+                    },
+                    "source": {
+                        "title": "Source title",
+                        "citation": "Source citation",
+                        "first_author": "Author",
+                        "year": "2023",
+                    },
+                },
+            ),
+        ]
+
+        for model, required_fields in test_matrix:
+            with self.subTest(model=model.__name__):
+                self._assert_field_selection_redirect(model, required_fields=required_fields)
