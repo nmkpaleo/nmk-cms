@@ -257,6 +257,45 @@ class MergeAdminWorkflowTests(TransactionTestCase):
         self.assertTrue(MergeLog.objects.filter(target_pk=str(self.target.pk)).exists())
 
     @override_settings(MERGE_TOOL_FEATURE=True)
+    def test_field_selection_strategy_redirects_to_per_field_flow(self):
+        user = self._login(with_permission=True)
+
+        with connection.schema_editor() as editor:
+            try:
+                editor.create_model(Site)
+            except Exception:
+                pass
+
+        original_merge_fields = self.Model.merge_fields.copy()
+        self.addCleanup(lambda: setattr(self.Model, "merge_fields", original_merge_fields))
+        self.Model.merge_fields = {
+            "name": MergeStrategy.FIELD_SELECTION,
+            "email": MergeStrategy.PREFER_NON_NULL,
+            "notes": MergeStrategy.PREFER_NON_NULL,
+        }
+
+        form_data = {
+            "selected_ids": f"{self.target.pk},{self.source.pk}",
+            "source": str(self.source.pk),
+            "target": str(self.target.pk),
+            "strategy__name": MergeStrategy.FIELD_SELECTION.value,
+            "value__name": "",
+            "strategy__email": MergeStrategy.PREFER_NON_NULL.value,
+            "value__email": "",
+            "strategy__notes": MergeStrategy.PREFER_NON_NULL.value,
+            "value__notes": "",
+        }
+
+        merge_request = self._build_request("post", self.merge_url, data=form_data, user=user)
+
+        with self._override_admin_urls(), patch("cms.merge.merge_records") as merge_records_mock:
+            response = self.admin_site.admin_view(self.model_admin.merge_view)(merge_request)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/merge/field-selection/", response["Location"])
+        merge_records_mock.assert_not_called()
+
+    @override_settings(MERGE_TOOL_FEATURE=True)
     def test_manual_action_prompts_for_target_selection(self):
         user = self._login(with_permission=True)
 

@@ -305,6 +305,9 @@ class MergeAdminMixin:
 
         merge_fields = self.get_mergeable_fields()
         selected_ids = self._extract_selected_ids(request)
+        changelist_url = reverse(
+            f"admin:{self.model._meta.app_label}_{self.model._meta.model_name}_changelist"
+        )
 
         initial_source = request.GET.get("source") or (selected_ids[1] if len(selected_ids) > 1 else "")
         initial_target = request.GET.get("target") or (selected_ids[0] if selected_ids else "")
@@ -339,6 +342,23 @@ class MergeAdminMixin:
         target_obj = form.get_bound_instance("target")
 
         if request.method == "POST" and form.is_valid():
+            field_selection_url = self._build_field_selection_url(
+                selected_ids=selected_ids,
+                source_obj=source_obj,
+                target_obj=target_obj,
+                cancel_url=changelist_url,
+            )
+            if self._requires_field_selection(form) and field_selection_url:
+                self.message_user(
+                    request,
+                    _(
+                        "Field selection is required for this merge. "
+                        "Choose per-field values before continuing."
+                    ),
+                    level=messages.INFO,
+                )
+                return redirect(field_selection_url)
+
             try:
                 merge_result = merge_records(
                     form.cleaned_data["source"],
@@ -480,8 +500,22 @@ class MergeAdminMixin:
                 "selections, the merge will keep the existing target values."
             ),
             "model_label": f"{opts.app_label}.{opts.model_name}",
+            "merge_tool_enabled": self.is_merge_tool_enabled(),
         }
         return context
+
+    def _requires_field_selection(self, form: MergeAdminForm) -> bool:
+        for config in form.field_configs:
+            raw_strategy = form.cleaned_data.get(config["strategy_name"])
+            if not raw_strategy:
+                continue
+            try:
+                strategy = MergeStrategy(raw_strategy)
+            except Exception:
+                continue
+            if strategy is MergeStrategy.FIELD_SELECTION:
+                return True
+        return False
 
     def _build_field_selection_url(
         self,
