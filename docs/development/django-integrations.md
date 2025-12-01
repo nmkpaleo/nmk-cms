@@ -29,6 +29,7 @@ This companion guide documents deeper integrations that extend the baseline codi
       },
   )
   ```
+- **Surface field-selection flows when required.** Use `MergeStrategy.FIELD_SELECTION` for fields that must be chosen explicitly during a merge (e.g., citations or storage locations). Populate links to `/merge/field-selection/` with `model`, `target`, and comma-separated `candidates` so staff can pick values via `FieldSelectionMergeView` and the accompanying `FieldSelectionForm`.
 - **Review automated coverage.** The integration tests in `app/cms/tests/test_merge_engine.py`, `app/cms/tests/test_admin_merge.py`, and `app/cms/tests/test_merge_fuzzy_search.py` illustrate end-to-end expectations for field resolution, admin workflows, and the fuzzy candidate endpoint. Use them as templates when extending the engine to additional models.
 
 ---

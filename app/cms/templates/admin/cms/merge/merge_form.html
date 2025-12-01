@@ -29,6 +29,18 @@
     </p>
   </div>
 
+  {% if field_selection_help %}
+  <div class="w3-panel w3-pale-yellow w3-leftbar w3-border-amber w3-round w3-margin-bottom" role="note">
+    <p class="w3-margin-0">
+      <span class="fa fa-sliders-h" aria-hidden="true"></span>
+      <span class="w3-margin-left">{{ field_selection_help }}</span>
+      {% if field_selection_url %}
+        <a class="w3-margin-left" href="{{ field_selection_url }}">{% trans "Open field selection merge" %}</a>
+      {% endif %}
+    </p>
+  </div>
+  {% endif %}
+
   <section class="w3-margin-bottom">
     <h2 class="w3-large w3-margin-bottom">{% trans "Current selection" %}</h2>
     <div class="w3-row-padding">

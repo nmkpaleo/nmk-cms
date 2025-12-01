@@ -2,7 +2,6 @@ from django.urls import include, path
 from django.conf.urls.static import static
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.contrib.admin.views.decorators import staff_member_required as staff_login_required
 from django_filters.views import FilterView
 from cms.models import Accession
 from cms.views import (
@@ -77,8 +76,6 @@ from cms.views import (
     StorageDetailView,
     StorageCreateView,
     StorageUpdateView,
-    MergeCandidateAdminView,
-    MergeCandidateAPIView,
     ManualQCImportView,
     AccessionRowPrintSmallView,
 )
@@ -199,16 +196,7 @@ urlpatterns += [
 
 if getattr(settings, "MERGE_TOOL_FEATURE", False):
     urlpatterns += [
-        path(
-            "merge/",
-            staff_login_required(MergeCandidateAdminView.as_view()),
-            name="merge_candidates",
-        ),
-        path(
-            "merge/search/",
-            staff_login_required(MergeCandidateAPIView.as_view()),
-            name="merge_candidate_search",
-        ),
+        path("merge/", include(("cms.merge.urls", "merge"), namespace="merge"))
     ]
 
 urlpatterns += [

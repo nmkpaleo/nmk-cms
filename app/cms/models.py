@@ -725,9 +725,9 @@ class Comment(BaseModel):
 # FieldSlip Model
 class FieldSlip(MergeMixin, BaseModel):
     merge_fields = {
-        "field_number": MergeStrategy.PREFER_NON_NULL,
-        "verbatim_taxon": MergeStrategy.PREFER_NON_NULL,
-        "verbatim_element": MergeStrategy.PREFER_NON_NULL,
+        "field_number": MergeStrategy.FIELD_SELECTION,
+        "verbatim_taxon": MergeStrategy.FIELD_SELECTION,
+        "verbatim_element": MergeStrategy.FIELD_SELECTION,
     }
     relation_strategies = {
         "accession_links": {
@@ -768,7 +768,7 @@ class FieldSlip(MergeMixin, BaseModel):
 # Storage Model
 class Storage(MergeMixin, BaseModel):
     merge_fields = {
-        "area": MergeStrategy.PREFER_NON_NULL,
+        "area": MergeStrategy.FIELD_SELECTION,
     }
     area = models.CharField(
         max_length=255,
@@ -800,8 +800,8 @@ class Storage(MergeMixin, BaseModel):
 # Reference Model
 class Reference(MergeMixin, BaseModel):
     merge_fields = {
-        "title": MergeStrategy.PREFER_NON_NULL,
-        "citation": MergeStrategy.CONCAT_TEXT,
+        "title": MergeStrategy.FIELD_SELECTION,
+        "citation": MergeStrategy.FIELD_SELECTION,
     }
     title = models.CharField(
         max_length=255,

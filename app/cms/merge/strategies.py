@@ -195,6 +195,43 @@ class WhitelistStrategy(BaseStrategy):
         return StrategyResolution(value=target_value, note=note)
 
 
+class FieldSelectionStrategy(BaseStrategy):
+    """Use an explicit user-selected value for the field when provided."""
+
+    def __call__(
+        self,
+        *,
+        field_name: str,
+        source: Model,
+        target: Model,
+        source_value: Any,
+        target_value: Any,
+        options: Mapping[str, Any],
+    ) -> StrategyResolution:
+        explicit_key = None
+        if "value" in options:
+            explicit_key = "value"
+        elif "selected_value" in options:
+            explicit_key = "selected_value"
+        if explicit_key:
+            note = options.get("note") or "Applied user-selected value."
+            return StrategyResolution(value=options.get(explicit_key), note=note)
+
+        selected_from_raw = options.get("selected_from") or options.get("choice")
+        selected_from = str(selected_from_raw).strip().lower() if selected_from_raw else ""
+
+        if selected_from == "source":
+            note = options.get("note") or f"User selected source value for '{field_name}'."
+            return StrategyResolution(value=source_value, note=note)
+
+        if selected_from == "target":
+            note = options.get("note") or f"User kept target value for '{field_name}'."
+            return StrategyResolution(value=target_value, note=note)
+
+        note = options.get("note") or "No user selection provided; leaving value unchanged."
+        return StrategyResolution(value=UNCHANGED, note=note)
+
+
 class CustomStrategy(BaseStrategy):
     """Delegate resolution to a project specific callable."""
 
@@ -284,6 +321,7 @@ class StrategyResolver:
             MergeStrategy.PREFER_NON_NULL: PreferNonNullStrategy(),
             MergeStrategy.CONCAT_TEXT: ConcatenateTextStrategy(),
             MergeStrategy.WHITELIST: WhitelistStrategy(),
+            MergeStrategy.FIELD_SELECTION: FieldSelectionStrategy(),
             MergeStrategy.CUSTOM: CustomStrategy(self),
             MergeStrategy.USER_PROMPT: UserPromptStrategy(),
         }
