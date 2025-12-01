@@ -669,6 +669,10 @@ class MergeCandidateAPIView(View):
         if payload:
             results = payload.get("results", [])
             preview_fields = payload.get("preview_fields", [])
+        try:
+            merge_tool_url = reverse("merge:merge_candidates")
+        except Exception:  # pragma: no cover - defensive when namespace absent
+            merge_tool_url = ""
         return {
             "error": error,
             "payload": payload,
@@ -679,7 +683,7 @@ class MergeCandidateAPIView(View):
             "model_meta": meta,
             "model_label": payload["model"] if payload else None,
             "query_params": self._build_query_params(request),
-            "merge_tool_url": reverse("merge:merge_candidates"),
+            "merge_tool_url": merge_tool_url,
         }
 
     def _build_query_params(self, request) -> str:
