@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from django.contrib.auth import get_user_model
 from django.db import connection, models
 from django.test import TransactionTestCase
 from django.test.utils import isolate_apps
@@ -11,7 +12,46 @@ from cms.merge.serializers import serialize_instance
 from cms.models import MergeLog
 
 
-@isolate_apps("cms")
+def _ensure_content_type_table() -> None:
+    from django.contrib.contenttypes.models import ContentType
+
+    existing_tables = set(connection.introspection.table_names())
+    if ContentType._meta.db_table in existing_tables:
+        return
+
+    connection.disable_constraint_checking()
+    try:
+        with connection.schema_editor(atomic=False) as schema_editor:
+            schema_editor.create_model(ContentType)
+    finally:
+        connection.enable_constraint_checking()
+
+
+def _ensure_auth_and_merge_tables() -> None:
+    """Create auth and merge log tables when migrations are unavailable."""
+
+    from django.contrib.auth.models import Group, Permission, User
+    from django.contrib.contenttypes.models import ContentType
+    from django.contrib.sites.models import Site
+
+    from cms.models import MergeLog
+
+    _ensure_content_type_table()
+    existing_tables = set(connection.introspection.table_names())
+    models_to_create = [Permission, Group, User, Site, MergeLog]
+
+    connection.disable_constraint_checking()
+    try:
+        with connection.schema_editor(atomic=False) as schema_editor:
+            for model in models_to_create:
+                if model._meta.db_table in existing_tables:
+                    continue
+                schema_editor.create_model(model)
+    finally:
+        connection.enable_constraint_checking()
+
+
+@isolate_apps("cms", "django.contrib.contenttypes")
 class MergeEngineIntegrationTests(TransactionTestCase):
     """Exercise the merge engine end-to-end using concrete models."""
 
@@ -77,6 +117,8 @@ class MergeEngineIntegrationTests(TransactionTestCase):
         cls.Attachment = Attachment
         cls.Badge = Badge
         cls.Profile = Profile
+
+        _ensure_auth_and_merge_tables()
 
         connection.disable_constraint_checking()
         try:
@@ -164,3 +206,77 @@ class MergeEngineIntegrationTests(TransactionTestCase):
         self.assertEqual(archived_snapshot["description"], "Replacement description")
 
         self.assertFalse(self.MergeSubject.objects.filter(pk=self.source.pk).exists())
+
+
+@isolate_apps("cms", "django.contrib.contenttypes")
+class FieldSelectionMergeLogTests(TransactionTestCase):
+    """Ensure merge logs serialise user-valued fields for field-selection merges."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+
+        class LocalUser(models.Model):
+            username = models.CharField(max_length=64)
+
+            class Meta:
+                app_label = "cms"
+
+        class FieldSelectionSubject(MergeMixin):
+            name = models.CharField(max_length=64)
+            owner = models.ForeignKey(LocalUser, on_delete=models.CASCADE)
+
+            merge_fields = {"owner": MergeStrategy.FIELD_SELECTION}
+
+            class Meta:
+                app_label = "cms"
+
+            def archive_source_instance(self, source_instance: "MergeSubject") -> None:  # type: ignore[name-defined]
+                return None
+
+        cls.LocalUser = LocalUser
+        cls.MergeSubject = FieldSelectionSubject
+
+        _ensure_auth_and_merge_tables()
+
+        connection.disable_constraint_checking()
+        try:
+            with connection.schema_editor(atomic=False) as schema_editor:
+                schema_editor.create_model(LocalUser)
+                schema_editor.create_model(FieldSelectionSubject)
+        finally:
+            connection.enable_constraint_checking()
+
+    @classmethod
+    def tearDownClass(cls):
+        connection.disable_constraint_checking()
+        try:
+            with connection.schema_editor(atomic=False) as schema_editor:
+                schema_editor.delete_model(cls.MergeSubject)
+                schema_editor.delete_model(cls.LocalUser)
+        finally:
+            connection.enable_constraint_checking()
+        super().tearDownClass()
+
+    def setUp(self):
+        self.owner_a = self.LocalUser.objects.create(username="owner-a")
+        self.owner_b = self.LocalUser.objects.create(username="owner-b")
+        self.target = self.MergeSubject.objects.create(name="Target", owner=self.owner_a)
+        self.source = self.MergeSubject.objects.create(name="Source", owner=self.owner_b)
+        self.audit_user = get_user_model().objects.create(username="auditor")
+
+    def test_field_selection_owner_logs_primary_key(self):
+        strategy_map = {
+            "fields": {
+                "owner": {
+                    "strategy": MergeStrategy.FIELD_SELECTION,
+                    "value": self.owner_b,
+                }
+            }
+        }
+
+        merge_records(self.source, self.target, strategy_map=strategy_map, user=self.audit_user)
+
+        log_entry = MergeLog.objects.filter(target_pk=str(self.target.pk)).latest("executed_at")
+        owner_log = log_entry.resolved_values["fields"]["owner"]
+        self.assertEqual(owner_log["value"], self.owner_b.pk)

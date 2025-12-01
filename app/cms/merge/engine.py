@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import copy
+import json
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Iterable, Mapping, MutableMapping, Optional, cast
 
 from django.contrib.contenttypes.models import ContentType
+from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models, transaction
 from django.db.models import Model
 from django.db.models.fields.related import (
@@ -134,6 +136,24 @@ def _normalise_relation_spec(field: Any, raw_value: Any) -> RelationDirective:
         raise ValueError("Custom relation directives require a callable callback")
 
     return RelationDirective(action=action, options=options, callback=callback)
+
+
+def _serialise_value(value: Any) -> Any:
+    """Return a JSON-safe representation of ``value`` suitable for logging."""
+
+    if isinstance(value, Model):
+        return getattr(value, "pk", str(value))
+    if isinstance(value, Mapping):
+        return {k: _serialise_value(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_serialise_value(item) for item in value]
+    if hasattr(value, "pk"):
+        return getattr(value, "pk")
+    try:
+        json.dumps(value, cls=DjangoJSONEncoder)
+        return value
+    except TypeError:
+        return str(value)
 
 
 def _unique_constraint_combinations(
@@ -539,19 +559,25 @@ def _log_merge(
     from cms.models import MergeLog  # Imported lazily to avoid circular imports.
 
     content_type = ContentType.objects.get_for_model(target, for_concrete_model=True)
+    serialised_resolved_fields = _serialise_value(resolved_fields)
+    serialised_relation_actions = _serialise_value(relation_actions)
+    serialised_strategy_map = _serialise_value(strategy_map)
+    serialised_source_snapshot = _serialise_value(source_snapshot)
+    serialised_target_before = _serialise_value(target_before)
+    serialised_target_after = _serialise_value(target_after)
     MergeLog.objects.create(
         model_label=f"{content_type.app_label}.{content_type.model}",
         source_pk=source_pk,
         target_pk=target.pk,
         resolved_values={
-            "fields": resolved_fields,
-            "relations": relation_actions,
+            "fields": serialised_resolved_fields,
+            "relations": serialised_relation_actions,
         },
-        strategy_map=strategy_map,
-        relation_actions=relation_actions,
-        source_snapshot=source_snapshot,
-        target_before=target_before,
-        target_after=target_after,
+        strategy_map=serialised_strategy_map,
+        relation_actions=serialised_relation_actions,
+        source_snapshot=serialised_source_snapshot,
+        target_before=serialised_target_before,
+        target_after=serialised_target_after,
         performed_by=user,
     )
 
