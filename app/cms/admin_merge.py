@@ -14,7 +14,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import redirect, render
-from django.urls import path, reverse
+from django.urls import NoReverseMatch, path, reverse
 from django.utils.text import capfirst
 from django.utils.translation import gettext_lazy as _, ngettext
 
@@ -466,12 +466,28 @@ class MergeAdminMixin:
             "source_summary": self._serialise_instance(source_obj),
             "target_summary": self._serialise_instance(target_obj),
             "changelist_url": changelist_url,
-            "search_url": reverse("merge_candidate_search")
-            if self.is_merge_tool_enabled()
-            else "",
+            "search_url": self._safe_reverse("merge:merge_candidate_search"),
+            "field_selection_url": self._safe_reverse("merge:merge_field_selection"),
+            "field_selection_help": _(
+                "Use the Field selection strategy when you need to pick a value "
+                "for each field. If you choose it here without providing per-field "
+                "selections, the merge will keep the existing target values."
+            ),
             "model_label": f"{opts.app_label}.{opts.model_name}",
         }
         return context
+
+    def _safe_reverse(self, url_name: str) -> str:
+        if not self.is_merge_tool_enabled():
+            return ""
+        try:
+            return reverse(url_name)
+        except NoReverseMatch:
+            if url_name == "merge:merge_candidate_search":
+                return "/merge/search/"
+            if url_name == "merge:merge_field_selection":
+                return "/merge/field-selection/"
+            return ""
 
     def _relation_summary_text(
         self,

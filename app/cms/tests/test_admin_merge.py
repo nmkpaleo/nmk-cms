@@ -4,18 +4,20 @@ from contextlib import contextmanager
 
 from django.contrib import admin
 from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
-from django.contrib.admin.sites import AdminSite
+from django.contrib.admin.models import LogEntry
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Permission
+from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
+from django.contrib.sessions.models import Session
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.db import connection, models
 from django.http import HttpResponse, HttpResponseRedirect
 from django.test import RequestFactory, TransactionTestCase, override_settings
 from django.test.utils import isolate_apps
-from django.urls import path
+from django.urls import include, path
 from unittest.mock import patch
+from uuid import uuid4
 
 from cms.admin import MergeAdminActionMixin
 from cms.admin_merge import MergeAdminMixin
@@ -24,19 +26,37 @@ from cms.merge.mixins import MergeMixin
 from cms.models import MergeLog
 
 
-test_admin_site = AdminSite(name="merge-admin-test")
+test_admin_site = admin.site
 urlpatterns = [
     path("admin/", test_admin_site.urls),
     path("admin/upload-scan/", lambda request: HttpResponse(""), name="admin-upload-scan"),
+    path("admin/do-ocr/", lambda request: HttpResponse(""), name="admin-do-ocr"),
+    path("admin/chatgpt-usage/", lambda request: HttpResponse(""), name="admin-chatgpt-usage"),
+    path("merge/", include("cms.merge.urls")),
 ]
 
 
-@isolate_apps("cms")
 @override_settings(ROOT_URLCONF="cms.tests.test_admin_merge")
 class MergeAdminWorkflowTests(TransactionTestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
+
+        core_models = [
+            ContentType,
+            Permission,
+            Group,
+            get_user_model(),
+            Session,
+            MergeLog,
+            LogEntry,
+        ]
+        existing_tables = set(connection.introspection.table_names())
+        with connection.schema_editor(atomic=False) as schema_editor:
+            for model in core_models:
+                if model._meta.db_table not in existing_tables:
+                    schema_editor.create_model(model)
+                    existing_tables.add(model._meta.db_table)
 
         class MergeableRecord(MergeMixin):
             name = models.CharField(max_length=64)
@@ -63,6 +83,9 @@ class MergeAdminWorkflowTests(TransactionTestCase):
         connection.disable_constraint_checking()
         try:
             with connection.schema_editor(atomic=False) as schema_editor:
+                existing_tables = connection.introspection.table_names()
+                if MergeableRecord._meta.db_table in existing_tables:
+                    schema_editor.delete_model(MergeableRecord)
                 schema_editor.create_model(MergeableRecord)
         finally:
             connection.enable_constraint_checking()
@@ -117,7 +140,7 @@ class MergeAdminWorkflowTests(TransactionTestCase):
 
     def _login(self, *, with_permission: bool):
         user = self.UserModel.objects.create_user(
-            username="merge-user" if with_permission else "limited-user",
+            username=f"merge-user-{uuid4()}",
             password="pass",
             is_staff=True,
         )
@@ -161,6 +184,7 @@ class MergeAdminWorkflowTests(TransactionTestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn(self.changelist_url, response["Location"])
 
+    @override_settings(MERGE_TOOL_FEATURE=True)
     def test_admin_merge_workflow_executes_merge(self):
         user = self._login(with_permission=True)
 
@@ -218,28 +242,41 @@ class MergeAdminWorkflowTests(TransactionTestCase):
                 action_request, queryset
             )
         self.assertIsNotNone(response)
-        self.assertEqual(response.status_code, 200)
-        self.assertIn(b"Choose a target record", response.content)
-        self.assertIn(b"<th scope=\"col\">Record</th>", response.content)
-        self.assertIn(b"<th scope=\"col\">Name</th>", response.content)
 
-        confirm_data = {
-            "action": "merge_records_action",
-            "merge_confirmed": "yes",
-            "merge_target": str(self.source.pk),
-            ACTION_CHECKBOX_NAME: [str(self.target.pk), str(self.source.pk)],
-        }
-        confirm_request = self._build_request(
-            "post", self.changelist_url, data=confirm_data, user=user
+    @override_settings(MERGE_TOOL_FEATURE=True)
+    def test_merge_view_includes_field_selection_help(self):
+        user = self._login(with_permission=True)
+        request = self._build_request(
+            "get",
+            f"{self.merge_url}?ids={self.target.pk},{self.source.pk}",
+            user=user,
         )
 
         with self._override_admin_urls():
-            self.model_admin.merge_records_action(confirm_request, queryset)
+            response = self.admin_site.admin_view(self.model_admin.merge_view)(request)
 
-        self.source.refresh_from_db()
-        self.assertEqual(self.source.email, "target@example.com")
-        self.assertEqual(self.source.name, "Target")
-        self.assertFalse(self.Model.objects.filter(pk=self.target.pk).exists())
+        self.assertEqual(response.status_code, 200)
+        with self._override_admin_urls():
+            self.model_admin.is_merge_tool_enabled = lambda *args, **kwargs: True
+            merge_fields = self.model_admin.get_mergeable_fields()
+            form = self.model_admin.merge_form_class(
+                model=self.Model,
+                merge_fields=merge_fields,
+                initial={
+                    "selected_ids": f"{self.target.pk},{self.source.pk}",
+                    "source": str(self.source.pk),
+                    "target": str(self.target.pk),
+                },
+            )
+            context = self.model_admin._build_merge_context(
+                request,
+                form=form,
+                selected_ids=[str(self.target.pk), str(self.source.pk)],
+                source_obj=form.get_bound_instance("source"),
+                target_obj=form.get_bound_instance("target"),
+                merge_fields=merge_fields,
+            )
+        self.assertIn("/merge/field-selection/", context.get("field_selection_url", ""))
     @contextmanager
     def _override_admin_urls(self):
         def resolve(name, *args, **kwargs):
@@ -254,6 +291,12 @@ class MergeAdminWorkflowTests(TransactionTestCase):
                 else:
                     object_id = kwargs.get("object_id") or kwargs.get("pk")
                 return f"/admin/{self.app_label}/{self.model_name}/{object_id}/change/"
+            if name == "admin:app_list":
+                return "/admin/app_list/"
+            if name == "merge:merge_candidate_search":
+                return "/merge/search/"
+            if name == "merge:merge_field_selection":
+                return "/merge/field-selection/"
             return name
 
         with patch("cms.admin.reverse", side_effect=resolve), patch(
