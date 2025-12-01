@@ -220,7 +220,7 @@ class FieldSlipMergeDeduplicationTests(TransactionTestCase):
             "cms.merge.engine._log_merge"
         ) as mock_log_merge:
             def fake_reverse(name: str, *args, **kwargs) -> str:
-                if name == "merge_candidate_search":
+                if name == "merge:merge_candidate_search":
                     return "/admin/cms/fieldslip/merge/search/"
                 return reverse(name, *args, **kwargs)
 

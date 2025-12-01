@@ -398,7 +398,7 @@ class MergeCandidateAdminView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         context["merge_models"] = self._get_merge_models()
         context["search_url"] = (
-            reverse("merge_candidate_search")
+            reverse("merge:merge_candidate_search")
             if getattr(settings, "MERGE_TOOL_FEATURE", False)
             else ""
         )
@@ -679,7 +679,7 @@ class MergeCandidateAPIView(View):
             "model_meta": meta,
             "model_label": payload["model"] if payload else None,
             "query_params": self._build_query_params(request),
-            "merge_tool_url": reverse("merge_candidates"),
+            "merge_tool_url": reverse("merge:merge_candidates"),
         }
 
     def _build_query_params(self, request) -> str:

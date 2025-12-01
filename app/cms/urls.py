@@ -195,7 +195,9 @@ urlpatterns += [
 ]
 
 if getattr(settings, "MERGE_TOOL_FEATURE", False):
-    urlpatterns += [path("merge/", include("cms.merge.urls"))]
+    urlpatterns += [
+        path("merge/", include(("cms.merge.urls", "merge"), namespace="merge"))
+    ]
 
 urlpatterns += [
     path("dashboard/", dashboard, name="dashboard"),
