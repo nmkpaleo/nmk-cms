@@ -15,6 +15,7 @@ from django.db import models
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import redirect, render
 from django.urls import NoReverseMatch, path, reverse
+from urllib.parse import urlencode
 from django.utils.text import capfirst
 from django.utils.translation import gettext_lazy as _, ngettext
 
@@ -467,7 +468,12 @@ class MergeAdminMixin:
             "target_summary": self._serialise_instance(target_obj),
             "changelist_url": changelist_url,
             "search_url": self._safe_reverse("merge:merge_candidate_search"),
-            "field_selection_url": self._safe_reverse("merge:merge_field_selection"),
+            "field_selection_url": self._build_field_selection_url(
+                selected_ids=selected_ids,
+                source_obj=source_obj,
+                target_obj=target_obj,
+                cancel_url=changelist_url,
+            ),
             "field_selection_help": _(
                 "Use the Field selection strategy when you need to pick a value "
                 "for each field. If you choose it here without providing per-field "
@@ -476,6 +482,40 @@ class MergeAdminMixin:
             "model_label": f"{opts.app_label}.{opts.model_name}",
         }
         return context
+
+    def _build_field_selection_url(
+        self,
+        *,
+        selected_ids: Iterable[str],
+        source_obj: models.Model | None,
+        target_obj: models.Model | None,
+        cancel_url: str,
+    ) -> str:
+        base_url = self._safe_reverse("merge:merge_field_selection")
+        if not base_url:
+            return ""
+
+        opts = self.model._meta
+        target_id = getattr(target_obj, "pk", None) or (selected_ids[0] if selected_ids else "")
+        candidate_ids: list[str] = []
+        for value in selected_ids:
+            if value not in candidate_ids:
+                candidate_ids.append(value)
+        for obj in (source_obj, target_obj):
+            if obj is None:
+                continue
+            obj_pk = str(getattr(obj, "pk", ""))
+            if obj_pk and obj_pk not in candidate_ids:
+                candidate_ids.append(obj_pk)
+
+        params = {
+            "model": f"{opts.app_label}.{opts.model_name}",
+            "target": target_id,
+            "candidates": ",".join(candidate_ids),
+            "cancel": cancel_url,
+        }
+
+        return f"{base_url}?{urlencode(params)}"
 
     def _safe_reverse(self, url_name: str) -> str:
         if not self.is_merge_tool_enabled():

@@ -81,6 +81,7 @@ class FieldSelectionMergeViewTests(SimpleTestCase):
         request = self.factory.get(
             "/merge/field-selection/",
             {"model": "cms.DummyMergeModel", "target": 1, "candidates": "1,2"},
+            HTTP_ACCEPT="application/json",
         )
         request.user = self._dummy_user()
 
@@ -97,6 +98,7 @@ class FieldSelectionMergeViewTests(SimpleTestCase):
         request = self.factory.post(
             "/merge/field-selection/",
             {"model": "cms.DummyMergeModel", "target": 1, "candidates": "1,2", selection_field: "2"},
+            HTTP_ACCEPT="application/json",
         )
         request.user = self._dummy_user()
 

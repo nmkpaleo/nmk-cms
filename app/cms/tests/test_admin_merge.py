@@ -8,10 +8,14 @@ from django.contrib.admin.models import LogEntry
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
+from django.contrib.sites.models import Site
+from django.contrib.sites.management import create_default_site
 from django.contrib.sessions.models import Session
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.db import connection, models
+from django.core.management import call_command
+from django.db.models.signals import post_migrate
 from django.http import HttpResponse, HttpResponseRedirect
 from django.test import RequestFactory, TransactionTestCase, override_settings
 from django.test.utils import isolate_apps
@@ -38,6 +42,36 @@ urlpatterns = [
 
 @override_settings(ROOT_URLCONF="cms.tests.test_admin_merge")
 class MergeAdminWorkflowTests(TransactionTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        post_migrate.disconnect(
+            create_default_site,
+            dispatch_uid="django.contrib.sites.management.create_default_site",
+        )
+        with connection.schema_editor() as editor:
+            try:
+                editor.create_model(Site)
+            except Exception:
+                # Table may already exist when migrations have been applied.
+                pass
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        call_command("migrate", "sites", verbosity=0, run_syncdb=True)
+        if not Site.objects.filter(pk=1).exists():
+            Site.objects.create(pk=1, domain="example.com", name="example.com")
+
+    def setUp(self):
+        super().setUp()
+        with connection.schema_editor() as editor:
+            try:
+                editor.create_model(Site)
+            except Exception:
+                pass
+        if not Site.objects.filter(pk=1).exists():
+            Site.objects.create(pk=1, domain="example.com", name="example.com")
     @classmethod
     def setUpClass(cls):
         super().setUpClass()

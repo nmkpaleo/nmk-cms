@@ -9,7 +9,8 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, JsonResponse
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, render, redirect
+from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 
@@ -45,12 +46,26 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
             candidates=candidates,
         )
 
-        payload = {
-            "fields": form.field_options,
-            "target": target.instance.pk,
-            "candidates": [candidate.key for candidate in candidates],
-        }
-        return JsonResponse(payload)
+        if self._wants_json(request):
+            payload = {
+                "fields": form.field_options,
+                "target": target.instance.pk,
+                "candidates": [candidate.key for candidate in candidates],
+            }
+            return JsonResponse(payload)
+
+        return render(
+            request,
+            "merge/per_field_strategy.html",
+            {
+                "form": form,
+                "model_label": model._meta.label,
+                "target_id": target.key,
+                "candidate_ids": ",".join(candidate.key for candidate in candidates),
+                "action_url": reverse("merge:merge_field_selection"),
+                "cancel_url": request.GET.get("cancel") or request.META.get("HTTP_REFERER", ""),
+            },
+        )
 
     def post(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
         try:
@@ -67,7 +82,22 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
         )
 
         if not form.is_valid():
-            return JsonResponse({"errors": form.errors}, status=400)
+            if self._wants_json(request):
+                return JsonResponse({"errors": form.errors}, status=400)
+            return render(
+                request,
+                "merge/per_field_strategy.html",
+                {
+                    "form": form,
+                    "model_label": model._meta.label,
+                    "target_id": target.key,
+                    "candidate_ids": ",".join(candidate.key for candidate in candidates),
+                    "action_url": reverse("merge:merge_field_selection"),
+                    "cancel_url": request.POST.get("cancel")
+                    or request.META.get("HTTP_REFERER", ""),
+                },
+                status=400,
+            )
 
         source = self._get_source_candidate(candidates)
         if not source:
@@ -87,13 +117,21 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
             % {"source": source.label, "target": target.label},
         )
 
-        return JsonResponse(
-            {
-                "target_id": result.target.pk,
-                "resolved_fields": result.resolved_values,
-                "relation_actions": result.relation_actions,
-            }
-        )
+        if self._wants_json(request):
+            return JsonResponse(
+                {
+                    "target_id": result.target.pk,
+                    "resolved_fields": result.resolved_values,
+                    "relation_actions": result.relation_actions,
+                }
+            )
+
+        meta = target.instance._meta
+        try:
+            change_url = reverse(f"admin:{meta.app_label}_{meta.model_name}_change", args=[target.instance.pk])
+        except Exception:  # pragma: no cover - defensive fallback
+            change_url = request.POST.get("cancel") or request.META.get("HTTP_REFERER", "")
+        return redirect(change_url)
 
     def get_model(self, request: HttpRequest) -> type[MergeMixin]:
         if self.model is not None:
@@ -149,6 +187,13 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
             raise ValueError("A valid target candidate is required.")
 
         return candidates, target
+
+    def _wants_json(self, request: HttpRequest) -> bool:
+        explicit = (request.GET.get("format") or request.POST.get("format") or "").lower()
+        if explicit == "json":
+            return True
+        accept = request.headers.get("Accept", "")
+        return "application/json" in accept.split(",")
 
     def _get_source_candidate(
         self, candidates: Iterable[FieldSelectionCandidate]
