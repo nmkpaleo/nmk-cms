@@ -132,6 +132,7 @@ class FieldSelectionForm(forms.Form):
                     "label": field.verbose_name,
                     "choices": choice_rows,
                     "field_name": field_name,
+                    "bound_field": self[field_name],
                 }
             )
 

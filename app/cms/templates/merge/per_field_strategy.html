@@ -63,7 +63,7 @@
           </thead>
           <tbody>
             {% for option in form.field_options %}
-              {% with bound_field=form[option.field_name] %}
+              {% with bound_field=option.bound_field %}
                 {% with selected_value=bound_field.value %}
                 <tr>
                   <th scope="row" class="w3-text-dark-grey">
