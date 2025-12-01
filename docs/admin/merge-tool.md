@@ -16,6 +16,13 @@ The interface now renders entirely with W3.CSS containers and cards, so the admi
 - **Fuzzy candidate search** – visit `/merge/` while logged in as a staff user to open the dedicated search UI. The form lists every model registered with `MERGE_REGISTRY` and sends requests to `/merge/search/` to return scored candidates.
 - Both entry points honour the `MERGE_TOOL_FEATURE` flag: when disabled the URLs remain hidden and the templates render a clear *feature disabled* notice.
 
+### Per-field selection workflow
+
+- When a model defaults to the `FIELD_SELECTION` strategy for a field, the compare screen surfaces a yellow banner with an **Open field selection merge** link once a target and source are chosen.
+- Follow the link to load the dedicated field-selection view at `/merge/field-selection/` with the `model`, `target`, and `candidates` query parameters prefilled. The view is staff-only and respects the same feature flag.
+- Pick the value to keep for each field using the radio buttons across the source and target columns. Leave fields untouched to keep the target value.
+- Submit to complete the merge; the view redirects back to the target’s admin change page with a success banner that also records in `MergeLog`.
+
 ## Feature Flag Rollout and Safeguards
 
 The merge tooling is disabled by default and is controlled through the `ENABLE_ADMIN_MERGE` environment variable (surfaceable as `settings.MERGE_TOOL_FEATURE`).
