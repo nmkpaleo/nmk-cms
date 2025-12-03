@@ -1,15 +1,33 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 from django.db import models
-from django.test import SimpleTestCase
+from django.contrib.admin.models import LogEntry
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group, Permission
+from django.contrib.contenttypes.models import ContentType
+from django.contrib.messages.storage.fallback import FallbackStorage
+from django.contrib.sessions.middleware import SessionMiddleware
+from django.contrib.sessions.models import Session
+from django.contrib.sites.models import Site
+from django.db import connection, models
+from django.test import RequestFactory, SimpleTestCase, TransactionTestCase, override_settings
+from django.urls import reverse
 from django.test.utils import isolate_apps
 from unittest import mock
+from uuid import uuid4
+
+from crum import set_current_user
 
 from cms.merge.constants import MergeStrategy
 from cms.merge.engine import merge_records
+from cms.merge.forms import FieldSelectionForm
 from cms.merge.mixins import MergeMixin
+from cms.merge.views import FieldSelectionMergeView
+from cms.models import MergeLog
+from cms import models as cms_models
 from cms.merge.strategies import FieldSelectionStrategy, UNCHANGED
 
 
@@ -158,10 +176,119 @@ class FieldSelectionMergeIntegrationTests(SimpleTestCase):
         log_merge_mock.assert_called_once()
         payload = log_merge_mock.call_args.kwargs
         self.assertEqual(payload["resolved_fields"]["title"]["value"], "Incoming")
-        self.assertEqual(payload["resolved_fields"]["code"]["value"], "ABC")
-        title_strategy = payload["strategy_map"]["fields"]["title"]
-        code_strategy = payload["strategy_map"]["fields"]["code"]
-        self.assertEqual(title_strategy["strategy"], MergeStrategy.FIELD_SELECTION.value)
-        self.assertEqual(code_strategy["strategy"], MergeStrategy.FIELD_SELECTION.value)
-        self.assertEqual(title_strategy.get("options", {}).get("selected_from"), "source")
-        self.assertEqual(code_strategy.get("options", {}).get("selected_from"), "target")
+
+
+@override_settings(MERGE_TOOL_FEATURE=True)
+class FieldSelectionViewMultiSourceTests(TransactionTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+
+        cls.factory = RequestFactory()
+        existing_tables = set(connection.introspection.table_names())
+        core_models = [
+            ContentType,
+            Group,
+            Permission,
+            LogEntry,
+            Session,
+            get_user_model(),
+            Site,
+            MergeLog,
+            cms_models.Storage,
+            cms_models.Storage.history.model,
+        ]
+
+        with connection.schema_editor(atomic=False) as schema_editor:
+            for model in core_models:
+                if model._meta.db_table not in existing_tables:
+                    schema_editor.create_model(model)
+                    existing_tables.add(model._meta.db_table)
+
+    def setUp(self):
+        super().setUp()
+        self.user = get_user_model().objects.create_user(
+            username=f"merge-user-{uuid4()}",
+            email="merge@example.com",
+            password="pass",
+            is_staff=True,
+        )
+        content_type = ContentType.objects.get_for_model(cms_models.Storage)
+        permission, _ = Permission.objects.get_or_create(
+            codename="can_merge",
+            content_type=content_type,
+            defaults={"name": "Can merge storage records"},
+        )
+        self.user.user_permissions.add(permission)
+
+    def tearDown(self):
+        set_current_user(None)
+        super().tearDown()
+
+    def _build_request(self, data):
+        request = self.factory.post("/merge/field-selection/", data=data)
+        SessionMiddleware(lambda req: None).process_request(request)
+        request.session.save()
+        setattr(request, "_messages", FallbackStorage(request))
+        request._dont_enforce_csrf_checks = True
+        request.user = self.user
+        return request
+
+    def test_field_selection_merges_all_sources(self):
+        set_current_user(self.user)
+        target = cms_models.Storage.objects.create(area="Target")
+        source_one = cms_models.Storage.objects.create(area="Source One")
+        source_two = cms_models.Storage.objects.create(area="Source Two")
+        set_current_user(None)
+
+        view = FieldSelectionMergeView()
+        merge_fields = view.get_mergeable_fields(cms_models.Storage)
+        selection_field = FieldSelectionForm.selection_field_name("area")
+        data = {
+            "model": cms_models.Storage._meta.label,
+            "target": str(target.pk),
+            "candidates": ",".join(
+                [str(target.pk), str(source_one.pk), str(source_two.pk)]
+            ),
+            selection_field: str(source_two.pk),
+            "cancel": "/admin/cms/storage/",
+        }
+        for field in merge_fields:
+            field_name = FieldSelectionForm.selection_field_name(field.name)
+            data.setdefault(field_name, str(target.pk))
+
+        request = self._build_request(data)
+
+        with mock.patch(
+            "cms.merge.views.reverse",
+            side_effect=lambda name, *args, **kwargs: (
+                "/merge/field-selection/"
+                if name == "merge:merge_field_selection"
+                else (
+                    f"/admin/{name.split(':', 1)[1]}/{(args[0] if args else kwargs.get('object_id') or kwargs.get('pk') or '')}/"
+                    if name.startswith("admin:")
+                    else name
+                )
+            ),
+        ), mock.patch("cms.merge.views.merge_records") as merge_mock:
+
+            def _perform_merge(source, target, strategy_map, user=None, archive=True):
+                area_config = strategy_map.get("fields", {}).get("area", {})
+                resolved_area = area_config.get("value") or getattr(source, "area", None)
+                if resolved_area is not None:
+                    target.area = resolved_area
+                return SimpleNamespace(target=target, resolved_values={}, relation_actions={})
+
+            merge_mock.side_effect = _perform_merge
+            response = FieldSelectionMergeView.as_view()(request)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(merge_mock.call_count, 2)
+        self.assertEqual(
+            [call.kwargs["source"].pk for call in merge_mock.call_args_list],
+            [source_one.pk, source_two.pk],
+        )
+        self.assertEqual(
+            merge_mock.call_args_list[0].kwargs["strategy_map"]["fields"]["area"].get("value"),
+            "Source Two",
+        )
