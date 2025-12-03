@@ -26,6 +26,7 @@ from uuid import uuid4
 from crum import set_current_user
 
 from cms.admin import MergeAdminActionMixin
+from cms import admin_merge
 from cms.admin_merge import MergeAdminMixin
 from cms.merge.constants import MergeStrategy
 from cms.merge.mixins import MergeMixin
@@ -223,6 +224,38 @@ class MergeAdminWorkflowTests(TransactionTestCase):
         self.assertIn(self.changelist_url, response["Location"])
 
     @override_settings(MERGE_TOOL_FEATURE=True)
+    def test_merge_action_redirects_with_all_selected_ids(self):
+        user = self._login(with_permission=True)
+        extra_source = self.Model.objects.create(
+            name="Extra", email="extra@example.com", notes=""
+        )
+
+        post_data = {
+            "action": "merge_selected",
+            ACTION_CHECKBOX_NAME: [
+                str(self.target.pk),
+                str(self.source.pk),
+                str(extra_source.pk),
+            ],
+        }
+        queryset = self.Model._default_manager.filter(
+            pk__in=[self.target.pk, self.source.pk, extra_source.pk]
+        )
+        action_request = self._build_request(
+            "post", self.changelist_url, data=post_data, user=user
+        )
+
+        with self._override_admin_urls():
+            response = self.model_admin.merge_selected(action_request, queryset)
+
+        self.assertEqual(response.status_code, 302)
+        parsed = parse_qs(urlparse(response["Location"]).query)
+        self.assertEqual(
+            parsed.get("ids"),
+            ["{},{},{}".format(self.target.pk, self.source.pk, extra_source.pk)],
+        )
+
+    @override_settings(MERGE_TOOL_FEATURE=True)
     def test_admin_merge_workflow_executes_merge(self):
         user = self._login(with_permission=True)
 
@@ -417,6 +450,47 @@ class MergeAdminWorkflowTests(TransactionTestCase):
         merge_records_mock.assert_not_called()
 
     @override_settings(MERGE_TOOL_FEATURE=True)
+    def test_field_selection_redirect_includes_all_candidates(self):
+        user = self._login(with_permission=True)
+        extra_source = self.Model.objects.create(
+            name="Extra", email="extra@example.com", notes=""
+        )
+
+        original_merge_fields = self.Model.merge_fields.copy()
+        self.addCleanup(lambda: setattr(self.Model, "merge_fields", original_merge_fields))
+        self.Model.merge_fields = {
+            "name": MergeStrategy.FIELD_SELECTION,
+            "email": MergeStrategy.PREFER_NON_NULL,
+            "notes": MergeStrategy.PREFER_NON_NULL,
+        }
+
+        form_data = {
+            "selected_ids": f"{self.target.pk},{self.source.pk},{extra_source.pk}",
+            "source": str(self.source.pk),
+            "target": str(self.target.pk),
+            "strategy__name": MergeStrategy.FIELD_SELECTION.value,
+            "value__name": "",
+            "strategy__email": MergeStrategy.PREFER_NON_NULL.value,
+            "value__email": "",
+            "strategy__notes": MergeStrategy.PREFER_NON_NULL.value,
+            "value__notes": "",
+        }
+
+        merge_request = self._build_request("post", self.merge_url, data=form_data, user=user)
+
+        with self._override_admin_urls(), patch("cms.merge.merge_records") as merge_records_mock:
+            response = self.admin_site.admin_view(self.model_admin.merge_view)(merge_request)
+
+        self.assertEqual(response.status_code, 302)
+        query = parse_qs(urlparse(response["Location"]).query)
+        self.assertEqual(
+            query.get("candidates"),
+            [f"{self.target.pk},{self.source.pk},{extra_source.pk}"],
+        )
+        self.assertEqual(query.get("target"), [str(self.target.pk)])
+        merge_records_mock.assert_not_called()
+
+    @override_settings(MERGE_TOOL_FEATURE=True)
     def test_admin_merge_handles_multiple_sources(self):
         user = self._login(with_permission=True)
         extra_source = self.Model.objects.create(
@@ -494,6 +568,35 @@ class MergeAdminWorkflowTests(TransactionTestCase):
             self.assertEqual(entry.target_pk, str(self.target.pk))
 
     @override_settings(MERGE_TOOL_FEATURE=True)
+    def test_merge_view_rejects_multi_source_post_without_permission(self):
+        user = self._login(with_permission=False)
+        extra_source = self.Model.objects.create(
+            name="Extra", email="extra@example.com", notes=""
+        )
+
+        form_data = {
+            "selected_ids": f"{self.target.pk},{self.source.pk},{extra_source.pk}",
+            "source": str(self.source.pk),
+            "target": str(self.target.pk),
+            "strategy__name": MergeStrategy.LAST_WRITE.value,
+            "value__name": "",
+            "strategy__email": MergeStrategy.LAST_WRITE.value,
+            "value__email": "",
+            "strategy__notes": MergeStrategy.LAST_WRITE.value,
+            "value__notes": "",
+        }
+
+        merge_request = self._build_request("post", self.merge_url, data=form_data, user=user)
+
+        with self._override_admin_urls():
+            response = self.admin_site.admin_view(self.model_admin.merge_view)(merge_request)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(self.changelist_url, response["Location"])
+        self.assertEqual(self.Model.objects.count(), 3)
+        self.assertFalse(MergeLog.objects.exists())
+
+    @override_settings(MERGE_TOOL_FEATURE=True)
     def test_admin_merge_archives_each_source(self):
         user = self._login(with_permission=True)
         extra_source = self.Model.objects.create(
@@ -529,6 +632,52 @@ class MergeAdminWorkflowTests(TransactionTestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(archive_mock.call_count, 2)
         self.assertEqual(set(archived_sources), {self.source.pk, extra_source.pk})
+
+    @override_settings(MERGE_TOOL_FEATURE=True)
+    def test_admin_merge_stops_processing_after_failure(self):
+        user = self._login(with_permission=True)
+        failing_source = self.Model.objects.create(
+            name="Failing", email="fail@example.com", notes=""
+        )
+
+        form_data = {
+            "selected_ids": f"{self.target.pk},{self.source.pk},{failing_source.pk}",
+            "source": str(self.source.pk),
+            "target": str(self.target.pk),
+            "strategy__name": MergeStrategy.LAST_WRITE.value,
+            "value__name": "",
+            "strategy__email": MergeStrategy.LAST_WRITE.value,
+            "value__email": "",
+            "strategy__notes": MergeStrategy.LAST_WRITE.value,
+            "value__notes": "",
+        }
+
+        original_merge = admin_merge.merge_records
+
+        call_counter = {"index": 0}
+
+        def _merge_with_failure(source, target, strategy_map, user=None, archive=True):
+            if call_counter["index"] == 0:
+                call_counter["index"] += 1
+                return original_merge(source, target, strategy_map, user=user, archive=archive)
+            raise RuntimeError("boom")
+
+        merge_request = self._build_request("post", self.merge_url, data=form_data, user=user)
+
+        with self._override_admin_urls(), patch(
+            "cms.admin_merge.merge_records", side_effect=_merge_with_failure
+        ) as merge_mock:
+            response = self.admin_site.admin_view(self.model_admin.merge_view)(merge_request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(merge_mock.call_count, 2)
+        self.assertTrue(
+            any("Merge failed" in str(message) for message in merge_request._messages)
+        )
+        self.target.refresh_from_db()
+        self.assertEqual(self.target.name, "Source")
+        self.assertTrue(self.Model.objects.filter(pk=failing_source.pk).exists())
+        self.assertEqual(MergeLog.objects.filter(target_pk=str(self.target.pk)).count(), 1)
     @contextmanager
     def _override_admin_urls(self):
         def resolve(name, *args, **kwargs):
