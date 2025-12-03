@@ -151,7 +151,26 @@ class MergeAdminForm(forms.Form):
             raise ValidationError(_("Source and target must be different records."))
 
         raw_ids = cleaned_data.get("selected_ids") or ""
-        self.selected_ids = [value for value in (item.strip() for item in raw_ids.split(",")) if value]
+        parsed_ids = self._normalise_ids(raw_ids)
+
+        target_pk = self._pk_value(cleaned_data.get("target"))
+        source_pk = self._pk_value(cleaned_data.get("source"))
+
+        parsed_ids = [pk for pk in parsed_ids if pk != target_pk]
+        ordered_ids: list[str] = []
+        if target_pk:
+            ordered_ids.append(target_pk)
+        for value in parsed_ids:
+            if value not in ordered_ids:
+                ordered_ids.append(value)
+        if source_pk and source_pk not in ordered_ids:
+            ordered_ids.append(source_pk)
+
+        if len(ordered_ids) < 2:
+            raise ValidationError(_("Select at least two records to merge."))
+
+        self.selected_ids = ordered_ids
+        cleaned_data["selected_ids"] = ",".join(ordered_ids)
 
         for config in self.field_configs:
             strategy_name = config["strategy_name"]
@@ -176,6 +195,22 @@ class MergeAdminForm(forms.Form):
                     cleaned_data[value_name] = manual_value.pk
 
         return cleaned_data
+
+    def _normalise_ids(self, raw_ids: str) -> list[str]:
+        """Split and de-duplicate a comma-separated list of identifiers."""
+
+        values: list[str] = []
+        for raw_value in raw_ids.split(","):
+            value = raw_value.strip()
+            if not value or value in values:
+                continue
+            values.append(value)
+        return values
+
+    def _pk_value(self, obj: models.Model | None) -> str:
+        if obj is None:
+            return ""
+        return str(getattr(obj, "pk", ""))
 
     def build_strategy_map(self) -> dict[str, Any]:
         """Return a strategy payload suitable for :func:`merge_records`."""
@@ -342,6 +377,7 @@ class MergeAdminMixin:
         target_obj = form.get_bound_instance("target")
 
         if request.method == "POST" and form.is_valid():
+            selected_ids = getattr(form, "selected_ids", selected_ids)
             field_selection_url = self._build_field_selection_url(
                 selected_ids=selected_ids,
                 source_obj=source_obj,
@@ -429,7 +465,7 @@ class MergeAdminMixin:
         context = self._build_merge_context(
             request,
             form=form,
-            selected_ids=selected_ids,
+            selected_ids=getattr(form, "selected_ids", selected_ids),
             source_obj=source_obj,
             target_obj=target_obj,
             merge_fields=merge_fields,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from urllib.parse import parse_qs, urlparse
 
 from django.contrib import admin
 from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
@@ -353,6 +354,67 @@ class MergeAdminWorkflowTests(TransactionTestCase):
                 merge_fields=merge_fields,
             )
         self.assertIn("/merge/field-selection/", context.get("field_selection_url", ""))
+
+    @override_settings(MERGE_TOOL_FEATURE=True)
+    def test_merge_form_normalises_selected_ids_and_requires_distinct_records(self):
+        merge_fields = self.model_admin.get_mergeable_fields()
+        form = self.model_admin.merge_form_class(
+            model=self.Model,
+            merge_fields=merge_fields,
+            data={
+                "selected_ids": f"{self.target.pk},{self.source.pk},{self.target.pk}",
+                "source": str(self.source.pk),
+                "target": str(self.target.pk),
+                "strategy__name": MergeStrategy.LAST_WRITE.value,
+                "value__name": "",
+                "strategy__email": MergeStrategy.PREFER_NON_NULL.value,
+                "value__email": "",
+                "strategy__notes": MergeStrategy.PREFER_NON_NULL.value,
+                "value__notes": "",
+            },
+        )
+
+        self.assertTrue(form.is_valid())
+        self.assertEqual(form.selected_ids, [str(self.target.pk), str(self.source.pk)])
+
+    @override_settings(MERGE_TOOL_FEATURE=True)
+    def test_field_selection_payload_uses_normalised_selected_ids(self):
+        user = self._login(with_permission=True)
+
+        original_merge_fields = self.Model.merge_fields.copy()
+        self.addCleanup(lambda: setattr(self.Model, "merge_fields", original_merge_fields))
+        self.Model.merge_fields = {
+            "name": MergeStrategy.FIELD_SELECTION,
+            "email": MergeStrategy.PREFER_NON_NULL,
+            "notes": MergeStrategy.PREFER_NON_NULL,
+        }
+
+        form_data = {
+            "selected_ids": f"{self.source.pk},{self.target.pk},{self.source.pk}",
+            "source": str(self.source.pk),
+            "target": str(self.target.pk),
+            "strategy__name": MergeStrategy.FIELD_SELECTION.value,
+            "value__name": "",
+            "strategy__email": MergeStrategy.PREFER_NON_NULL.value,
+            "value__email": "",
+            "strategy__notes": MergeStrategy.PREFER_NON_NULL.value,
+            "value__notes": "",
+        }
+
+        merge_request = self._build_request("post", self.merge_url, data=form_data, user=user)
+
+        with self._override_admin_urls(), patch("cms.merge.merge_records") as merge_records_mock:
+            response = self.admin_site.admin_view(self.model_admin.merge_view)(merge_request)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/merge/field-selection/", response["Location"])
+        query = parse_qs(urlparse(response["Location"]).query)
+        self.assertEqual(
+            query.get("candidates"),
+            [f"{self.target.pk},{self.source.pk}"],
+        )
+        self.assertEqual(query.get("target"), [str(self.target.pk)])
+        merge_records_mock.assert_not_called()
 
     @override_settings(MERGE_TOOL_FEATURE=True)
     def test_admin_merge_handles_multiple_sources(self):
