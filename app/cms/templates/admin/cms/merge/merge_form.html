@@ -44,9 +44,9 @@
   <section class="w3-margin-bottom">
     <h2 class="w3-large w3-margin-bottom">{% trans "Current selection" %}</h2>
     <div class="w3-row-padding">
-      <div class="w3-col l6 w3-margin-bottom">
-        <div class="w3-card w3-white w3-round-large w3-padding-large w3-margin-bottom">
-          <h3>{% trans "Target" %}</h3>
+      <div class="w3-col l4 m12 w3-margin-bottom">
+        <div class="w3-card w3-white w3-round-large w3-padding-large w3-margin-bottom" aria-label="{% trans 'Target record' %}">
+          <h3 class="w3-margin-top">{% trans "Target" %}</h3>
           {% if target_summary %}
             <p data-merge-summary="target">
               <span class="w3-large">{{ target_summary.label }}</span>
@@ -64,27 +64,38 @@
           {% endif %}
         </div>
       </div>
-      <div class="w3-col l6 w3-margin-bottom">
-        <div class="w3-card w3-white w3-round-large w3-padding-large w3-margin-bottom">
-          <h3>{% trans "Source" %}</h3>
-          {% if source_summary %}
-            <p data-merge-summary="source">
-              <span class="w3-large">{{ source_summary.label }}</span>
-              <span class="w3-tag w3-round w3-light-grey w3-margin-left">ID {{ source_summary.pk }}</span>
-            </p>
-            {% if source_summary.preview %}
-              <ul class="w3-ul w3-small">
-                {% for row in source_summary.preview %}
-                  <li><strong>{{ row.field }}:</strong> {{ row.value }}</li>
-                {% endfor %}
-              </ul>
-            {% endif %}
-          {% else %}
-            <p class="w3-text-grey" data-merge-summary="source">{% trans "No source selected." %}</p>
-          {% endif %}
+      <div class="w3-col l8 m12 w3-margin-bottom">
+        <div class="w3-card w3-white w3-round-large w3-padding-large w3-margin-bottom" aria-label="{% trans 'Source records' %}">
+          <header class="w3-margin-bottom">
+            <h3 class="w3-margin-top">{% trans "Sources" %}</h3>
+            <p class="w3-text-grey w3-small">{% trans "Merge will process sources in order. The first source is shown in the field comparison table." %}</p>
+          </header>
+          <ul class="w3-ul w3-small" data-merge-source-list data-primary-label="{% trans 'Primary' %}" data-remove-label="{% trans 'Remove' %}">
+            {% for item in source_objects %}
+              <li class="w3-padding-small w3-border-bottom" data-merge-source-row data-merge-object-id="{{ item.pk }}" data-merge-object-label="{{ item.label }}">
+                <div class="w3-row">
+                  <div class="w3-col s9">
+                    <strong>{{ item.label }}</strong>
+                    <span class="w3-tag w3-round w3-light-grey w3-margin-left">ID {{ item.pk }}</span>
+                    {% if forloop.first %}
+                      <span class="w3-tag w3-round w3-blue w3-margin-left">{% trans "Primary" %}</span>
+                    {% endif %}
+                  </div>
+                  <div class="w3-col s3 w3-right-align">
+                    <button type="button" class="w3-button w3-small w3-light-grey w3-round" data-merge-remove-source="{{ item.pk }}">
+                      <span class="fa fa-times" aria-hidden="true"></span>
+                      <span class="w3-margin-left">{% trans "Remove" %}</span>
+                    </button>
+                  </div>
+                </div>
+              </li>
+            {% endfor %}
+          </ul>
+          <p class="w3-text-grey" data-merge-empty-sources {% if source_objects %}hidden{% endif %}>{% trans "No sources selected." %}</p>
         </div>
       </div>
     </div>
+    <p class="w3-small w3-text-grey" data-merge-live role="status" aria-live="polite"></p>
   </section>
 
   {% if selected_objects %}
@@ -107,7 +118,7 @@
           {% endif %}
           <div class="w3-margin-top">
             <button type="button" class="button w3-button w3-round w3-blue w3-margin-right" data-merge-set-role="target" data-merge-object-id="{{ item.pk }}">{% trans "Use as target" %}</button>
-            <button type="button" class="button w3-button w3-round w3-border" data-merge-set-role="source" data-merge-object-id="{{ item.pk }}">{% trans "Use as source" %}</button>
+            <button type="button" class="button w3-button w3-round w3-border" data-merge-set-role="source" data-merge-object-id="{{ item.pk }}">{% trans "Add as source" %}</button>
           </div>
         </article>
       </div>

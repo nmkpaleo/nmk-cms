@@ -585,6 +585,11 @@ class MergeAdminMixin:
             "selected_objects": selected_objects,
             "source_summary": self._serialise_instance(source_obj),
             "target_summary": self._serialise_instance(target_obj),
+            "source_objects": [
+                obj
+                for obj in selected_objects
+                if not target_obj or str(obj.get("pk")) != str(getattr(target_obj, "pk", ""))
+            ],
             "changelist_url": changelist_url,
             "search_url": self._safe_reverse("merge:merge_candidate_search"),
             "field_selection_url": self._build_field_selection_url(
