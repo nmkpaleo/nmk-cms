@@ -452,6 +452,83 @@ class MergeAdminWorkflowTests(TransactionTestCase):
             MergeLog.objects.filter(target_pk=str(self.target.pk)).count(),
             2,
         )
+
+    @override_settings(MERGE_TOOL_FEATURE=True)
+    def test_admin_merge_logs_each_source_with_snapshots(self):
+        user = self._login(with_permission=True)
+        extra_source = self.Model.objects.create(
+            name="Extra Source",
+            email="extra@example.com",
+            notes="Extra notes",
+        )
+
+        form_data = {
+            "selected_ids": f"{self.target.pk},{self.source.pk},{extra_source.pk}",
+            "source": str(self.source.pk),
+            "target": str(self.target.pk),
+            "strategy__name": MergeStrategy.LAST_WRITE.value,
+            "value__name": "",
+            "strategy__email": MergeStrategy.LAST_WRITE.value,
+            "value__email": "",
+            "strategy__notes": MergeStrategy.LAST_WRITE.value,
+            "value__notes": "",
+        }
+
+        merge_request = self._build_request("post", self.merge_url, data=form_data, user=user)
+        with self._override_admin_urls():
+            response = self.admin_site.admin_view(self.model_admin.merge_view)(merge_request)
+
+        self.assertEqual(response.status_code, 302)
+
+        log_entries = MergeLog.objects.filter(target_pk=str(self.target.pk)).order_by(
+            "executed_at"
+        )
+        self.assertEqual(log_entries.count(), 2)
+        self.assertEqual(
+            {entry.source_pk for entry in log_entries},
+            {str(self.source.pk), str(extra_source.pk)},
+        )
+        for entry in log_entries:
+            self.assertIsNotNone(entry.source_snapshot)
+            self.assertTrue(entry.resolved_values.get("fields"))
+            self.assertEqual(entry.target_pk, str(self.target.pk))
+
+    @override_settings(MERGE_TOOL_FEATURE=True)
+    def test_admin_merge_archives_each_source(self):
+        user = self._login(with_permission=True)
+        extra_source = self.Model.objects.create(
+            name="Extra Source",
+            email="extra@example.com",
+            notes="Extra notes",
+        )
+
+        form_data = {
+            "selected_ids": f"{self.target.pk},{self.source.pk},{extra_source.pk}",
+            "source": str(self.source.pk),
+            "target": str(self.target.pk),
+            "strategy__name": MergeStrategy.LAST_WRITE.value,
+            "value__name": "",
+            "strategy__email": MergeStrategy.LAST_WRITE.value,
+            "value__email": "",
+            "strategy__notes": MergeStrategy.LAST_WRITE.value,
+            "value__notes": "",
+        }
+
+        merge_request = self._build_request("post", self.merge_url, data=form_data, user=user)
+
+        archived_sources: list[int | None] = []
+
+        def _record_archive(_self, source_instance):
+            archived_sources.append(getattr(source_instance, "pk", None))
+
+        with self._override_admin_urls(), patch.object(
+            self.Model, "archive_source_instance", autospec=True, side_effect=_record_archive
+        ) as archive_mock:
+            response = self.admin_site.admin_view(self.model_admin.merge_view)(merge_request)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(archive_mock.call_count, 2)
+        self.assertEqual(set(archived_sources), {self.source.pk, extra_source.pk})
     @contextmanager
     def _override_admin_urls(self):
         def resolve(name, *args, **kwargs):
