@@ -34,3 +34,4 @@
 - Document the expert QC reference delete control, including save behavior and rollback expectations (T5).
 - Document the tabbed Change log UI for drawer and storage details, including user/admin guidance and updated development audit notes.
 - Add user, admin, and developer guidance for the FIELD_SELECTION merge workflow covering Field Slip, Storage, and Reference merges plus the dedicated field-selection view.
+- Document the admin and field-selection multi-merge workflow so all selected candidates merge into the chosen target sequentially with per-field strategies preserved.

@@ -26,6 +26,13 @@
       <div class="w3-row-padding w3-margin-bottom">
         <div class="w3-col l6 m6 s12">
           <h2 class="w3-large w3-margin-top">{% trans "Candidates" %}</h2>
+          <p class="w3-text-grey w3-small">
+            {% blocktrans count candidate_count=form.candidates|length %}
+              {{ candidate_count }} record selected for merging.
+            {% plural %}
+              {{ candidate_count }} records selected for merging.
+            {% endblocktrans %}
+          </p>
           <ul class="w3-ul w3-small">
             {% for candidate in form.candidates %}
               <li class="w3-padding-small">

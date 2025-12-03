@@ -15,7 +15,7 @@ from django.db.models import Model
 from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext_lazy as _, ngettext
 from django.views import View
 
 from cms.merge import merge_records
@@ -108,41 +108,58 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
                 status=400,
             )
 
-        source = self._get_source_candidate(candidates)
-        if not source:
+        sources = [candidate for candidate in candidates if candidate.role == "source"]
+        if not sources:
             return HttpResponseBadRequest("A source record must be provided for merging.")
 
+        strategy_map = form.build_strategy_map()
+        merge_results = []
+        target_instance = target.instance
+
         with transaction.atomic():
-            result = merge_records(
-                source=source.instance,
-                target=target.instance,
-                strategy_map=form.build_strategy_map(),
-                user=request.user,
-            )
+            for source_candidate in sources:
+                merge_result = merge_records(
+                    source=source_candidate.instance,
+                    target=target_instance,
+                    strategy_map=strategy_map,
+                    user=request.user,
+                )
+                merge_results.append((source_candidate, merge_result))
+                target_instance = merge_result.target
 
         messages.success(
             request,
-            _("Merged %(source)s into %(target)s using field selections.")
-            % {"source": source.label, "target": target.label},
+            ngettext(
+                "Merged %(count)d source into %(target)s using field selections.",
+                "Merged %(count)d sources into %(target)s using field selections.",
+                len(merge_results),
+            )
+            % {"count": len(merge_results), "target": target_instance},
         )
 
         if self._wants_json(request):
+            last_result = merge_results[-1][1]
             return JsonResponse(
                 {
-                    "target_id": result.target.pk,
+                    "target_id": target_instance.pk,
                     "resolved_fields": self._serialise_value(
                         {
                             field: self._serialise_resolution(resolution)
-                            for field, resolution in result.resolved_values.items()
+                            for field, resolution in last_result.resolved_values.items()
                         }
                     ),
-                    "relation_actions": self._serialise_value(result.relation_actions),
+                    "relation_actions": self._serialise_value(
+                        last_result.relation_actions
+                    ),
                 }
             )
 
-        meta = target.instance._meta
+        meta = target_instance._meta
         try:
-            change_url = reverse(f"admin:{meta.app_label}_{meta.model_name}_change", args=[target.instance.pk])
+            change_url = reverse(
+                f"admin:{meta.app_label}_{meta.model_name}_change",
+                args=[target_instance.pk],
+            )
         except Exception:  # pragma: no cover - defensive fallback
             change_url = request.POST.get("cancel") or request.META.get("HTTP_REFERER", "")
         return redirect(change_url)

@@ -161,9 +161,11 @@ class FieldSelectionForm(forms.Form):
                 continue
 
             payload: dict[str, object] = {"strategy": MergeStrategy.FIELD_SELECTION.value}
-            if candidate.role in {"source", "target"}:
+
+            if candidate.role == "target":
                 payload["selected_from"] = candidate.role
             else:
+                payload["selected_from"] = candidate.role or "source"
                 payload["value"] = field.value_from_object(candidate.instance)
 
             strategy_map["fields"][field_name] = payload

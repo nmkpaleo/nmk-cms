@@ -19,6 +19,7 @@ This document summarises the current merge tool components to support strategy u
 - `merge_records` (app/cms/merge/engine.py) orchestrates merges under `transaction.atomic()`, validating source/target types, combining base strategies from the model with runtime overrides, and driving `StrategyResolver` to collect field-level resolutions.
 - Resolved field values are applied with `target.save(update_fields=...)` when not a dry run. Relation handling iterates through auto-created relations, applies directives from `_normalise_relation_spec`, and records actions.
 - Merge results are logged via `_log_merge`, creating `MergeLog` entries with snapshots (`serialize_model_state`) of source and target before/after merge, the strategy map, and relation actions. The source record may be archived via `archive_source_instance` before deletion when `archive=True`.
+- Admin-initiated merges now iterate through **all** selected candidates. `MergeAdminMixin.merge_view` normalises the incoming ID list (target first), then loops over each remaining source, reusing the resolved strategy map and accumulating success/rollback messaging so every candidate beyond the initial pair is merged into the chosen target. The field-selection view mirrors this loop to honour per-field choices across all candidates.
 
 ## Views and entry points
 
