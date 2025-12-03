@@ -12,16 +12,16 @@ The interface now renders entirely with W3.CSS containers and cards, so the admi
 
 ## Accessing the merge tools
 
-- **Admin merge form** – open any merge-enabled model's changelist, select the duplicate rows, and choose **Merge selected records** from the actions menu. This launches the compare-and-confirm screen at `.../admin/<app>/<model>/<id>/merge/`.
+- **Admin merge form** – open any merge-enabled model's changelist, select the duplicate rows, and choose **Merge selected records** from the actions menu. This launches the compare-and-confirm screen at `.../admin/<app>/<model>/<id>/merge/` and keeps **all** selected IDs in the request so downstream steps can process them.
 - **Fuzzy candidate search** – visit `/merge/` while logged in as a staff user to open the dedicated search UI. The form lists every model registered with `MERGE_REGISTRY` and sends requests to `/merge/search/` to return scored candidates.
 - Both entry points honour the `MERGE_TOOL_FEATURE` flag: when disabled the URLs remain hidden and the templates render a clear *feature disabled* notice.
 
 ### Per-field selection workflow
 
 - When a model defaults to the `FIELD_SELECTION` strategy for a field, the compare screen surfaces a yellow banner with an **Open field selection merge** link once a target and source are chosen.
-- Follow the link to load the dedicated field-selection view at `/merge/field-selection/` with the `model`, `target`, and `candidates` query parameters prefilled. The view is staff-only and respects the same feature flag.
-- Pick the value to keep for each field using the radio buttons across the source and target columns. Leave fields untouched to keep the target value.
-- Submit to complete the merge; the view redirects back to the target’s admin change page with a success banner that also records in `MergeLog`.
+- Follow the link to load the dedicated field-selection view at `/merge/field-selection/` with the `model`, `target`, and **all candidates** query parameters prefilled. The view is staff-only and respects the same feature flag.
+- Pick the value to keep for each field using the radio buttons across the source and target columns. Leave fields untouched to keep the target value. The view preserves the target you selected on the admin form and will merge **every remaining source** into that target sequentially using the same strategy map.
+- Submit to complete the merge; the view redirects back to the target’s admin change page with a success banner that aggregates the relation/field updates across all merged sources and records the full sequence in `MergeLog`.
 
 ## Feature Flag Rollout and Safeguards
 
@@ -85,10 +85,10 @@ If a merge needs to be reversed after the fact:
 ## Launching the Merge Workflow
 
 1. Navigate to the model’s changelist in the admin.
-2. Select at least two records that represent duplicates.
+2. Select at least two records that represent duplicates; more are allowed, and the admin will keep all IDs in order.
 3. Choose **Merge selected records** from the actions drop-down and submit the form.
-4. Review the merge form. The target record appears on the left and the source on the right. Adjust the **Strategy** column for each field if necessary and provide manual values when prompted by the *User Prompt* strategy.
-5. Submit the form to execute the merge. A success message confirms the source data moved into the target and includes the number of fields updated.
+4. Review the merge form. The target record appears on the left and the first source on the right. Adjust the **Strategy** column for each field if necessary and provide manual values when prompted by the *User Prompt* strategy. Additional candidates appear in a stacked list beneath the current selection.
+5. Submit the form to execute the merge. The system loops through every listed source and merges it into the chosen target sequentially using the same strategies. A success message confirms the source data moved into the target and includes the number of fields updated across all merges.
 
 Behind the scenes the merge engine reassigns relations, archives the source snapshot, deletes the source record, and records the result in `MergeLog`. Refer to `app/cms/tests/test_admin_merge.py` and `app/cms/tests/test_merge_engine.py` for concrete examples of the full workflow.
 
