@@ -359,71 +359,72 @@ class MergeAdminMixin:
                 )
                 return redirect(field_selection_url)
 
-            try:
-                merge_result = merge_records(
-                    form.cleaned_data["source"],
-                    form.cleaned_data["target"],
-                    form.build_strategy_map(),
-                    user=request.user,
-                )
-            except Exception as exc:  # pragma: no cover - surfaced to admin UI
-                source = form.cleaned_data.get("source")
-                target = form.cleaned_data.get("target")
-                logger.exception(
-                    "Merge failed for %s into %s", source, target, exc_info=exc
-                )
-                merge_failed.send(
-                    sender=self.__class__,
-                    request=request,
-                    source=source,
-                    target=target,
-                    error=exc,
-                )
-                if sentry_sdk is not None:  # pragma: no cover - optional dependency
-                    sentry_sdk.add_breadcrumb(
-                        category="merge",
-                        message="Merge operation failed",
-                        level="error",
-                        data={
-                            "model": f"{self.model._meta.app_label}.{self.model._meta.model_name}",
-                            "source": getattr(source, "pk", None),
-                            "target": getattr(target, "pk", None),
-                        },
-                    )
-                    sentry_sdk.capture_exception(exc)
-                self.message_user(request, str(exc), level=messages.ERROR)
-            else:
-                target = merge_result.target
-                source = form.cleaned_data["source"]
-                base_message = _(
-                    "Merged %(source)s into %(target)s (%(count)s fields updated)."
-                ) % {
-                    "source": source,
-                    "target": target,
-                    "count": len(merge_result.resolved_values),
-                }
-                self.log_change(
-                    request,
-                    target,
-                    f"Merged {source.pk} into {target.pk}",
-                )
+            merges_to_perform = self._ordered_merge_sources(
+                form=form, selected_ids=selected_ids, target=target_obj
+            )
+            if not merges_to_perform:
                 self.message_user(
                     request,
-                    base_message,
-                    level=messages.SUCCESS,
+                    _("Select at least one source record to merge."),
+                    level=messages.WARNING,
                 )
-                relation_summary_text = self._relation_summary_text(
-                    [merge_result.relation_actions]
-                )
-                if relation_summary_text:
+            else:
+                strategy_map = form.build_strategy_map()
+                merge_results: list[dict[str, Any]] = []
+                for source in merges_to_perform:
+                    merge_result = self._execute_merge(
+                        request,
+                        source=source,
+                        target=target_obj,
+                        strategy_map=strategy_map,
+                    )
+                    if merge_result is None:
+                        break
+                    merge_results.append({"source": source, "result": merge_result})
+                    target_obj = merge_result.target
+
+                if merge_results and len(merge_results) == len(merges_to_perform):
+                    merged_sources = [item["source"] for item in merge_results]
+                    field_updates = sum(
+                        len(item["result"].resolved_values) for item in merge_results
+                    )
+                    base_message = ngettext(
+                        "Merged %(count)d source into %(target)s (%(fields)d fields updated).",
+                        "Merged %(count)d sources into %(target)s (%(fields)d fields updated).",
+                        len(merged_sources),
+                    ) % {
+                        "count": len(merged_sources),
+                        "target": target_obj,
+                        "fields": field_updates,
+                    }
+                    base_message += _(" Sources: %(sources)s.") % {
+                        "sources": ", ".join(str(obj) for obj in merged_sources)
+                    }
+                    for item in merge_results:
+                        self.log_change(
+                            request,
+                            target_obj,
+                            f"Merged {item['source'].pk} into {target_obj.pk}",
+                        )
                     self.message_user(
                         request,
-                        _("Relation updates: %(summary)s")
-                        % {"summary": relation_summary_text},
-                        level=messages.INFO,
+                        base_message,
+                        level=messages.SUCCESS,
                     )
-                info = self.model._meta.app_label, self.model._meta.model_name
-                return redirect(f"admin:{info[0]}_{info[1]}_change", target.pk)
+                    relation_summary_text = self._relation_summary_text(
+                        [item["result"].relation_actions for item in merge_results]
+                    )
+                    if relation_summary_text:
+                        self.message_user(
+                            request,
+                            _("Relation updates: %(summary)s")
+                            % {"summary": relation_summary_text},
+                            level=messages.INFO,
+                        )
+                    info = self.model._meta.app_label, self.model._meta.model_name
+                    return redirect(
+                        f"admin:{info[0]}_{info[1]}_change", target_obj.pk
+                    )
 
         context = self._build_merge_context(
             request,
@@ -438,6 +439,68 @@ class MergeAdminMixin:
     def _extract_selected_ids(self, request: HttpRequest) -> list[str]:
         raw = request.GET.get("ids") or request.POST.get("selected_ids") or ""
         return [value for value in (item.strip() for item in raw.split(",")) if value]
+
+    def _ordered_merge_sources(
+        self,
+        *,
+        form: MergeAdminForm,
+        selected_ids: Iterable[str],
+        target: models.Model | None,
+    ) -> list[models.Model]:
+        sources: list[models.Model] = []
+        target_pk = str(getattr(target, "pk", ""))
+
+        if form.cleaned_data.get("source"):
+            sources.append(form.cleaned_data["source"])
+
+        seen: set[str] = {str(getattr(source, "pk", "")) for source in sources if source}
+        for raw_id in selected_ids:
+            if raw_id in seen or raw_id == target_pk:
+                continue
+            try:
+                obj = self.model._default_manager.get(pk=raw_id)
+            except self.model.DoesNotExist:  # type: ignore[attr-defined]
+                continue
+            seen.add(raw_id)
+            sources.append(obj)
+
+        return sources
+
+    def _execute_merge(
+        self,
+        request: HttpRequest,
+        *,
+        source: models.Model,
+        target: models.Model,
+        strategy_map: Mapping[str, Any],
+    ) -> Any:
+        try:
+            return merge_records(
+                source,
+                target,
+                strategy_map,
+                user=request.user,
+            )
+        except Exception as exc:  # pragma: no cover - surfaced to admin UI
+            logger.exception("Merge failed for %s into %s", source, target, exc_info=exc)
+            merge_failed.send(
+                sender=self.__class__,
+                request=request,
+                source=source,
+                target=target,
+                error=exc,
+            )
+            if sentry_sdk is not None:  # pragma: no cover - optional dependency
+                try:
+                    sentry_sdk.capture_exception(exc)
+                except Exception:  # pragma: no cover - safety net
+                    pass
+            self.message_user(
+                request,
+                _("Merge failed. %(error)s") % {"error": exc},
+                level=messages.ERROR,
+            )
+            return None
 
     def _get_object_or_none(self, pk: str | None) -> models.Model | None:
         if not pk:

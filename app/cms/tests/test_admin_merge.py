@@ -353,6 +353,43 @@ class MergeAdminWorkflowTests(TransactionTestCase):
                 merge_fields=merge_fields,
             )
         self.assertIn("/merge/field-selection/", context.get("field_selection_url", ""))
+
+    @override_settings(MERGE_TOOL_FEATURE=True)
+    def test_admin_merge_handles_multiple_sources(self):
+        user = self._login(with_permission=True)
+        extra_source = self.Model.objects.create(
+            name="Extra Source",
+            email="extra@example.com",
+            notes="Extra notes",
+        )
+
+        form_data = {
+            "selected_ids": f"{self.target.pk},{self.source.pk},{extra_source.pk}",
+            "source": str(self.source.pk),
+            "target": str(self.target.pk),
+            "strategy__name": MergeStrategy.LAST_WRITE.value,
+            "value__name": "",
+            "strategy__email": MergeStrategy.LAST_WRITE.value,
+            "value__email": "",
+            "strategy__notes": MergeStrategy.LAST_WRITE.value,
+            "value__notes": "",
+        }
+
+        merge_request = self._build_request("post", self.merge_url, data=form_data, user=user)
+        with self._override_admin_urls():
+            response = self.admin_site.admin_view(self.model_admin.merge_view)(merge_request)
+
+        self.assertEqual(response.status_code, 302)
+
+        self.target.refresh_from_db()
+        self.assertEqual(self.target.name, "Extra Source")
+        self.assertEqual(self.target.email, "extra@example.com")
+        self.assertEqual(self.target.notes, "Extra notes")
+        self.assertEqual(self.Model.objects.count(), 1)
+        self.assertEqual(
+            MergeLog.objects.filter(target_pk=str(self.target.pk)).count(),
+            2,
+        )
     @contextmanager
     def _override_admin_urls(self):
         def resolve(name, *args, **kwargs):
@@ -395,7 +432,9 @@ class FieldSelectionAdminActionRedirectTests(TransactionTestCase):
         cls.factory = RequestFactory()
         cls.admin_site = admin.site
 
-        call_command("migrate", "sites", verbosity=0)
+        existing_tables = set(connection.introspection.table_names())
+        if Site._meta.db_table not in existing_tables:
+            call_command("migrate", "sites", verbosity=0)
 
         core_models = [
             ContentType,
