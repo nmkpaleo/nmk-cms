@@ -261,9 +261,18 @@ SCAN_UPLOAD_MAX_BYTES = int(get_var("SCAN_UPLOAD_MAX_BYTES", 5 * 1024 * 1024))
 SCAN_UPLOAD_BATCH_MAX_BYTES = int(get_var("SCAN_UPLOAD_BATCH_MAX_BYTES", 0))
 SCAN_UPLOAD_TIMEOUT_SECONDS = int(get_var("SCAN_UPLOAD_TIMEOUT_SECONDS", 60))
 
-# Email configuration
-EMAIL_BACKEND = get_var("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
+# Email Configuration
+EMAIL_BACKEND = get_var(
+    "EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend"
+)
 
+EMAIL_HOST = get_var("EMAIL_HOST")
+EMAIL_HOST_USER = get_var("EMAIL_HOST_USER")
+EMAIL_HOST_PASSWORD = get_var("EMAIL_HOST_PASSWORD")
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+DEFAULT_FROM_EMAIL = get_var("DEFAULT_FROM_EMAIL")
+ 
 # This tells Django to allow iframes only on the same origin (localhost:8000).
 X_FRAME_OPTIONS = 'SAMEORIGIN'
 
