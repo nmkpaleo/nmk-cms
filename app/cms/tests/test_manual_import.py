@@ -606,3 +606,43 @@ def test_import_manual_row_creates_reference_links():
     assert link.reference.first_author == "Leakey"
     assert link.reference.year == "1964"
     assert link.reference.title.startswith("Leakey")
+
+
+def test_import_manual_row_sets_taxon_verbatim():
+    collection, _ = Collection.objects.get_or_create(
+        abbreviation="KNM", defaults={"description": "Test collection"}
+    )
+    locality, _ = Locality.objects.get_or_create(
+        abbreviation="ER", defaults={"name": "Koobi Fora"}
+    )
+
+    media = Media.objects.create(
+        media_location="uploads/manual_qc/26.jpg", file_name="26.jpg"
+    )
+
+    row = {
+        "id": "26",
+        "collection_id": collection.abbreviation,
+        "accession_number": "ER 501 A",
+        "storage_area": "Cabinet 2",
+        "taxon": "Parapapio kindae",
+        "family": "Cercopithecidae",
+        "genus": "Parapapio",
+        "species": "kindae",
+        "body_parts": "Mandible",
+    }
+
+    import_manual_row(row, queryset=Media.objects.filter(pk=media.pk))
+
+    media.refresh_from_db()
+    accession = media.accession
+
+    assert accession is not None
+
+    accession_row = accession.accessionrow_set.first()
+    assert accession_row is not None
+
+    identification = accession_row.identification_set.first()
+    assert identification is not None
+    assert identification.taxon_verbatim is not None
+    assert identification.taxon_verbatim.startswith("Parapapio kindae")
