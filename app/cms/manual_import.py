@@ -305,13 +305,10 @@ def build_row_section(
 
 
 def make_identification_entry(taxon_value: str | None) -> dict[str, Any]:
-    # Identification payload currently mirrors the concatenated taxonomy string
-    # into both the legacy ``taxon`` field and ``verbatim_identification``.
-    # ``taxon_verbatim`` is not populated at this stage, so downstream
-    # consumers should account for that when validating identifications.
     return {
         "taxon": make_interpreted_value(taxon_value),
         "verbatim_identification": make_interpreted_value(taxon_value),
+        "taxon_verbatim": make_interpreted_value(taxon_value),
     }
 
 
