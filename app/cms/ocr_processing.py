@@ -944,8 +944,8 @@ def _apply_rows(
             nature["element_name"] = resolved_name
             if resolved_element is None:
                 logger.warning(
-                    "Skipped nature for accession %s (suffix %s) due to missing element '%s' and no placeholder",
-                    accession.pk,
+                    "Skipped nature for accession [REDACTED] (suffix %s) due to missing element '%s' and no placeholder",
+                    "[REDACTED]",
                     suffix,
                     resolved_name,
                 )
