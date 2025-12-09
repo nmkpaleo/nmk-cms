@@ -314,31 +314,29 @@ QUALIFIER_TOKENS = {"cf.", "cf", "aff.", "aff", "sp.", "sp", "nr.", "nr"}
 
 
 def _split_taxon_and_qualifier(value: str | None) -> tuple[str | None, str | None]:
-    """Return the base taxon string and any qualifier token from the provided value."""
+    """Return the base taxon string and any qualifier tokens from the provided value."""
 
     text = coerce_stripped(value)
     if not text:
         return None, None
 
     tokens = text.split()
-    qualifier: str | None = None
-    base_tokens: list[str] = tokens
+    qualifier_tokens: list[str] = []
+    base_tokens: list[str] = []
 
-    for index, token in enumerate(tokens):
+    for token in tokens:
         if token.lower() in QUALIFIER_TOKENS:
-            qualifier = token if token.endswith(".") else f"{token}."
-            if index + 1 < len(tokens):
-                base_tokens = tokens[index + 1 :]
-            else:
-                base_tokens = tokens[:index] + tokens[index + 1 :]
-            break
+            qualifier_tokens.append(token if token.endswith(".") else f"{token}.")
+            continue
+        base_tokens.append(token)
 
+    qualifier = " ".join(qualifier_tokens) or None
     base_taxon = " ".join(base_tokens).strip() or None
     return base_taxon, qualifier
 
 
 def _extract_lowest_taxon(row: Mapping[str, Any]) -> tuple[str | None, str | None, str | None]:
-    """Determine the lowest taxonomic value and qualifier from a manual QC row."""
+    """Return (base_taxon, qualifier, verbatim_identification) derived from the row."""
 
     genus_value = coerce_stripped(row.get("genus"))
     species_value = coerce_stripped(row.get("species"))

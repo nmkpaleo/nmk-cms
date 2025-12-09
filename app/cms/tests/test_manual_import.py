@@ -11,6 +11,7 @@ from cms.manual_import import (
     build_accession_payload,
     build_reference_entries,
     find_media_for_row,
+    _split_taxon_and_qualifier,
     import_manual_row,
 )
 from django.db import models
@@ -258,6 +259,21 @@ def test_build_reference_entries_extracts_page_and_defaults_year():
     assert entry["reference_title"]["interpreted"] == reference_text[:255]
     assert entry["reference_year"]["interpreted"] == "0000"
     assert entry["page"]["interpreted"] == "246"
+
+
+@pytest.mark.parametrize(
+    "value, expected_base, expected_qualifier",
+    [
+        ("Homo cf.", "Homo", "cf."),
+        ("cf. aff. Homo", "Homo", "cf. aff."),
+        ("Papio cf. hamadryas", "Papio hamadryas", "cf."),
+    ],
+)
+def test_split_taxon_and_qualifier_handles_edge_cases(value, expected_base, expected_qualifier):
+    base_taxon, qualifier = _split_taxon_and_qualifier(value)
+
+    assert base_taxon == expected_base
+    assert qualifier == expected_qualifier
 
 
 def test_import_manual_row_updates_media_and_invokes_create(monkeypatch):

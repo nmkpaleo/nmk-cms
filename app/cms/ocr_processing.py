@@ -943,6 +943,12 @@ def _apply_rows(
             resolved_name = resolved_name or getattr(resolved_element, "name", None)
             nature["element_name"] = resolved_name
             if resolved_element is None:
+                logger.warning(
+                    "Skipped nature for accession %s (suffix %s) due to missing element '%s' and no placeholder",
+                    accession.pk,
+                    suffix,
+                    resolved_name,
+                )
                 continue
             fragments = nature.get("fragments")
             if fragments in (None, ""):

@@ -20,6 +20,7 @@ Additional behaviors:
 - The qualifier is stored separately (`identification_qualifier` = `cf.` in the example above).
 - The field slip’s verbatim taxon string is used for `verbatim_identification`; if absent, the synthesized taxonomy value is reused.
 - Rows without any taxonomy values do not create identifications and surface validation errors until taxonomy is supplied.
+- Spreadsheet taxonomy columns are distinct from the pipe-delimited verbatim taxon saved on the field slip; the latter remains unchanged and only feeds `verbatim_identification`.
 
 ## Troubleshooting
 - If identifications fail with “Provide the lowest taxon for this identification,” confirm that at least one taxonomy column is populated. The import expects `taxon_verbatim` to be derived from those columns rather than left blank.
