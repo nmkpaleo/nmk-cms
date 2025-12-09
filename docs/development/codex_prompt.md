@@ -107,4 +107,5 @@ Checklist must include: acceptance criteria satisfied, tests (unit/integration) 
 - Prefer Django class-based patterns and existing apps; justify any new app.
 - Keep reasoning concise and review-ready.
 - Reuse approved dependencies before proposing new ones.
+- Apply the **DRY (Don't Repeat Yourself)** principle: reduce volatile duplication, prefer reusable abstractions, and normalize data to avoid redundancy.
 - Stop after planning; await explicit approval before coding.

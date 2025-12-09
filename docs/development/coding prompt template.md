@@ -108,6 +108,7 @@ No commentary or extra narrative outside these blocks.
 - **Scope control:** Implement only the assigned task—no bonus features.
 - **Quality:** Production-grade code with typing hints where practical.
 - **Architecture:** Prefer CBVs, leverage django-filter for querysets, integrate django-simple-history only when required.
+- **DRY:** Avoid duplicating logic or configuration; factor shared behavior into reusable helpers and normalized data structures.
 - **Database:** Use MySQL-compatible field types and indexes.
 - **Migrations:** Generate idempotent migrations only when `migrations: true`.
 - **Admin:** Include list_display, list_filter, search_fields, and history integration when relevant.
