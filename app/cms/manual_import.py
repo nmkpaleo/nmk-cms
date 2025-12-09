@@ -367,7 +367,7 @@ def _extract_lowest_taxon(row: Mapping[str, Any]) -> tuple[str | None, str | Non
 def make_identification_entry(row: Mapping[str, Any], taxon_value: str | None) -> dict[str, Any]:
     base_taxon, qualifier, verbatim_identification = _extract_lowest_taxon(row)
     resolved_taxon = base_taxon or taxon_value
-    resolved_verbatim = verbatim_identification or taxon_value
+    resolved_verbatim = taxon_value or verbatim_identification or resolved_taxon
 
     return {
         "taxon": make_interpreted_value(resolved_taxon),
