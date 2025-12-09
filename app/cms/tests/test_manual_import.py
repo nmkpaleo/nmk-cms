@@ -659,8 +659,7 @@ def test_import_manual_row_sets_taxon_verbatim():
 
     identification = accession_row.identification_set.first()
     assert identification is not None
-    assert identification.taxon_verbatim is not None
-    assert identification.taxon_verbatim.startswith("Parapapio kindae")
+    assert identification.taxon_verbatim == "Parapapio kindae"
 
 
 def test_import_manual_row_uses_lowest_taxon_and_sets_qualifier():
@@ -697,6 +696,36 @@ def test_import_manual_row_uses_lowest_taxon_and_sets_qualifier():
     assert identification is not None
     assert identification.taxon_verbatim == "Parapapio"
     assert identification.identification_qualifier == "cf."
+
+
+def test_import_manual_row_requires_taxon_verbatim():
+    collection, _ = Collection.objects.get_or_create(
+        abbreviation="KNM", defaults={"description": "Test collection"}
+    )
+
+    media = Media.objects.create(
+        media_location="uploads/manual_qc/29.jpg", file_name="29.jpg"
+    )
+
+    row = {
+        "id": "29",
+        "collection_id": collection.abbreviation,
+        "accession_number": "ER 504 A",
+        "storage_area": "Cabinet 5",
+        "body_parts": "Mandible",
+    }
+
+    import_manual_row(row, queryset=Media.objects.filter(pk=media.pk))
+
+    media.refresh_from_db()
+    accession = media.accession
+
+    assert accession is not None
+
+    accession_row = accession.accessionrow_set.first()
+    assert accession_row is not None
+
+    assert accession_row.identification_set.count() == 0
 
 
 def test_import_manual_row_sets_verbatim_identification_from_field_slip_taxon():
