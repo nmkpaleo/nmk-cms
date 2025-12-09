@@ -1680,7 +1680,7 @@ class Media(BaseModel):
         help_text="File format of the media (supported formats: 'jpg', 'jpeg', 'png', 'gif', 'bmp')"
     )
     media_location = models.ImageField(
-        upload_to='media/',
+        upload_to="uploads/",
         help_text="Uploaded media file.",
     )
     license = models.CharField(max_length=30, choices=LICENSE_CHOICES

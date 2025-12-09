@@ -580,6 +580,7 @@ def _extract_entry_components(entry: dict) -> dict[str, object]:
         ident = identifications[index] if index < len(identifications) else {}
         ident_data = {
             "taxon": (ident.get("taxon") or {}).get("interpreted"),
+            "taxon_verbatim": (ident.get("taxon_verbatim") or {}).get("interpreted"),
             "identification_qualifier": (ident.get("identification_qualifier") or {}).get("interpreted"),
             "verbatim_identification": (ident.get("verbatim_identification") or {}).get("interpreted"),
             "identification_remarks": (ident.get("identification_remarks") or {}).get("interpreted"),
@@ -700,6 +701,7 @@ def _has_identification_data(data: dict[str, object]) -> bool:
         return False
     for key in (
         "taxon",
+        "taxon_verbatim",
         "identification_qualifier",
         "verbatim_identification",
         "identification_remarks",
@@ -916,6 +918,7 @@ def _apply_rows(
             Identification.objects.create(
                 accession_row=row_obj,
                 taxon=ident_to_apply.get("taxon"),
+                taxon_verbatim=ident_to_apply.get("taxon_verbatim"),
                 identification_qualifier=ident_to_apply.get("identification_qualifier"),
                 verbatim_identification=ident_to_apply.get("verbatim_identification"),
                 identification_remarks=ident_to_apply.get("identification_remarks"),
@@ -934,22 +937,19 @@ def _apply_rows(
             element_name = _clean_string(nature.get("element_name"))
             verbatim_element = _clean_string(nature.get("verbatim_element"))
             resolved_name = element_name or verbatim_element
-            element = None
-            if resolved_name:
-                element = Element.objects.filter(name=resolved_name).first()
+            element = Element.objects.filter(name=resolved_name).first() if resolved_name else None
             parent = Element.objects.filter(name="-Undefined").first()
-            if element is None:
-                if parent is None:
-                    parent = Element.objects.create(name="-Undefined")
-                if not resolved_name or resolved_name == parent.name:
-                    element = parent
-                    resolved_name = parent.name
-                else:
-                    element = Element.objects.create(
-                        name=resolved_name,
-                        parent_element=parent,
-                    )
+            resolved_element = element or parent
+            resolved_name = resolved_name or getattr(resolved_element, "name", None)
             nature["element_name"] = resolved_name
+            if resolved_element is None:
+                logger.warning(
+                    "Skipped nature for accession %s (suffix %s) due to missing element '[REDACTED]' and no placeholder",
+                    accession.pk,
+                    suffix,
+                    # resolved_name intentionally omitted to avoid logging potentially sensitive data.
+                )
+                continue
             fragments = nature.get("fragments")
             if fragments in (None, ""):
                 fragments_value = 0
@@ -960,7 +960,7 @@ def _apply_rows(
                     fragments_value = 0
             NatureOfSpecimen.objects.create(
                 accession_row=row_obj,
-                element=element,
+                element=resolved_element,
                 side=nature.get("side"),
                 condition=nature.get("condition"),
                 verbatim_element=nature.get("verbatim_element"),

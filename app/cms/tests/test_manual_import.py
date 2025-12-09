@@ -11,6 +11,7 @@ from cms.manual_import import (
     build_accession_payload,
     build_reference_entries,
     find_media_for_row,
+    _split_taxon_and_qualifier,
     import_manual_row,
 )
 from django.db import models
@@ -21,6 +22,7 @@ from cms.models import (
     AccessionReference,
     AccessionRow,
     Collection,
+    Element,
     FieldSlip,
     Locality,
     Media,
@@ -101,6 +103,20 @@ def test_build_accession_payload_maps_row_fields():
     nature = row_entry["natures"][0]
     assert nature["verbatim_element"]["interpreted"] == "Rt. femur"
     assert nature["fragments"]["interpreted"] == "19"
+
+
+def test_build_accession_payload_supports_hyphenated_prefix():
+    row = {
+        "id": "1",
+        "accession_number": "ER-30292",
+    }
+
+    payload = build_accession_payload([row])
+
+    accession = payload["accessions"][0]
+    assert accession["collection_abbreviation"]["interpreted"] == "KNM"
+    assert accession["specimen_prefix_abbreviation"]["interpreted"] == "ER"
+    assert accession["specimen_no"]["interpreted"] == 30292
 
 
 @pytest.mark.parametrize(
@@ -243,6 +259,21 @@ def test_build_reference_entries_extracts_page_and_defaults_year():
     assert entry["reference_title"]["interpreted"] == reference_text[:255]
     assert entry["reference_year"]["interpreted"] == "0000"
     assert entry["page"]["interpreted"] == "246"
+
+
+@pytest.mark.parametrize(
+    "value, expected_base, expected_qualifier",
+    [
+        ("Homo cf.", "Homo", "cf."),
+        ("cf. aff. Homo", "Homo", "cf. aff."),
+        ("Papio cf. hamadryas", "Papio hamadryas", "cf."),
+    ],
+)
+def test_split_taxon_and_qualifier_handles_edge_cases(value, expected_base, expected_qualifier):
+    base_taxon, qualifier = _split_taxon_and_qualifier(value)
+
+    assert base_taxon == expected_base
+    assert qualifier == expected_qualifier
 
 
 def test_import_manual_row_updates_media_and_invokes_create(monkeypatch):
@@ -606,3 +637,229 @@ def test_import_manual_row_creates_reference_links():
     assert link.reference.first_author == "Leakey"
     assert link.reference.year == "1964"
     assert link.reference.title.startswith("Leakey")
+
+
+def test_import_manual_row_sets_taxon_verbatim():
+    collection, _ = Collection.objects.get_or_create(
+        abbreviation="KNM", defaults={"description": "Test collection"}
+    )
+    locality, _ = Locality.objects.get_or_create(
+        abbreviation="ER", defaults={"name": "Koobi Fora"}
+    )
+
+    media = Media.objects.create(
+        media_location="uploads/manual_qc/26.jpg", file_name="26.jpg"
+    )
+
+    row = {
+        "id": "26",
+        "collection_id": collection.abbreviation,
+        "accession_number": "ER 501 A",
+        "storage_area": "Cabinet 2",
+        "taxon": "Parapapio kindae",
+        "family": "Cercopithecidae",
+        "genus": "Parapapio",
+        "species": "kindae",
+        "body_parts": "Mandible",
+    }
+
+    import_manual_row(row, queryset=Media.objects.filter(pk=media.pk))
+
+    media.refresh_from_db()
+    accession = media.accession
+
+    assert accession is not None
+
+    accession_row = accession.accessionrow_set.first()
+    assert accession_row is not None
+
+    identification = accession_row.identification_set.first()
+    assert identification is not None
+    assert identification.taxon_verbatim == "Parapapio kindae"
+
+
+def test_import_manual_row_uses_lowest_taxon_and_sets_qualifier():
+    collection, _ = Collection.objects.get_or_create(
+        abbreviation="KNM", defaults={"description": "Test collection"}
+    )
+
+    media = Media.objects.create(
+        media_location="uploads/manual_qc/27.jpg", file_name="27.jpg"
+    )
+
+    row = {
+        "id": "27",
+        "collection_id": collection.abbreviation,
+        "accession_number": "ER 502 A",
+        "storage_area": "Cabinet 3",
+        "family": "Cercopithecidae",
+        "tribe": "Papionini",
+        "genus": "cf. Parapapio",
+        "body_parts": "Mandible",
+    }
+
+    import_manual_row(row, queryset=Media.objects.filter(pk=media.pk))
+
+    media.refresh_from_db()
+    accession = media.accession
+
+    assert accession is not None
+
+    accession_row = accession.accessionrow_set.first()
+    assert accession_row is not None
+
+    identification = accession_row.identification_set.first()
+    assert identification is not None
+    assert identification.taxon_verbatim == "Parapapio"
+    assert identification.identification_qualifier == "cf."
+
+
+def test_import_manual_row_requires_taxon_verbatim():
+    collection, _ = Collection.objects.get_or_create(
+        abbreviation="KNM", defaults={"description": "Test collection"}
+    )
+
+    media = Media.objects.create(
+        media_location="uploads/manual_qc/29.jpg", file_name="29.jpg"
+    )
+
+    row = {
+        "id": "29",
+        "collection_id": collection.abbreviation,
+        "accession_number": "ER 504 A",
+        "storage_area": "Cabinet 5",
+        "body_parts": "Mandible",
+    }
+
+    import_manual_row(row, queryset=Media.objects.filter(pk=media.pk))
+
+    media.refresh_from_db()
+    accession = media.accession
+
+    assert accession is not None
+
+    accession_row = accession.accessionrow_set.first()
+    assert accession_row is not None
+
+    assert accession_row.identification_set.count() == 0
+
+
+def test_import_manual_row_sets_verbatim_identification_from_field_slip_taxon():
+    collection, _ = Collection.objects.get_or_create(
+        abbreviation="KNM", defaults={"description": "Test collection"}
+    )
+
+    media = Media.objects.create(
+        media_location="uploads/manual_qc/28.jpg", file_name="28.jpg"
+    )
+
+    row = {
+        "id": "28",
+        "collection_id": collection.abbreviation,
+        "accession_number": "ER 503 A",
+        "storage_area": "Cabinet 4",
+        "family": "Cercopithecidae",
+        "tribe": "Papionini",
+        "genus": "cf. Parapapio",
+        "body_parts": "Mandible",
+    }
+
+    import_manual_row(row, queryset=Media.objects.filter(pk=media.pk))
+
+    media.refresh_from_db()
+    accession = media.accession
+
+    assert accession is not None
+
+    accession_row = accession.accessionrow_set.first()
+    assert accession_row is not None
+
+    identification = accession_row.identification_set.first()
+    assert identification is not None
+    assert (
+        identification.verbatim_identification
+        == "Cercopithecidae | Papionini | cf. Parapapio"
+    )
+
+
+def test_import_manual_row_reuses_existing_element():
+    collection = Collection.objects.filter(abbreviation="KNM").order_by("pk").first()
+    if collection is None:
+        collection = Collection.objects.create(abbreviation="KNM", description="Test collection")
+
+    locality = Locality.objects.filter(abbreviation="ER").order_by("pk").first()
+    if locality is None:
+        locality = Locality.objects.create(abbreviation="ER", name="East River")
+
+    media = Media.objects.create(
+        media_location="uploads/manual_qc/manual-element-1.jpg",
+        file_name="manual-element-1.jpg",
+    )
+
+    parent_element, _ = Element.objects.get_or_create(name="-Undefined")
+    femur, _ = Element.objects.get_or_create(
+        name="Femur", defaults={"parent_element": parent_element}
+    )
+    initial_count = Element.objects.count()
+
+    row = {
+        "id": "manual-element-1",
+        "collection_id": "KNM",
+        "accession_number": "ER 321",
+        "storage_area": "Drawer 1",
+        "field_number": "FD-300",
+        "body_parts": "Femur",
+        "taxon": "Pan troglodytes",
+    }
+
+    import_manual_row(row, queryset=Media.objects.filter(pk=media.pk))
+
+    assert Element.objects.count() == initial_count
+
+    media.refresh_from_db()
+    accession = media.accession
+    assert accession is not None
+    nature = NatureOfSpecimen.objects.filter(accession_row__accession=accession).first()
+    assert nature is not None
+    assert nature.element_id == femur.id
+    assert nature.verbatim_element == "Femur"
+
+
+def test_import_manual_row_uses_placeholder_when_element_missing():
+    collection = Collection.objects.filter(abbreviation="KNM").order_by("pk").first()
+    if collection is None:
+        collection = Collection.objects.create(abbreviation="KNM", description="Test collection")
+
+    locality = Locality.objects.filter(abbreviation="ER").order_by("pk").first()
+    if locality is None:
+        locality = Locality.objects.create(abbreviation="ER", name="East River")
+
+    media = Media.objects.create(
+        media_location="uploads/manual_qc/manual-element-2.jpg",
+        file_name="manual-element-2.jpg",
+    )
+
+    placeholder, _ = Element.objects.get_or_create(name="-Undefined")
+    initial_count = Element.objects.count()
+
+    row = {
+        "id": "manual-element-2",
+        "collection_id": "KNM",
+        "accession_number": "ER 322",
+        "storage_area": "Drawer 2",
+        "field_number": "FD-301",
+        "body_parts": "Novel element description",
+        "taxon": "Pan troglodytes",
+    }
+
+    import_manual_row(row, queryset=Media.objects.filter(pk=media.pk))
+
+    assert Element.objects.count() == initial_count
+
+    media.refresh_from_db()
+    accession = media.accession
+    assert accession is not None
+    nature = NatureOfSpecimen.objects.filter(accession_row__accession=accession).first()
+    assert nature is not None
+    assert nature.element_id == placeholder.id
+    assert nature.verbatim_element == "Novel element description"

@@ -4,6 +4,7 @@
 - Update accession detail pages to hide Comments from anonymous visitors while hyperlinking reference titles; adjust locality
   detail heading to show “Associated published accessions” for unauthenticated users while retaining the existing heading for
   signed-in users (template regression tests added).
+- Document manual QC import taxonomy mapping so `taxon_verbatim` captures the lowest supplied taxon and qualifiers from upload spreadsheets.
 - Document that the dashboard disables the Create single accession action when a collection manager lacks an active accession number series, while leaving the Generate batch shortcut unchanged.
 - Document the dashboard Generate batch shortcut for accession number series, including access rules for collection managers and the self-service workflow that redirects to the accession wizard once numbers are reserved.
 - Record the accession wizard update that shows specimen numbers as display-only text while preserving the selected value through submission.
