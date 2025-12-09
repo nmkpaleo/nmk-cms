@@ -247,7 +247,7 @@ STATIC_ROOT = get_var("STATIC_ROOT", os.path.join(BASE_DIR, "static"))
 
 # Media files
 
-MEDIA_URL = "media/"
+MEDIA_URL = "/media/"
 MEDIA_ROOT = get_var("MEDIA_ROOT", os.path.join(BASE_DIR, "media"))
 
 # Default primary key field type
