@@ -646,3 +646,39 @@ def test_import_manual_row_sets_taxon_verbatim():
     assert identification is not None
     assert identification.taxon_verbatim is not None
     assert identification.taxon_verbatim.startswith("Parapapio kindae")
+
+
+def test_import_manual_row_uses_lowest_taxon_and_sets_qualifier():
+    collection, _ = Collection.objects.get_or_create(
+        abbreviation="KNM", defaults={"description": "Test collection"}
+    )
+
+    media = Media.objects.create(
+        media_location="uploads/manual_qc/27.jpg", file_name="27.jpg"
+    )
+
+    row = {
+        "id": "27",
+        "collection_id": collection.abbreviation,
+        "accession_number": "ER 502 A",
+        "storage_area": "Cabinet 3",
+        "family": "Cercopithecidae",
+        "tribe": "Papionini",
+        "genus": "cf. Parapapio",
+        "body_parts": "Mandible",
+    }
+
+    import_manual_row(row, queryset=Media.objects.filter(pk=media.pk))
+
+    media.refresh_from_db()
+    accession = media.accession
+
+    assert accession is not None
+
+    accession_row = accession.accessionrow_set.first()
+    assert accession_row is not None
+
+    identification = accession_row.identification_set.first()
+    assert identification is not None
+    assert identification.taxon_verbatim == "Parapapio"
+    assert identification.identification_qualifier == "cf."

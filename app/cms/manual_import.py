@@ -304,11 +304,76 @@ def build_row_section(
     }
 
 
-def make_identification_entry(taxon_value: str | None) -> dict[str, Any]:
+QUALIFIER_TOKENS = {"cf.", "cf", "aff.", "aff", "sp.", "sp", "nr.", "nr"}
+
+
+def _split_taxon_and_qualifier(value: str | None) -> tuple[str | None, str | None]:
+    """Return the base taxon string and any qualifier token from the provided value."""
+
+    text = coerce_stripped(value)
+    if not text:
+        return None, None
+
+    tokens = text.split()
+    qualifier: str | None = None
+    base_tokens: list[str] = tokens
+
+    for index, token in enumerate(tokens):
+        if token.lower() in QUALIFIER_TOKENS:
+            qualifier = token if token.endswith(".") else f"{token}."
+            if index + 1 < len(tokens):
+                base_tokens = tokens[index + 1 :]
+            else:
+                base_tokens = tokens[:index] + tokens[index + 1 :]
+            break
+
+    base_taxon = " ".join(base_tokens).strip() or None
+    return base_taxon, qualifier
+
+
+def _extract_lowest_taxon(row: Mapping[str, Any]) -> tuple[str | None, str | None, str | None]:
+    """Determine the lowest taxonomic value and qualifier from a manual QC row."""
+
+    genus_value = coerce_stripped(row.get("genus"))
+    species_value = coerce_stripped(row.get("species"))
+
+    if genus_value or species_value:
+        species_base, species_qualifier = _split_taxon_and_qualifier(species_value)
+        genus_base, genus_qualifier = _split_taxon_and_qualifier(genus_value)
+        qualifier = species_qualifier or genus_qualifier
+
+        if species_base:
+            base_taxon = " ".join(filter(None, [genus_base or genus_value, species_base]))
+        elif species_value:
+            base_taxon = " ".join(filter(None, [genus_base or genus_value, species_value]))
+        else:
+            base_taxon = genus_base or genus_value
+
+        verbatim_identification = " ".join(filter(None, [qualifier, base_taxon])) if qualifier else base_taxon
+        return base_taxon, qualifier, verbatim_identification
+
+    for key in ("tribe", "subfamily", "family", "taxon"):
+        value = coerce_stripped(row.get(key))
+        if not value:
+            continue
+        base_taxon, qualifier = _split_taxon_and_qualifier(value)
+        base_value = base_taxon or value
+        verbatim_identification = " ".join(filter(None, [qualifier, base_value])) if qualifier else base_value
+        return base_value, qualifier, verbatim_identification
+
+    return None, None, None
+
+
+def make_identification_entry(row: Mapping[str, Any], taxon_value: str | None) -> dict[str, Any]:
+    base_taxon, qualifier, verbatim_identification = _extract_lowest_taxon(row)
+    resolved_taxon = base_taxon or taxon_value
+    resolved_verbatim = verbatim_identification or taxon_value
+
     return {
-        "taxon": make_interpreted_value(taxon_value),
-        "verbatim_identification": make_interpreted_value(taxon_value),
-        "taxon_verbatim": make_interpreted_value(taxon_value),
+        "taxon": make_interpreted_value(resolved_taxon),
+        "verbatim_identification": make_interpreted_value(resolved_verbatim),
+        "taxon_verbatim": make_interpreted_value(resolved_taxon),
+        "identification_qualifier": make_interpreted_value(qualifier),
     }
 
 
@@ -499,7 +564,7 @@ def build_accession_payload(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]
         "references": build_reference_entries(references),
         "field_slips": field_slips,
         "rows": [build_row_section(aggregated_row, suffix) for suffix in suffixes],
-        "identifications": [make_identification_entry(taxon_value)],
+        "identifications": [make_identification_entry(aggregated_row, taxon_value)],
     }
 
     for comment in comments:
