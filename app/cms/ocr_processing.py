@@ -937,22 +937,13 @@ def _apply_rows(
             element_name = _clean_string(nature.get("element_name"))
             verbatim_element = _clean_string(nature.get("verbatim_element"))
             resolved_name = element_name or verbatim_element
-            element = None
-            if resolved_name:
-                element = Element.objects.filter(name=resolved_name).first()
+            element = Element.objects.filter(name=resolved_name).first() if resolved_name else None
             parent = Element.objects.filter(name="-Undefined").first()
-            if element is None:
-                if parent is None:
-                    parent = Element.objects.create(name="-Undefined")
-                if not resolved_name or resolved_name == parent.name:
-                    element = parent
-                    resolved_name = parent.name
-                else:
-                    element = Element.objects.create(
-                        name=resolved_name,
-                        parent_element=parent,
-                    )
+            resolved_element = element or parent
+            resolved_name = resolved_name or getattr(resolved_element, "name", None)
             nature["element_name"] = resolved_name
+            if resolved_element is None:
+                continue
             fragments = nature.get("fragments")
             if fragments in (None, ""):
                 fragments_value = 0
@@ -963,7 +954,7 @@ def _apply_rows(
                     fragments_value = 0
             NatureOfSpecimen.objects.create(
                 accession_row=row_obj,
-                element=element,
+                element=resolved_element,
                 side=nature.get("side"),
                 condition=nature.get("condition"),
                 verbatim_element=nature.get("verbatim_element"),

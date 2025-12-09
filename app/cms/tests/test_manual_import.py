@@ -21,6 +21,7 @@ from cms.models import (
     AccessionReference,
     AccessionRow,
     Collection,
+    Element,
     FieldSlip,
     Locality,
     Media,
@@ -720,3 +721,86 @@ def test_import_manual_row_sets_verbatim_identification_from_field_slip_taxon():
         identification.verbatim_identification
         == "Cercopithecidae | Papionini | cf. Parapapio"
     )
+
+
+def test_import_manual_row_reuses_existing_element():
+    collection = Collection.objects.filter(abbreviation="KNM").order_by("pk").first()
+    if collection is None:
+        collection = Collection.objects.create(abbreviation="KNM", description="Test collection")
+
+    locality = Locality.objects.filter(abbreviation="ER").order_by("pk").first()
+    if locality is None:
+        locality = Locality.objects.create(abbreviation="ER", name="East River")
+
+    media = Media.objects.create(
+        media_location="uploads/manual_qc/manual-element-1.jpg",
+        file_name="manual-element-1.jpg",
+    )
+
+    parent_element, _ = Element.objects.get_or_create(name="-Undefined")
+    femur, _ = Element.objects.get_or_create(
+        name="Femur", defaults={"parent_element": parent_element}
+    )
+    initial_count = Element.objects.count()
+
+    row = {
+        "id": "manual-element-1",
+        "collection_id": "KNM",
+        "accession_number": "ER 321",
+        "storage_area": "Drawer 1",
+        "field_number": "FD-300",
+        "body_parts": "Femur",
+        "taxon": "Pan troglodytes",
+    }
+
+    import_manual_row(row, queryset=Media.objects.filter(pk=media.pk))
+
+    assert Element.objects.count() == initial_count
+
+    media.refresh_from_db()
+    accession = media.accession
+    assert accession is not None
+    nature = NatureOfSpecimen.objects.filter(accession_row__accession=accession).first()
+    assert nature is not None
+    assert nature.element_id == femur.id
+    assert nature.verbatim_element == "Femur"
+
+
+def test_import_manual_row_uses_placeholder_when_element_missing():
+    collection = Collection.objects.filter(abbreviation="KNM").order_by("pk").first()
+    if collection is None:
+        collection = Collection.objects.create(abbreviation="KNM", description="Test collection")
+
+    locality = Locality.objects.filter(abbreviation="ER").order_by("pk").first()
+    if locality is None:
+        locality = Locality.objects.create(abbreviation="ER", name="East River")
+
+    media = Media.objects.create(
+        media_location="uploads/manual_qc/manual-element-2.jpg",
+        file_name="manual-element-2.jpg",
+    )
+
+    placeholder, _ = Element.objects.get_or_create(name="-Undefined")
+    initial_count = Element.objects.count()
+
+    row = {
+        "id": "manual-element-2",
+        "collection_id": "KNM",
+        "accession_number": "ER 322",
+        "storage_area": "Drawer 2",
+        "field_number": "FD-301",
+        "body_parts": "Novel element description",
+        "taxon": "Pan troglodytes",
+    }
+
+    import_manual_row(row, queryset=Media.objects.filter(pk=media.pk))
+
+    assert Element.objects.count() == initial_count
+
+    media.refresh_from_db()
+    accession = media.accession
+    assert accession is not None
+    nature = NatureOfSpecimen.objects.filter(accession_row__accession=accession).first()
+    assert nature is not None
+    assert nature.element_id == placeholder.id
+    assert nature.verbatim_element == "Novel element description"
