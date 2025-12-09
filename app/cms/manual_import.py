@@ -66,6 +66,12 @@ def parse_accession_number(accession_number: Any) -> ManualRowContext:
     if collection:
         collection = collection.upper()
 
+    if prefix is None and collection and "-" in value:
+        # Values like "ER-30292" have the prefix separated by a hyphen but no
+        # explicit collection identifier. Treat the portion before the hyphen
+        # as the specimen prefix and let the collection fall back to defaults.
+        prefix, collection = collection, None
+
     return ManualRowContext(collection, prefix, number, suffix)
 
 

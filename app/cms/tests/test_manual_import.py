@@ -104,6 +104,20 @@ def test_build_accession_payload_maps_row_fields():
     assert nature["fragments"]["interpreted"] == "19"
 
 
+def test_build_accession_payload_supports_hyphenated_prefix():
+    row = {
+        "id": "1",
+        "accession_number": "ER-30292",
+    }
+
+    payload = build_accession_payload([row])
+
+    accession = payload["accessions"][0]
+    assert accession["collection_abbreviation"]["interpreted"] == "KNM"
+    assert accession["specimen_prefix_abbreviation"]["interpreted"] == "ER"
+    assert accession["specimen_no"]["interpreted"] == 30292
+
+
 @pytest.mark.parametrize(
     "coordinates, expected_lat, expected_lon",
     [
