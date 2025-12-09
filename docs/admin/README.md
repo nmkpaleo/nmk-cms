@@ -7,6 +7,7 @@
 - [References](references.md)
 - [Preparations](preparations.md)
 - [Scan Uploads](scan-uploads.md)
+- [Manual QC Import](manual-import.md)
 - [Accession detail review](accessions-detail.md)
 - [Users](users.md)
 - [Merge Tool](merge-tool.md)
