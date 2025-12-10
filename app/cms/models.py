@@ -1100,7 +1100,11 @@ class NatureOfSpecimen(BaseModel):
 
 
 # Element Model
-class Element(BaseModel):
+class Element(MergeMixin, BaseModel):
+    merge_fields = {
+        "name": MergeStrategy.FIELD_SELECTION,
+        "parent_element": MergeStrategy.FIELD_SELECTION,
+    }
     parent_element = models.ForeignKey(
         'self',
         on_delete=models.CASCADE,
