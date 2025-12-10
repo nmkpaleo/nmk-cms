@@ -11,6 +11,7 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from .constants import MergeStrategy
+from cms.models import Element
 
 
 @dataclass(frozen=True)
@@ -171,3 +172,61 @@ class FieldSelectionForm(forms.Form):
             strategy_map["fields"][field_name] = payload
 
         return strategy_map
+
+
+class ElementFieldSelectionForm(FieldSelectionForm):
+    """Field selection form constrained to Element merges."""
+
+    allowed_field_names = ("name", "parent_element")
+
+    def __init__(
+        self,
+        *,
+        model: type[models.Model] | None = None,
+        merge_fields: Iterable[models.Field] | None = None,
+        candidates: Iterable[FieldSelectionCandidate | models.Model],
+        data: Mapping[str, object] | None = None,
+        initial: Mapping[str, object] | None = None,
+    ) -> None:
+        resolved_model = model or Element
+        resolved_merge_fields = merge_fields or self.get_mergeable_fields(resolved_model)
+        super().__init__(
+            model=resolved_model,
+            merge_fields=resolved_merge_fields,
+            candidates=candidates,
+            data=data,
+            initial=initial,
+        )
+
+    @classmethod
+    def get_mergeable_fields(cls, model: type[models.Model]) -> tuple[models.Field, ...]:
+        fields: list[models.Field] = []
+        for name in cls.allowed_field_names:
+            try:
+                fields.append(model._meta.get_field(name))
+            except Exception:  # pragma: no cover - defensive
+                continue
+        return tuple(fields)
+
+    def build_selected_fields(self) -> dict[str, object]:
+        """Return field selections that mirror :func:`cms.merge.services.merge_elements`."""
+
+        selected: dict[str, object] = {}
+        for field in self.merge_fields:
+            field_name = field.name
+            choice = self.cleaned_data.get(self.selection_field_name(field_name))
+            if not choice:
+                continue
+
+            candidate = self._candidate_map.get(choice)
+            if not candidate:
+                continue
+
+            if candidate.role == "target":
+                selected[field_name] = "target"
+                continue
+
+            value = field.value_from_object(candidate.instance)
+            selected[field_name] = value
+
+        return selected
