@@ -967,25 +967,36 @@ class AccessionFieldSlipMergeView(LoginRequiredMixin, PermissionRequiredMixin, V
                     )
             return redirect("accession_detail", pk=accession.pk)
 
-        source = form.cleaned_data["source"]
-        target = form.cleaned_data["target"]
-
-        try:
-            merge_records(source, target, strategy_map=None, user=request.user)
-        except Exception as exc:  # pragma: no cover - defensive
+        if not getattr(settings, "MERGE_TOOL_FEATURE", False):
             messages.error(
                 request,
-                _("Could not merge field slips: %(reason)s")
-                % {"reason": str(exc)},
+                _("Field slip merging requires the merge tool to be enabled."),
             )
             return redirect("accession_detail", pk=accession.pk)
 
-        messages.success(
-            request,
-            _("Merged %(source)s into %(target)s")
-            % {"source": source, "target": target},
+        if not request.user.is_staff:
+            return HttpResponseForbidden()
+
+        source = form.cleaned_data["source"]
+        target = form.cleaned_data["target"]
+
+        cancel_url = reverse("accession_detail", args=[accession.pk])
+        selection_url = reverse("merge:merge_field_selection")
+        candidates = [str(target.pk), str(source.pk)]
+        query = urlencode(
+            {
+                "model": FieldSlip._meta.label,
+                "target": target.pk,
+                "candidates": ",".join(candidates),
+                "cancel": cancel_url,
+            }
         )
-        return redirect("accession_detail", pk=accession.pk)
+
+        messages.info(
+            request,
+            _("Select the preferred values to complete the merge."),
+        )
+        return redirect(f"{selection_url}?{query}")
 
 def create_fieldslip_for_accession(request, pk):
     """ Opens a modal for FieldSlip creation and links it to an Accession """
@@ -1674,7 +1685,7 @@ class AccessionDetailView(DetailView):
         context['can_edit_accession_rows'] = can_edit_accession_rows
         context['specimen_table_empty_colspan'] = 11 if can_edit_accession_rows else 10
 
-        if self.request.user.has_perm("cms.can_merge"):
+        if self.request.user.has_perm("cms.can_merge") and len(related_fieldslips) >= 2:
             context["merge_fieldslip_form"] = FieldSlipMergeForm(accession=accession)
 
         return context

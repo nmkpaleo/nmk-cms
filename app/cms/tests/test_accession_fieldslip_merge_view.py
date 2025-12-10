@@ -1,3 +1,5 @@
+from urllib.parse import urlencode
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
@@ -81,7 +83,8 @@ class AccessionFieldSlipMergeViewTests(TransactionTestCase):
 
         self.assertEqual(response.status_code, 403)
 
-    def test_merges_fieldslips_and_redirects(self):
+    @override_settings(MERGE_TOOL_FEATURE=True)
+    def test_redirects_to_merge_field_selection(self):
         accession = self._create_accession()
         with impersonate(self.user_with_perm):
             target = FieldSlip.objects.create(
@@ -104,18 +107,22 @@ class AccessionFieldSlipMergeViewTests(TransactionTestCase):
             {"target": target.pk, "source": source.pk},
         )
 
-        self.assertRedirects(
-            response, reverse("accession_detail", kwargs={"pk": accession.pk})
+        cancel_url = reverse("accession_detail", kwargs={"pk": accession.pk})
+        expected_query = urlencode(
+            {
+                "model": FieldSlip._meta.label,
+                "target": target.pk,
+                "candidates": f"{target.pk},{source.pk}",
+                "cancel": cancel_url,
+            }
         )
-        self.assertTrue(FieldSlip.objects.filter(pk=target.pk).exists())
-        self.assertFalse(FieldSlip.objects.filter(pk=source.pk).exists())
+        expected_url = f"{reverse('merge:merge_field_selection')}?{expected_query}"
+
+        self.assertRedirects(response, expected_url, fetch_redirect_response=False)
+        self.assertTrue(FieldSlip.objects.filter(pk=source.pk).exists())
         self.assertEqual(
             AccessionFieldSlip.objects.filter(accession=accession).count(),
-            1,
-        )
-        self.assertEqual(
-            AccessionFieldSlip.objects.filter(accession=accession, fieldslip=target).count(),
-            1,
+            2,
         )
 
     def test_rejects_fieldslip_not_linked_to_accession(self):
@@ -225,6 +232,25 @@ class AccessionFieldSlipMergeViewTests(TransactionTestCase):
             merge_form.fields["target"].queryset.order_by("pk"),
             FieldSlip.objects.filter(pk__in=[target.pk, source.pk]).order_by("pk"),
             transform=lambda obj: obj,
+        )
+
+    def test_merge_form_hidden_with_fewer_than_two_links(self):
+        accession = self._create_accession()
+        with impersonate(self.user_with_perm):
+            slip = FieldSlip.objects.create(
+                field_number="FS-950", verbatim_taxon="Taxon", verbatim_element="Element"
+            )
+            AccessionFieldSlip.objects.create(accession=accession, fieldslip=slip)
+
+        self.client.force_login(self.manager_with_perm)
+        response = self.client.get(
+            reverse("accession_detail", kwargs={"pk": accession.pk}), follow=True
+        )
+
+        self.assertNotContains(response, "Merge field slips")
+        self.assertNotContains(
+            response,
+            reverse("accession_merge_fieldslips", args=[accession.pk]),
         )
 
     def test_merge_form_hidden_without_permission(self):

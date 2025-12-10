@@ -280,7 +280,7 @@
               </div>
             </div>
 
-            {% if merge_fieldslip_form %}
+            {% if merge_fieldslip_form and related_fieldslips|length >= 2 %}
               <div class="w3-margin-top" aria-labelledby="accession-fieldslip-merge-heading">
                 <h3 id="accession-fieldslip-merge-heading" class="w3-margin-top">
                   <i class="fa-solid fa-object-group" aria-hidden="true"></i>

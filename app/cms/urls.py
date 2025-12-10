@@ -200,10 +200,9 @@ urlpatterns += [
     path("autocomplete/fieldslip/", FieldSlipAutocomplete.as_view(), name="fieldslip-autocomplete"),
 ]
 
-if getattr(settings, "MERGE_TOOL_FEATURE", False):
-    urlpatterns += [
-        path("merge/", include(("cms.merge.urls", "merge"), namespace="merge"))
-    ]
+urlpatterns += [
+    path("merge/", include(("cms.merge.urls", "merge"), namespace="merge"))
+]
 
 urlpatterns += [
     path("dashboard/", dashboard, name="dashboard"),
