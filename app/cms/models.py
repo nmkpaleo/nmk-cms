@@ -1101,6 +1101,14 @@ class NatureOfSpecimen(BaseModel):
 
 # Element Model
 class Element(BaseModel):
+    """Hierarchical anatomical element tracked with audit history.
+
+    Merge preparation notes:
+    - Parent links cascade on delete, so merge flows should reparent children before
+      removing any source records.
+    - No uniqueness constraints on name or parent; duplicates may need FIELD_SELECTION
+      and deduplication strategies during merge.
+    """
     parent_element = models.ForeignKey(
         'self',
         on_delete=models.CASCADE,
