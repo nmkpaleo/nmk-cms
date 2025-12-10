@@ -154,7 +154,11 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
                 }
             )
 
-        cancel_url = request.POST.get("cancel") or request.META.get("HTTP_REFERER", "")
+        cancel_url = (
+            request.POST.get("cancel")
+            or request.GET.get("cancel")
+            or request.META.get("HTTP_REFERER", "")
+        )
         if cancel_url:
             return redirect(cancel_url)
 

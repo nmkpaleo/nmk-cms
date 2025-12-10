@@ -22,6 +22,9 @@
       {% if candidate_ids %}
         <input type="hidden" name="candidates" value="{{ candidate_ids }}" />
       {% endif %}
+      {% if cancel_url %}
+        <input type="hidden" name="cancel" value="{{ cancel_url }}" />
+      {% endif %}
 
       <div class="w3-row-padding w3-margin-bottom">
         <div class="w3-col l6 m6 s12">
