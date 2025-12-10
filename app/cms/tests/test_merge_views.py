@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from datetime import date
 from typing import Any
 from unittest import mock
-import json
 
 from django.contrib.auth import get_user_model
 from django.db import models
@@ -177,4 +178,29 @@ class FieldSelectionMergeViewTests(SimpleTestCase):
         payload = json.loads(response.content.decode())
         self.assertEqual(payload["resolved_fields"]["owner"]["value"], request.user.pk)
         self.assertEqual(payload["relation_actions"]["owners"], [request.user.pk])
+
+    def test_post_serialises_date_values_in_json_response(self):
+        selection_field = FieldSelectionForm.selection_field_name("name")
+        request = self.factory.post(
+            "/merge/field-selection/",
+            {"model": "cms.DummyMergeModel", "target": 1, "candidates": "1,2", selection_field: "2"},
+            HTTP_ACCEPT="application/json",
+        )
+        request.user = self._dummy_user()
+
+        dummy_result = DummyMergeResult(
+            target=self.target,
+            resolved_values={"collected_at": StrategyResolution(value=date(2024, 1, 2))},
+            relation_actions={},
+        )
+
+        with (
+            mock.patch("cms.merge.views.merge_records", return_value=dummy_result),
+            mock.patch("cms.merge.views.transaction.atomic"),
+            mock.patch("django.contrib.messages.api.add_message"),
+        ):
+            response = self._build_view()(request)
+
+        payload = json.loads(response.content.decode())
+        self.assertEqual(payload["resolved_fields"]["collected_at"]["value"], "2024-01-02")
 

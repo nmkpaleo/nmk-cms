@@ -279,6 +279,53 @@
                 </button>
               </div>
             </div>
+
+            {% if merge_fieldslip_form and related_fieldslips|length >= 2 %}
+              <div class="w3-margin-top" aria-labelledby="accession-fieldslip-merge-heading">
+                <h3 id="accession-fieldslip-merge-heading" class="w3-margin-top">
+                  <i class="fa-solid fa-object-group" aria-hidden="true"></i>
+                  <span class="w3-margin-left">{% trans "Merge field slips" %}</span>
+                </h3>
+                <p class="w3-text-gray">{% trans "Combine duplicate field slips linked to this accession by selecting a target and a source." %}</p>
+                <form method="post" action="{% url 'accession_merge_fieldslips' accession.pk %}" class="w3-margin-top" aria-describedby="accession-fieldslip-merge-heading">
+                  {% csrf_token %}
+                  <div class="w3-row-padding">
+                    <div class="w3-col s12 m6">
+                      <label class="w3-text-gray" for="{{ merge_fieldslip_form.target.id_for_label }}">
+                        {{ merge_fieldslip_form.target.label }}
+                      </label>
+                      {{ merge_fieldslip_form.target }}
+                      {% if merge_fieldslip_form.target.errors %}
+                        <ul class="w3-text-red w3-small w3-margin-top" role="alert">
+                          {% for error in merge_fieldslip_form.target.errors %}
+                            <li>{{ error }}</li>
+                          {% endfor %}
+                        </ul>
+                      {% endif %}
+                    </div>
+                    <div class="w3-col s12 m6">
+                      <label class="w3-text-gray" for="{{ merge_fieldslip_form.source.id_for_label }}">
+                        {{ merge_fieldslip_form.source.label }}
+                      </label>
+                      {{ merge_fieldslip_form.source }}
+                      {% if merge_fieldslip_form.source.errors %}
+                        <ul class="w3-text-red w3-small w3-margin-top" role="alert">
+                          {% for error in merge_fieldslip_form.source.errors %}
+                            <li>{{ error }}</li>
+                          {% endfor %}
+                        </ul>
+                      {% endif %}
+                    </div>
+                  </div>
+                  <div class="w3-margin-top">
+                    <button type="submit" class="w3-button w3-blue w3-round">
+                      <i class="fa-solid fa-right-left" aria-hidden="true"></i>
+                      <span class="w3-margin-left">{% trans "Merge selected field slips" %}</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            {% endif %}
           </div>
         </section>
       {% endif %}

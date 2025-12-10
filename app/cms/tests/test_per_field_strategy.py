@@ -225,8 +225,8 @@ class FieldSelectionViewMultiSourceTests(TransactionTestCase):
         set_current_user(None)
         super().tearDown()
 
-    def _build_request(self, data):
-        request = self.factory.post("/merge/field-selection/", data=data)
+    def _build_request(self, data, path: str = "/merge/field-selection/"):
+        request = self.factory.post(path, data=data)
         SessionMiddleware(lambda req: None).process_request(request)
         request.session.save()
         setattr(request, "_messages", FallbackStorage(request))
@@ -291,4 +291,91 @@ class FieldSelectionViewMultiSourceTests(TransactionTestCase):
         self.assertEqual(
             merge_mock.call_args_list[0].kwargs["strategy_map"]["fields"]["area"].get("value"),
             "Source Two",
+        )
+
+    def test_redirects_to_cancel_url_when_provided(self):
+        set_current_user(self.user)
+        target = cms_models.Storage.objects.create(area="Target")
+        source = cms_models.Storage.objects.create(area="Source")
+        set_current_user(None)
+
+        view = FieldSelectionMergeView()
+        merge_fields = view.get_mergeable_fields(cms_models.Storage)
+        data = {
+            "model": cms_models.Storage._meta.label,
+            "target": str(target.pk),
+            "candidates": ",".join([str(target.pk), str(source.pk)]),
+            "cancel": "/accessions/8535/",
+        }
+        for field in merge_fields:
+            field_name = FieldSelectionForm.selection_field_name(field.name)
+            data.setdefault(field_name, str(target.pk))
+
+        request = self._build_request(data)
+
+        with mock.patch("cms.merge.views.merge_records") as merge_mock:
+            merge_mock.return_value = SimpleNamespace(
+                target=target, resolved_values={}, relation_actions={}
+            )
+            response = FieldSelectionMergeView.as_view()(request)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "/accessions/8535/")
+        merge_mock.assert_called_once()
+
+    def test_redirects_to_cancel_querystring_when_post_missing_cancel(self):
+        set_current_user(self.user)
+        target = cms_models.Storage.objects.create(area="Target")
+        source = cms_models.Storage.objects.create(area="Source")
+        set_current_user(None)
+
+        view = FieldSelectionMergeView()
+        merge_fields = view.get_mergeable_fields(cms_models.Storage)
+        data = {
+            "model": cms_models.Storage._meta.label,
+            "target": str(target.pk),
+            "candidates": ",".join([str(target.pk), str(source.pk)]),
+        }
+        for field in merge_fields:
+            field_name = FieldSelectionForm.selection_field_name(field.name)
+            data.setdefault(field_name, str(target.pk))
+
+        request = self._build_request(
+            data, path="/merge/field-selection/?cancel=/accessions/8536/"
+        )
+
+        with mock.patch("cms.merge.views.merge_records") as merge_mock:
+            merge_mock.return_value = SimpleNamespace(
+                target=target, resolved_values={}, relation_actions={}
+            )
+            response = FieldSelectionMergeView.as_view()(request)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "/accessions/8536/")
+        merge_mock.assert_called_once()
+
+    @override_settings(ALLOWED_HOSTS=["testserver", "localhost"])
+    def test_renders_cancel_hidden_input(self):
+        set_current_user(self.user)
+        target = cms_models.Storage.objects.create(area="Target")
+        source = cms_models.Storage.objects.create(area="Source")
+        set_current_user(None)
+
+        cancel_url = "/accessions/8536/"
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse("merge:merge_field_selection"),
+            {
+                "model": cms_models.Storage._meta.label,
+                "target": target.pk,
+                "candidates": f"{target.pk},{source.pk}",
+                "cancel": cancel_url,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            f'<input type="hidden" name="cancel" value="{cancel_url}" />',
+            html=False,
         )

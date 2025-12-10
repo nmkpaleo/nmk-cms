@@ -82,6 +82,7 @@ from cms.forms import (
     AddAccessionRowForm,
     DrawerRegisterForm,
     FieldSlipForm,
+    FieldSlipMergeForm,
     LocalityForm,
     ManualQCImportForm,
     ManualImportSummary,
@@ -146,7 +147,7 @@ from django.db.models import Count
 
 
 
-from cms.merge import MERGE_REGISTRY, MergeMixin
+from cms.merge import MERGE_REGISTRY, MergeMixin, merge_records
 from cms.merge.fuzzy import score_candidates
 from cms.resources import FieldSlipResource
 from .utils import build_accession_identification_maps, build_history_entries
@@ -936,6 +937,67 @@ def add_fieldslip_to_accession(request, pk):
     messages.error(request, "Error adding FieldSlip.")
     return redirect("accession_detail", pk=accession.pk)
 
+
+class AccessionFieldSlipMergeView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = "cms.can_merge"
+    raise_exception = True
+    http_method_names = ["post"]
+
+    def get_accession(self, pk: int) -> Accession:
+        return get_object_or_404(
+            Accession.objects.prefetch_related("fieldslip_links__fieldslip"), pk=pk
+        )
+
+    def handle_no_permission(self):
+        if self.raise_exception:
+            return super().handle_no_permission()
+        return redirect("login")
+
+    def post(self, request, pk: int, *args, **kwargs):
+        accession = self.get_accession(pk)
+        form = FieldSlipMergeForm(request.POST, accession=accession)
+
+        if not form.is_valid():
+            for field, errors in form.errors.items():
+                for error in errors:
+                    label = form.fields.get(field).label if field in form.fields else field
+                    messages.error(
+                        request,
+                        _("%(field)s: %(error)s") % {"field": label, "error": error},
+                    )
+            return redirect("accession_detail", pk=accession.pk)
+
+        if not getattr(settings, "MERGE_TOOL_FEATURE", False):
+            messages.error(
+                request,
+                _("Field slip merging requires the merge tool to be enabled."),
+            )
+            return redirect("accession_detail", pk=accession.pk)
+
+        if not request.user.is_staff:
+            return HttpResponseForbidden()
+
+        source = form.cleaned_data["source"]
+        target = form.cleaned_data["target"]
+
+        cancel_url = reverse("accession_detail", args=[accession.pk])
+        selection_url = reverse("merge:merge_field_selection")
+        candidates = [str(target.pk), str(source.pk)]
+        query = urlencode(
+            {
+                "model": FieldSlip._meta.label,
+                "target": target.pk,
+                "candidates": ",".join(candidates),
+                "cancel": cancel_url,
+            }
+        )
+
+        messages.info(
+            request,
+            _("Select the preferred values to complete the merge."),
+        )
+        return redirect(f"{selection_url}?{query}")
+
 def create_fieldslip_for_accession(request, pk):
     """ Opens a modal for FieldSlip creation and links it to an Accession """
     accession = get_object_or_404(Accession, pk=pk)
@@ -1622,6 +1684,9 @@ class AccessionDetailView(DetailView):
         )
         context['can_edit_accession_rows'] = can_edit_accession_rows
         context['specimen_table_empty_colspan'] = 11 if can_edit_accession_rows else 10
+
+        if self.request.user.has_perm("cms.can_merge") and len(related_fieldslips) >= 2:
+            context["merge_fieldslip_form"] = FieldSlipMergeForm(accession=accession)
 
         return context
 

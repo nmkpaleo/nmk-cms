@@ -20,6 +20,7 @@ from cms.views import (
     edit_identification,
     edit_specimen_element,
     add_reference_to_accession,
+    AccessionFieldSlipMergeView,
     create_fieldslip_for_accession,
     fieldslip_create,
     fieldslip_edit,
@@ -120,6 +121,11 @@ urlpatterns = [
     path('accessions/<int:pk>/edit/', accession_edit, name='accession_edit'),
     path('accessions/<int:pk>/add-fieldslip/', add_fieldslip_to_accession, name='accession_add_fieldslip'),
     path('accessions/<int:pk>/create-fieldslip/', create_fieldslip_for_accession, name='accession_create_fieldslip'),
+    path(
+        'accessions/<int:pk>/merge-fieldslips/',
+        AccessionFieldSlipMergeView.as_view(),
+        name='accession_merge_fieldslips',
+    ),
     path('accessions/<int:accession_id>/add-row/', add_accession_row, name='accession_add_row'),
     path('accessions/<int:accession_id>/add-comment/', add_comment_to_accession, name='accession_add_comment'),
     path('accessions/<int:accession_id>/add-geology/', add_geology_to_accession, name='accession_add_geology'),
@@ -194,10 +200,9 @@ urlpatterns += [
     path("autocomplete/fieldslip/", FieldSlipAutocomplete.as_view(), name="fieldslip-autocomplete"),
 ]
 
-if getattr(settings, "MERGE_TOOL_FEATURE", False):
-    urlpatterns += [
-        path("merge/", include(("cms.merge.urls", "merge"), namespace="merge"))
-    ]
+urlpatterns += [
+    path("merge/", include(("cms.merge.urls", "merge"), namespace="merge"))
+]
 
 urlpatterns += [
     path("dashboard/", dashboard, name="dashboard"),

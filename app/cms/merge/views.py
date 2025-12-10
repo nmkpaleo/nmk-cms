@@ -17,6 +17,7 @@ from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _, ngettext
 from django.views import View
+from django.utils.http import url_has_allowed_host_and_scheme
 
 from cms.merge import merge_records
 from cms.merge.forms import FieldSelectionCandidate, FieldSelectionForm
@@ -154,6 +155,14 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
                 }
             )
 
+        cancel_url = (
+            request.POST.get("cancel")
+            or request.GET.get("cancel")
+            or request.META.get("HTTP_REFERER", "")
+        )
+        if cancel_url and url_has_allowed_host_and_scheme(cancel_url, allowed_hosts={request.get_host()}):
+            return redirect(cancel_url)
+
         meta = target_instance._meta
         try:
             change_url = reverse(
@@ -161,8 +170,8 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
                 args=[target_instance.pk],
             )
         except Exception:  # pragma: no cover - defensive fallback
-            change_url = request.POST.get("cancel") or request.META.get("HTTP_REFERER", "")
-        return redirect(change_url)
+            change_url = ""
+        return redirect(change_url or "/")
 
     def get_model(self, request: HttpRequest) -> type[MergeMixin]:
         if self.model is not None:
@@ -252,9 +261,9 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
             return [self._serialise_value(item) for item in value]
         if hasattr(value, "pk"):
             return getattr(value, "pk")
+
         try:
-            json.dumps(value, cls=DjangoJSONEncoder)
-            return value
+            return json.loads(json.dumps(value, cls=DjangoJSONEncoder))
         except TypeError:
             return str(value)
 

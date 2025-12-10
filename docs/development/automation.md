@@ -23,6 +23,11 @@ by `docs/scripts/update_prompts.py`.
   suite and guard against manual edits within the managed block (`<!-- DEPENDENCY_SNAPSHOT:START -->` ... `END`).
 - If the script raises a marker error, ensure both prompt files still contain the start and end comments on their own lines.
 
+### Documentation coverage
+- Feature docs such as FieldSlip merge guidance live alongside the automation content. Add a short changelog entry whenever you
+  document a new workflow and ensure the Markdown renders cleanly (headings, lists, and code fences) so CI docs checks continue
+  to pass.
+
 ## Maintenance
 - Update `CATEGORY_RULES` in `docs/scripts/update_prompts.py` when introducing new dependency groups so related packages are
   grouped meaningfully.
