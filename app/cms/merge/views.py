@@ -252,9 +252,9 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
             return [self._serialise_value(item) for item in value]
         if hasattr(value, "pk"):
             return getattr(value, "pk")
+
         try:
-            json.dumps(value, cls=DjangoJSONEncoder)
-            return value
+            return json.loads(json.dumps(value, cls=DjangoJSONEncoder))
         except TypeError:
             return str(value)
 
