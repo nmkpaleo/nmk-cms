@@ -1100,7 +1100,7 @@ class NatureOfSpecimen(BaseModel):
 
 
 # Element Model
-class Element(BaseModel):
+class Element(MergeMixin, BaseModel):
     """Hierarchical anatomical element tracked with audit history.
 
     Merge preparation notes:
@@ -1109,6 +1109,16 @@ class Element(BaseModel):
     - No uniqueness constraints on name or parent; duplicates may need FIELD_SELECTION
       and deduplication strategies during merge.
     """
+
+    merge_fields = {
+        "name": MergeStrategy.FIELD_SELECTION,
+        "parent_element": MergeStrategy.FIELD_SELECTION,
+    }
+
+    relation_strategies = {
+        "children": {"action": "reassign", "deduplicate": True},
+        "natureofspecimen_set": {"action": "reassign", "deduplicate": True},
+    }
     parent_element = models.ForeignKey(
         'self',
         on_delete=models.CASCADE,
@@ -1125,15 +1135,14 @@ class Element(BaseModel):
     )
     history = HistoricalRecords()
 
-    class Meta:
-        ordering = ['parent_element__name', 'name']
-
     def get_absolute_url(self):
         return reverse('element-detail', args=[str(self.id)])
 
     class Meta:
         verbose_name = "Element"
         verbose_name_plural = "Elements"
+        permissions = [("can_merge", "Can merge element records")]
+        ordering = ['parent_element__name', 'name']
 
     def __str__(self):
         return self.name

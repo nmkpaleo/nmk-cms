@@ -13,9 +13,9 @@ class CmsConfig(AppConfig):
 
         try:
             from cms.merge import register_merge_rules
-            from cms.models import FieldSlip, Reference, Storage
+            from cms.models import Element, FieldSlip, Reference, Storage
         except ImportError:  # pragma: no cover - defensive import guard
             return
 
-        for model in (FieldSlip, Storage, Reference):
+        for model in (FieldSlip, Storage, Reference, Element):
             register_merge_rules(model)
