@@ -17,6 +17,7 @@ from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _, ngettext
 from django.views import View
+from django.utils.http import url_has_allowed_host_and_scheme
 
 from cms.merge import merge_records
 from cms.merge.forms import FieldSelectionCandidate, FieldSelectionForm
@@ -159,7 +160,7 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
             or request.GET.get("cancel")
             or request.META.get("HTTP_REFERER", "")
         )
-        if cancel_url:
+        if cancel_url and url_has_allowed_host_and_scheme(cancel_url, allowed_hosts={request.get_host()}):
             return redirect(cancel_url)
 
         meta = target_instance._meta
