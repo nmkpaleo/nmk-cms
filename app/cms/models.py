@@ -1105,27 +1105,6 @@ class Element(MergeMixin, BaseModel):
         "name": MergeStrategy.FIELD_SELECTION,
         "parent_element": MergeStrategy.FIELD_SELECTION,
     }
-    canonical_element = models.ForeignKey(
-        "self",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="merged_elements",
-        help_text="Canonical element that supersedes this record after merge.",
-    )
-    merged_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text="Timestamp when this element was merged into the canonical record.",
-    )
-    merged_by = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="merged_element_records",
-        help_text="User who performed the merge.",
-    )
     parent_element = models.ForeignKey(
         'self',
         on_delete=models.CASCADE,
