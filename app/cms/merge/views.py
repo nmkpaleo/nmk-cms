@@ -154,6 +154,10 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
                 }
             )
 
+        cancel_url = request.POST.get("cancel") or request.META.get("HTTP_REFERER", "")
+        if cancel_url:
+            return redirect(cancel_url)
+
         meta = target_instance._meta
         try:
             change_url = reverse(
@@ -161,8 +165,8 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
                 args=[target_instance.pk],
             )
         except Exception:  # pragma: no cover - defensive fallback
-            change_url = request.POST.get("cancel") or request.META.get("HTTP_REFERER", "")
-        return redirect(change_url)
+            change_url = ""
+        return redirect(change_url or "/")
 
     def get_model(self, request: HttpRequest) -> type[MergeMixin]:
         if self.model is not None:
