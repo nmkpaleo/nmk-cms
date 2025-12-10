@@ -1674,6 +1674,9 @@ class AccessionDetailView(DetailView):
         context['can_edit_accession_rows'] = can_edit_accession_rows
         context['specimen_table_empty_colspan'] = 11 if can_edit_accession_rows else 10
 
+        if self.request.user.has_perm("cms.can_merge"):
+            context["merge_fieldslip_form"] = FieldSlipMergeForm(accession=accession)
+
         return context
 
 from django.contrib.auth.mixins import LoginRequiredMixin

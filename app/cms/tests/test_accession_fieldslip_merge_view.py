@@ -1,10 +1,13 @@
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group, Permission
+from django.contrib.contenttypes.models import ContentType
 from django.core.management import call_command
 from django.test import TransactionTestCase, override_settings
 from django.urls import reverse
 
 from crum import impersonate
 
+from cms.forms import FieldSlipMergeForm
 from cms.models import Accession, AccessionFieldSlip, Collection, FieldSlip, Locality
 
 
@@ -31,10 +34,25 @@ class AccessionFieldSlipMergeViewTests(TransactionTestCase):
             is_superuser=True,
         )
 
+        self.collection_managers = Group.objects.create(name="Collection Managers")
+        fieldslip_ct = ContentType.objects.get_for_model(FieldSlip)
+        self.merge_permission = Permission.objects.get(
+            codename="can_merge", content_type=fieldslip_ct
+        )
+
+        self.manager_with_perm = get_user_model().objects.create_user(
+            username="manager-merge-user",
+            password="test-pass",
+            is_staff=True,
+        )
+        self.manager_with_perm.groups.add(self.collection_managers)
+        self.manager_with_perm.user_permissions.add(self.merge_permission)
+
         self.user_without_perm = get_user_model().objects.create_user(
             username="no-merge-user",
             password="test-pass",
         )
+        self.user_without_perm.groups.add(self.collection_managers)
 
     def _create_accession(self) -> Accession:
         with impersonate(self.user_with_perm):
@@ -137,4 +155,95 @@ class AccessionFieldSlipMergeViewTests(TransactionTestCase):
         self.assertEqual(
             AccessionFieldSlip.objects.filter(accession=accession).count(),
             1,
+        )
+
+    def test_merge_form_rejects_identical_selection(self):
+        accession = self._create_accession()
+        with impersonate(self.user_with_perm):
+            slip = FieldSlip.objects.create(
+                field_number="FS-900",
+                verbatim_taxon="Taxon",
+                verbatim_element="Element",
+            )
+        with impersonate(self.user_with_perm):
+            AccessionFieldSlip.objects.create(accession=accession, fieldslip=slip)
+
+        self.client.force_login(self.manager_with_perm)
+        response = self.client.post(
+            reverse("accession_merge_fieldslips", args=[accession.pk]),
+            {"target": slip.pk, "source": slip.pk},
+            follow=True,
+        )
+
+        self.assertRedirects(
+            response, reverse("accession_detail", kwargs={"pk": accession.pk})
+        )
+        messages = list(response.wsgi_request._messages)
+        self.assertTrue(
+            any("Select two different field slips" in message.message for message in messages)
+        )
+        self.assertEqual(
+            AccessionFieldSlip.objects.filter(accession=accession).count(),
+            1,
+        )
+
+    def test_merge_form_rendered_for_permitted_user(self):
+        accession = self._create_accession()
+        with impersonate(self.user_with_perm):
+            target = FieldSlip.objects.create(
+                field_number="FS-500",
+                verbatim_taxon="Taxon",
+                verbatim_element="Element",
+            )
+            source = FieldSlip.objects.create(
+                field_number="FS-600",
+                verbatim_taxon="Taxon",
+                verbatim_element="Element",
+            )
+            unrelated = FieldSlip.objects.create(
+                field_number="FS-700",
+                verbatim_taxon="Other Taxon",
+                verbatim_element="Other Element",
+            )
+
+        with impersonate(self.user_with_perm):
+            AccessionFieldSlip.objects.create(accession=accession, fieldslip=target)
+            AccessionFieldSlip.objects.create(accession=accession, fieldslip=source)
+
+        self.client.force_login(self.manager_with_perm)
+        response = self.client.get(
+            reverse("accession_detail", kwargs={"pk": accession.pk}), follow=True
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Merge field slips")
+        self.assertContains(response, "name=\"target\"")
+        self.assertContains(response, "name=\"source\"")
+
+        merge_form = FieldSlipMergeForm(accession=accession)
+        self.assertQuerysetEqual(
+            merge_form.fields["target"].queryset.order_by("pk"),
+            FieldSlip.objects.filter(pk__in=[target.pk, source.pk]).order_by("pk"),
+            transform=lambda obj: obj,
+        )
+
+    def test_merge_form_hidden_without_permission(self):
+        accession = self._create_accession()
+        with impersonate(self.user_with_perm):
+            linked = FieldSlip.objects.create(
+                field_number="FS-800",
+                verbatim_taxon="Taxon",
+                verbatim_element="Element",
+            )
+        with impersonate(self.user_with_perm):
+            AccessionFieldSlip.objects.create(accession=accession, fieldslip=linked)
+
+        self.client.force_login(self.user_without_perm)
+        response = self.client.get(
+            reverse("accession_detail", kwargs={"pk": accession.pk})
+        )
+
+        self.assertNotContains(
+            response,
+            reverse("accession_merge_fieldslips", args=[accession.pk]),
         )
