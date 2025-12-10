@@ -721,6 +721,44 @@ class AccessionFieldSlipForm(BaseW3ModelForm):
         self.fields["fieldslip"].widget.choices = self.fields["fieldslip"].choices
 
 
+class FieldSlipMergeForm(BaseW3Form):
+    target = forms.ModelChoiceField(
+        queryset=FieldSlip.objects.none(),
+        label=_("Target field slip"),
+    )
+    source = forms.ModelChoiceField(
+        queryset=FieldSlip.objects.none(),
+        label=_("Source field slip"),
+    )
+
+    def __init__(self, *args, accession: Accession, **kwargs):
+        self.accession = accession
+        super().__init__(*args, **kwargs)
+        fieldslips = (
+            FieldSlip.objects.filter(accession_links__accession=accession)
+            .distinct()
+            .order_by("field_number", "id")
+        )
+        self.fields["target"].queryset = fieldslips
+        self.fields["source"].queryset = fieldslips
+
+    def clean(self):
+        cleaned_data = super().clean()
+        target = cleaned_data.get("target")
+        source = cleaned_data.get("source")
+
+        if target and source and target == source:
+            self.add_error("source", _("Select two different field slips to merge."))
+
+        if not self.accession.fieldslip_links.filter(fieldslip=target).exists():
+            self.add_error("target", _("Select a field slip linked to this accession."))
+
+        if not self.accession.fieldslip_links.filter(fieldslip=source).exists():
+            self.add_error("source", _("Select a field slip linked to this accession."))
+
+        return cleaned_data
+
+
 class AccessionGeologyForm(BaseW3ModelForm):
     class Meta:
         model = SpecimenGeology

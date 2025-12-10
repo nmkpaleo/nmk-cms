@@ -82,6 +82,7 @@ from cms.forms import (
     AddAccessionRowForm,
     DrawerRegisterForm,
     FieldSlipForm,
+    FieldSlipMergeForm,
     LocalityForm,
     ManualQCImportForm,
     ManualImportSummary,
@@ -146,7 +147,7 @@ from django.db.models import Count
 
 
 
-from cms.merge import MERGE_REGISTRY, MergeMixin
+from cms.merge import MERGE_REGISTRY, MergeMixin, merge_records
 from cms.merge.fuzzy import score_candidates
 from cms.resources import FieldSlipResource
 from .utils import build_accession_identification_maps, build_history_entries
@@ -935,6 +936,56 @@ def add_fieldslip_to_accession(request, pk):
 
     messages.error(request, "Error adding FieldSlip.")
     return redirect("accession_detail", pk=accession.pk)
+
+
+class AccessionFieldSlipMergeView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = "cms.can_merge"
+    raise_exception = True
+    http_method_names = ["post"]
+
+    def get_accession(self, pk: int) -> Accession:
+        return get_object_or_404(
+            Accession.objects.prefetch_related("fieldslip_links__fieldslip"), pk=pk
+        )
+
+    def handle_no_permission(self):
+        if self.raise_exception:
+            return super().handle_no_permission()
+        return redirect("login")
+
+    def post(self, request, pk: int, *args, **kwargs):
+        accession = self.get_accession(pk)
+        form = FieldSlipMergeForm(request.POST, accession=accession)
+
+        if not form.is_valid():
+            for field, errors in form.errors.items():
+                for error in errors:
+                    label = form.fields.get(field).label if field in form.fields else field
+                    messages.error(
+                        request,
+                        _("%(field)s: %(error)s") % {"field": label, "error": error},
+                    )
+            return redirect("accession_detail", pk=accession.pk)
+
+        source = form.cleaned_data["source"]
+        target = form.cleaned_data["target"]
+
+        try:
+            merge_records(source, target, strategy_map=None, user=request.user)
+        except Exception as exc:  # pragma: no cover - defensive
+            messages.error(
+                request,
+                _("Could not merge field slips: %(reason)s")
+                % {"reason": str(exc)},
+            )
+            return redirect("accession_detail", pk=accession.pk)
+
+        messages.success(
+            request,
+            _("Merged %(source)s into %(target)s")
+            % {"source": source, "target": target},
+        )
+        return redirect("accession_detail", pk=accession.pk)
 
 def create_fieldslip_for_accession(request, pk):
     """ Opens a modal for FieldSlip creation and links it to an Accession """
