@@ -2,6 +2,7 @@ from typing import Any, Mapping
 
 from django.contrib import admin, messages
 from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
+from django.contrib.admin.views.decorators import staff_member_required
 from django.db.models import Count, OuterRef, Exists, Q
 from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -1486,22 +1487,28 @@ class FlatImportForm(forms.Form):
     import_file = forms.FileField(label="Import CSV")
 
 
+@staff_member_required
 def flat_file_import_view(request):
-    """Handle the flat file import process."""
+    """Handle the flat file import process with staff-only access."""
+
     if request.method == "POST":
         form = FlatImportForm(request.POST, request.FILES)
         if form.is_valid():
             try:
                 count = import_flat_file(form.cleaned_data["import_file"])
-                messages.success(request, f"Imported {count} rows successfully.")
+                messages.success(request, _("Imported %(count)d rows successfully.") % {"count": count})
                 return redirect("admin:index")
             except Exception as exc:  # pragma: no cover - best effort
-                messages.error(request, f"Import failed: {exc}")
+                messages.error(request, _("Import failed: %(error)s") % {"error": exc})
     else:
         form = FlatImportForm()
 
-    context = {"form": form, "title": "Flat File Import"}
-    return render(request, "admin/flat_file_import.html", context)
+    context = {
+        **admin.site.each_context(request),
+        "form": form,
+        "title": _("Flat File Import"),
+    }
+    return TemplateResponse(request, "admin/flat_file_import.html", context)
 
 
 original_get_urls = admin.site.get_urls
