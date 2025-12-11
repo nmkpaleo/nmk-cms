@@ -1,23 +1,23 @@
 """Views supporting merge workflows and per-field selection flows."""
 from __future__ import annotations
 
+import json
+import logging
 from typing import Iterable, Mapping
 
 from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
-import json
-import logging
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import transaction
 from django.db.models import Model
 from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext_lazy as _, ngettext
 from django.views import View
-from django.utils.http import url_has_allowed_host_and_scheme
 
 from cms.merge import merge_records
 from cms.merge.forms import (
@@ -58,7 +58,8 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
         try:
             candidates, target = self.get_candidates(request, model)
         except Exception as exc:  # pragma: no cover - defensive
-            return HttpResponseBadRequest(str(exc))
+            logging.exception("Exception in get_candidates")
+            return HttpResponseBadRequest("An internal error has occurred.")
         form = self.form_class(
             model=model,
             merge_fields=self.get_mergeable_fields(model),
@@ -95,7 +96,8 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
         try:
             model = self.get_model(request)
         except Exception as exc:  # pragma: no cover - defensive
-            return HttpResponseBadRequest(str(exc))
+            logging.exception("Exception in get_model")
+            return HttpResponseBadRequest("An internal error has occurred.")
 
         if model is Element and not isinstance(self, ElementFieldSelectionView):
             return ElementFieldSelectionView.as_view()(request, *args, **kwargs)
@@ -103,7 +105,8 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
         try:
             candidates, target = self.get_candidates(request, model)
         except Exception as exc:  # pragma: no cover - defensive
-            return HttpResponseBadRequest(str(exc))
+            logging.exception("Exception in get_candidates")
+            return HttpResponseBadRequest("An internal error has occurred.")
 
         form = self.form_class(
             model=model,
@@ -345,7 +348,8 @@ class ElementFieldSelectionView(PermissionRequiredMixin, FieldSelectionMergeView
             model = self.get_model(request)
             candidates, target = self.get_candidates(request, model)
         except Exception as exc:  # pragma: no cover - defensive
-            return HttpResponseBadRequest(str(exc))
+            logging.exception("Exception in ElementFieldSelectionView.post")
+            return HttpResponseBadRequest(_("An error occurred processing your request."))
 
         form = self.form_class(
             model=model,
