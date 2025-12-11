@@ -1,31 +1,7 @@
-from venv import logger
-from .models import (
-    Accession,
-    AccessionReference,
-    AccessionRow,
-    Collection,
-    Element,
-    FieldSlip,
-    GeologicalContext,
-    Identification,
-    Locality,
-    Place,
-    PlaceRelation,
-    PlaceType,
-    Media,
-    NatureOfSpecimen,
-    Person,
-    Preparation,
-    PreparationMaterial,
-    DrawerRegister,
-    Scanning,
-    Reference,
-    SpecimenGeology,
-    Storage,
-    Taxon,
-    User,
-)
-from import_export import resources, fields
+import logging
+from datetime import datetime
+
+from import_export import fields, resources
 
 # from import_export.fields import Field
 from import_export.widgets import (
@@ -36,9 +12,36 @@ from import_export.widgets import (
     ManyToManyWidget,
     Widget,
 )
-from datetime import datetime
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from .models import (
+    Accession,
+    AccessionReference,
+    AccessionRow,
+    Collection,
+    DrawerRegister,
+    Element,
+    FieldSlip,
+    GeologicalContext,
+    Identification,
+    Locality,
+    Media,
+    NatureOfSpecimen,
+    Person,
+    Place,
+    PlaceRelation,
+    PlaceType,
+    Preparation,
+    PreparationMaterial,
+    Reference,
+    Scanning,
+    SpecimenGeology,
+    Storage,
+    Taxon,
+    User,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class DayFirstDateTimeWidget(DateTimeWidget):
@@ -109,7 +112,9 @@ class AccessionResource(resources.ModelResource):
             "instance_number",
             "accessioned_by",
             "accession",
+            "has_duplicates",
         )
+        readonly_fields = ("has_duplicates",)
         export_order = (
             "accession",
             "collection",
@@ -136,7 +141,7 @@ class AccessionResource(resources.ModelResource):
 
 
 class AccessionReferenceResource(resources.ModelResource):
-    accession_id = fields.Field(
+    accession = fields.Field(
         column_name="accession",
         attribute="accession",
         widget=ForeignKeyWidget(Accession, "id"),
@@ -231,7 +236,7 @@ class AccessionReferenceResource(resources.ModelResource):
 
 
 class AccessionRowResource(resources.ModelResource):
-    accession_id = fields.Field(
+    accession = fields.Field(
         column_name="accession",
         attribute="accession",
         widget=ForeignKeyWidget(Accession, "id"),
@@ -313,7 +318,7 @@ class AccessionRowResource(resources.ModelResource):
         skip_unchanged = True
         report_skipped = False
         import_id_fields = (
-            "accession_id",
+            "accession",
             "specimen_suffix",
         )
         fields = (
@@ -408,7 +413,7 @@ class FieldSlipResource(resources.ModelResource):
 
 
 class IdentificationResource(resources.ModelResource):
-    accession_row_id = fields.Field(
+    accession_row = fields.Field(
         column_name="accession_row",
         attribute="accession_row",
         widget=ForeignKeyWidget(AccessionRow, "id"),
@@ -527,7 +532,7 @@ class IdentificationResource(resources.ModelResource):
         model = Identification
         skip_unchanged = True
         report_skipped = False
-        import_id_fields = ("accession_row_id",)
+        import_id_fields = ("accession_row",)
         fields = (
             "accession_row",
             "collection",
@@ -726,7 +731,7 @@ class PlaceResource(resources.ModelResource):
 
 
 class NatureOfSpecimenResource(resources.ModelResource):
-    accession_row_id = fields.Field(
+    accession_row = fields.Field(
         column_name="accession_row",
         attribute="accession_row",
         widget=ForeignKeyWidget(AccessionRow, "id"),
@@ -829,7 +834,7 @@ class NatureOfSpecimenResource(resources.ModelResource):
         model = NatureOfSpecimen
         skip_unchanged = True
         report_skipped = False
-        import_id_fields = ("accession_row_id",)
+        import_id_fields = ("accession_row",)
         fields = (
             "accession_row",
             "collection",
