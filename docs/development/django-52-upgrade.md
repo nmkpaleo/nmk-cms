@@ -42,6 +42,17 @@ Run the following checks after deployment:
 - `python manage.py check --deploy` to confirm settings (hosts, CSRF, secure cookies) are correct.
 - `python -m compileall app` to catch import regressions.
 
+## Deployment assets
+- **Docker entrypoint** now binds Gunicorn to `0.0.0.0:8000` and accepts tuning via `GUNICORN_BIND`, `GUNICORN_WORKERS`, `GUNICORN_TIMEOUT`, `GUNICORN_MAX_REQUESTS`, and `GUNICORN_MAX_REQUESTS_JITTER` environment variables. Defaults are safe for staging/prod; override per environment as needed.
+- **Compose defaults** set `DJANGO_SETTINGS_MODULE=config.settings` for web containers to align with the Django 5.2 settings module.
+- **CI workflows** for staging and production compile the Django project (`python -m compileall app`) before building images to surface syntax errors introduced during the upgrade.
+
+## Rollout checklist (staging → production)
+1. Export Django 5.2-ready images using the updated GitHub Actions workflows, confirming the compile step passes.
+2. Deploy to staging with the refreshed compose files, setting any Gunicorn overrides through environment variables and ensuring `TRUSTED_ORIGINS` contains schemes.
+3. Run `python manage.py check --deploy` and smoke tests (auth flows, admin import, autocomplete) against staging.
+4. Promote the tested image to production and re-run smoke tests plus cache/DB connection checks.
+
 ## Rollback plan
 1. Revert to the previous dependency set (Django 4.2.x) and redeploy.
 2. Reverse migration `0076_alter_accession_unique_together_and_more` if necessary:
