@@ -1,111 +1,113 @@
 {% extends "base_generic.html" %}
-{% load user_tags %}
+{% load i18n user_tags %}
 
-{% block title %}Accessions{% endblock %}
+{% block title %}{% trans "Accessions" %}{% endblock %}
 
 {% block content %}
-
-<div class="w3-container w3-margin-top">
-    <div class="w3-row w3-margin-bottom w3-padding-16 w3-border-bottom">
+<section class="w3-container w3-margin-top" aria-labelledby="accessions-heading">
+    <header class="w3-row w3-margin-bottom w3-padding-16 w3-border-bottom">
         <div class="w3-col s12 m6 l6">
-            <h2 class="w3-margin-0">Accessions</h2>
+            <h2 id="accessions-heading" class="w3-margin-0">{% trans "Accessions" %}</h2>
         </div>
         <div class="w3-col s12 m6 l6 w3-right-align w3-margin-top">
             {% if user.is_authenticated %}
                 {% if user.is_superuser or user|has_group:"Collection Managers" %}
                     <a href="{% url 'accession-wizard' %}" class="w3-button w3-green w3-round">
-                        <i class="fa-solid fa-plus-circle"></i>
-                        New Accession
+                        <i class="fa-solid fa-plus-circle" aria-hidden="true"></i>
+                        <span class="sr-only">{% trans "Create a new accession record" %}</span>
+                        <span aria-hidden="true">{% trans "New Accession" %}</span>
                     </a>
                 {% endif %}
             {% endif %}
         </div>
-    </div>
+    </header>
 
-    <button type="button" onclick="toggleAccordion('accessionFilterPanel')" class="w3-button w3-light-grey w3-round-large">
-        <i class="fa-solid fa-filter"></i>
-        <span class="w3-margin-left">Show/Hide Filters</span>
+    <button type="button" onclick="toggleAccordion('accessionFilterPanel')" class="w3-button w3-light-grey w3-round-large" aria-expanded="false" aria-controls="accessionFilterPanel">
+        <i class="fa-solid fa-filter" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "Show or hide filters" %}</span>
     </button>
 
     <div id="accessionFilterPanel" class="w3-hide w3-animate-opacity w3-padding w3-light-grey w3-round-large w3-margin-top w3-card">
-        <form method="get" class="w3-container w3-padding-16" role="search">
+        <form method="get" class="w3-container w3-padding-16" role="search" aria-label="{% trans 'Filter accessions' %}">
             <div class="w3-row-padding">
                 <div class="w3-col s12 m6 l3 w3-margin-bottom">
-                    <label class="w3-text-grey">Specimen Number</label>
+                    <label class="w3-text-grey" for="id_specimen_no">{% trans "Specimen Number" %}</label>
                     {{ filter.form.specimen_no }}
                 </div>
                 <div class="w3-col s12 m6 l3 w3-margin-bottom">
-                    <label class="w3-text-grey">Specimen Prefix</label>
+                    <label class="w3-text-grey" for="id_specimen_prefix">{% trans "Specimen Prefix" %}</label>
                     {{ filter.form.specimen_prefix }}
                 </div>
                 <div class="w3-col s12 m6 l3 w3-margin-bottom">
-                    <label class="w3-text-grey">Specimen Suffix</label>
+                    <label class="w3-text-grey" for="id_specimen_suffix">{% trans "Specimen Suffix" %}</label>
                     {{ filter.form.specimen_suffix }}
                 </div>
                 <div class="w3-col s12 m6 l3 w3-margin-bottom">
-                    <label class="w3-text-grey">Comment</label>
+                    <label class="w3-text-grey" for="id_comment">{% trans "Comment" %}</label>
                     {{ filter.form.comment }}
                 </div>
             </div>
 
             <div class="w3-row-padding">
                 <div class="w3-col s12 m6 l3 w3-margin-bottom">
-                    <label class="w3-text-grey">Taxon</label>
+                    <label class="w3-text-grey" for="id_taxon">{% trans "Taxon" %}</label>
                     {{ filter.form.taxon }}
                 </div>
                 <div class="w3-col s12 m6 l3 w3-margin-bottom">
-                    <label class="w3-text-grey">Element</label>
+                    <label class="w3-text-grey" for="id_element">{% trans "Element" %}</label>
                     {{ filter.form.element }}
                 </div>
                 <div class="w3-col s12 m6 l3 w3-margin-bottom">
-                    <label class="w3-text-grey">Family</label>
+                    <label class="w3-text-grey" for="id_family">{% trans "Family" %}</label>
                     {{ filter.form.family }}
                 </div>
                 <div class="w3-col s12 m6 l3 w3-margin-bottom">
-                    <label class="w3-text-grey">Subfamily</label>
+                    <label class="w3-text-grey" for="id_subfamily">{% trans "Subfamily" %}</label>
                     {{ filter.form.subfamily }}
                 </div>
             </div>
 
             <div class="w3-row-padding">
                 <div class="w3-col s12 m6 l3 w3-margin-bottom">
-                    <label class="w3-text-grey">Tribe</label>
+                    <label class="w3-text-grey" for="id_tribe">{% trans "Tribe" %}</label>
                     {{ filter.form.tribe }}
                 </div>
                 <div class="w3-col s12 m6 l3 w3-margin-bottom">
-                    <label class="w3-text-grey">Genus</label>
+                    <label class="w3-text-grey" for="id_genus">{% trans "Genus" %}</label>
                     {{ filter.form.genus }}
                 </div>
                 <div class="w3-col s12 m6 l3 w3-margin-bottom">
-                    <label class="w3-text-grey">Species</label>
+                    <label class="w3-text-grey" for="id_species">{% trans "Species" %}</label>
                     {{ filter.form.species }}
                 </div>
             </div>
 
             <div class="w3-margin-top">
                 <button type="submit" class="w3-button w3-blue w3-round w3-margin-right">
-                    <i class="fa-solid fa-check"></i>
-                    Apply Filters
+                    <i class="fa-solid fa-check" aria-hidden="true"></i>
+                    <span class="sr-only">{% trans "Apply the selected filters" %}</span>
+                    <span aria-hidden="true">{% trans "Apply Filters" %}</span>
                 </button>
                 <a href="{% url 'accession_list' %}" class="w3-button w3-gray w3-round">
-                    <i class="fa-solid fa-rotate-left"></i>
-                    Clear
+                    <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
+                    <span class="sr-only">{% trans "Reset filters and show all accessions" %}</span>
+                    <span aria-hidden="true">{% trans "Clear" %}</span>
                 </a>
             </div>
         </form>
     </div>
 
     <div class="w3-responsive w3-margin-top">
-        <table class="w3-table-all w3-hoverable">
+        <table class="w3-table-all w3-hoverable" aria-describedby="accessions-heading">
             <thead>
                 <tr>
-                    <th>Collection</th>
-                    <th>Specimen Prefix</th>
-                    <th>Specimen Number</th>
-                    <th>Taxon</th>
-                    <th>Element</th>
+                    <th scope="col">{% trans "Collection" %}</th>
+                    <th scope="col">{% trans "Specimen Prefix" %}</th>
+                    <th scope="col">{% trans "Specimen Number" %}</th>
+                    <th scope="col">{% trans "Taxon" %}</th>
+                    <th scope="col">{% trans "Element" %}</th>
                     {% if user.is_superuser or user|has_group:"Collection Managers" %}
-                        <th>Accessioned By</th>
+                        <th scope="col">{% trans "Accessioned By" %}</th>
                     {% endif %}
                 </tr>
             </thead>
@@ -137,25 +139,36 @@
                     </tr>
                 {% empty %}
                     <tr>
-                        <td colspan="{% if user.is_superuser or user|has_group:"Collection Managers" %}6{% else %}5{% endif %}" class="w3-center">No accessions found.</td>
+                        <td colspan="{% if user.is_superuser or user|has_group:"Collection Managers" %}6{% else %}5{% endif %}" class="w3-center">
+                            {% trans "No accessions found." %}
+                        </td>
                     </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
-</div>
+</section>
 {% endblock %}
 
 {% block script %}
     <script>
         function toggleAccordion(id) {
             const panel = document.getElementById(id);
-            if (panel.classList.contains('w3-show')) {
+            const toggleButton = document.querySelector(`[aria-controls="${id}"]`);
+            const isOpen = panel.classList.contains('w3-show');
+
+            if (isOpen) {
                 panel.classList.remove('w3-show');
                 panel.classList.add('w3-hide');
+                if (toggleButton) {
+                    toggleButton.setAttribute('aria-expanded', 'false');
+                }
             } else {
                 panel.classList.remove('w3-hide');
                 panel.classList.add('w3-show');
+                if (toggleButton) {
+                    toggleButton.setAttribute('aria-expanded', 'true');
+                }
             }
         }
     </script>
