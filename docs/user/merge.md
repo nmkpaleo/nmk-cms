@@ -26,6 +26,7 @@ The merge tool consolidates duplicate records into a single entry and now suppor
 - **Field Slip:** key attributes such as citation or accession-related fields require explicit picks to avoid accidental overwrites.
 - **Storage:** area values use field selection so curators can confirm the correct location during a merge.
 - **Reference:** title and citation rely on field selection to preserve the authoritative record.
+- **Element:** name and parent hierarchy require explicit choices to avoid cycles; keep the target’s parent unless you intentionally reparent during the merge.
 
 ## Tips and troubleshooting
 

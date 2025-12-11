@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- Enable Element merge support by adding MergeMixin wiring, FIELD_SELECTION defaults, and merge permissions for staff.
+- Finalise Element merge QA with dry-run safety tests, rollback guidance across user/admin/developer docs, and consolidated coverage commands.
 - Document FieldSlip merge auditing, rollback guidance, and the accession-level merge flow for staff with the can_merge permission.
 - Update accession detail pages to hide Comments from anonymous visitors while hyperlinking reference titles; adjust locality
   detail heading to show “Associated published accessions” for unauthenticated users while retaining the existing heading for

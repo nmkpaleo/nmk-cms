@@ -19,6 +19,7 @@ The interface now renders entirely with W3.CSS containers and cards, so the admi
 ### Per-field selection workflow
 
 - When a model defaults to the `FIELD_SELECTION` strategy for a field, the compare screen surfaces a yellow banner with an **Open field selection merge** link once a target and source are chosen.
+- Elements use this workflow for `name` and `parent_element`; pick a parent intentionally to avoid introducing hierarchy cycles during the merge.
 - Follow the link to load the dedicated field-selection view at `/merge/field-selection/` with the `model`, `target`, and **all candidates** query parameters prefilled. The view is staff-only and respects the same feature flag.
 - Pick the value to keep for each field using the radio buttons across the source and target columns. Leave fields untouched to keep the target value. The view preserves the target you selected on the admin form and will merge **every remaining source** into that target sequentially using the same strategy map.
 - Submit to complete the merge; the view redirects back to the target’s admin change page with a success banner that aggregates the relation/field updates across all merged sources and records the full sequence in `MergeLog`.
