@@ -8,7 +8,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 import json
-
+import logging
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import transaction
 from django.db.models import Model
@@ -49,7 +49,8 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
         try:
             model = self.get_model(request)
         except Exception as exc:  # pragma: no cover - defensive
-            return HttpResponseBadRequest(str(exc))
+            logging.exception("Exception in get_model")
+            return HttpResponseBadRequest("An internal error has occurred.")
 
         if model is Element and not isinstance(self, ElementFieldSelectionView):
             return ElementFieldSelectionView.as_view()(request, *args, **kwargs)
