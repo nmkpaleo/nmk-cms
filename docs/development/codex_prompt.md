@@ -9,11 +9,11 @@ Use this dependency overview (generated from `app/requirements.txt`) to ground a
 <!-- DEPENDENCY_SNAPSHOT:START -->
 
 ### Core Framework & Runtime
-- asgiref >= 3.5.2
+- asgiref >= 3.8.1
 - debugpy == 1.5.1
-- Django == 4.2.26
+- Django == 5.2
 - gunicorn == 23.0.0
-- sqlparse == 0.5.0
+- sqlparse == 0.5.1
 - watchdog >= 4.0.0
 
 ### Database, Caching & State
@@ -22,7 +22,7 @@ Use this dependency overview (generated from `app/requirements.txt`) to ground a
 - mysqlclient == 2.1.0
 
 ### Auth, Security & Identity
-- django-allauth >= 0.49.0
+- django-allauth >= 0.63.3
 - oauthlib == 3.2.2
 - PyJWT == 2.4.0
 - python3-openid == 3.2.0
@@ -31,7 +31,7 @@ Use this dependency overview (generated from `app/requirements.txt`) to ground a
 ### Data Integrity, Import & Auditing
 - django-crum >= 0.7
 - django-import-export >= 3.3.7
-- django-simple-history >= 3.5.0
+- django-simple-history >= 3.7.0
 
 ### Forms, UI & Filtering
 - django-autocomplete-light >= 3.9.2
@@ -44,7 +44,7 @@ Use this dependency overview (generated from `app/requirements.txt`) to ground a
 - idna == 3.7
 - python-dotenv >= 1.0.1
 - requests == 2.32.4
-- urllib3 == 2.5.0
+- urllib3 == 2.6.0
 
 ### Analytics, AI & Matching
 - matplotlib (unpinned)
