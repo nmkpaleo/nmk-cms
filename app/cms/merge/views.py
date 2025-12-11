@@ -305,7 +305,8 @@ class ElementFieldSelectionView(PermissionRequiredMixin, FieldSelectionMergeView
             model = self.get_model(request)
             candidates, target = self.get_candidates(request, model)
         except Exception as exc:  # pragma: no cover - defensive
-            return HttpResponseBadRequest(str(exc))
+            logging.exception("Exception in ElementFieldSelectionView.get")
+            return HttpResponseBadRequest(_("An error occurred processing your request."))
 
         form = self.form_class(
             model=model,
