@@ -12,3 +12,4 @@
 - [Scan Uploads](scan-uploads.md)
 - [Authentication Experience](authentication.md)
 - [Merge tool and field selection](merge.md)
+- [Django 5.2 upgrade notes](django-52-upgrade.md)

@@ -72,7 +72,7 @@ Describe the desired feature: user stories, data model changes, permissions, ext
 ```
 
 ## 4. Planning Workflow
-1. **Clarify context** using the feature intake and project stack snapshot. Flag assumptions or constraints specific to Django 4.2/MySQL.
+1. **Clarify context** using the feature intake and project stack snapshot. Flag assumptions or constraints specific to Django 5.2/MySQL.
 2. **Assess impacted apps** within `/apps/<app_name>/`, shared templates, and supporting services.
 3. **Identify reuse vs. net-new components** (models, forms, views, serializers, filters, tasks) and required integrations (django-allauth, django-simple-history, django-filter, etc.).
 4. **Outline testing and quality strategy** (pytest/pytest-django, coverage ≥ 90%, linting, typing, migrations check, docs build).

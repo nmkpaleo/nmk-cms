@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Document the Django 5.2 LTS upgrade with updated dependency expectations, host/CSRF configuration guidance, auth tightening, and rollback steps across user, admin, and developer docs.
 - Enable Element merge support by adding MergeMixin wiring, FIELD_SELECTION defaults, and merge permissions for staff.
 - Finalise Element merge QA with dry-run safety tests, rollback guidance across user/admin/developer docs, and consolidated coverage commands.
 - Document FieldSlip merge auditing, rollback guidance, and the accession-level merge flow for staff with the can_merge permission.
