@@ -794,7 +794,7 @@ class CollectionAdmin(HistoricalImportExportAdmin):
     search_fields = ('abbreviation', 'description')
 
 # Element Model
-class ElementAdmin(HistoricalImportExportAdmin):
+class ElementAdmin(MergeAdminActionMixin, MergeAdminMixin, HistoricalImportExportAdmin):
     resource_class = ElementResource
     list_display = ('parent_element', 'name')
     list_filter = ('parent_element__name',)
