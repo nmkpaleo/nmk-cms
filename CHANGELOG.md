@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- Document the Django 5.2 LTS upgrade with updated dependency expectations, host/CSRF configuration guidance, auth tightening, and rollback steps across user, admin, and developer docs.
+- Harden Docker deployment assets for Django 5.2 with Gunicorn tuning defaults, compose environment alignment, and CI compile checks before image builds.
 - Enable Element merge support by adding MergeMixin wiring, FIELD_SELECTION defaults, and merge permissions for staff.
 - Finalise Element merge QA with dry-run safety tests, rollback guidance across user/admin/developer docs, and consolidated coverage commands.
 - Document FieldSlip merge auditing, rollback guidance, and the accession-level merge flow for staff with the can_merge permission.

@@ -345,7 +345,7 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="taxon",
             constraint=models.CheckConstraint(
-                check=
+                condition=
                 (
                     models.Q(status="accepted", accepted_taxon__isnull=True)
                     | models.Q(status="synonym", accepted_taxon__isnull=False)

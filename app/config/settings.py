@@ -63,12 +63,15 @@ MERGE_TOOL_FEATURE = bool(int(get_var("ENABLE_ADMIN_MERGE", 0)))
 ALLOWED_HOSTS = []
 ALLOWED_HOSTS_ENV = get_var("ALLOWED_HOSTS")
 if ALLOWED_HOSTS_ENV:
-    ALLOWED_HOSTS.extend(ALLOWED_HOSTS_ENV.split(","))
+    ALLOWED_HOSTS.extend([host.strip() for host in ALLOWED_HOSTS_ENV.split(",") if host.strip()])
 
 CSRF_TRUSTED_ORIGINS = []
 TRUSTED_ORIGINS_ENV = get_var("TRUSTED_ORIGINS")
 if TRUSTED_ORIGINS_ENV:
-    CSRF_TRUSTED_ORIGINS.extend(TRUSTED_ORIGINS_ENV.split(","))
+    parsed_origins = [origin.strip() for origin in TRUSTED_ORIGINS_ENV.split(",") if origin.strip()]
+    CSRF_TRUSTED_ORIGINS.extend(
+        [origin if "://" in origin else f"https://{origin}" for origin in parsed_origins]
+    )
 
 # Application definition
 
@@ -220,6 +223,7 @@ TIME_ZONE = "Europe/Helsinki"
 USE_I18N = True
 
 USE_TZ = True
+USE_DEPRECATED_PYTZ = False
 
 # Set false for Pythonanywhere and similar non-Docker environments
 USE_REDIS = os.getenv("USE_REDIS", "false").lower() == "true"
@@ -272,6 +276,9 @@ EMAIL_HOST_PASSWORD = get_var("EMAIL_HOST_PASSWORD")
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 DEFAULT_FROM_EMAIL = get_var("DEFAULT_FROM_EMAIL")
+
+# Password reset token lifetime (seconds). Django 5.2 default is three days.
+PASSWORD_RESET_TIMEOUT = int(get_var("PASSWORD_RESET_TIMEOUT", 60 * 60 * 24 * 3))
  
 # This tells Django to allow iframes only on the same origin (localhost:8000).
 X_FRAME_OPTIONS = 'SAMEORIGIN'

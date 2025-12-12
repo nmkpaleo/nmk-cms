@@ -11,3 +11,4 @@
 - [Accession detail review](accessions-detail.md)
 - [Users](users.md)
 - [Merge Tool](merge-tool.md)
+- [Django 5.2 upgrade notes](django-52-upgrade.md)

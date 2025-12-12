@@ -341,7 +341,9 @@ def accession_distribution_report(request):
 
 
 
-class FieldSlipAutocomplete(autocomplete.Select2QuerySetView):
+class FieldSlipAutocomplete(LoginRequiredMixin, autocomplete.Select2QuerySetView):
+    raise_exception = True
+
     def get_queryset(self):
         qs = FieldSlip.objects.all()
         if self.q:

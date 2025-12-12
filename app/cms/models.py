@@ -571,7 +571,12 @@ class Accession(BaseModel):
         ordering = ["collection", "specimen_prefix", "specimen_no"]
         verbose_name = "Accession"
         verbose_name_plural = "Accessions"
-        unique_together = ('specimen_no', 'specimen_prefix', 'instance_number')
+        constraints = [
+            models.UniqueConstraint(
+                fields=["specimen_no", "specimen_prefix", "instance_number"],
+                name="unique_accession_specimen_instance",
+            )
+        ]
 
 class AccessionNumberSeries(BaseModel):
     objects = AccessionNumberSeriesManager()
@@ -896,10 +901,15 @@ class AccessionFieldSlip(BaseModel):
     history = HistoricalRecords()
 
     class Meta:
-        unique_together = ("accession", "fieldslip")  # Ensures no duplicate relations
         ordering = ["accession", "fieldslip"]
         verbose_name = "Accession-FieldSlip Link"
         verbose_name_plural = "Accession-FieldSlip Links"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["accession", "fieldslip"],
+                name="unique_accession_fieldslip",
+            )
+        ]
 
     def __str__(self):
         return f"{self.accession} ↔ {self.fieldslip}"
@@ -1507,7 +1517,7 @@ class Taxon(BaseModel):
                 ),
             ),
             models.CheckConstraint(
-                check=(
+                condition=(
                     models.Q(status=TaxonStatus.ACCEPTED, accepted_taxon__isnull=True)
                     | models.Q(status=TaxonStatus.SYNONYM, accepted_taxon__isnull=False)
                     | models.Q(status=TaxonStatus.INVALID)
@@ -2499,9 +2509,14 @@ class PreparationMedia(BaseModel):
     history = HistoricalRecords()
 
     class Meta:
-        unique_together = ("preparation", "media")
         verbose_name = "Preparation Media"
         verbose_name_plural = "Preparation Media"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["preparation", "media"],
+                name="unique_preparation_media",
+            )
+        ]
 
     def __str__(self):
         return f"{self.preparation} - {self.get_context_display()}"

@@ -29,7 +29,6 @@ from django_select2.forms import (
     ModelSelect2Widget,
     Select2Widget,
 )
-from django.contrib.auth.models import User
 from django.template.defaultfilters import filesizeformat
 from django.utils.translation import gettext_lazy as _
 
