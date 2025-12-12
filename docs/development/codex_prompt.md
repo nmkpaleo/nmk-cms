@@ -109,3 +109,8 @@ Checklist must include: acceptance criteria satisfied, tests (unit/integration) 
 - Reuse approved dependencies before proposing new ones.
 - Apply the **DRY (Don't Repeat Yourself)** principle: reduce volatile duplication, prefer reusable abstractions, and normalize data to avoid redundancy.
 - Stop after planning; await explicit approval before coding.
+
+## 7. Review Notes
+- Captures the end-to-end planning expectations, including dependency awareness, accessibility, rollout, and DRY guidance.
+- Tasks JSON schema is clearly specified for downstream implementation prompts.
+- Gaps to address in follow-up tasks: remind writers not to include internal code citations in user-facing documentation, and clarify how PR headings/descriptions evolve across commit rounds.

@@ -124,3 +124,8 @@ Before returning your answer:
 - ✅ i18n strings wrapped; accessibility and security considerations addressed.
 - ✅ Tests and documentation executed/updated as mandated by the task (`pytest`, integration, docs build, etc.).
 - ✅ Response follows the strict file-diff output format.
+
+## 8. Review Notes
+- Reinforces single-task delivery, scope validation, and UX/i18n/security expectations for implementers.
+- Notes the strict output format for returning modified files, aligning with automation needs.
+- Follow-up guidance needed: discourage internal code citations in user-facing documentation and clarify updating PR headings/descriptions as commits evolve.
