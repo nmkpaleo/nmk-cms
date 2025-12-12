@@ -11,7 +11,7 @@ Use this dependency overview (generated from `app/requirements.txt`) to ground a
 ### Core Framework & Runtime
 - asgiref >= 3.8.1
 - debugpy == 1.5.1
-- Django == 5.2
+- Django == 5.2.9
 - gunicorn == 23.0.0
 - sqlparse == 0.5.1
 - watchdog >= 4.0.0
@@ -90,6 +90,9 @@ Produce the deliverables in this exact order:
 
 ### 2️⃣ High-Level Plan (5–12 steps)
 Cover: models/migrations, URLs & CBVs/APIs, forms/serializers, templates (extend `base_generic.html` with semantic HTML5 + W3.CSS + Font Awesome), filters/pagination, permissions/auth, admin registration, django-simple-history, tests, docs/changelog, rollout/feature flags.
+- **Documentation hygiene:** When documenting work, avoid internal code citations (e.g., file paths/line numbers) in user-facing docs; prefer descriptive prose and links suitable for external audiences.
+- **PR messaging:** Note how PR headings/descriptions should evolve with later commits—summaries must stay aligned to the latest scope.
+- **Testing/CI expectations:** Explicitly call out pytest/pytest-django usage, coverage ≥ 90%, migrations checks, and docs lint/build steps required by Django 5.2/MySQL constraints.
 
 ### 3️⃣ Tasks (JSON)
 Follow the provided schema verbatim, reflecting project paths (apps/, templates/, docs/, etc.).
@@ -109,3 +112,8 @@ Checklist must include: acceptance criteria satisfied, tests (unit/integration) 
 - Reuse approved dependencies before proposing new ones.
 - Apply the **DRY (Don't Repeat Yourself)** principle: reduce volatile duplication, prefer reusable abstractions, and normalize data to avoid redundancy.
 - Stop after planning; await explicit approval before coding.
+
+## 7. Review Notes
+- Captures the end-to-end planning expectations, including dependency awareness, accessibility, rollout, and DRY guidance.
+- Tasks JSON schema is clearly specified for downstream implementation prompts.
+- Gaps addressed: reinforce documentation hygiene (no internal code citations), evolving PR messaging guidance, and explicit testing/CI expectations for Django 5.2.
