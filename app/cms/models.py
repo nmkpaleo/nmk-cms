@@ -1517,7 +1517,7 @@ class Taxon(BaseModel):
                 ),
             ),
             models.CheckConstraint(
-                check=(
+                condition=(
                     models.Q(status=TaxonStatus.ACCEPTED, accepted_taxon__isnull=True)
                     | models.Q(status=TaxonStatus.SYNONYM, accepted_taxon__isnull=False)
                     | models.Q(status=TaxonStatus.INVALID)
