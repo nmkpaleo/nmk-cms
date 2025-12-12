@@ -90,6 +90,9 @@ Produce the deliverables in this exact order:
 
 ### 2️⃣ High-Level Plan (5–12 steps)
 Cover: models/migrations, URLs & CBVs/APIs, forms/serializers, templates (extend `base_generic.html` with semantic HTML5 + W3.CSS + Font Awesome), filters/pagination, permissions/auth, admin registration, django-simple-history, tests, docs/changelog, rollout/feature flags.
+- **Documentation hygiene:** When documenting work, avoid internal code citations (e.g., file paths/line numbers) in user-facing docs; prefer descriptive prose and links suitable for external audiences.
+- **PR messaging:** Note how PR headings/descriptions should evolve with later commits—summaries must stay aligned to the latest scope.
+- **Testing/CI expectations:** Explicitly call out pytest/pytest-django usage, coverage ≥ 90%, migrations checks, and docs lint/build steps required by Django 5.2/MySQL constraints.
 
 ### 3️⃣ Tasks (JSON)
 Follow the provided schema verbatim, reflecting project paths (apps/, templates/, docs/, etc.).
@@ -113,4 +116,4 @@ Checklist must include: acceptance criteria satisfied, tests (unit/integration) 
 ## 7. Review Notes
 - Captures the end-to-end planning expectations, including dependency awareness, accessibility, rollout, and DRY guidance.
 - Tasks JSON schema is clearly specified for downstream implementation prompts.
-- Gaps to address in follow-up tasks: remind writers not to include internal code citations in user-facing documentation, and clarify how PR headings/descriptions evolve across commit rounds.
+- Gaps addressed: reinforce documentation hygiene (no internal code citations), evolving PR messaging guidance, and explicit testing/CI expectations for Django 5.2.

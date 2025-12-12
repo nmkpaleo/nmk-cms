@@ -95,7 +95,8 @@ Paste the **exact** task object (T1/T2/…) from the approved plan into the JSON
 3. **Implement code** following black/isort/ruff formatting, MySQL-safe schema choices, and Django best practices.
 4. **Ensure UX compliance**: templates extend `base_generic.html`, use semantic HTML5 (`<header>`, `<main>`, `<section>`, `<article>`, `<aside>`, `<footer>`), W3.CSS classes, Font Awesome icons as required, ARIA/labels for accessibility.
 5. **Handle i18n and security**: wrap user-facing strings with gettext, respect permission checks, validate input, and honor configuration patterns (12-factor, env vars).
-6. **Update docs/tests** when included in `files_touched` or `test_plan` directives.
+6. **Update docs/tests** when included in `files_touched` or `test_plan` directives; keep user-facing docs free of internal code citations (no file/line references) and use external-friendly links or prose instead.
+7. **Testing & CI**: run pytest/pytest-django with coverage ≥ 90%, enforce migrations checks, and execute docs lint/build steps expected by CI for Django 5.2/MySQL support.
 
 ## 5. Output Requirements
 Return only the modified files using this format:
@@ -123,9 +124,10 @@ Before returning your answer:
 - ✅ Templates (if touched) remain mobile-first, semantic, and W3.CSS compliant with Font Awesome usage.
 - ✅ i18n strings wrapped; accessibility and security considerations addressed.
 - ✅ Tests and documentation executed/updated as mandated by the task (`pytest`, integration, docs build, etc.).
+- ✅ PR heading and description updated to reflect the latest committed scope.
 - ✅ Response follows the strict file-diff output format.
 
 ## 8. Review Notes
 - Reinforces single-task delivery, scope validation, and UX/i18n/security expectations for implementers.
 - Notes the strict output format for returning modified files, aligning with automation needs.
-- Follow-up guidance needed: discourage internal code citations in user-facing documentation and clarify updating PR headings/descriptions as commits evolve.
+- Added guidance to avoid internal code citations in user-facing docs, clarified evolving PR headings/descriptions as commits evolve, and highlighted testing/CI requirements.
