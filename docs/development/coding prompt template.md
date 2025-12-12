@@ -11,7 +11,7 @@ Ground your implementation decisions in this dependency list generated from `app
 ### Core Framework & Runtime
 - asgiref >= 3.8.1
 - debugpy == 1.5.1
-- Django == 5.2
+- Django == 5.2.9
 - gunicorn == 23.0.0
 - sqlparse == 0.5.1
 - watchdog >= 4.0.0
