@@ -306,16 +306,21 @@ def build_field_slip(row: Mapping[str, Any], taxon_value: str | None) -> dict[st
 def build_row_section(
     row: Mapping[str, Any],
     specimen_suffix: str | None,
+    *,
+    body_part_assignment: Mapping[str | None, list[str]] | None = None,
 ) -> dict[str, Any]:
     storage_value = coerce_stripped(row.get("storage_area") or row.get("shelf"))
     storage = make_interpreted_value(storage_value)
-    labeled_body_parts, unlabeled_body_parts = parse_labeled_body_parts(
-        row.get("body_parts")
-    )
-    suffix_key = coerce_stripped(specimen_suffix)
-    if suffix_key:
-        suffix_key = suffix_key.upper()
-    body_parts = labeled_body_parts.get(suffix_key, []) or unlabeled_body_parts
+    if body_part_assignment is not None:
+        body_parts = body_part_assignment.get(specimen_suffix, [])
+    else:
+        labeled_body_parts, unlabeled_body_parts = parse_labeled_body_parts(
+            row.get("body_parts")
+        )
+        suffix_key = coerce_stripped(specimen_suffix)
+        if suffix_key:
+            suffix_key = suffix_key.upper()
+        body_parts = labeled_body_parts.get(suffix_key, []) or unlabeled_body_parts
     fragments = parse_fragments(row.get("fragments"))
 
     natures: list[dict[str, Any]] = []
@@ -518,6 +523,69 @@ def _determine_suffix_display(suffixes: list[str | None]) -> str | None:
     return f"{meaningful[0]}-{meaningful[-1]}"
 
 
+def _resolve_body_part_assignment(
+    row: Mapping[str, Any], suffixes: Sequence[str | None]
+) -> tuple[dict[str | None, list[str]], str | None, dict[str, Any]]:
+    labeled_body_parts, unlabeled_body_parts = parse_labeled_body_parts(
+        row.get("body_parts")
+    )
+    suffix_keys = []
+    for suffix in suffixes:
+        key = coerce_stripped(suffix)
+        suffix_keys.append(key.upper() if key else None)
+
+    assignment: dict[str | None, list[str]] = {}
+    note_text: str | None = None
+    metadata: dict[str, Any] = {}
+
+    if labeled_body_parts and unlabeled_body_parts:
+        for suffix, key in zip(suffixes, suffix_keys):
+            assignment[suffix] = labeled_body_parts.get(key, [])
+        note_text = _(
+            "Unlabeled body parts were not assigned because labeled elements were provided: %(values)s"
+        ) % {"values": "; ".join(unlabeled_body_parts)}
+        metadata = {
+            "body_part_resolution": {
+                "strategy": "labeled_precedence",
+                "unlabeled_elements": unlabeled_body_parts,
+                "labeled_suffixes": sorted(labeled_body_parts.keys()),
+            }
+        }
+        return assignment, note_text, metadata
+
+    if not labeled_body_parts and len(suffixes) > 1 and unlabeled_body_parts:
+        first_suffix = suffixes[0]
+        assignment[first_suffix] = unlabeled_body_parts
+        for suffix in suffixes[1:]:
+            assignment[suffix] = []
+        display_suffix = coerce_stripped(first_suffix) or "-"
+        note_text = _(
+            "Body parts were applied to specimen %(suffix)s only because multiple suffixes lacked labels: %(values)s"
+        ) % {"suffix": display_suffix, "values": "; ".join(unlabeled_body_parts)}
+        metadata = {
+            "body_part_resolution": {
+                "strategy": "unlabeled_first_suffix",
+                "unlabeled_elements": unlabeled_body_parts,
+                "applied_suffix": display_suffix,
+            }
+        }
+        return assignment, note_text, metadata
+
+    for suffix, key in zip(suffixes, suffix_keys):
+        assignment[suffix] = labeled_body_parts.get(key, []) or unlabeled_body_parts
+
+    if unlabeled_body_parts or labeled_body_parts:
+        metadata = {
+            "body_part_resolution": {
+                "strategy": "default",
+                "unlabeled_elements": unlabeled_body_parts,
+                "labeled_suffixes": sorted(labeled_body_parts.keys()),
+            }
+        }
+
+    return assignment, note_text, metadata
+
+
 def build_accession_payload(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     if not rows:
         raise ManualImportError("No rows provided for accession payload generation")
@@ -582,6 +650,10 @@ def build_accession_payload(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]
         "photo_id": _join_unique(_collect_unique(rows, "photo_id")),
     }
 
+    body_part_assignment, body_part_note, body_part_metadata = _resolve_body_part_assignment(
+        aggregated_row, suffixes
+    )
+
     taxon_value = make_taxon_value(aggregated_row)
 
     field_slips: list[dict[str, Any]] = []
@@ -600,9 +672,22 @@ def build_accession_payload(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]
         "additional_notes": [],
         "references": build_reference_entries(references),
         "field_slips": field_slips,
-        "rows": [build_row_section(aggregated_row, suffix) for suffix in suffixes],
+        "rows": [
+            build_row_section(
+                aggregated_row, suffix, body_part_assignment=body_part_assignment
+            )
+            for suffix in suffixes
+        ],
         "identifications": [make_identification_entry(aggregated_row, taxon_value)],
     }
+
+    if body_part_note:
+        accession_entry["additional_notes"].append(
+            {
+                "heading": make_interpreted_value(_("Manual QC")),
+                "value": make_interpreted_value(body_part_note),
+            }
+        )
 
     for comment in comments:
         accession_entry["additional_notes"].append(
@@ -612,10 +697,15 @@ def build_accession_payload(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]
             }
         )
 
-    return {
+    payload: dict[str, Any] = {
         "card_type": "accession_card",
         "accessions": [accession_entry],
     }
+
+    if body_part_metadata:
+        payload["_manual_import_metadata"] = body_part_metadata
+
+    return payload
 
 
 def _extract_accession_key(entry: Mapping[str, Any]) -> tuple[str | None, str | None, int | None]:
@@ -772,6 +862,8 @@ def import_manual_row(
         "group_size": len(row_list),
     }
 
+    manual_metadata = payload.pop("_manual_import_metadata", None) or {}
+
     if row_ids:
         metadata["row_id"] = row_ids[0]
     if created_by_values:
@@ -782,6 +874,8 @@ def import_manual_row(
         metadata["created_on"] = created_on_values[0]
         if len(created_on_values) > 1:
             metadata["created_on_values"] = created_on_values
+
+    metadata.update(manual_metadata)
 
     payload["_manual_import"] = metadata
 
