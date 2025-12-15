@@ -225,7 +225,7 @@ BODY_PART_LABEL_RE = re.compile(r"^(?P<label>[A-Za-z0-9]+)\s*[:\-]\s*(?P<body>.+
 
 INLINE_BODY_PART_LABEL_RE = re.compile(
     r"(?:(?<=^)|(?<=[\s;,]))"
-    r"(?:\((?P<label1>[A-Za-z0-9]+)\)\s+|(?P<label2>[A-Za-z0-9]+)\s*(?:[:=\-])\s+|(?P<label3>[A-Za-z])\.\s+)",
+    r"(?:\((?P<label1>[A-Za-z0-9]+)\)\s+|(?P<label2>[A-Za-z0-9]+)\s*(?:[:=\-])\s*|(?P<label3>[A-Za-z])\.\s+)",
     flags=re.IGNORECASE,
 )
 
@@ -751,7 +751,6 @@ def build_accession_payload(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]
     suffixes = _unique_preserving(suffix_values)
     if not suffixes:
         suffixes = [None]
-    suffix_display = _determine_suffix_display(suffixes)
 
     type_values = _collect_unique(rows, "is_type_specimen")
     is_type = any(normalise_yes_no(value) for value in type_values)
@@ -785,6 +784,17 @@ def build_accession_payload(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]
         "member_horizon_level": _join_unique(_collect_unique(rows, "member_horizon_level")),
         "photo_id": _join_unique(_collect_unique(rows, "photo_id")),
     }
+
+    labeled_body_parts, unlabeled_body_parts = parse_labeled_body_parts(
+        aggregated_row.get("body_parts")
+    )
+    if labeled_body_parts:
+        labeled_suffixes = list(labeled_body_parts.keys())
+        meaningful_suffixes = [suffix for suffix in suffixes if coerce_stripped(suffix)]
+        if not meaningful_suffixes or len(labeled_suffixes) > len(meaningful_suffixes):
+            suffixes = _unique_preserving(labeled_suffixes)
+
+    suffix_display = _determine_suffix_display(suffixes)
 
     body_part_assignment, body_part_note, body_part_metadata = _resolve_body_part_assignment(
         aggregated_row, suffixes

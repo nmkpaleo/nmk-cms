@@ -145,6 +145,22 @@ def test_inline_labeled_body_parts_with_equals_and_newline():
         assert natures[0]["verbatim_element"]["interpreted"] == verbatim
 
 
+def test_inline_labeled_body_parts_expand_suffixes_when_missing():
+    rows = [
+        {
+            "accession_number": "KNM-783",
+            "body_parts": "A=md frag m1 or m3, B=lt. p3",
+        }
+    ]
+
+    payload = build_accession_payload(rows)
+    accession_rows = payload["accessions"][0]["rows"]
+
+    assert len(accession_rows) == 2
+    assert _extract_nature_values(accession_rows[0])[0]["verbatim_element"]["interpreted"] == "md frag m1 or m3"
+    assert _extract_nature_values(accession_rows[1])[0]["verbatim_element"]["interpreted"] == "lt. p3"
+
+
 def test_inline_labeled_body_parts_with_period_delimiters():
     rows = [
         {
