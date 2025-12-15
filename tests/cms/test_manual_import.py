@@ -161,6 +161,64 @@ def test_inline_labeled_body_parts_expand_suffixes_when_missing():
     assert _extract_nature_values(accession_rows[1])[0]["verbatim_element"]["interpreted"] == "lt. p3"
 
 
+def test_invalid_body_part_labels_ignored_for_suffix_derivation():
+    rows = [
+        {
+            "accession_number": "KNM-986",
+            "body_parts": "A= humerus 1= ulna",
+        }
+    ]
+
+    payload = build_accession_payload(rows)
+    accession = payload["accessions"][0]
+    accession_rows = accession["rows"]
+
+    assert len(accession_rows) == 1
+    natures = _extract_nature_values(accession_rows[0])
+    assert natures[0]["verbatim_element"]["interpreted"] == "humerus"
+
+    note_values = [
+        (note.get("value") or {}).get("interpreted", "") for note in accession["additional_notes"]
+    ]
+    assert any("ignored" in value and "1" in value for value in note_values)
+
+    manual_metadata = payload.get("_manual_import_metadata", {})
+    resolution_metadata = manual_metadata.get("body_part_resolution", {})
+    assert resolution_metadata.get("invalid_labels") == ["1"]
+
+
+def test_only_invalid_body_part_labels_fall_back_to_default_suffix():
+    rows = [
+        {
+            "accession_number": "KNM-987",
+            "body_parts": "1= tibia; 2= femur",
+        }
+    ]
+
+    payload = build_accession_payload(rows)
+    accession = payload["accessions"][0]
+    accession_rows = accession["rows"]
+
+    assert len(accession_rows) == 1
+    section = accession_rows[0]
+    assert (section.get("specimen_suffix") or {}).get("interpreted") == "-"
+
+    natures = _extract_nature_values(section)
+    verbatim_elements = [
+        (nature.get("verbatim_element") or {}).get("interpreted") for nature in natures
+    ]
+    assert verbatim_elements == ["tibia", "femur"]
+
+    note_values = [
+        (note.get("value") or {}).get("interpreted", "") for note in accession["additional_notes"]
+    ]
+    assert any("ignored" in value and "1" in value and "2" in value for value in note_values)
+
+    manual_metadata = payload.get("_manual_import_metadata", {})
+    resolution_metadata = manual_metadata.get("body_part_resolution", {})
+    assert resolution_metadata.get("invalid_labels") == ["1", "2"]
+
+
 def test_inline_labeled_body_parts_with_period_delimiters():
     rows = [
         {

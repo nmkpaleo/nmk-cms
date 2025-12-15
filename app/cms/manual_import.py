@@ -337,6 +337,18 @@ def parse_labeled_body_parts(value: Any) -> tuple[dict[str, list[str]], list[str
     return labeled, unlabeled
 
 
+def _allowed_specimen_suffixes() -> set[str]:
+    """Return the allowed specimen suffix codes (A-Z and AA-FZ)."""
+
+    allowed: set[str] = set()
+    for letter in range(ord("A"), ord("Z") + 1):
+        allowed.add(chr(letter))
+    for first in "ABCDEF":
+        for second in range(ord("A"), ord("Z") + 1):
+            allowed.add(f"{first}{chr(second)}")
+    return allowed
+
+
 def parse_fragments(value: Any) -> str | None:
     text = coerce_stripped(value)
     if not text:
@@ -663,11 +675,19 @@ def _determine_suffix_display(suffixes: list[str | None]) -> str | None:
 
 
 def _resolve_body_part_assignment(
-    row: Mapping[str, Any], suffixes: Sequence[str | None]
+    row: Mapping[str, Any],
+    suffixes: Sequence[str | None],
+    *,
+    labeled_body_parts: Mapping[str, list[str]] | None = None,
+    unlabeled_body_parts: list[str] | None = None,
 ) -> tuple[dict[str | None, list[str]], str | None, dict[str, Any]]:
-    labeled_body_parts, unlabeled_body_parts = parse_labeled_body_parts(
-        row.get("body_parts")
-    )
+    if labeled_body_parts is None or unlabeled_body_parts is None:
+        labeled_body_parts, unlabeled_body_parts = parse_labeled_body_parts(
+            row.get("body_parts")
+        )
+    else:
+        labeled_body_parts = dict(labeled_body_parts)
+        unlabeled_body_parts = list(unlabeled_body_parts)
     suffix_keys = []
     for suffix in suffixes:
         key = coerce_stripped(suffix)
@@ -791,6 +811,18 @@ def build_accession_payload(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]
     labeled_body_parts, unlabeled_body_parts = parse_labeled_body_parts(
         aggregated_row.get("body_parts")
     )
+    allowed_suffixes = _allowed_specimen_suffixes()
+    invalid_body_part_labels: list[str] = []
+    if labeled_body_parts:
+        valid_labeled_parts: dict[str, list[str]] = {}
+        for suffix, parts in labeled_body_parts.items():
+            if suffix in allowed_suffixes:
+                valid_labeled_parts[suffix] = parts
+            else:
+                invalid_body_part_labels.append(suffix)
+                unlabeled_body_parts.extend(parts)
+        labeled_body_parts = valid_labeled_parts
+
     if labeled_body_parts:
         labeled_suffixes = list(labeled_body_parts.keys())
         meaningful_suffixes = [suffix for suffix in suffixes if coerce_stripped(suffix)]
@@ -800,8 +832,25 @@ def build_accession_payload(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]
     suffix_display = _determine_suffix_display(suffixes)
 
     body_part_assignment, body_part_note, body_part_metadata = _resolve_body_part_assignment(
-        aggregated_row, suffixes
+        aggregated_row,
+        suffixes,
+        labeled_body_parts=labeled_body_parts,
+        unlabeled_body_parts=unlabeled_body_parts,
     )
+
+    if invalid_body_part_labels:
+        invalid_note = _(
+            "Body part labels were ignored because they are not valid specimen suffixes: %(labels)s"
+        ) % {"labels": ", ".join(_unique_preserving(invalid_body_part_labels))}
+        if body_part_metadata is None:
+            body_part_metadata = {"body_part_resolution": {}}
+        resolution_metadata = body_part_metadata.setdefault("body_part_resolution", {})
+        existing_invalid = set(resolution_metadata.get("invalid_labels", []))
+        resolution_metadata["invalid_labels"] = sorted(
+            existing_invalid | set(_unique_preserving(invalid_body_part_labels))
+        )
+    else:
+        invalid_note = None
     verbatim_overflow_notes: list[str] = []
     verbatim_overflow_seen: set[str] = set()
 
@@ -848,6 +897,14 @@ def build_accession_payload(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]
             {
                 "heading": make_interpreted_value(_("Manual QC")),
                 "value": make_interpreted_value(body_part_note),
+            }
+        )
+
+    if invalid_note:
+        accession_entry["additional_notes"].append(
+            {
+                "heading": make_interpreted_value(_("Manual QC")),
+                "value": make_interpreted_value(invalid_note),
             }
         )
 
