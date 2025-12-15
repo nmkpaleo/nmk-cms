@@ -143,3 +143,24 @@ def test_inline_labeled_body_parts_with_equals_and_newline():
     for section, verbatim in zip(accession_rows, expected):
         natures = _extract_nature_values(section)
         assert natures[0]["verbatim_element"]["interpreted"] == verbatim
+
+
+def test_inline_labeled_body_parts_with_period_delimiters():
+    rows = [
+        {
+            "accession_number": "KNM-782 A-B",
+            "body_parts": "A. Lt femur, B. scapula frag.",
+        }
+    ]
+
+    payload = build_accession_payload(rows)
+    accession_rows = payload["accessions"][0]["rows"]
+
+    expected = [
+        "Lt femur",
+        "scapula frag.",
+    ]
+
+    for section, verbatim in zip(accession_rows, expected):
+        natures = _extract_nature_values(section)
+        assert natures[0]["verbatim_element"]["interpreted"] == verbatim

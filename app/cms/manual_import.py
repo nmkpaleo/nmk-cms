@@ -196,7 +196,8 @@ def parse_body_parts(value: Any) -> list[str]:
 BODY_PART_LABEL_RE = re.compile(r"^(?P<label>[A-Za-z0-9]+)\s*[:\-]\s*(?P<body>.+)$")
 
 INLINE_BODY_PART_LABEL_RE = re.compile(
-    r"(?:(?<=^)|(?<=[\s;,]))(?:\((?P<label1>[A-Za-z0-9]+)\)\s+|(?P<label2>[A-Za-z0-9]+)\s*(?:[:=\-])\s+)",
+    r"(?:(?<=^)|(?<=[\s;,]))"
+    r"(?:\((?P<label1>[A-Za-z0-9]+)\)\s+|(?P<label2>[A-Za-z0-9]+)\s*(?:[:=\-])\s+|(?P<label3>[A-Za-z])\.\s+)",
     flags=re.IGNORECASE,
 )
 
@@ -245,7 +246,9 @@ def _extract_inline_labeled_body_parts(text: str) -> tuple[list[tuple[str, str]]
             if leftover:
                 leftovers.append(leftover)
 
-        label = coerce_stripped(match.group("label1") or match.group("label2"))
+        label = coerce_stripped(
+            match.group("label1") or match.group("label2") or match.group("label3")
+        )
         content_start = match.end()
         content_end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
         body_text = coerce_stripped(text[content_start:content_end].strip(" ;,\n"))
