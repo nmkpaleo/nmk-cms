@@ -193,6 +193,34 @@ def parse_body_parts(value: Any) -> list[str]:
     return parts or [text]
 
 
+VERBATIM_ELEMENT_MAX_LENGTH = 255
+
+
+def _truncate_verbatim_element(
+    value: str | None,
+    *,
+    context: str,
+    overflow_notes: list[str] | None = None,
+    seen_overflow: set[str] | None = None,
+) -> str | None:
+    """Return ``value`` trimmed to the DB limit and record overflow notes."""
+
+    cleaned = coerce_stripped(value)
+    if not cleaned:
+        return None
+
+    if len(cleaned) > VERBATIM_ELEMENT_MAX_LENGTH:
+        note_text = f"{context}: {cleaned}"
+        if overflow_notes is not None:
+            if seen_overflow is None or note_text not in seen_overflow:
+                overflow_notes.append(note_text)
+                if seen_overflow is not None:
+                    seen_overflow.add(note_text)
+        return cleaned[:VERBATIM_ELEMENT_MAX_LENGTH]
+
+    return cleaned
+
+
 BODY_PART_LABEL_RE = re.compile(r"^(?P<label>[A-Za-z0-9]+)\s*[:\-]\s*(?P<body>.+)$")
 
 INLINE_BODY_PART_LABEL_RE = re.compile(
@@ -359,11 +387,24 @@ def build_reference_entries(value: Any) -> list[dict[str, dict[str, Any]]]:
     return [entry]
 
 
-def build_field_slip(row: Mapping[str, Any], taxon_value: str | None) -> dict[str, Any]:
+def build_field_slip(
+    row: Mapping[str, Any],
+    taxon_value: str | None,
+    *,
+    overflow_notes: list[str] | None = None,
+    seen_overflow: set[str] | None = None,
+) -> dict[str, Any]:
     locality_parts = [coerce_stripped(row.get("locality")), coerce_stripped(row.get("site_area"))]
     verbatim_locality = " | ".join([part for part in locality_parts if part]) or None
     formation = coerce_stripped(row.get("formation"))
     member = coerce_stripped(row.get("member_horizon_level"))
+
+    verbatim_body_part = _truncate_verbatim_element(
+        row.get("body_parts"),
+        context=_("Full verbatim element text (field slip)"),
+        overflow_notes=overflow_notes,
+        seen_overflow=seen_overflow,
+    )
 
     latitude, longitude = parse_coordinates(row.get("coordinates"))
 
@@ -372,7 +413,7 @@ def build_field_slip(row: Mapping[str, Any], taxon_value: str | None) -> dict[st
         "collection_date": make_interpreted_value(parse_collection_date(row.get("date"))),
         "verbatim_locality": make_interpreted_value(verbatim_locality),
         "verbatim_taxon": make_interpreted_value(taxon_value),
-        "verbatim_element": make_interpreted_value(coerce_stripped(row.get("body_parts"))),
+        "verbatim_element": make_interpreted_value(verbatim_body_part),
         "aerial_photo": make_interpreted_value(coerce_stripped(row.get("photo_id"))),
         "verbatim_latitude": make_interpreted_value(latitude),
         "verbatim_longitude": make_interpreted_value(longitude),
@@ -394,6 +435,8 @@ def build_row_section(
     specimen_suffix: str | None,
     *,
     body_part_assignment: Mapping[str | None, list[str]] | None = None,
+    overflow_notes: list[str] | None = None,
+    seen_overflow: set[str] | None = None,
 ) -> dict[str, Any]:
     storage_value = coerce_stripped(row.get("storage_area") or row.get("shelf"))
     storage = make_interpreted_value(storage_value)
@@ -411,15 +454,22 @@ def build_row_section(
 
     natures: list[dict[str, Any]] = []
     for part in body_parts or [None]:
-        element_value = coerce_stripped(part)
+        raw_element_value = coerce_stripped(part)
+        element_value = _truncate_verbatim_element(
+            raw_element_value,
+            context=_("Full verbatim element text for specimen %(suffix)s")
+            % {"suffix": specimen_suffix or "-"},
+            overflow_notes=overflow_notes,
+            seen_overflow=seen_overflow,
+        )
         nature_entry = {
             "verbatim_element": make_interpreted_value(element_value),
         }
         side_match = None
-        if element_value:
-            if re.search(r"\b(rt\.?|right)\b", element_value, flags=re.IGNORECASE):
+        if raw_element_value:
+            if re.search(r"\b(rt\.?|right)\b", raw_element_value, flags=re.IGNORECASE):
                 side_match = "Right"
-            elif re.search(r"\b(lt\.?|left)\b", element_value, flags=re.IGNORECASE):
+            elif re.search(r"\b(lt\.?|left)\b", raw_element_value, flags=re.IGNORECASE):
                 side_match = "Left"
         if side_match:
             nature_entry["side"] = make_interpreted_value(side_match)
@@ -739,6 +789,8 @@ def build_accession_payload(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]
     body_part_assignment, body_part_note, body_part_metadata = _resolve_body_part_assignment(
         aggregated_row, suffixes
     )
+    verbatim_overflow_notes: list[str] = []
+    verbatim_overflow_seen: set[str] = set()
 
     taxon_value = make_taxon_value(aggregated_row)
 
@@ -746,7 +798,14 @@ def build_accession_payload(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]
     for row in rows:
         row_taxon_value = make_taxon_value(row)
         slip_taxon_value = row_taxon_value or taxon_value
-        field_slips.append(build_field_slip(row, slip_taxon_value))
+        field_slips.append(
+            build_field_slip(
+                row,
+                slip_taxon_value,
+                overflow_notes=verbatim_overflow_notes,
+                seen_overflow=verbatim_overflow_seen,
+            )
+        )
 
     accession_entry: dict[str, Any] = {
         "collection_abbreviation": make_interpreted_value(collection_value),
@@ -760,7 +819,11 @@ def build_accession_payload(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]
         "field_slips": field_slips,
         "rows": [
             build_row_section(
-                aggregated_row, suffix, body_part_assignment=body_part_assignment
+                aggregated_row,
+                suffix,
+                body_part_assignment=body_part_assignment,
+                overflow_notes=verbatim_overflow_notes,
+                seen_overflow=verbatim_overflow_seen,
             )
             for suffix in suffixes
         ],
@@ -772,6 +835,14 @@ def build_accession_payload(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]
             {
                 "heading": make_interpreted_value(_("Manual QC")),
                 "value": make_interpreted_value(body_part_note),
+            }
+        )
+
+    for overflow_note in verbatim_overflow_notes:
+        accession_entry["additional_notes"].append(
+            {
+                "heading": make_interpreted_value(_("Manual QC")),
+                "value": make_interpreted_value(overflow_note),
             }
         )
 

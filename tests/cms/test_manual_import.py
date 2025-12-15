@@ -164,3 +164,27 @@ def test_inline_labeled_body_parts_with_period_delimiters():
     for section, verbatim in zip(accession_rows, expected):
         natures = _extract_nature_values(section)
         assert natures[0]["verbatim_element"]["interpreted"] == verbatim
+
+
+def test_verbatim_element_truncated_and_added_to_notes():
+    long_body_part = "A: " + "very long description " * 20
+
+    rows = [
+        {
+            "accession_number": "KNM-900 A-B",
+            "body_parts": long_body_part,
+        }
+    ]
+
+    payload = build_accession_payload(rows)
+    accession = payload["accessions"][0]
+    first_row_nature = _extract_nature_values(accession["rows"][0])[0]
+
+    verbatim_value = first_row_nature["verbatim_element"]["interpreted"]
+    assert len(verbatim_value) == 255
+
+    note_values = [
+        (note.get("value") or {}).get("interpreted", "")
+        for note in accession["additional_notes"]
+    ]
+    assert any("very long description" in value for value in note_values)
