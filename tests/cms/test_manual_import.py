@@ -76,3 +76,70 @@ def test_unlabeled_parts_with_multiple_suffixes_assigned_to_first():
         (note.get("value") or {}).get("interpreted", "") for note in accession["additional_notes"]
     ]
     assert any("humerus" in value for value in note_values)
+
+
+def test_inline_labeled_body_parts_with_equals_and_parentheses():
+    rows = [
+        {
+            "accession_number": "KNM-789 A-D",
+            "body_parts": "A = frag proximal right humerus B = prox. right ulna C = distal left radius D = frags ulna ?(3) shaft",
+        }
+    ]
+
+    payload = build_accession_payload(rows)
+    accession_rows = payload["accessions"][0]["rows"]
+
+    expected = [
+        "frag proximal right humerus",
+        "prox. right ulna",
+        "distal left radius",
+        "frags ulna ?(3) shaft",
+    ]
+
+    for section, verbatim in zip(accession_rows, expected):
+        natures = _extract_nature_values(section)
+        assert natures[0]["verbatim_element"]["interpreted"] == verbatim
+
+
+def test_inline_labeled_body_parts_with_parentheses_and_and_delimiters():
+    rows = [
+        {
+            "accession_number": "KNM-780 A-D",
+            "body_parts": "(A) frag. proximal right humerus (B) prox. right ulna and (C) distal Rt. radius (D) frags ulna? shaft",
+        }
+    ]
+
+    payload = build_accession_payload(rows)
+    accession_rows = payload["accessions"][0]["rows"]
+
+    expected = [
+        "frag. proximal right humerus",
+        "prox. right ulna",
+        "distal Rt. radius",
+        "frags ulna? shaft",
+    ]
+
+    for section, verbatim in zip(accession_rows, expected):
+        natures = _extract_nature_values(section)
+        assert natures[0]["verbatim_element"]["interpreted"] == verbatim
+
+
+def test_inline_labeled_body_parts_with_equals_and_newline():
+    rows = [
+        {
+            "accession_number": "KNM-781 A-B",
+            "body_parts": "A= Juvenile distorted male cranium lacking tooth crowns. B= skull frags (8)\n",
+        }
+    ]
+
+    payload = build_accession_payload(rows)
+    accession_rows = payload["accessions"][0]["rows"]
+
+    expected = [
+        "Juvenile distorted male cranium lacking tooth crowns.",
+        "skull frags (8)",
+    ]
+
+    for section, verbatim in zip(accession_rows, expected):
+        natures = _extract_nature_values(section)
+        assert natures[0]["verbatim_element"]["interpreted"] == verbatim

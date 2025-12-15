@@ -195,14 +195,97 @@ def parse_body_parts(value: Any) -> list[str]:
 
 BODY_PART_LABEL_RE = re.compile(r"^(?P<label>[A-Za-z0-9]+)\s*[:\-]\s*(?P<body>.+)$")
 
+INLINE_BODY_PART_LABEL_RE = re.compile(
+    r"(?:(?<=^)|(?<=[\s;,]))(?:\((?P<label1>[A-Za-z0-9]+)\)\s+|(?P<label2>[A-Za-z0-9]+)\s*(?:[:=\-])\s+)",
+    flags=re.IGNORECASE,
+)
+
+
+def _split_body_part_body(text: str | None) -> tuple[str | None, list[str]]:
+    """Return the primary body text and any extra unlabeled chunks."""
+
+    cleaned = coerce_stripped(text)
+    if not cleaned:
+        return None, []
+
+    extras: list[str] = []
+    if ";" in cleaned:
+        pieces = [coerce_stripped(piece.strip(" ,")) for piece in cleaned.split(";")]
+        primary = pieces[0]
+        extras = [piece for piece in pieces[1:] if piece]
+    else:
+        primary = cleaned
+
+    if primary:
+        primary = re.sub(r"\b(and|&)\s*$", "", primary, flags=re.IGNORECASE).rstrip(" ,")
+        primary = coerce_stripped(primary)
+
+    return primary, extras
+
+
+def _extract_inline_labeled_body_parts(text: str) -> tuple[list[tuple[str, str]], list[str]]:
+    """Return (segments, leftovers) for inline-labeled body part strings.
+
+    Segments are (label, body) tuples. Leftovers are unmatched chunks between
+    labeled segments that should be treated as unlabeled values.
+    """
+
+    matches = list(INLINE_BODY_PART_LABEL_RE.finditer(text))
+    if not matches:
+        return [], []
+
+    segments: list[tuple[str, str]] = []
+    leftovers: list[str] = []
+    previous_end = 0
+
+    for index, match in enumerate(matches):
+        start = match.start()
+        if start > previous_end:
+            leftover = text[previous_end:start].strip(" ;,\n")
+            if leftover:
+                leftovers.append(leftover)
+
+        label = coerce_stripped(match.group("label1") or match.group("label2"))
+        content_start = match.end()
+        content_end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        body_text = coerce_stripped(text[content_start:content_end].strip(" ;,\n"))
+        primary_body, extra_chunks = _split_body_part_body(body_text)
+
+        if label and primary_body:
+            segments.append((label, primary_body))
+        leftovers.extend(extra_chunks)
+
+        previous_end = content_end
+
+    if previous_end < len(text):
+        trailing = text[previous_end:].strip(" ;,\n")
+        if trailing:
+            leftovers.append(trailing)
+
+    return segments, leftovers
+
 
 def parse_labeled_body_parts(value: Any) -> tuple[dict[str, list[str]], list[str]]:
     """Return (labeled_parts, unlabeled_parts) parsed from ``body_parts`` text."""
 
+    text = coerce_stripped(value)
     labeled: dict[str, list[str]] = {}
     unlabeled: list[str] = []
 
-    for part in parse_body_parts(value):
+    if not text:
+        return labeled, unlabeled
+
+    segments, leftovers = _extract_inline_labeled_body_parts(text)
+    if segments:
+        for label, body in segments:
+            labeled.setdefault(label.upper(), []).append(body)
+        for chunk in leftovers:
+            cleaned = coerce_stripped(chunk)
+            if cleaned:
+                unlabeled.append(cleaned)
+        return labeled, unlabeled
+
+    for part in parse_body_parts(text):
         match = BODY_PART_LABEL_RE.match(part)
         if match:
             label = coerce_stripped(match.group("label"))
