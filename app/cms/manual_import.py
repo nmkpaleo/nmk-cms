@@ -193,6 +193,33 @@ def parse_body_parts(value: Any) -> list[str]:
     return parts or [text]
 
 
+BODY_PART_LABEL_RE = re.compile(r"^(?P<label>[A-Za-z0-9]+)\s*[:\-]\s*(?P<body>.+)$")
+
+
+def parse_labeled_body_parts(value: Any) -> tuple[dict[str, list[str]], list[str]]:
+    """Return (labeled_parts, unlabeled_parts) parsed from ``body_parts`` text."""
+
+    labeled: dict[str, list[str]] = {}
+    unlabeled: list[str] = []
+
+    for part in parse_body_parts(value):
+        match = BODY_PART_LABEL_RE.match(part)
+        if match:
+            label = coerce_stripped(match.group("label"))
+            body = coerce_stripped(match.group("body"))
+            if not label or not body:
+                continue
+            label_key = label.upper()
+            labeled.setdefault(label_key, []).append(body)
+            continue
+
+        cleaned = coerce_stripped(part)
+        if cleaned:
+            unlabeled.append(cleaned)
+
+    return labeled, unlabeled
+
+
 def parse_fragments(value: Any) -> str | None:
     text = coerce_stripped(value)
     if not text:
@@ -282,7 +309,13 @@ def build_row_section(
 ) -> dict[str, Any]:
     storage_value = coerce_stripped(row.get("storage_area") or row.get("shelf"))
     storage = make_interpreted_value(storage_value)
-    body_parts = parse_body_parts(row.get("body_parts"))
+    labeled_body_parts, unlabeled_body_parts = parse_labeled_body_parts(
+        row.get("body_parts")
+    )
+    suffix_key = coerce_stripped(specimen_suffix)
+    if suffix_key:
+        suffix_key = suffix_key.upper()
+    body_parts = labeled_body_parts.get(suffix_key, []) or unlabeled_body_parts
     fragments = parse_fragments(row.get("fragments"))
 
     natures: list[dict[str, Any]] = []
