@@ -182,6 +182,58 @@ def test_inline_labeled_body_parts_with_period_delimiters():
         assert natures[0]["verbatim_element"]["interpreted"] == verbatim
 
 
+def test_inline_labeled_body_parts_with_comma_delimiters():
+    rows = [
+        {
+            "accession_number": "KNM-784",
+            "body_parts": "A, Lt m3; B, m1; C, Lp3; D, Rp3; E, Lt C female F, root.",
+        }
+    ]
+
+    payload = build_accession_payload(rows)
+    accession_rows = payload["accessions"][0]["rows"]
+
+    expected = [
+        "Lt m3",
+        "m1",
+        "Lp3",
+        "Rp3",
+        "Lt C female",
+        "root.",
+    ]
+
+    assert len(accession_rows) == len(expected)
+    for section, verbatim in zip(accession_rows, expected):
+        natures = _extract_nature_values(section)
+        assert natures[0]["verbatim_element"]["interpreted"] == verbatim
+
+
+def test_inline_labeled_body_parts_with_pipe_delimiters():
+    rows = [
+        {
+            "accession_number": "KNM-785",
+            "body_parts": "A = Lt m3, | B = m1 | C = Lp3 | D = Rp3 | E = Lt c female | F = root\n",
+        }
+    ]
+
+    payload = build_accession_payload(rows)
+    accession_rows = payload["accessions"][0]["rows"]
+
+    expected = [
+        "Lt m3",
+        "m1",
+        "Lp3",
+        "Rp3",
+        "Lt c female",
+        "root",
+    ]
+
+    assert len(accession_rows) == len(expected)
+    for section, verbatim in zip(accession_rows, expected):
+        natures = _extract_nature_values(section)
+        assert natures[0]["verbatim_element"]["interpreted"] == verbatim
+
+
 def test_verbatim_element_truncated_and_added_to_notes():
     long_body_part = "A: " + "very long description " * 20
 

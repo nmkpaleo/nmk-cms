@@ -224,8 +224,8 @@ def _truncate_verbatim_element(
 BODY_PART_LABEL_RE = re.compile(r"^(?P<label>[A-Za-z0-9]+)\s*[:\-]\s*(?P<body>.+)$")
 
 INLINE_BODY_PART_LABEL_RE = re.compile(
-    r"(?:(?<=^)|(?<=[\s;,]))"
-    r"(?:\((?P<label1>[A-Za-z0-9]+)\)\s+|(?P<label2>[A-Za-z0-9]+)\s*(?:[:=\-])\s*|(?P<label3>[A-Za-z])\.\s+)",
+    r"(?:(?<=^)|(?<=[\s;,|]))"
+    r"(?:\((?P<label1>[A-Za-z0-9]+)\)\s+|(?P<label2>[A-Za-z0-9]+)\s*(?:[:=\-])\s*|(?P<label3>[A-Za-z])\.\s+|(?P<label4>[A-Za-z])\s*,\s+)",
     flags=re.IGNORECASE,
 )
 
@@ -246,7 +246,7 @@ def _split_body_part_body(text: str | None) -> tuple[str | None, list[str]]:
         primary = cleaned
 
     if primary:
-        primary = re.sub(r"\b(and|&)\s*$", "", primary, flags=re.IGNORECASE).rstrip(" ,")
+        primary = re.sub(r"\b(and|&)\s*$", "", primary, flags=re.IGNORECASE).rstrip(" ,|")
         primary = coerce_stripped(primary)
 
     return primary, extras
@@ -270,12 +270,15 @@ def _extract_inline_labeled_body_parts(text: str) -> tuple[list[tuple[str, str]]
     for index, match in enumerate(matches):
         start = match.start()
         if start > previous_end:
-            leftover = text[previous_end:start].strip(" ;,\n")
+            leftover = text[previous_end:start].strip(" ;,|\n")
             if leftover:
                 leftovers.append(leftover)
 
         label = coerce_stripped(
-            match.group("label1") or match.group("label2") or match.group("label3")
+            match.group("label1")
+            or match.group("label2")
+            or match.group("label3")
+            or match.group("label4")
         )
         content_start = match.end()
         content_end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
@@ -289,7 +292,7 @@ def _extract_inline_labeled_body_parts(text: str) -> tuple[list[tuple[str, str]]
         previous_end = content_end
 
     if previous_end < len(text):
-        trailing = text[previous_end:].strip(" ;,\n")
+        trailing = text[previous_end:].strip(" ;,|\n")
         if trailing:
             leftovers.append(trailing)
 
