@@ -103,6 +103,13 @@ Key takeaways for staff users:
 - Relation summaries appear alongside the standard merge success banner, making it easier to audit which accessions moved, were skipped, or were deleted.
 - The audit trail in `MergeLog` captures these relation actions so administrators can review the conflict handling at any time.
 
+### Accession Reference field-selection merges
+
+- Accession Reference merges are limited to records that belong to the **same accession**; cross-accession merges are blocked before any data changes.
+- The field-selection view is mandatory and surfaces the **Reference** and **Page** fields for every candidate. Choose one value per field; leave a field unselected to keep the target’s value.
+- The compare screen links to the field-selection page once both a target and source are chosen. The link preserves all selected candidates so the merge can process them sequentially into the target.
+- Successful merges redirect back to the target change page with a banner summarising the updates. Merge logs and django-simple-history entries capture the before/after state for rollback.
+
 ## Configuring Strategies
 
 Merge strategies determine how conflicting field values resolve:

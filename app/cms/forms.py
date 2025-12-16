@@ -13,6 +13,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.contrib.contenttypes.models import ContentType
+from django.db import models
 from django.db.models import Q
 from django.forms.widgets import (
     CheckboxInput,
@@ -68,6 +69,7 @@ from cms.manual_import import (
     import_manual_row,
     parse_accession_number,
 )
+from cms.merge.forms import FieldSelectionCandidate, FieldSelectionForm
 from cms.utils import coerce_stripped
 
 User = get_user_model()
@@ -754,6 +756,55 @@ class FieldSlipMergeForm(BaseW3Form):
 
         if not self.accession.fieldslip_links.filter(fieldslip=source).exists():
             self.add_error("source", _("Select a field slip linked to this accession."))
+
+        return cleaned_data
+
+
+class AccessionReferenceFieldSelectionForm(FieldSelectionForm):
+    """FIELD_SELECTION merge form for :class:`AccessionReference` candidates."""
+
+    merge_field_names = ("reference", "page")
+
+    def __init__(
+        self,
+        *,
+        candidates: Iterable[FieldSelectionCandidate | AccessionReference],
+        data: dict[str, object] | None = None,
+        initial: dict[str, object] | None = None,
+    ) -> None:
+        super().__init__(
+            model=AccessionReference,
+            merge_fields=self.get_mergeable_fields(),
+            candidates=candidates,
+            data=data,
+            initial=initial,
+        )
+
+    @classmethod
+    def get_mergeable_fields(cls) -> tuple[models.Field, ...]:
+        fields: list[models.Field] = []
+        for field_name in cls.merge_field_names:
+            try:
+                fields.append(AccessionReference._meta.get_field(field_name))
+            except Exception:
+                continue
+        return tuple(fields)
+
+    def clean(self) -> dict[str, object]:
+        cleaned_data = super().clean()
+
+        if len(self.candidates) < 2:
+            raise forms.ValidationError(
+                _("Select at least two accession references to merge."),
+            )
+
+        accession_ids = {
+            candidate.instance.accession_id for candidate in self.candidates
+        }
+        if len(accession_ids) > 1:
+            raise forms.ValidationError(
+                _("Accession references must belong to the same accession."),
+            )
 
         return cleaned_data
 

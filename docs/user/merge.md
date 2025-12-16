@@ -9,7 +9,7 @@ The merge tool consolidates duplicate records into a single entry and now suppor
 
 ## Starting a merge
 
-1. Open the admin changelist for the model you want to merge (Field Slip, Storage, or Reference).
+1. Open the admin changelist for the model you want to merge (Field Slip, Storage, Reference, or Accession Reference).
 2. Select **two or more** records that represent duplicates.
 3. Choose **Merge selected records** from the actions menu and continue. The compare screen lists every selected record and shows the current **target** on the left with the first **source** on the right.
 4. Pick the target and source in the **Current selection** cards. Extra candidates stay listed beneath and will be merged into the chosen target one after another in the order shown. When the model supports per-field choices, a yellow notice appears with an **Open field selection merge** link that carries all selected IDs.
@@ -27,6 +27,7 @@ The merge tool consolidates duplicate records into a single entry and now suppor
 - **Storage:** area values use field selection so curators can confirm the correct location during a merge.
 - **Reference:** title and citation rely on field selection to preserve the authoritative record.
 - **Element:** name and parent hierarchy require explicit choices to avoid cycles; keep the target’s parent unless you intentionally reparent during the merge.
+- **Accession Reference:** reference text and page values require explicit choices and only merge when every candidate belongs to the same accession.
 
 ## Tips and troubleshooting
 
