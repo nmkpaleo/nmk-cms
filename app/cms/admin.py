@@ -11,16 +11,23 @@ from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
+from crum import set_current_user
 from import_export.admin import ImportExportModelAdmin
 from import_export import resources, fields
 from import_export.fields import Field
 from import_export.widgets import ForeignKeyWidget, DateWidget
 from simple_history.admin import SimpleHistoryAdmin
 
-from .forms import AccessionNumberSeriesAdminForm, DrawerRegisterForm
+from .forms import (
+    AccessionNumberSeriesAdminForm,
+    AccessionReferenceFieldSelectionForm,
+    DrawerRegisterForm,
+)
 from .admin_merge import MergeAdminMixin
 from .merge import merge_records
 from .merge.constants import MergeStrategy
+from .merge.services import merge_accession_references
+from .merge.signals import merge_failed
 
 from .models import (
     AccessionNumberSeries,
@@ -746,11 +753,76 @@ class AccessionNumberSeriesAdmin(HistoricalAdmin):
 
         return RequestUserAwareForm
 
-class AccessionReferenceAdmin(HistoricalImportExportAdmin):
+class AccessionReferenceAdmin(
+    MergeAdminActionMixin, MergeAdminMixin, HistoricalImportExportAdmin
+):
     resource_class = AccessionReferenceResource
     list_display = ('collection_abbreviation', 'specimen_prefix_abbreviation', 'specimen_number', 'page', 'reference')
     search_fields = ('accession__specimen_no', 'specimen_suffix', 'reference',)
     ordering = ('accession__collection__abbreviation', 'accession__specimen_prefix__abbreviation', 'accession__specimen_no',)
+
+    merge_form_class = MergeAdminMixin.merge_form_class
+
+    def has_merge_permission(self, request):  # type: ignore[override]
+        if not self.is_merge_tool_enabled():
+            return False
+
+        opts = self.model._meta
+        return request.user.has_perm(
+            f"{opts.app_label}.change_{opts.model_name}"
+        ) or super().has_merge_permission(request)
+
+    def get_mergeable_fields(self):  # type: ignore[override]
+        return list(AccessionReferenceFieldSelectionForm.get_mergeable_fields())
+
+    def _execute_merge(
+        self,
+        request,
+        *,
+        source,
+        target,
+        strategy_map,
+    ):
+        if source.accession_id != target.accession_id:
+            self.message_user(
+                request,
+                _("Accession references must belong to the same accession."),
+                level=messages.ERROR,
+            )
+            return None
+
+        try:
+            set_current_user(request.user)
+            return merge_accession_references(
+                source=source,
+                target=target,
+                strategy_map=strategy_map,
+                user=request.user,
+            )
+        except ValidationError as exc:
+            self.message_user(
+                request,
+                _("Merge failed. %(error)s") % {"error": "; ".join(exc.messages)},
+                level=messages.ERROR,
+            )
+            return None
+        except Exception as exc:  # pragma: no cover - surfaced to admin UI
+            logger.exception("Merge failed for %s into %s", source, target, exc_info=exc)
+            merge_failed.send(
+                sender=self.__class__,
+                request=request,
+                source=source,
+                target=target,
+                error=exc,
+            )
+            self.message_user(
+                request,
+                _("Merge failed. %(error)s") % {"error": exc},
+                level=messages.ERROR,
+            )
+            return None
+        finally:
+            set_current_user(None)
 
     def collection_abbreviation(self, obj):
         return obj.accession.collection.abbreviation if obj.accession.collection else None
