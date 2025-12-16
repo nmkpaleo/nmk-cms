@@ -194,6 +194,7 @@ def parse_body_parts(value: Any) -> list[str]:
 
 
 VERBATIM_ELEMENT_MAX_LENGTH = 255
+AERIAL_PHOTO_MAX_LENGTH = 25
 
 
 def _truncate_verbatim_element(
@@ -219,6 +220,35 @@ def _truncate_verbatim_element(
         return cleaned[:VERBATIM_ELEMENT_MAX_LENGTH]
 
     return cleaned
+
+
+def _clean_aerial_photo(
+    value: str | None,
+    *,
+    context: str,
+    overflow_notes: list[str] | None = None,
+    seen_overflow: set[str] | None = None,
+) -> str | None:
+    """Return an aerial photo value without leading labels and within DB limits."""
+
+    cleaned = coerce_stripped(value)
+    if not cleaned:
+        return None
+
+    normalized = re.sub(r"\b(?:aerial|photo)\b", "", cleaned, flags=re.IGNORECASE)
+    normalized = re.sub(r"\s+", " ", normalized).strip(" -_,;|")
+    normalized = normalized or cleaned
+
+    if len(normalized) > AERIAL_PHOTO_MAX_LENGTH:
+        note_text = f"{context}: {normalized}"
+        if overflow_notes is not None:
+            if seen_overflow is None or note_text not in seen_overflow:
+                overflow_notes.append(note_text)
+                if seen_overflow is not None:
+                    seen_overflow.add(note_text)
+        return normalized[:AERIAL_PHOTO_MAX_LENGTH]
+
+    return normalized
 
 
 BODY_PART_LABEL_RE = re.compile(r"^(?P<label>[A-Za-z0-9]+)\s*[:\-]\s*(?P<body>.+)$")
@@ -429,7 +459,14 @@ def build_field_slip(
         "verbatim_locality": make_interpreted_value(verbatim_locality),
         "verbatim_taxon": make_interpreted_value(taxon_value),
         "verbatim_element": make_interpreted_value(verbatim_body_part),
-        "aerial_photo": make_interpreted_value(coerce_stripped(row.get("photo_id"))),
+        "aerial_photo": make_interpreted_value(
+            _clean_aerial_photo(
+                row.get("photo_id"),
+                context=_("Full aerial photo text (field slip)"),
+                overflow_notes=overflow_notes,
+                seen_overflow=seen_overflow,
+            )
+        ),
         "verbatim_latitude": make_interpreted_value(latitude),
         "verbatim_longitude": make_interpreted_value(longitude),
     }

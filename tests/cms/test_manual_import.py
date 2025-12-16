@@ -314,3 +314,44 @@ def test_verbatim_element_truncated_and_added_to_notes():
         for note in accession["additional_notes"]
     ]
     assert any("very long description" in value for value in note_values)
+
+
+def test_aerial_photo_strips_labels_before_storage():
+    rows = [
+        {
+            "accession_number": "KNM-910",
+            "body_parts": "A: tibia",
+            "photo_id": "Aerial Photo 1430/019 - 114 ",
+        }
+    ]
+
+    payload = build_accession_payload(rows)
+    slip = payload["accessions"][0]["field_slips"][0]
+
+    assert (slip.get("aerial_photo") or {}).get("interpreted") == "1430/019 - 114"
+
+
+def test_aerial_photo_truncated_and_noted_when_too_long():
+    long_photo = "Aerial Photo " + ("X" * 30)
+
+    rows = [
+        {
+            "accession_number": "KNM-911",
+            "body_parts": "A: femur",
+            "photo_id": long_photo,
+        }
+    ]
+
+    payload = build_accession_payload(rows)
+    accession = payload["accessions"][0]
+    slip = accession["field_slips"][0]
+
+    aerial_photo_value = (slip.get("aerial_photo") or {}).get("interpreted")
+    assert aerial_photo_value is not None
+    assert len(aerial_photo_value) == 25
+
+    note_values = [
+        (note.get("value") or {}).get("interpreted", "")
+        for note in accession["additional_notes"]
+    ]
+    assert any("Full aerial photo text" in value for value in note_values)
