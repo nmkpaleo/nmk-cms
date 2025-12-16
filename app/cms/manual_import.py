@@ -193,6 +193,218 @@ def parse_body_parts(value: Any) -> list[str]:
     return parts or [text]
 
 
+VERBATIM_ELEMENT_MAX_LENGTH = 255
+AERIAL_PHOTO_MAX_LENGTH = 25
+
+
+def _truncate_verbatim_element(
+    value: str | None,
+    *,
+    context: str,
+    overflow_notes: list[str] | None = None,
+    seen_overflow: set[str] | None = None,
+) -> str | None:
+    """Return ``value`` trimmed to the DB limit and record overflow notes."""
+
+    cleaned = coerce_stripped(value)
+    if not cleaned:
+        return None
+
+    if len(cleaned) > VERBATIM_ELEMENT_MAX_LENGTH:
+        note_text = f"{context}: {cleaned}"
+        if overflow_notes is not None:
+            if seen_overflow is None or note_text not in seen_overflow:
+                overflow_notes.append(note_text)
+                if seen_overflow is not None:
+                    seen_overflow.add(note_text)
+        return cleaned[:VERBATIM_ELEMENT_MAX_LENGTH]
+
+    return cleaned
+
+
+def _clean_aerial_photo(
+    value: str | None,
+    *,
+    context: str,
+    overflow_notes: list[str] | None = None,
+    seen_overflow: set[str] | None = None,
+) -> str | None:
+    """Return an aerial photo value without leading labels and within DB limits."""
+
+    cleaned = coerce_stripped(value)
+    if not cleaned:
+        return None
+
+    normalized = re.sub(r"\b(?:aerial|photo)\b", "", cleaned, flags=re.IGNORECASE)
+    normalized = re.sub(r"\s+", " ", normalized).strip(" -_,;|")
+    normalized = normalized or cleaned
+
+    if len(normalized) > AERIAL_PHOTO_MAX_LENGTH:
+        note_text = f"{context}: {normalized}"
+        if overflow_notes is not None:
+            if seen_overflow is None or note_text not in seen_overflow:
+                overflow_notes.append(note_text)
+                if seen_overflow is not None:
+                    seen_overflow.add(note_text)
+        return normalized[:AERIAL_PHOTO_MAX_LENGTH]
+
+    return normalized
+
+
+BODY_PART_LABEL_RE = re.compile(r"^(?P<label>[A-Za-z0-9]+)\s*[:\-]\s*(?P<body>.+)$")
+
+INLINE_BODY_PART_LABEL_RE = re.compile(
+    r"(?:(?<=^)|(?<=[\s;,|]))"
+    r"(?:\((?P<label1>[A-Za-z0-9]+)\)\s+|(?P<label2>[A-Za-z0-9]+)\s*(?:[:=\-])\s*|(?P<label3>[A-Za-z])\.\s+|(?P<label4>[A-Za-z])\s*,\s+)",
+    flags=re.IGNORECASE,
+)
+
+
+def _split_body_part_body(text: str | None) -> tuple[str | None, list[str]]:
+    """Return the primary body text and any extra unlabeled chunks."""
+
+    cleaned = coerce_stripped(text)
+    if not cleaned:
+        return None, []
+
+    extras: list[str] = []
+    if ";" in cleaned:
+        pieces = [coerce_stripped(piece.strip(" ,")) for piece in cleaned.split(";")]
+        primary = pieces[0]
+        extras = [piece for piece in pieces[1:] if piece]
+    else:
+        primary = cleaned
+
+    if primary:
+        primary = re.sub(r"\b(and|&)\s*$", "", primary, flags=re.IGNORECASE).rstrip(" ,|")
+        primary = coerce_stripped(primary)
+
+    return primary, extras
+
+
+def _extract_inline_labeled_body_parts(text: str) -> tuple[list[tuple[str, str]], list[str]]:
+    """Return (segments, leftovers) for inline-labeled body part strings.
+
+    Segments are (label, body) tuples. Leftovers are unmatched chunks between
+    labeled segments that should be treated as unlabeled values.
+    """
+
+    matches = list(INLINE_BODY_PART_LABEL_RE.finditer(text))
+    if not matches:
+        return [], []
+
+    segments: list[tuple[str, str]] = []
+    leftovers: list[str] = []
+    previous_end = 0
+
+    for index, match in enumerate(matches):
+        start = match.start()
+        if start > previous_end:
+            leftover = text[previous_end:start].strip(" ;,|\n")
+            if leftover:
+                leftovers.append(leftover)
+
+        label = coerce_stripped(
+            match.group("label1")
+            or match.group("label2")
+            or match.group("label3")
+            or match.group("label4")
+        )
+        content_start = match.end()
+        content_end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        body_text = coerce_stripped(text[content_start:content_end].strip(" ;,\n"))
+        primary_body, extra_chunks = _split_body_part_body(body_text)
+
+        if label and primary_body:
+            segments.append((label, primary_body))
+        leftovers.extend(extra_chunks)
+
+        previous_end = content_end
+
+    if previous_end < len(text):
+        trailing = text[previous_end:].strip(" ;,|\n")
+        if trailing:
+            leftovers.append(trailing)
+
+    return segments, leftovers
+
+
+def parse_labeled_body_parts(value: Any) -> tuple[dict[str, list[str]], list[str]]:
+    """Return (labeled_parts, unlabeled_parts) parsed from ``body_parts`` text."""
+
+    text = coerce_stripped(value)
+    labeled: dict[str, list[str]] = {}
+    unlabeled: list[str] = []
+
+    if not text:
+        return labeled, unlabeled
+
+    segments, leftovers = _extract_inline_labeled_body_parts(text)
+    if segments:
+        for label, body in segments:
+            labeled.setdefault(label.upper(), []).append(body)
+        for chunk in leftovers:
+            cleaned = coerce_stripped(chunk)
+            if cleaned:
+                unlabeled.append(cleaned)
+        return labeled, unlabeled
+
+    for part in parse_body_parts(text):
+        match = BODY_PART_LABEL_RE.match(part)
+        if match:
+            label = coerce_stripped(match.group("label"))
+            body = coerce_stripped(match.group("body"))
+            if not label or not body:
+                continue
+            label_key = label.upper()
+            labeled.setdefault(label_key, []).append(body)
+            continue
+
+        cleaned = coerce_stripped(part)
+        if cleaned:
+            unlabeled.append(cleaned)
+
+    return labeled, unlabeled
+
+
+def _extract_body_parts_from_other(
+    comments: Sequence[str],
+) -> tuple[dict[str, list[str]], list[str], list[str]]:
+    """Pull labeled body parts out of free-text "other" comments.
+
+    Returns ``(labeled_parts, unlabeled_parts, remaining_comments)`` where
+    ``remaining_comments`` are the comment strings that did not yield any labeled
+    body-part segments and should remain as general notes.
+    """
+
+    labeled: dict[str, list[str]] = {}
+    unlabeled: list[str] = []
+    remaining: list[str] = []
+
+    for comment in comments:
+        parsed_labeled, parsed_unlabeled = parse_labeled_body_parts(comment)
+        if parsed_labeled:
+            for suffix, parts in parsed_labeled.items():
+                labeled.setdefault(suffix, []).extend(parts)
+            unlabeled.extend(parsed_unlabeled)
+        else:
+            remaining.append(comment)
+
+    return labeled, unlabeled, remaining
+
+
+def _allowed_specimen_suffixes() -> set[str]:
+    """Return the allowed specimen suffix codes (A-Z and AA-FZ)."""
+
+    allowed: set[str] = set()
+    for letter in range(ord("A"), ord("Z") + 1):
+        allowed.add(chr(letter))
+    for first in "ABCDEF":
+        for second in range(ord("A"), ord("Z") + 1):
+            allowed.add(f"{first}{chr(second)}")
+    return allowed
+
+
 def parse_fragments(value: Any) -> str | None:
     text = coerce_stripped(value)
     if not text:
@@ -246,11 +458,24 @@ def build_reference_entries(value: Any) -> list[dict[str, dict[str, Any]]]:
     return [entry]
 
 
-def build_field_slip(row: Mapping[str, Any], taxon_value: str | None) -> dict[str, Any]:
+def build_field_slip(
+    row: Mapping[str, Any],
+    taxon_value: str | None,
+    *,
+    overflow_notes: list[str] | None = None,
+    seen_overflow: set[str] | None = None,
+) -> dict[str, Any]:
     locality_parts = [coerce_stripped(row.get("locality")), coerce_stripped(row.get("site_area"))]
     verbatim_locality = " | ".join([part for part in locality_parts if part]) or None
     formation = coerce_stripped(row.get("formation"))
     member = coerce_stripped(row.get("member_horizon_level"))
+
+    verbatim_body_part = _truncate_verbatim_element(
+        row.get("body_parts"),
+        context=_("Full verbatim element text (field slip)"),
+        overflow_notes=overflow_notes,
+        seen_overflow=seen_overflow,
+    )
 
     latitude, longitude = parse_coordinates(row.get("coordinates"))
 
@@ -259,8 +484,15 @@ def build_field_slip(row: Mapping[str, Any], taxon_value: str | None) -> dict[st
         "collection_date": make_interpreted_value(parse_collection_date(row.get("date"))),
         "verbatim_locality": make_interpreted_value(verbatim_locality),
         "verbatim_taxon": make_interpreted_value(taxon_value),
-        "verbatim_element": make_interpreted_value(coerce_stripped(row.get("body_parts"))),
-        "aerial_photo": make_interpreted_value(coerce_stripped(row.get("photo_id"))),
+        "verbatim_element": make_interpreted_value(verbatim_body_part),
+        "aerial_photo": make_interpreted_value(
+            _clean_aerial_photo(
+                row.get("photo_id"),
+                context=_("Full aerial photo text (field slip)"),
+                overflow_notes=overflow_notes,
+                seen_overflow=seen_overflow,
+            )
+        ),
         "verbatim_latitude": make_interpreted_value(latitude),
         "verbatim_longitude": make_interpreted_value(longitude),
     }
@@ -279,23 +511,43 @@ def build_field_slip(row: Mapping[str, Any], taxon_value: str | None) -> dict[st
 def build_row_section(
     row: Mapping[str, Any],
     specimen_suffix: str | None,
+    *,
+    body_part_assignment: Mapping[str | None, list[str]] | None = None,
+    overflow_notes: list[str] | None = None,
+    seen_overflow: set[str] | None = None,
 ) -> dict[str, Any]:
     storage_value = coerce_stripped(row.get("storage_area") or row.get("shelf"))
     storage = make_interpreted_value(storage_value)
-    body_parts = parse_body_parts(row.get("body_parts"))
+    if body_part_assignment is not None:
+        body_parts = body_part_assignment.get(specimen_suffix, [])
+    else:
+        labeled_body_parts, unlabeled_body_parts = parse_labeled_body_parts(
+            row.get("body_parts")
+        )
+        suffix_key = coerce_stripped(specimen_suffix)
+        if suffix_key:
+            suffix_key = suffix_key.upper()
+        body_parts = labeled_body_parts.get(suffix_key, []) or unlabeled_body_parts
     fragments = parse_fragments(row.get("fragments"))
 
     natures: list[dict[str, Any]] = []
     for part in body_parts or [None]:
-        element_value = coerce_stripped(part)
+        raw_element_value = coerce_stripped(part)
+        element_value = _truncate_verbatim_element(
+            raw_element_value,
+            context=_("Full verbatim element text for specimen %(suffix)s")
+            % {"suffix": specimen_suffix or "-"},
+            overflow_notes=overflow_notes,
+            seen_overflow=seen_overflow,
+        )
         nature_entry = {
             "verbatim_element": make_interpreted_value(element_value),
         }
         side_match = None
-        if element_value:
-            if re.search(r"\b(rt\.?|right)\b", element_value, flags=re.IGNORECASE):
+        if raw_element_value:
+            if re.search(r"\b(rt\.?|right)\b", raw_element_value, flags=re.IGNORECASE):
                 side_match = "Right"
-            elif re.search(r"\b(lt\.?|left)\b", element_value, flags=re.IGNORECASE):
+            elif re.search(r"\b(lt\.?|left)\b", raw_element_value, flags=re.IGNORECASE):
                 side_match = "Left"
         if side_match:
             nature_entry["side"] = make_interpreted_value(side_match)
@@ -485,6 +737,77 @@ def _determine_suffix_display(suffixes: list[str | None]) -> str | None:
     return f"{meaningful[0]}-{meaningful[-1]}"
 
 
+def _resolve_body_part_assignment(
+    row: Mapping[str, Any],
+    suffixes: Sequence[str | None],
+    *,
+    labeled_body_parts: Mapping[str, list[str]] | None = None,
+    unlabeled_body_parts: list[str] | None = None,
+) -> tuple[dict[str | None, list[str]], str | None, dict[str, Any]]:
+    if labeled_body_parts is None or unlabeled_body_parts is None:
+        labeled_body_parts, unlabeled_body_parts = parse_labeled_body_parts(
+            row.get("body_parts")
+        )
+    else:
+        labeled_body_parts = dict(labeled_body_parts)
+        unlabeled_body_parts = list(unlabeled_body_parts)
+    suffix_keys = []
+    for suffix in suffixes:
+        key = coerce_stripped(suffix)
+        suffix_keys.append(key.upper() if key else None)
+
+    assignment: dict[str | None, list[str]] = {}
+    note_text: str | None = None
+    metadata: dict[str, Any] = {}
+
+    if labeled_body_parts and unlabeled_body_parts:
+        for suffix, key in zip(suffixes, suffix_keys):
+            assignment[suffix] = labeled_body_parts.get(key, [])
+        note_text = _(
+            "Unlabeled body parts were not assigned because labeled elements were provided: %(values)s"
+        ) % {"values": "; ".join(unlabeled_body_parts)}
+        metadata = {
+            "body_part_resolution": {
+                "strategy": "labeled_precedence",
+                "unlabeled_elements": unlabeled_body_parts,
+                "labeled_suffixes": sorted(labeled_body_parts.keys()),
+            }
+        }
+        return assignment, note_text, metadata
+
+    if not labeled_body_parts and len(suffixes) > 1 and unlabeled_body_parts:
+        first_suffix = suffixes[0]
+        assignment[first_suffix] = unlabeled_body_parts
+        for suffix in suffixes[1:]:
+            assignment[suffix] = []
+        display_suffix = coerce_stripped(first_suffix) or "-"
+        note_text = _(
+            "Body parts were applied to specimen %(suffix)s only because multiple suffixes lacked labels: %(values)s"
+        ) % {"suffix": display_suffix, "values": "; ".join(unlabeled_body_parts)}
+        metadata = {
+            "body_part_resolution": {
+                "strategy": "unlabeled_first_suffix",
+                "unlabeled_elements": unlabeled_body_parts,
+                "applied_suffix": display_suffix,
+            }
+        }
+        return assignment, note_text, metadata
+
+    for suffix, key in zip(suffixes, suffix_keys):
+        assignment[suffix] = labeled_body_parts.get(key, []) or unlabeled_body_parts
+
+    if unlabeled_body_parts or labeled_body_parts:
+        metadata = {
+            "body_part_resolution": {
+                "strategy": "default",
+                "unlabeled_elements": unlabeled_body_parts,
+                "labeled_suffixes": sorted(labeled_body_parts.keys()),
+            }
+        }
+
+    return assignment, note_text, metadata
+
+
 def build_accession_payload(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     if not rows:
         raise ManualImportError("No rows provided for accession payload generation")
@@ -514,7 +837,6 @@ def build_accession_payload(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]
     suffixes = _unique_preserving(suffix_values)
     if not suffixes:
         suffixes = [None]
-    suffix_display = _determine_suffix_display(suffixes)
 
     type_values = _collect_unique(rows, "is_type_specimen")
     is_type = any(normalise_yes_no(value) for value in type_values)
@@ -523,7 +845,7 @@ def build_accession_payload(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]
     is_published = any(normalise_yes_no(value) for value in published_values)
 
     references = _collect_unique(rows, "reference")
-    comments = _collect_unique(rows, "other")
+    other_comments = _collect_unique(rows, "other")
 
     aggregated_row = {
         "collection_id": collection_value,
@@ -549,13 +871,74 @@ def build_accession_payload(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]
         "photo_id": _join_unique(_collect_unique(rows, "photo_id")),
     }
 
+    labeled_body_parts, unlabeled_body_parts = parse_labeled_body_parts(
+        aggregated_row.get("body_parts")
+    )
+
+    other_labeled_parts, other_unlabeled_parts, comments = _extract_body_parts_from_other(
+        other_comments
+    )
+    if other_labeled_parts:
+        for suffix, parts in other_labeled_parts.items():
+            labeled_body_parts.setdefault(suffix, []).extend(parts)
+    unlabeled_body_parts.extend(other_unlabeled_parts)
+    allowed_suffixes = _allowed_specimen_suffixes()
+    invalid_body_part_labels: list[str] = []
+    if labeled_body_parts:
+        valid_labeled_parts: dict[str, list[str]] = {}
+        for suffix, parts in labeled_body_parts.items():
+            if suffix in allowed_suffixes:
+                valid_labeled_parts[suffix] = parts
+            else:
+                invalid_body_part_labels.append(suffix)
+                unlabeled_body_parts.extend(parts)
+        labeled_body_parts = valid_labeled_parts
+
+    if labeled_body_parts:
+        labeled_suffixes = list(labeled_body_parts.keys())
+        meaningful_suffixes = [suffix for suffix in suffixes if coerce_stripped(suffix)]
+        if not meaningful_suffixes or len(labeled_suffixes) > len(meaningful_suffixes):
+            suffixes = _unique_preserving(labeled_suffixes)
+
+    suffix_display = _determine_suffix_display(suffixes)
+
+    body_part_assignment, body_part_note, body_part_metadata = _resolve_body_part_assignment(
+        aggregated_row,
+        suffixes,
+        labeled_body_parts=labeled_body_parts,
+        unlabeled_body_parts=unlabeled_body_parts,
+    )
+
+    if invalid_body_part_labels:
+        invalid_note = _(
+            "Body part labels were ignored because they are not valid specimen suffixes: %(labels)s"
+        ) % {"labels": ", ".join(_unique_preserving(invalid_body_part_labels))}
+        if body_part_metadata is None:
+            body_part_metadata = {"body_part_resolution": {}}
+        resolution_metadata = body_part_metadata.setdefault("body_part_resolution", {})
+        existing_invalid = set(resolution_metadata.get("invalid_labels", []))
+        resolution_metadata["invalid_labels"] = sorted(
+            existing_invalid | set(_unique_preserving(invalid_body_part_labels))
+        )
+    else:
+        invalid_note = None
+    verbatim_overflow_notes: list[str] = []
+    verbatim_overflow_seen: set[str] = set()
+
     taxon_value = make_taxon_value(aggregated_row)
 
     field_slips: list[dict[str, Any]] = []
     for row in rows:
         row_taxon_value = make_taxon_value(row)
         slip_taxon_value = row_taxon_value or taxon_value
-        field_slips.append(build_field_slip(row, slip_taxon_value))
+        field_slips.append(
+            build_field_slip(
+                row,
+                slip_taxon_value,
+                overflow_notes=verbatim_overflow_notes,
+                seen_overflow=verbatim_overflow_seen,
+            )
+        )
 
     accession_entry: dict[str, Any] = {
         "collection_abbreviation": make_interpreted_value(collection_value),
@@ -567,9 +950,42 @@ def build_accession_payload(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]
         "additional_notes": [],
         "references": build_reference_entries(references),
         "field_slips": field_slips,
-        "rows": [build_row_section(aggregated_row, suffix) for suffix in suffixes],
+        "rows": [
+            build_row_section(
+                aggregated_row,
+                suffix,
+                body_part_assignment=body_part_assignment,
+                overflow_notes=verbatim_overflow_notes,
+                seen_overflow=verbatim_overflow_seen,
+            )
+            for suffix in suffixes
+        ],
         "identifications": [make_identification_entry(aggregated_row, taxon_value)],
     }
+
+    if body_part_note:
+        accession_entry["additional_notes"].append(
+            {
+                "heading": make_interpreted_value(_("Manual QC")),
+                "value": make_interpreted_value(body_part_note),
+            }
+        )
+
+    if invalid_note:
+        accession_entry["additional_notes"].append(
+            {
+                "heading": make_interpreted_value(_("Manual QC")),
+                "value": make_interpreted_value(invalid_note),
+            }
+        )
+
+    for overflow_note in verbatim_overflow_notes:
+        accession_entry["additional_notes"].append(
+            {
+                "heading": make_interpreted_value(_("Manual QC")),
+                "value": make_interpreted_value(overflow_note),
+            }
+        )
 
     for comment in comments:
         accession_entry["additional_notes"].append(
@@ -579,10 +995,15 @@ def build_accession_payload(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]
             }
         )
 
-    return {
+    payload: dict[str, Any] = {
         "card_type": "accession_card",
         "accessions": [accession_entry],
     }
+
+    if body_part_metadata:
+        payload["_manual_import_metadata"] = body_part_metadata
+
+    return payload
 
 
 def _extract_accession_key(entry: Mapping[str, Any]) -> tuple[str | None, str | None, int | None]:
@@ -739,6 +1160,8 @@ def import_manual_row(
         "group_size": len(row_list),
     }
 
+    manual_metadata = payload.pop("_manual_import_metadata", None) or {}
+
     if row_ids:
         metadata["row_id"] = row_ids[0]
     if created_by_values:
@@ -749,6 +1172,8 @@ def import_manual_row(
         metadata["created_on"] = created_on_values[0]
         if len(created_on_values) > 1:
             metadata["created_on_values"] = created_on_values
+
+    metadata.update(manual_metadata)
 
     payload["_manual_import"] = metadata
 
