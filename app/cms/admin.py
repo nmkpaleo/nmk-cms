@@ -762,6 +762,7 @@ class AccessionReferenceAdmin(
     ordering = ('accession__collection__abbreviation', 'accession__specimen_prefix__abbreviation', 'accession__specimen_no',)
 
     merge_form_class = MergeAdminMixin.merge_form_class
+    merge_template = "admin/cms/accessionreference_merge.html"
 
     def has_merge_permission(self, request):  # type: ignore[override]
         if not self.is_merge_tool_enabled():
