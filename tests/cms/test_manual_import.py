@@ -240,6 +240,66 @@ def test_inline_labeled_body_parts_with_period_delimiters():
         assert natures[0]["verbatim_element"]["interpreted"] == verbatim
 
 
+def test_other_field_labeled_body_parts_build_accession_rows():
+    rows = [
+        {
+            "accession_number": "KNM-900",
+            "other": (
+                "D. distal Rt. humerus | E. Mand. frag erupting p2 | F. Mand. frag dm2 m1 | "
+                "G. Rt. prox. femur | H. Rt. prox. humerus | I. Rt. mandibulus condyle | "
+                "J. bone grag. probably distal tibia (Rt. humerus shaft, dist. Lt. tibia shaft)"
+            ),
+        }
+    ]
+
+    payload = build_accession_payload(rows)
+    accession = payload["accessions"][0]
+    accession_rows = accession["rows"]
+
+    expected_suffixes = ["D", "E", "F", "G", "H", "I", "J"]
+    expected_verbatims = [
+        "distal Rt. humerus",
+        "Mand. frag erupting p2",
+        "Mand. frag dm2 m1",
+        "Rt. prox. femur",
+        "Rt. prox. humerus",
+        "Rt. mandibulus condyle",
+        "bone grag. probably distal tibia (Rt. humerus shaft, dist. Lt. tibia shaft)",
+    ]
+
+    assert [
+        (section.get("specimen_suffix") or {}).get("interpreted") for section in accession_rows
+    ] == expected_suffixes
+
+    for section, verbatim in zip(accession_rows, expected_verbatims):
+        natures = _extract_nature_values(section)
+        assert natures[0]["verbatim_element"]["interpreted"] == verbatim
+
+    note_values = [
+        (note.get("value") or {}).get("interpreted", "") for note in accession["additional_notes"]
+    ]
+
+    assert not any("D. distal Rt. humerus" in value for value in note_values)
+
+
+def test_other_field_without_labels_remains_comment():
+    rows = [
+        {
+            "accession_number": "KNM-901",
+            "body_parts": "humerus",
+            "other": "Unlabeled context that should stay as a note",
+        }
+    ]
+
+    payload = build_accession_payload(rows)
+    accession = payload["accessions"][0]
+    note_values = [
+        (note.get("value") or {}).get("interpreted", "") for note in accession["additional_notes"]
+    ]
+
+    assert any("Unlabeled context" in value for value in note_values)
+
+
 def test_inline_labeled_body_parts_with_comma_delimiters():
     rows = [
         {

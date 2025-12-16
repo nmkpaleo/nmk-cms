@@ -367,6 +367,32 @@ def parse_labeled_body_parts(value: Any) -> tuple[dict[str, list[str]], list[str
     return labeled, unlabeled
 
 
+def _extract_body_parts_from_other(
+    comments: Sequence[str],
+) -> tuple[dict[str, list[str]], list[str], list[str]]:
+    """Pull labeled body parts out of free-text "other" comments.
+
+    Returns ``(labeled_parts, unlabeled_parts, remaining_comments)`` where
+    ``remaining_comments`` are the comment strings that did not yield any labeled
+    body-part segments and should remain as general notes.
+    """
+
+    labeled: dict[str, list[str]] = {}
+    unlabeled: list[str] = []
+    remaining: list[str] = []
+
+    for comment in comments:
+        parsed_labeled, parsed_unlabeled = parse_labeled_body_parts(comment)
+        if parsed_labeled:
+            for suffix, parts in parsed_labeled.items():
+                labeled.setdefault(suffix, []).extend(parts)
+            unlabeled.extend(parsed_unlabeled)
+        else:
+            remaining.append(comment)
+
+    return labeled, unlabeled, remaining
+
+
 def _allowed_specimen_suffixes() -> set[str]:
     """Return the allowed specimen suffix codes (A-Z and AA-FZ)."""
 
@@ -819,7 +845,7 @@ def build_accession_payload(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]
     is_published = any(normalise_yes_no(value) for value in published_values)
 
     references = _collect_unique(rows, "reference")
-    comments = _collect_unique(rows, "other")
+    other_comments = _collect_unique(rows, "other")
 
     aggregated_row = {
         "collection_id": collection_value,
@@ -848,6 +874,14 @@ def build_accession_payload(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]
     labeled_body_parts, unlabeled_body_parts = parse_labeled_body_parts(
         aggregated_row.get("body_parts")
     )
+
+    other_labeled_parts, other_unlabeled_parts, comments = _extract_body_parts_from_other(
+        other_comments
+    )
+    if other_labeled_parts:
+        for suffix, parts in other_labeled_parts.items():
+            labeled_body_parts.setdefault(suffix, []).extend(parts)
+    unlabeled_body_parts.extend(other_unlabeled_parts)
     allowed_suffixes = _allowed_specimen_suffixes()
     invalid_body_part_labels: list[str] = []
     if labeled_body_parts:
