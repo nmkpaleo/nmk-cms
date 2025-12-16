@@ -916,6 +916,11 @@ class AccessionFieldSlip(BaseModel):
 
 # AccessionReference Model
 class AccessionReference(MergeMixin, BaseModel):
+    merge_fields = {
+        "reference": MergeStrategy.FIELD_SELECTION,
+        "page": MergeStrategy.FIELD_SELECTION,
+    }
+
     accession = models.ForeignKey(
         Accession,
         on_delete=models.CASCADE,

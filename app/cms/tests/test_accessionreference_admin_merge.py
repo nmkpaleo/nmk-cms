@@ -4,10 +4,12 @@ from django.contrib import admin
 from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
+from django.contrib.contenttypes.models import ContentType
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.http import HttpResponse
 import pytest
+from urllib.parse import urlencode
 
 from crum import set_current_user
 from django.test import RequestFactory, TransactionTestCase, override_settings
@@ -18,6 +20,13 @@ from cms.models import Accession, AccessionReference, Collection, Locality, Refe
 
 
 urlpatterns = [
+    path("", include("cms.urls")),
+    path("", lambda request: HttpResponse(""), name="index"),
+    path("accession/", lambda request: HttpResponse(""), name="accession_list"),
+    path("locality/", lambda request: HttpResponse(""), name="locality_list"),
+    path("place/", lambda request: HttpResponse(""), name="place_list"),
+    path("reference/", lambda request: HttpResponse(""), name="reference_list"),
+    path("accounts/logout/", lambda request: HttpResponse(""), name="account_logout"),
     path("admin/", admin.site.urls),
     path("admin/upload-scan/", lambda request: HttpResponse(""), name="admin-upload-scan"),
     path("admin/do-ocr/", lambda request: HttpResponse(""), name="admin-do-ocr"),
@@ -44,9 +53,11 @@ class AccessionReferenceAdminMergeTests(TransactionTestCase):
         cls.model_admin.is_merge_tool_enabled = lambda: True
         cls.admin_site._urls = None
         cls.UserModel = get_user_model()
-        cls.change_permission = Permission.objects.get(
+        accession_ct = ContentType.objects.get_for_model(AccessionReference)
+        cls.change_permission, _ = Permission.objects.get_or_create(
             codename="change_accessionreference",
-            content_type__model="accessionreference",
+            content_type=accession_ct,
+            defaults={"name": "Can change accession reference"},
         )
         cls.changelist_url = reverse("admin:cms_accessionreference_changelist")
         opts = cls.model_admin.opts
@@ -116,7 +127,7 @@ class AccessionReferenceAdminMergeTests(TransactionTestCase):
         set_current_user(None)
         return target, source
 
-    def _merge_post_data(self, target, source):
+    def _merge_post_data(self, target, source, *, strategy: MergeStrategy):
         post_data = {
             "selected_ids": f"{target.pk},{source.pk}",
             "source": str(source.pk),
@@ -124,7 +135,7 @@ class AccessionReferenceAdminMergeTests(TransactionTestCase):
             ACTION_CHECKBOX_NAME: [str(target.pk), str(source.pk)],
         }
         for field in self.model_admin.get_mergeable_fields():
-            post_data[f"strategy__{field.name}"] = MergeStrategy.PREFER_NON_NULL.value
+            post_data[f"strategy__{field.name}"] = strategy.value
             post_data[f"value__{field.name}"] = ""
         return post_data
 
@@ -150,7 +161,9 @@ class AccessionReferenceAdminMergeTests(TransactionTestCase):
         user = self._create_user(with_permission=True)
         target, source = self._create_references()
 
-        post_data = self._merge_post_data(target, source)
+        post_data = self._merge_post_data(
+            target, source, strategy=MergeStrategy.PREFER_NON_NULL
+        )
         request = self._build_request("post", self.merge_url, user=user, data=post_data)
 
         response = self.admin_site.admin_view(self.model_admin.merge_view)(request)
@@ -163,6 +176,33 @@ class AccessionReferenceAdminMergeTests(TransactionTestCase):
         self.assertEqual(target.reference, self.reference)
         self.assertEqual(target.page, "1")
 
+    def test_merge_view_redirects_to_field_selection_by_default(self):
+        user = self._create_user(with_permission=True)
+        target, source = self._create_references()
+
+        post_data = self._merge_post_data(
+            target, source, strategy=MergeStrategy.FIELD_SELECTION
+        )
+        request = self._build_request("post", self.merge_url, user=user, data=post_data)
+
+        response = self.admin_site.admin_view(self.model_admin.merge_view)(request)
+
+        cancel_url = reverse("admin:cms_accessionreference_changelist")
+        expected_query = urlencode(
+            {
+                "model": f"{AccessionReference._meta.app_label}.{AccessionReference._meta.model_name}",
+                "target": target.pk,
+                "candidates": f"{target.pk},{source.pk}",
+                "cancel": cancel_url,
+            }
+        )
+        expected_url = f"{reverse('merge:merge_field_selection')}?{expected_query}"
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], expected_url)
+        self.assertTrue(AccessionReference.objects.filter(pk=target.pk).exists())
+        self.assertTrue(AccessionReference.objects.filter(pk=source.pk).exists())
+
     def test_merge_view_blocks_cross_accession_merge(self):
         user = self._create_user(with_permission=True)
         target, source = self._create_references()
@@ -172,7 +212,9 @@ class AccessionReferenceAdminMergeTests(TransactionTestCase):
         )
         set_current_user(None)
 
-        post_data = self._merge_post_data(target, cross_source)
+        post_data = self._merge_post_data(
+            target, cross_source, strategy=MergeStrategy.LAST_WRITE
+        )
         request = self._build_request("post", self.merge_url, user=user, data=post_data)
 
         response = self.admin_site.admin_view(self.model_admin.merge_view)(request)
