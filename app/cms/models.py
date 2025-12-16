@@ -915,7 +915,7 @@ class AccessionFieldSlip(BaseModel):
         return f"{self.accession} ↔ {self.fieldslip}"
 
 # AccessionReference Model
-class AccessionReference(BaseModel):
+class AccessionReference(MergeMixin, BaseModel):
     accession = models.ForeignKey(
         Accession,
         on_delete=models.CASCADE,
