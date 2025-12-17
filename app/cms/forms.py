@@ -886,6 +886,153 @@ class AccessionReferenceFieldSelectionForm(FieldSelectionForm):
         return cleaned_data
 
 
+class AccessionElementMergeSelectionForm(BaseW3Form):
+    """Select specimen elements (NatureOfSpecimen) to merge for an accession row."""
+
+    selected_ids = forms.MultipleChoiceField(
+        choices=(),
+        widget=forms.CheckboxSelectMultiple,
+        label=_("Select elements to merge"),
+    )
+    target = forms.ChoiceField(
+        choices=(),
+        widget=forms.RadioSelect,
+        label=_("Choose the target element"),
+    )
+
+    def __init__(self, *args, accession_row: AccessionRow, **kwargs) -> None:
+        self.accession_row = accession_row
+        self._choices: list[tuple[str, str]] = []
+        super().__init__(*args, **kwargs)
+        specimens = (
+            accession_row.natureofspecimen_set.select_related("element")
+            .order_by("element__name", "pk")
+        )
+        for specimen in specimens:
+            label_parts = [
+                specimen.element.name if specimen.element else _("Unknown element"),
+                specimen.side or "",
+                specimen.verbatim_element or "",
+            ]
+            label = " • ".join(part for part in label_parts if part)
+            self._choices.append((str(specimen.pk), label))
+
+        self.fields["selected_ids"].choices = self._choices
+        self.fields["target"].choices = self._choices
+        if not self.fields["target"].initial and self._choices:
+            self.fields["target"].initial = self._choices[0][0]
+
+    def clean(self):
+        cleaned = super().clean()
+        selected_ids = cleaned.get("selected_ids") or []
+        target = cleaned.get("target")
+        valid_ids = {choice[0] for choice in self._choices}
+
+        ordered_selected: list[str] = []
+        for raw_id in self.data.getlist("selected_ids"):
+            if raw_id in valid_ids and raw_id not in ordered_selected:
+                ordered_selected.append(raw_id)
+        if ordered_selected:
+            cleaned["selected_ids"] = ordered_selected
+
+        if not selected_ids or len(selected_ids) < 2:
+            self.add_error("selected_ids", _("Select at least two elements to merge."))
+
+        invalid = [value for value in selected_ids if value not in valid_ids]
+        if invalid:
+            self.add_error(
+                "selected_ids",
+                _("One or more selected elements are not linked to this specimen."),
+            )
+
+        if target and target not in valid_ids:
+            self.add_error("target", _("Choose a valid target element."))
+        if target and target not in selected_ids:
+            self.add_error(
+                "target",
+                _("The target element must be included in the merge selection."),
+            )
+
+        return cleaned
+
+
+class AccessionElementFieldSelectionForm(FieldSelectionForm):
+    """FIELD_SELECTION merge form for :class:`NatureOfSpecimen` candidates."""
+
+    merge_field_names = (
+        "element",
+        "side",
+        "condition",
+        "verbatim_element",
+        "portion",
+        "fragments",
+    )
+
+    def __init__(
+        self,
+        *,
+        candidates: Iterable[FieldSelectionCandidate | NatureOfSpecimen],
+        data: dict[str, object] | None = None,
+        initial: dict[str, object] | None = None,
+    ) -> None:
+        super().__init__(
+            model=NatureOfSpecimen,
+            merge_fields=self.get_mergeable_fields(),
+            candidates=candidates,
+            data=data,
+            initial=initial,
+        )
+
+    @classmethod
+    def get_mergeable_fields(cls) -> tuple[models.Field, ...]:
+        fields: list[models.Field] = []
+        for field_name in cls.merge_field_names:
+            try:
+                fields.append(NatureOfSpecimen._meta.get_field(field_name))
+            except Exception:
+                continue
+        return tuple(fields)
+
+    def clean(self) -> dict[str, object]:
+        cleaned_data = super().clean()
+
+        if len(self.candidates) < 2:
+            raise forms.ValidationError(
+                _("Select at least two elements to merge."),
+            )
+
+        accession_row_ids = {candidate.instance.accession_row_id for candidate in self.candidates}
+        if len(accession_row_ids) > 1:
+            raise forms.ValidationError(
+                _("Elements must belong to the same accession row."),
+            )
+
+        return cleaned_data
+
+    def build_selected_fields(self) -> dict[str, object]:
+        """Return selected fields mirroring element merge semantics."""
+
+        selected: dict[str, object] = {}
+        for field in self.merge_fields:
+            field_name = field.name
+            choice = self.cleaned_data.get(self.selection_field_name(field_name))
+            if not choice:
+                continue
+
+            candidate = self._candidate_map.get(choice)
+            if not candidate:
+                continue
+
+            if candidate.role == "target":
+                selected[field_name] = "target"
+                continue
+
+            value = field.value_from_object(candidate.instance)
+            selected[field_name] = value
+
+        return selected
+
+
 class AccessionGeologyForm(BaseW3ModelForm):
     class Meta:
         model = SpecimenGeology

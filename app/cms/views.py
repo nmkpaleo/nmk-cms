@@ -71,6 +71,8 @@ from cms.forms import (
     AccessionCommentForm,
     AccessionForm,
     AccessionFieldSlipForm,
+    AccessionElementFieldSelectionForm,
+    AccessionElementMergeSelectionForm,
     AccessionGeologyForm,
     AccessionNumberSelectForm,
     AccessionNumberSeriesAdminForm,
@@ -150,7 +152,9 @@ from django.db.models import Count
 
 from cms.merge import MERGE_REGISTRY, MergeMixin, merge_records
 from cms.merge.services import (
+    build_accession_element_field_selection_form,
     build_accession_reference_field_selection_form,
+    merge_nature_of_specimen_candidates,
     merge_accession_reference_candidates,
 )
 from cms.merge.fuzzy import score_candidates
@@ -1124,6 +1128,148 @@ class AccessionReferenceMergeView(LoginRequiredMixin, PermissionRequiredMixin, V
         return redirect(self._detail_url(accession))
 
 
+class AccessionElementMergeView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    """Handle element merge preparation and confirmation for an accession row."""
+
+    permission_required = "cms.can_merge"
+    raise_exception = True
+    http_method_names = ["post"]
+    template_name = "cms/accession_element_merge_confirm.html"
+
+    def get_accession_row(self, accession_row_id: int) -> AccessionRow:
+        return get_object_or_404(
+            AccessionRow.objects.prefetch_related(
+                Prefetch(
+                    "natureofspecimen_set",
+                    queryset=NatureOfSpecimen.objects.select_related("element"),
+                )
+            ),
+            pk=accession_row_id,
+        )
+
+    def handle_no_permission(self):
+        if self.raise_exception:
+            return super().handle_no_permission()
+        return redirect("login")
+
+    def _detail_url(self, accession_row: AccessionRow) -> str:
+        return f"{reverse('accessionrow_detail', args=[accession_row.pk])}#accession-element-merge"
+
+    def post(self, request, accession_row_id: int, *args, **kwargs):
+        accession_row = self.get_accession_row(accession_row_id)
+        detail_url = self._detail_url(accession_row)
+
+        if not getattr(settings, "MERGE_TOOL_FEATURE", False):
+            messages.error(
+                request,
+                _("Element merging requires the merge tool to be enabled."),
+            )
+            return redirect(detail_url)
+
+        if not request.user.is_staff and not is_collection_manager(request.user):
+            return HttpResponseForbidden()
+
+        selection_form = AccessionElementMergeSelectionForm(
+            accession_row=accession_row, data=request.POST
+        )
+        if not selection_form.is_valid():
+            for field, errors in selection_form.errors.items():
+                label = selection_form.fields.get(field).label if field in selection_form.fields else field
+                for error in errors:
+                    messages.error(request, _("%(field)s: %(error)s") % {"field": label, "error": error})
+            return redirect(f"{detail_url}?merge_elements=open")
+
+        selected_ids = selection_form.cleaned_data["selected_ids"]
+        target_id = selection_form.cleaned_data["target"]
+        stage = (request.POST.get("stage") or "prepare").lower()
+
+        try:
+            field_selection_form = build_accession_element_field_selection_form(
+                candidate_ids=selected_ids,
+                target_id=target_id,
+                data=request.POST if stage == "confirm" else None,
+            )
+        except ValidationError as exc:
+            for message in exc.messages:
+                messages.error(request, message)
+            return redirect(detail_url)
+
+        selected_candidates = list(
+            accession_row.natureofspecimen_set.filter(pk__in=selected_ids).select_related("element")
+        )
+        selected_candidates.sort(key=lambda specimen: selected_ids.index(str(specimen.pk)))
+
+        if stage != "confirm" or not field_selection_form.is_valid():
+            status = 400 if stage == "confirm" else 200
+            return render(
+                request,
+                self.template_name,
+                {
+                    "accession_row": accession_row,
+                    "selected_ids": selected_ids,
+                    "selected_candidates": selected_candidates,
+                    "target_id": str(target_id),
+                    "field_selection_form": field_selection_form,
+                    "cancel_url": detail_url,
+                },
+                status=status,
+            )
+
+        target = next((specimen for specimen in selected_candidates if str(specimen.pk) == str(target_id)), None)
+        sources = [specimen for specimen in selected_candidates if str(specimen.pk) != str(target_id)]
+
+        if target is None or not sources:
+            messages.error(
+                request,
+                _("Select a valid target and at least one source element to merge."),
+            )
+            return redirect(detail_url)
+
+        with transaction.atomic():
+            merge_results = merge_nature_of_specimen_candidates(
+                target=target,
+                sources=sources,
+                form=field_selection_form,
+                user=request.user,
+            )
+
+        messages.success(
+            request,
+            ngettext(
+                "Merged %(count)d element into %(target)s.",
+                "Merged %(count)d elements into %(target)s.",
+                len(merge_results),
+            )
+            % {"count": len(merge_results), "target": target},
+        )
+        return redirect(self._detail_url(accession_row))
+
+
+@login_required
+def accession_element_delete(request, pk: int):
+    specimen = get_object_or_404(NatureOfSpecimen.objects.select_related("accession_row"), pk=pk)
+    accession_row = specimen.accession_row
+    detail_url = reverse("accessionrow_detail", args=[accession_row.pk])
+
+    if not getattr(settings, "MERGE_TOOL_FEATURE", False):
+        messages.error(request, _("Element deletion requires the merge tool to be enabled."))
+        return redirect(detail_url)
+
+    if not request.user.is_staff and not is_collection_manager(request.user):
+        return HttpResponseForbidden()
+
+    if request.method != "POST":
+        return HttpResponseForbidden()
+
+    if request.POST.get("confirm") != "yes":
+        messages.error(request, _("Confirm deletion to remove the element."))
+        return redirect(detail_url)
+
+    specimen.delete()
+    messages.success(request, _("Element deleted."))
+    return redirect(detail_url)
+
+
 def create_fieldslip_for_accession(request, pk):
     """ Opens a modal for FieldSlip creation and links it to an Accession """
     accession = get_object_or_404(Accession, pk=pk)
@@ -1913,6 +2059,7 @@ class AccessionRowDetailView(DetailView):
         )
         context['can_manage'] = context['can_edit']
         context['show_inventory_status'] = not is_public_user(self.request.user)
+        context['merge_action'] = reverse("accession_merge_elements", args=[self.object.pk])
         return context
 
 

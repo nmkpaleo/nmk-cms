@@ -7,11 +7,15 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from cms.forms import AccessionReferenceFieldSelectionForm, FieldSelectionCandidate
+from cms.forms import (
+    AccessionElementFieldSelectionForm,
+    AccessionReferenceFieldSelectionForm,
+    FieldSelectionCandidate,
+)
 from cms.merge.constants import MergeStrategy
 from cms.merge.engine import MergeResult, merge_records
 from cms.merge.element import build_element_strategy_map
-from cms.models import AccessionReference, Element
+from cms.models import AccessionReference, Element, NatureOfSpecimen
 
 
 def build_accession_reference_strategy_map(
@@ -265,3 +269,176 @@ def merge_accession_reference_candidates(
 
     return results
 
+
+class NatureOfSpecimenMergeResult(MergeResult):
+    """Lightweight result wrapper for NatureOfSpecimen merges."""
+
+    def __init__(self, target: NatureOfSpecimen, resolved_values: Mapping[str, Any], relation_actions=None):
+        super().__init__(target=target, resolved_values=resolved_values, relation_actions=relation_actions or {})
+
+
+def _ensure_same_accession_row(candidates: Iterable[NatureOfSpecimen]) -> None:
+    accession_row_ids = {candidate.accession_row_id for candidate in candidates}
+    if len(accession_row_ids) > 1:
+        raise ValidationError({"accession_row": _("Elements must belong to the same accession row.")})
+
+
+def build_accession_element_field_selection_form(
+    *,
+    candidate_ids: Iterable[str | int],
+    target_id: str | int | None = None,
+    data: dict[str, object] | None = None,
+    initial: dict[str, object] | None = None,
+) -> AccessionElementFieldSelectionForm:
+    """Return a FIELD_SELECTION form for NatureOfSpecimen candidates."""
+
+    ordered_ids: list[str] = []
+    for raw_id in candidate_ids:
+        value = str(raw_id)
+        if value and value not in ordered_ids:
+            ordered_ids.append(value)
+
+    if len(ordered_ids) < 2:
+        raise ValidationError({"selected_ids": _("Select at least two records to merge.")})
+
+    candidates = list(
+        NatureOfSpecimen.objects.filter(pk__in=ordered_ids).select_related("element", "accession_row")
+    )
+    candidate_map = {str(candidate.pk): candidate for candidate in candidates}
+    resolved_candidates: list[FieldSelectionCandidate] = []
+
+    if target_id is None:
+        target_id = ordered_ids[0]
+
+    _ensure_same_accession_row(candidate_map.values())
+
+    for pk in ordered_ids:
+        candidate = candidate_map.get(pk)
+        if candidate is None:
+            continue
+        resolved_candidates.append(
+            FieldSelectionCandidate.from_instance(
+                candidate, role="target" if str(pk) == str(target_id) else "source"
+            )
+        )
+
+    if len(resolved_candidates) < 2:
+        raise ValidationError(
+            {"selected_ids": _("Select at least two existing records to merge.")}
+        )
+
+    return AccessionElementFieldSelectionForm(
+        candidates=resolved_candidates,
+        data=data,
+        initial=initial,
+    )
+
+
+def merge_nature_of_specimen(
+    *,
+    source: NatureOfSpecimen,
+    target: NatureOfSpecimen,
+    selected_fields: Mapping[str, Any] | None = None,
+    user: Any | None = None,
+    dry_run: bool = False,
+) -> NatureOfSpecimenMergeResult:
+    """Merge ``source`` NatureOfSpecimen into ``target`` with field selections."""
+
+    if source.pk is None or target.pk is None:
+        raise ValidationError({"source": _("Merge candidates must be saved records.")})
+    if source.pk == target.pk:
+        raise ValidationError({"source": _("Source and target must differ.")})
+    if source.accession_row_id != target.accession_row_id:
+        raise ValidationError({"accession_row": _("Elements must belong to the same accession row.")})
+
+    allowed_fields = {
+        "element",
+        "side",
+        "condition",
+        "verbatim_element",
+        "portion",
+        "fragments",
+    }
+    selected_fields = selected_fields or {}
+    invalid = set(selected_fields) - allowed_fields
+    if invalid:
+        raise ValidationError({"selected_fields": _("Unsupported fields: %(fields)s") % {"fields": ", ".join(sorted(invalid))}})
+
+    resolved_values: dict[str, Any] = {}
+    for field_name, selection in selected_fields.items():
+        if selection == "target":
+            continue
+        if selection == "source":
+            resolved_values[field_name] = getattr(source, field_name)
+        else:
+            resolved_values[field_name] = selection
+
+    element_value = resolved_values.get("element")
+    if element_value not in (None, "") and not isinstance(element_value, Element):
+        try:
+            resolved_values["element"] = Element.objects.get(pk=element_value)
+        except Element.DoesNotExist:
+            raise ValidationError({"element": _("Selected element no longer exists.")})
+
+    updated_fields: dict[str, Any] = {}
+    for field_name, value in resolved_values.items():
+        setattr(target, field_name, value)
+        updated_fields[field_name] = value
+
+    deleted_source_ids: list[int] = []
+    if not dry_run:
+        target.save()
+        deleted_source_ids.append(source.pk)
+        source.delete()
+
+    return NatureOfSpecimenMergeResult(
+        target=target,
+        resolved_values=updated_fields,
+        relation_actions={"deleted_source_ids": deleted_source_ids},
+    )
+
+
+def merge_nature_of_specimen_candidates(
+    *,
+    target: NatureOfSpecimen,
+    sources: Iterable[NatureOfSpecimen],
+    form: AccessionElementFieldSelectionForm,
+    user: Any | None = None,
+    dry_run: bool = False,
+) -> list[NatureOfSpecimenMergeResult]:
+    """Merge ``sources`` into ``target`` using field selections."""
+
+    if target.pk is None:
+        raise ValidationError({"target": _("Merge candidates must be saved records.")})
+
+    unique_sources: list[NatureOfSpecimen] = []
+    seen: set[str] = set()
+    for source in sources:
+        if source.pk is None:
+            raise ValidationError({"source": _("Merge candidates must be saved records.")})
+        if str(source.pk) in seen or source.pk == target.pk:
+            continue
+        seen.add(str(source.pk))
+        unique_sources.append(source)
+
+    if not unique_sources:
+        raise ValidationError({"selected_ids": _("Select at least one source to merge.")})
+
+    _ensure_same_accession_row([target, *unique_sources])
+
+    selected_fields = form.build_selected_fields()
+    results: list[NatureOfSpecimenMergeResult] = []
+    current_target = target
+
+    for source in unique_sources:
+        merge_result = merge_nature_of_specimen(
+            source=source,
+            target=current_target,
+            selected_fields=selected_fields,
+            user=user,
+            dry_run=dry_run,
+        )
+        results.append(merge_result)
+        current_target = merge_result.target
+
+    return results
