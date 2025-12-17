@@ -161,23 +161,42 @@
     </div>
   </section>
 
-  <section class="w3-margin-top" aria-labelledby="specimen-elements-heading">
-    <header class="w3-row w3-padding-16">
-      <div class="w3-col s12 m6">
-        <h2 id="specimen-elements-heading" class="w3-margin-0">
-          <i class="fa-solid fa-bone" aria-hidden="true"></i>
-          <span class="w3-margin-left">{% trans "Elements" %}</span>
-        </h2>
-      </div>
-      {% if can_manage %}
-        <div class="w3-col s12 m6 w3-right-align">
-          <a href="{% url 'accessionrow_add_specimen' accessionrow.id %}" class="w3-button w3-green w3-round">
-            <i class="fa-solid fa-plus" aria-hidden="true"></i>
-            <span class="w3-hide-small w3-margin-left">{% trans "Add Element" %}</span>
-          </a>
+  {% with merge_elements_open=request.GET.merge_elements == 'open' %}
+    <section class="w3-margin-top" aria-labelledby="specimen-elements-heading">
+      <header class="w3-row w3-padding-16">
+        <div class="w3-col s12 m6">
+          <h2 id="specimen-elements-heading" class="w3-margin-0">
+            <i class="fa-solid fa-bone" aria-hidden="true"></i>
+            <span class="w3-margin-left">{% trans "Elements" %}</span>
+          </h2>
         </div>
+        {% if can_manage %}
+          <div class="w3-col s12 m6 w3-right-align">
+            <div class="w3-bar w3-margin-top-small" role="group" aria-label="{% trans 'Element actions' %}">
+              <a href="{% url 'accessionrow_add_specimen' accessionrow.id %}" class="w3-button w3-green w3-round w3-bar-item">
+                <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                <span class="w3-hide-small w3-margin-left">{% trans "Add Element" %}</span>
+              </a>
+              <button
+                type="button"
+                id="accession-element-merge-toggle"
+                class="w3-button w3-amber w3-round w3-bar-item"
+                aria-expanded="{{ merge_elements_open|yesno:'true,false' }}"
+                aria-controls="accession-element-merge-panel"
+                aria-label="{% trans 'Toggle merge elements panel' %}"
+                data-default-open="{{ merge_elements_open|yesno:'true,false' }}"
+              >
+                <i class="fa-solid fa-object-group" aria-hidden="true"></i>
+                <span class="w3-hide-small w3-margin-left">{% trans "Merge element" %}</span>
+              </button>
+            </div>
+          </div>
+        {% endif %}
+      </header>
+
+      {% if can_manage %}
+        {% include "cms/accession_element_merge.html" with accession_row=accessionrow natureofspecimens=natureofspecimens merge_open=merge_elements_open %}
       {% endif %}
-    </header>
     <div class="w3-responsive">
       <table class="w3-table-all w3-hoverable w3-small">
         <thead>
@@ -219,7 +238,8 @@
         </tbody>
       </table>
     </div>
-  </section>
+    </section>
+  {% endwith %}
 
   <div class="w3-margin-top">
     <a href="{% url 'accession_detail' accessionrow.accession.id %}" class="w3-button w3-light-grey w3-round">
@@ -230,4 +250,51 @@
 </main>
 {% endblock %}
 
+{% block script %}
+  {{ block.super }}
+  <script>
+    (function() {
+      const toggle = document.getElementById("accession-element-merge-toggle");
+      const panel = document.getElementById("accession-element-merge-panel");
+      if (toggle && panel) {
+        const setExpanded = (expanded) => {
+          toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+          panel.classList.toggle("w3-hide", !expanded);
+          panel.setAttribute("aria-hidden", expanded ? "false" : "true");
+        };
+        const defaultOpen = panel.dataset.defaultOpen === "true";
+        setExpanded(defaultOpen);
+        toggle.addEventListener("click", () => {
+          const expanded = toggle.getAttribute("aria-expanded") === "true";
+          setExpanded(!expanded);
+        });
+      }
 
+      const form = document.querySelector('[data-controller="accession-element-merge-form"]');
+      if (form) {
+        form.addEventListener("submit", (event) => {
+          const status = form.querySelector("[data-merge-status]");
+          if (status) {
+            status.hidden = true;
+            status.textContent = "";
+          }
+
+          const target = form.querySelector('input[name="target"]:checked');
+          const sources = Array.from(form.querySelectorAll("[data-merge-source]:checked")).filter(
+            (input) => !target || input.value !== target.value
+          );
+
+          if (!target || sources.length === 0) {
+            event.preventDefault();
+            if (status) {
+              status.hidden = false;
+              status.textContent = target
+                ? "{% trans 'Select at least one source element to merge.' %}"
+                : "{% trans 'Select a target and at least one source element.' %}";
+            }
+          }
+        });
+      }
+    })();
+  </script>
+{% endblock %}
