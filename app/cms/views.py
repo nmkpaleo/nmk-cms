@@ -2060,6 +2060,7 @@ class AccessionRowDetailView(DetailView):
         context['can_manage'] = context['can_edit']
         context['show_inventory_status'] = not is_public_user(self.request.user)
         context['merge_action'] = reverse("accession_merge_elements", args=[self.object.pk])
+        context['merge_elements_open'] = (self.request.GET.get("merge_elements") or "").lower() == "open"
         return context
 
 
