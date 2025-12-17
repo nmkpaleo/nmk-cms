@@ -386,7 +386,7 @@
         {% if not preview_mode and user.is_authenticated %}
           {% if user|has_group:"Collection Managers" %}
             <div class="w3-col s12 m6 w3-right-align">
-              <div class="w3-bar w3-margin-top-small">
+              <div class="w3-bar w3-margin-top-small" role="group" aria-label="{% trans 'Reference actions' %}">
                 <a href="{% url 'accession_add_reference' accession.id %}" class="w3-button w3-green w3-round w3-bar-item">
                   <i class="fa-solid fa-plus" aria-hidden="true"></i>
                   <span class="w3-hide-small w3-margin-left">{% trans "Add reference" %}</span>
@@ -398,6 +398,7 @@
                     class="w3-button w3-amber w3-round w3-bar-item"
                     aria-expanded="{{ reference_merge_open|yesno:'true,false' }}"
                     aria-controls="accession-reference-merge-panel"
+                    aria-label="{% trans 'Toggle merge references panel' %}"
                   >
                     <i class="fa-solid fa-object-group" aria-hidden="true"></i>
                     <span class="w3-hide-small w3-margin-left">{% trans "Merge references" %}</span>
@@ -415,6 +416,8 @@
             id="accession-reference-merge-panel"
             class="w3-card w3-round w3-white w3-padding {% if not reference_merge_open %}w3-hide{% endif %}"
             data-default-open="{{ reference_merge_open|yesno:'true,false' }}"
+            role="region"
+            aria-hidden="{{ reference_merge_open|yesno:'false,true' }}"
             aria-labelledby="accession-reference-merge-heading"
           >
             <div class="w3-row w3-padding-small">
@@ -466,17 +469,17 @@
                     {% endif %}
                   </fieldset>
                 </div>
-                <div class="w3-col s12 m5">
-                  <fieldset class="w3-padding-small w3-border w3-round">
-                    <legend class="w3-small w3-text-grey">{% trans "Target reference" %}</legend>
-                    <p class="w3-small w3-text-gray">{% trans "Pick the record you want to keep after merging." %}</p>
-                    {% for radio in reference_merge_form.target %}
-                      <label class="w3-block w3-padding-small w3-hover-light-grey">
-                        {{ radio.tag }}
-                        <span class="w3-margin-left">{{ radio.choice_label }}</span>
-                      </label>
-                    {% empty %}
-                      <p class="w3-text-gray">{% trans "No references available to select." %}</p>
+              <div class="w3-col s12 m5">
+                <fieldset class="w3-padding-small w3-border w3-round">
+                  <legend class="w3-small w3-text-grey">{% trans "Target reference" %}</legend>
+                  <p class="w3-small w3-text-gray">{% trans "Pick the record you want to keep after merging." %}</p>
+                  {% for radio in reference_merge_form.target %}
+                    <label class="w3-block w3-padding-small w3-hover-light-grey">
+                      {{ radio.tag }}
+                      <span class="w3-margin-left">{{ radio.choice_label }}</span>
+                    </label>
+                  {% empty %}
+                    <p class="w3-text-gray">{% trans "No references available to select." %}</p>
                     {% endfor %}
                     {% if reference_merge_form.target.errors %}
                       <ul class="w3-text-red w3-small w3-margin-top" role="alert">

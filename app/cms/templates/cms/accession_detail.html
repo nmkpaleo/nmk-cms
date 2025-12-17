@@ -220,6 +220,9 @@
   (function () {
     const toggleButton = document.getElementById("accession-reference-merge-toggle");
     const mergePanel = document.getElementById("accession-reference-merge-panel");
+    const mergePanelCheckboxes = mergePanel
+      ? mergePanel.querySelectorAll('input[type="checkbox"][name="selected_ids"]')
+      : null;
 
     function setMergePanel(open) {
       if (!mergePanel || !toggleButton) {
@@ -228,9 +231,14 @@
       if (open) {
         mergePanel.classList.remove("w3-hide");
         toggleButton.setAttribute("aria-expanded", "true");
+        mergePanel.setAttribute("aria-hidden", "false");
+        if (mergePanelCheckboxes && mergePanelCheckboxes.length) {
+          mergePanelCheckboxes[0].focus();
+        }
       } else {
         mergePanel.classList.add("w3-hide");
         toggleButton.setAttribute("aria-expanded", "false");
+        mergePanel.setAttribute("aria-hidden", "true");
       }
     }
 
