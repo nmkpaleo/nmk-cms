@@ -161,7 +161,12 @@
     </div>
   </section>
 
-  {% with merge_elements_open=request.GET.merge_elements == 'open' %}
+  {% with merge_param=request.GET.merge_elements|default_if_none:'' %}
+    {% if merge_param == 'open' %}
+      {% with True as merge_elements_open %}
+    {% else %}
+      {% with False as merge_elements_open %}
+    {% endif %}
     <section class="w3-margin-top" aria-labelledby="specimen-elements-heading">
       <header class="w3-row w3-padding-16">
         <div class="w3-col s12 m6">
@@ -195,7 +200,7 @@
       </header>
 
       {% if can_manage %}
-        {% include "cms/accession_element_merge.html" with accession_row=accessionrow natureofspecimens=natureofspecimens merge_open=merge_elements_open %}
+        {% include "cms/accession_element_merge.html" with accession_row=accessionrow natureofspecimens=natureofspecimens merge_open=merge_elements_open merge_action=merge_action %}
       {% endif %}
     <div class="w3-responsive">
       <table class="w3-table-all w3-hoverable w3-small">
@@ -239,6 +244,7 @@
       </table>
     </div>
     </section>
+      {% endwith %}
   {% endwith %}
 
   <div class="w3-margin-top">
