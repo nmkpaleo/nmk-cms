@@ -896,6 +896,9 @@ class AccessionReferenceForm(BaseW3ModelForm):
     class Meta:
         model = AccessionReference
         fields = ["reference", "page"]
+        help_texts = {
+            "page": _("Use numeric pages, ranges, or figure labels (for example: \"12\", \"12-14\", or \"Fig. 3\".)"),
+        }
         widgets = {
             "reference": ReferenceWidget,
         }
@@ -914,6 +917,9 @@ class AccessionReferenceForm2(BaseW3ModelForm):
     class Meta:
         model = AccessionReference
         fields = ["reference", "page"]
+        help_texts = {
+            "page": _("Use numeric pages, ranges, or figure labels (for example: \"12\", \"12-14\", or \"Fig. 3\".)"),
+        }
 
 
 class FieldSlipForm(BaseW3ModelForm):

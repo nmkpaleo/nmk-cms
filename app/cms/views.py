@@ -4802,8 +4802,24 @@ def add_reference_to_accession(request, accession_id):
 
     else:
         form = AccessionReferenceForm()
-
+    
     return render(request, 'cms/add_accession_reference.html', {'form': form, 'accession': accession})
+
+
+class AccessionReferenceUpdateView(LoginRequiredMixin, CollectionManagerAccessMixin, UpdateView):
+    model = AccessionReference
+    form_class = AccessionReferenceForm
+    template_name = "cms/edit_accession_reference.html"
+    raise_exception = True
+
+    def get_success_url(self):
+        return reverse("accession_detail", args=[self.object.accession_id])
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.setdefault("accession", self.object.accession)
+        context.setdefault("page_title", _("Edit accession reference"))
+        return context
 
 @login_required
 @user_passes_test(is_collection_manager)
