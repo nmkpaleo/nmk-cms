@@ -25,6 +25,7 @@
 - Record the accession field slip modal overlay fix, including accessibility updates to close Select2 dropdowns and hide background content while the dialog is open (CMS-ACC-UI-004).
 - Capture the accession detail QA checklist, coverage command, and rollout/rollback guidance following the layout restructure (T6).
 - Document the accession row print card workflow, including taxonomy fallback handling, print controls, and permission parity with edit actions, in the user guide (T6).
+- Document the accession detail **Merge references** UI for collection managers, aligned with the admin FIELD_SELECTION merge strategy and audit trail (T5).
 - Add QR codes to accession row print cards (big and small) so printouts link back to the specimen detail page, rendered
   server-side with the django-qr-code integration and paired with in-page print controls.
 - Add a reusable Field Slip related accessions section and document the visibility rules for collection managers and superusers (T4).

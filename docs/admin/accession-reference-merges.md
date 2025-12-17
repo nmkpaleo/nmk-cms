@@ -14,6 +14,7 @@ Use the merge tool to consolidate duplicate accession references that point to t
 2. Select at least two rows for the same accession and choose **Merge selected records**.
 3. Pick a target and source on the compare screen. A yellow notice links to the field-selection page once both roles are set.
 4. Follow the **Open field selection merge** link to choose the values to keep.
+5. Alternatively, collection managers can start a merge from the **References** card on an accession detail page. The panel lists only references already linked to the accession, enforces the same permission/flag checks, and hands off to the field-selection step with your chosen target and sources.
 
 ## Choosing field values
 
