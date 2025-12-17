@@ -164,87 +164,165 @@
   {% with merge_param=request.GET.merge_elements|default_if_none:'' %}
     {% if merge_param == 'open' %}
       {% with True as merge_elements_open %}
+        <section class="w3-margin-top" aria-labelledby="specimen-elements-heading">
+          <header class="w3-row w3-padding-16">
+            <div class="w3-col s12 m6">
+              <h2 id="specimen-elements-heading" class="w3-margin-0">
+                <i class="fa-solid fa-bone" aria-hidden="true"></i>
+                <span class="w3-margin-left">{% trans "Elements" %}</span>
+              </h2>
+            </div>
+            {% if can_manage %}
+              <div class="w3-col s12 m6 w3-right-align">
+                <div class="w3-bar w3-margin-top-small" role="group" aria-label="{% trans 'Element actions' %}">
+                  <a href="{% url 'accessionrow_add_specimen' accessionrow.id %}" class="w3-button w3-green w3-round w3-bar-item">
+                    <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                    <span class="w3-hide-small w3-margin-left">{% trans "Add Element" %}</span>
+                  </a>
+                  <button
+                    type="button"
+                    id="accession-element-merge-toggle"
+                    class="w3-button w3-amber w3-round w3-bar-item"
+                    aria-expanded="{{ merge_elements_open|yesno:'true,false' }}"
+                    aria-controls="accession-element-merge-panel"
+                    aria-label="{% trans 'Toggle merge elements panel' %}"
+                    data-default-open="{{ merge_elements_open|yesno:'true,false' }}"
+                  >
+                    <i class="fa-solid fa-object-group" aria-hidden="true"></i>
+                    <span class="w3-hide-small w3-margin-left">{% trans "Merge element" %}</span>
+                  </button>
+                </div>
+              </div>
+            {% endif %}
+          </header>
+
+          {% if can_manage %}
+            {% include "cms/accession_element_merge.html" with accession_row=accessionrow natureofspecimens=natureofspecimens merge_open=merge_elements_open merge_action=merge_action %}
+          {% endif %}
+        <div class="w3-responsive">
+          <table class="w3-table-all w3-hoverable w3-small">
+            <thead>
+              <tr>
+                <th scope="col">{% trans "Element" %}</th>
+                <th scope="col">{% trans "Side" %}</th>
+                <th scope="col">{% trans "Condition" %}</th>
+                <th scope="col">{% trans "Description" %}</th>
+                <th scope="col">{% trans "Portion" %}</th>
+                <th scope="col">{% trans "Fragments" %}</th>
+                {% if can_manage %}
+                  <th scope="col">{% trans "Actions" %}</th>
+                {% endif %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for specimen in natureofspecimens %}
+                <tr>
+                  <td>{{ specimen.element|default:"—" }}</td>
+                  <td>{{ specimen.side|default:"—" }}</td>
+                  <td>{{ specimen.condition|default:"—" }}</td>
+                  <td>{{ specimen.verbatim_element|default:"—" }}</td>
+                  <td>{{ specimen.portion|default:"—" }}</td>
+                  <td>{{ specimen.fragments|default:"—" }}</td>
+                  {% if can_manage %}
+                    <td>
+                      <a href="{% url 'element_edit' specimen.id %}" class="w3-button w3-small w3-blue w3-round" aria-label="{% trans 'Edit element' %}">
+                        <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+                        <span class="w3-hide-small w3-margin-left">{% trans "Edit" %}</span>
+                      </a>
+                    </td>
+                  {% endif %}
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="{% if can_manage %}7{% else %}6{% endif %}" class="w3-center">{% trans "No elements recorded." %}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        </section>
+      {% endwith %}
     {% else %}
       {% with False as merge_elements_open %}
-    {% endif %}
-    <section class="w3-margin-top" aria-labelledby="specimen-elements-heading">
-      <header class="w3-row w3-padding-16">
-        <div class="w3-col s12 m6">
-          <h2 id="specimen-elements-heading" class="w3-margin-0">
-            <i class="fa-solid fa-bone" aria-hidden="true"></i>
-            <span class="w3-margin-left">{% trans "Elements" %}</span>
-          </h2>
-        </div>
-        {% if can_manage %}
-          <div class="w3-col s12 m6 w3-right-align">
-            <div class="w3-bar w3-margin-top-small" role="group" aria-label="{% trans 'Element actions' %}">
-              <a href="{% url 'accessionrow_add_specimen' accessionrow.id %}" class="w3-button w3-green w3-round w3-bar-item">
-                <i class="fa-solid fa-plus" aria-hidden="true"></i>
-                <span class="w3-hide-small w3-margin-left">{% trans "Add Element" %}</span>
-              </a>
-              <button
-                type="button"
-                id="accession-element-merge-toggle"
-                class="w3-button w3-amber w3-round w3-bar-item"
-                aria-expanded="{{ merge_elements_open|yesno:'true,false' }}"
-                aria-controls="accession-element-merge-panel"
-                aria-label="{% trans 'Toggle merge elements panel' %}"
-                data-default-open="{{ merge_elements_open|yesno:'true,false' }}"
-              >
-                <i class="fa-solid fa-object-group" aria-hidden="true"></i>
-                <span class="w3-hide-small w3-margin-left">{% trans "Merge element" %}</span>
-              </button>
+        <section class="w3-margin-top" aria-labelledby="specimen-elements-heading">
+          <header class="w3-row w3-padding-16">
+            <div class="w3-col s12 m6">
+              <h2 id="specimen-elements-heading" class="w3-margin-0">
+                <i class="fa-solid fa-bone" aria-hidden="true"></i>
+                <span class="w3-margin-left">{% trans "Elements" %}</span>
+              </h2>
             </div>
-          </div>
-        {% endif %}
-      </header>
-
-      {% if can_manage %}
-        {% include "cms/accession_element_merge.html" with accession_row=accessionrow natureofspecimens=natureofspecimens merge_open=merge_elements_open merge_action=merge_action %}
-      {% endif %}
-    <div class="w3-responsive">
-      <table class="w3-table-all w3-hoverable w3-small">
-        <thead>
-          <tr>
-            <th scope="col">{% trans "Element" %}</th>
-            <th scope="col">{% trans "Side" %}</th>
-            <th scope="col">{% trans "Condition" %}</th>
-            <th scope="col">{% trans "Description" %}</th>
-            <th scope="col">{% trans "Portion" %}</th>
-            <th scope="col">{% trans "Fragments" %}</th>
             {% if can_manage %}
-              <th scope="col">{% trans "Actions" %}</th>
-            {% endif %}
-          </tr>
-        </thead>
-        <tbody>
-          {% for specimen in natureofspecimens %}
-            <tr>
-              <td>{{ specimen.element|default:"—" }}</td>
-              <td>{{ specimen.side|default:"—" }}</td>
-              <td>{{ specimen.condition|default:"—" }}</td>
-              <td>{{ specimen.verbatim_element|default:"—" }}</td>
-              <td>{{ specimen.portion|default:"—" }}</td>
-              <td>{{ specimen.fragments|default:"—" }}</td>
-              {% if can_manage %}
-                <td>
-                  <a href="{% url 'element_edit' specimen.id %}" class="w3-button w3-small w3-blue w3-round" aria-label="{% trans 'Edit element' %}">
-                    <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
-                    <span class="w3-hide-small w3-margin-left">{% trans "Edit" %}</span>
+              <div class="w3-col s12 m6 w3-right-align">
+                <div class="w3-bar w3-margin-top-small" role="group" aria-label="{% trans 'Element actions' %}">
+                  <a href="{% url 'accessionrow_add_specimen' accessionrow.id %}" class="w3-button w3-green w3-round w3-bar-item">
+                    <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                    <span class="w3-hide-small w3-margin-left">{% trans "Add Element" %}</span>
                   </a>
-                </td>
-              {% endif %}
-            </tr>
-          {% empty %}
-            <tr>
-              <td colspan="{% if can_manage %}7{% else %}6{% endif %}" class="w3-center">{% trans "No elements recorded." %}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    </section>
+                  <button
+                    type="button"
+                    id="accession-element-merge-toggle"
+                    class="w3-button w3-amber w3-round w3-bar-item"
+                    aria-expanded="{{ merge_elements_open|yesno:'true,false' }}"
+                    aria-controls="accession-element-merge-panel"
+                    aria-label="{% trans 'Toggle merge elements panel' %}"
+                    data-default-open="{{ merge_elements_open|yesno:'true,false' }}"
+                  >
+                    <i class="fa-solid fa-object-group" aria-hidden="true"></i>
+                    <span class="w3-hide-small w3-margin-left">{% trans "Merge element" %}</span>
+                  </button>
+                </div>
+              </div>
+            {% endif %}
+          </header>
+
+          {% if can_manage %}
+            {% include "cms/accession_element_merge.html" with accession_row=accessionrow natureofspecimens=natureofspecimens merge_open=merge_elements_open merge_action=merge_action %}
+          {% endif %}
+        <div class="w3-responsive">
+          <table class="w3-table-all w3-hoverable w3-small">
+            <thead>
+              <tr>
+                <th scope="col">{% trans "Element" %}</th>
+                <th scope="col">{% trans "Side" %}</th>
+                <th scope="col">{% trans "Condition" %}</th>
+                <th scope="col">{% trans "Description" %}</th>
+                <th scope="col">{% trans "Portion" %}</th>
+                <th scope="col">{% trans "Fragments" %}</th>
+                {% if can_manage %}
+                  <th scope="col">{% trans "Actions" %}</th>
+                {% endif %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for specimen in natureofspecimens %}
+                <tr>
+                  <td>{{ specimen.element|default:"—" }}</td>
+                  <td>{{ specimen.side|default:"—" }}</td>
+                  <td>{{ specimen.condition|default:"—" }}</td>
+                  <td>{{ specimen.verbatim_element|default:"—" }}</td>
+                  <td>{{ specimen.portion|default:"—" }}</td>
+                  <td>{{ specimen.fragments|default:"—" }}</td>
+                  {% if can_manage %}
+                    <td>
+                      <a href="{% url 'element_edit' specimen.id %}" class="w3-button w3-small w3-blue w3-round" aria-label="{% trans 'Edit element' %}">
+                        <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+                        <span class="w3-hide-small w3-margin-left">{% trans "Edit" %}</span>
+                      </a>
+                    </td>
+                  {% endif %}
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="{% if can_manage %}7{% else %}6{% endif %}" class="w3-center">{% trans "No elements recorded." %}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        </section>
       {% endwith %}
+    {% endif %}
   {% endwith %}
 
   <div class="w3-margin-top">
