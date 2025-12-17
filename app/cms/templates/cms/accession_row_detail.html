@@ -176,18 +176,19 @@
               <i class="fa-solid fa-plus" aria-hidden="true"></i>
               <span class="w3-hide-small w3-margin-left">{% trans "Add Element" %}</span>
             </a>
-            <button
-              type="button"
+            <a
+              href="{{ request.get_full_path }}{% if request.GET %}&{% else %}?{% endif %}merge_elements=open#accession-element-merge-panel"
               id="accession-element-merge-toggle"
               class="w3-button w3-amber w3-round w3-bar-item"
               aria-expanded="{{ merge_elements_open|yesno:'true,false' }}"
               aria-controls="accession-element-merge-panel"
               aria-label="{% trans 'Toggle merge elements panel' %}"
               data-default-open="{{ merge_elements_open|yesno:'true,false' }}"
+              role="button"
             >
               <i class="fa-solid fa-object-group" aria-hidden="true"></i>
               <span class="w3-hide-small w3-margin-left">{% trans "Merge element" %}</span>
-            </button>
+            </a>
           </div>
         </div>
       {% endif %}
@@ -262,7 +263,8 @@
         };
         const defaultOpen = panel.dataset.defaultOpen === "true";
         setExpanded(defaultOpen);
-        toggle.addEventListener("click", () => {
+        toggle.addEventListener("click", (event) => {
+          event.preventDefault();
           const expanded = toggle.getAttribute("aria-expanded") === "true";
           setExpanded(!expanded);
         });
