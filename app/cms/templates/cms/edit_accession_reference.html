@@ -7,6 +7,20 @@
   {% trans "Update reference" as update_reference_label %}
   {% trans "Edit accession reference" as edit_reference_title %}
   <main class="w3-container w3-margin-top w3-margin-bottom" role="main">
+    <section
+      class="w3-panel w3-pale-blue w3-leftbar w3-border-blue w3-round-large"
+      role="note"
+      aria-labelledby="accession-reference-page-help-title"
+      aria-describedby="accession-reference-page-help-body"
+    >
+      <h2 id="accession-reference-page-help-title" class="w3-margin-top w3-margin-bottom">
+        <i class="fa-solid fa-file-lines" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "How to enter Page(s)" %}</span>
+      </h2>
+      <p id="accession-reference-page-help-body" class="w3-margin-0">
+        {% blocktrans %}Use numeric pages, ranges, or figure labels (for example: "12", "12-14", or "Fig. 3").{% endblocktrans %}
+      </p>
+    </section>
     {% include "includes/base_form.html" with form=form submit_label=update_reference_label submit_icon="fa-pen-to-square" method="post" action=request.path title=edit_reference_title access=accession heading_id="edit-accession-reference-form" %}
     <div class="w3-margin-top">
       <a href="{% url 'accession_detail' accession.id %}" class="w3-button w3-white w3-border w3-round-large w3-hover-light-grey">
