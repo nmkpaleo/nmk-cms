@@ -386,14 +386,122 @@
         {% if not preview_mode and user.is_authenticated %}
           {% if user|has_group:"Collection Managers" %}
             <div class="w3-col s12 m6 w3-right-align">
-              <a href="{% url 'accession_add_reference' accession.id %}" class="w3-button w3-green w3-round">
-                <i class="fa-solid fa-plus" aria-hidden="true"></i>
-                <span class="w3-hide-small w3-margin-left">{% trans "Add reference" %}</span>
-              </a>
+              <div class="w3-bar w3-margin-top-small" role="group" aria-label="{% trans 'Reference actions' %}">
+                <a href="{% url 'accession_add_reference' accession.id %}" class="w3-button w3-green w3-round w3-bar-item">
+                  <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                  <span class="w3-hide-small w3-margin-left">{% trans "Add reference" %}</span>
+                </a>
+                {% if reference_merge_form %}
+                  <button
+                    type="button"
+                    id="accession-reference-merge-toggle"
+                    class="w3-button w3-amber w3-round w3-bar-item"
+                    aria-expanded="{{ reference_merge_open|yesno:'true,false' }}"
+                    aria-controls="accession-reference-merge-panel"
+                    aria-label="{% trans 'Toggle merge references panel' %}"
+                  >
+                    <i class="fa-solid fa-object-group" aria-hidden="true"></i>
+                    <span class="w3-hide-small w3-margin-left">{% trans "Merge references" %}</span>
+                  </button>
+                {% endif %}
+              </div>
             </div>
           {% endif %}
         {% endif %}
       </header>
+
+      {% if reference_merge_form %}
+        <div id="accession-reference-merge" class="w3-margin-top">
+          <div
+            id="accession-reference-merge-panel"
+            class="w3-card w3-round w3-white w3-padding {% if not reference_merge_open %}w3-hide{% endif %}"
+            data-default-open="{{ reference_merge_open|yesno:'true,false' }}"
+            role="region"
+            aria-hidden="{{ reference_merge_open|yesno:'false,true' }}"
+            aria-labelledby="accession-reference-merge-heading"
+          >
+            <div class="w3-row w3-padding-small">
+              <div class="w3-col s12 m8">
+                <h3 id="accession-reference-merge-heading" class="w3-margin-top">
+                  <i class="fa-solid fa-object-group" aria-hidden="true"></i>
+                  <span class="w3-margin-left">{% trans "Merge accession references" %}</span>
+                </h3>
+                <p class="w3-text-gray">
+                  {% trans "Select duplicate references linked to this accession, choose a target record, and review field selections in the next step." %}
+                </p>
+              </div>
+              <div class="w3-col s12 m4 w3-right-align">
+                <a href="#accession-reference-merge" class="w3-button w3-light-grey w3-round">
+                  <i class="fa-solid fa-circle-question" aria-hidden="true"></i>
+                  <span class="w3-hide-small w3-margin-left">{% trans "Need help?" %}</span>
+                </a>
+              </div>
+            </div>
+            <form
+              method="post"
+              action="{% url 'accession_merge_references' accession.pk %}"
+              class="w3-margin-top"
+              aria-describedby="accession-reference-merge-heading"
+            >
+              {% csrf_token %}
+              <input type="hidden" name="stage" value="prepare" />
+              <div class="w3-row-padding">
+                <div class="w3-col s12 m7">
+                  <fieldset class="w3-padding-small w3-border w3-round" aria-describedby="accession-reference-selection-hint">
+                    <legend class="w3-small w3-text-grey">{% trans "References to merge" %}</legend>
+                    <p id="accession-reference-selection-hint" class="w3-small w3-text-gray">
+                      {% trans "Pick at least two references linked to this accession." %}
+                    </p>
+                    {% for checkbox in reference_merge_form.selected_ids %}
+                      <label class="w3-block w3-padding-small w3-hover-light-grey">
+                        {{ checkbox.tag }}
+                        <span class="w3-margin-left">{{ checkbox.choice_label }}</span>
+                      </label>
+                    {% empty %}
+                      <p class="w3-text-gray">{% trans "No references available to merge." %}</p>
+                    {% endfor %}
+                    {% if reference_merge_form.selected_ids.errors %}
+                      <ul class="w3-text-red w3-small w3-margin-top" role="alert">
+                        {% for error in reference_merge_form.selected_ids.errors %}
+                          <li>{{ error }}</li>
+                        {% endfor %}
+                      </ul>
+                    {% endif %}
+                  </fieldset>
+                </div>
+              <div class="w3-col s12 m5">
+                <fieldset class="w3-padding-small w3-border w3-round">
+                  <legend class="w3-small w3-text-grey">{% trans "Target reference" %}</legend>
+                  <p class="w3-small w3-text-gray">{% trans "Pick the record you want to keep after merging." %}</p>
+                  {% for radio in reference_merge_form.target %}
+                    <label class="w3-block w3-padding-small w3-hover-light-grey">
+                      {{ radio.tag }}
+                      <span class="w3-margin-left">{{ radio.choice_label }}</span>
+                    </label>
+                  {% empty %}
+                    <p class="w3-text-gray">{% trans "No references available to select." %}</p>
+                    {% endfor %}
+                    {% if reference_merge_form.target.errors %}
+                      <ul class="w3-text-red w3-small w3-margin-top" role="alert">
+                        {% for error in reference_merge_form.target.errors %}
+                          <li>{{ error }}</li>
+                        {% endfor %}
+                      </ul>
+                    {% endif %}
+                  </fieldset>
+                </div>
+              </div>
+              <div class="w3-margin-top">
+                <button type="submit" class="w3-button w3-blue w3-round">
+                  <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+                  <span class="w3-margin-left">{% trans "Review selected references" %}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      {% endif %}
+
       {% if references %}
         <div class="w3-responsive">
           <table class="w3-table-all w3-hoverable w3-small">
@@ -497,4 +605,3 @@
     </section>
   </div>
 </section>
-

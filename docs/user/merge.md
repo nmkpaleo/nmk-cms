@@ -29,6 +29,10 @@ The merge tool consolidates duplicate records into a single entry and now suppor
 - **Element:** name and parent hierarchy require explicit choices to avoid cycles; keep the target’s parent unless you intentionally reparent during the merge.
 - **Accession Reference:** reference text and page values require explicit choices and only merge when every candidate belongs to the same accession.
 
+### Accession detail shortcut for accession references
+
+- Collection managers can merge duplicate accession references from the accession detail page without visiting the admin. Open an accession, expand **Merge references**, select at least two linked references plus a target, and continue to the field-selection step to choose the reference and page values to keep. The flow reuses the same merge engine and audit trail as the admin action.
+
 ## Tips and troubleshooting
 
 - If you see a 503 or 403 response, confirm the merge feature flag is enabled and that you are logged in with staff permissions.
