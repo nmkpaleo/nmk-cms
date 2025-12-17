@@ -758,7 +758,13 @@ class AccessionReferenceAdmin(
 ):
     resource_class = AccessionReferenceResource
     list_display = ('collection_abbreviation', 'specimen_prefix_abbreviation', 'specimen_number', 'page', 'reference')
-    search_fields = ('accession__specimen_no', 'specimen_suffix', 'reference',)
+    search_fields = (
+        'accession__specimen_no',
+        'specimen_suffix',
+        'reference__title',
+        'page',
+    )
+    list_filter = ('page', 'reference')
     ordering = ('accession__collection__abbreviation', 'accession__specimen_prefix__abbreviation', 'accession__specimen_no',)
 
     merge_form_class = MergeAdminMixin.merge_form_class
@@ -1627,4 +1633,3 @@ class MergeLogAdmin(admin.ModelAdmin):
         "created_by",
         "modified_by",
     )
-

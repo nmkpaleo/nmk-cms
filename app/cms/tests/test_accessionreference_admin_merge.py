@@ -157,6 +157,10 @@ class AccessionReferenceAdminMergeTests(TransactionTestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn(self.changelist_url, response["Location"])
 
+    def test_admin_exposes_page_filters_and_search(self):
+        self.assertIn("page", self.model_admin.search_fields)
+        self.assertIn("page", self.model_admin.list_filter)
+
     def test_merge_view_merges_records_with_permission(self):
         user = self._create_user(with_permission=True)
         target, source = self._create_references()
