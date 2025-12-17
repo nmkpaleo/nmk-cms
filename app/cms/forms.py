@@ -760,6 +760,83 @@ class FieldSlipMergeForm(BaseW3Form):
         return cleaned_data
 
 
+class AccessionReferenceMergeSelectionForm(BaseW3Form):
+    """Select accession reference candidates and a target for merge."""
+
+    selected_ids = forms.MultipleChoiceField(
+        choices=(),
+        widget=forms.CheckboxSelectMultiple,
+        label=_("Select references to merge"),
+    )
+    target = forms.ChoiceField(
+        choices=(),
+        widget=forms.RadioSelect,
+        label=_("Choose the target reference"),
+    )
+
+    def __init__(self, *args, accession: Accession, **kwargs) -> None:
+        self.accession = accession
+        self._choices: list[tuple[str, str]] = []
+        super().__init__(*args, **kwargs)
+        references = (
+            accession.accessionreference_set.select_related("reference")
+            .order_by("reference__year", "reference__first_author", "pk")
+        )
+
+        for ref in references:
+            label_parts = [
+                ref.reference.year if ref.reference else "",
+                ref.reference.first_author if ref.reference else "",
+                ref.reference.title if ref.reference else "",
+                _("Page %(page)s") % {"page": ref.page} if ref.page else "",
+            ]
+            label = " • ".join(part for part in label_parts if part)
+            if not label:
+                label = _("Accession reference %(pk)s") % {"pk": ref.pk}
+            self._choices.append((str(ref.pk), label))
+
+        self.fields["selected_ids"].choices = self._choices
+        self.fields["target"].choices = self._choices
+        if not self.fields["target"].initial and self._choices:
+            self.fields["target"].initial = self._choices[0][0]
+
+    def clean(self):
+        cleaned = super().clean()
+        selected_ids = cleaned.get("selected_ids") or []
+        target = cleaned.get("target")
+
+        valid_ids = {choice[0] for choice in self._choices}
+        ordered_selected: list[str] = []
+        for raw_id in self.data.getlist("selected_ids"):
+            if raw_id in valid_ids and raw_id not in ordered_selected:
+                ordered_selected.append(raw_id)
+        if ordered_selected:
+            cleaned["selected_ids"] = ordered_selected
+
+        if not selected_ids:
+            self.add_error("selected_ids", _("Select at least two references to merge."))
+            return cleaned
+        if len(selected_ids) < 2:
+            self.add_error("selected_ids", _("Select at least two references to merge."))
+
+        invalid = [value for value in selected_ids if value not in valid_ids]
+        if invalid:
+            self.add_error(
+                "selected_ids",
+                _("One or more selected references are not linked to this accession."),
+            )
+
+        if target and target not in valid_ids:
+            self.add_error("target", _("Choose a valid target reference."))
+        if target and target not in selected_ids:
+            self.add_error(
+                "target",
+                _("The target reference must be included in the merge selection."),
+            )
+
+        return cleaned
+
+
 class AccessionReferenceFieldSelectionForm(FieldSelectionForm):
     """FIELD_SELECTION merge form for :class:`AccessionReference` candidates."""
 

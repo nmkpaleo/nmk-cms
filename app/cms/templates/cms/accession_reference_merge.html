@@ -1,0 +1,126 @@
+{% extends "base_generic.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Merge accession references" %}{% endblock %}
+
+{% block content %}
+<main class="w3-container w3-margin-top" role="main">
+  <header class="w3-row w3-padding-16 w3-white w3-round-large w3-border-bottom" aria-labelledby="accession-reference-merge-title">
+    <div class="w3-col s12 m8">
+      <h1 id="accession-reference-merge-title" class="w3-margin-0">
+        {% trans "Merge accession references" %}
+      </h1>
+      <p class="w3-text-gray">
+        {% blocktrans with accession_number=accession %}Accession {{ accession_number }}{% endblocktrans %}
+      </p>
+    </div>
+    <div class="w3-col s12 m4 w3-right-align w3-margin-top">
+      <a href="{{ cancel_url }}" class="w3-button w3-light-grey w3-round">
+        <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "Back to accession" %}</span>
+      </a>
+    </div>
+  </header>
+
+  <section class="w3-margin-top w3-card w3-round w3-white w3-padding" aria-labelledby="merge-summary-heading">
+    <div class="w3-row">
+      <div class="w3-col s12 m7">
+        <h2 id="merge-summary-heading" class="w3-margin-top">
+          <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+          <span class="w3-margin-left">{% trans "Selected references" %}</span>
+        </h2>
+        <p class="w3-text-gray">
+          {% trans "Review the target and sources, then pick the preferred values for each field." %}
+        </p>
+      </div>
+      <div class="w3-col s12 m5 w3-right-align w3-margin-top">
+        <span class="w3-tag w3-blue w3-round w3-small">{% trans "Target" %}</span>
+        <span class="w3-tag w3-amber w3-round w3-small w3-margin-left">{% trans "Source" %}</span>
+      </div>
+    </div>
+    <ul class="w3-ul w3-border w3-round w3-margin-top">
+      {% for candidate in selected_candidates %}
+        <li class="w3-padding-small">
+          {% if target_id == candidate.pk|stringformat:"s" %}
+            <span class="w3-tag w3-blue w3-round w3-small w3-margin-right">{% trans "Target" %}</span>
+          {% else %}
+            <span class="w3-tag w3-amber w3-round w3-small w3-margin-right">{% trans "Source" %}</span>
+          {% endif %}
+          <span class="w3-text-bold">{{ candidate.reference.title|default:_("Untitled reference") }}</span>
+          <span class="w3-text-gray w3-small w3-margin-left">
+            {{ candidate.reference.first_author|default:"" }} {{ candidate.reference.year|default:"" }}{% if candidate.page %} · {% trans "Page" %} {{ candidate.page }}{% endif %}
+          </span>
+        </li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section class="w3-margin-top w3-card w3-round w3-white w3-padding" aria-labelledby="field-selection-heading">
+    <h2 id="field-selection-heading" class="w3-margin-top">
+      <i class="fa-solid fa-list-check" aria-hidden="true"></i>
+      <span class="w3-margin-left">{% trans "Select preferred values" %}</span>
+    </h2>
+    {% if field_selection_form.non_field_errors %}
+      <ul class="w3-text-red w3-small" role="alert">
+        {% for error in field_selection_form.non_field_errors %}
+          <li>{{ error }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+    <form
+      method="post"
+      action="{% url 'accession_merge_references' accession.pk %}"
+      class="w3-margin-top"
+      aria-describedby="field-selection-heading"
+    >
+      {% csrf_token %}
+      <input type="hidden" name="stage" value="confirm" />
+      <input type="hidden" name="target" value="{{ target_id }}" />
+      {% for selected_id in selected_ids %}
+        <input type="hidden" name="selected_ids" value="{{ selected_id }}" />
+      {% endfor %}
+
+      {% for option in field_selection_form.field_options %}
+        <fieldset class="w3-margin-top w3-padding w3-round w3-border">
+          <legend class="w3-small w3-text-grey">{{ option.label }}</legend>
+          {% if option.bound_field.errors %}
+            <ul class="w3-text-red w3-small" role="alert">
+              {% for error in option.bound_field.errors %}
+                <li>{{ error }}</li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+          <div class="w3-margin-top" role="radiogroup" aria-label="{{ option.label }}">
+            {% for choice in option.choices %}
+              <label class="w3-block w3-padding-small w3-hover-light-grey">
+                <input
+                  type="radio"
+                  name="{{ option.field_name }}"
+                  value="{{ choice.key }}"
+                  {% if option.bound_field.value == choice.key %}checked="checked"{% endif %}
+                />
+                <span class="w3-margin-left">{{ choice.label }}</span>
+                <span class="w3-margin-left w3-text-gray">{{ choice.value|default:"—" }}</span>
+                {% if choice.is_target %}
+                  <span class="w3-tag w3-blue w3-round w3-small w3-margin-left">{% trans "Target" %}</span>
+                {% endif %}
+              </label>
+            {% endfor %}
+          </div>
+        </fieldset>
+      {% endfor %}
+
+      <div class="w3-margin-top">
+        <a href="{{ cancel_url }}" class="w3-button w3-light-grey w3-round">
+          <i class="fa-solid fa-circle-xmark" aria-hidden="true"></i>
+          <span class="w3-margin-left">{% trans "Cancel" %}</span>
+        </a>
+        <button type="submit" class="w3-button w3-blue w3-round w3-margin-left">
+          <i class="fa-solid fa-check" aria-hidden="true"></i>
+          <span class="w3-margin-left">{% trans "Merge selected references" %}</span>
+        </button>
+      </div>
+    </form>
+  </section>
+</main>
+{% endblock %}

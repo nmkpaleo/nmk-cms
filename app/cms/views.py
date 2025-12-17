@@ -58,7 +58,7 @@ from django.http import Http404, HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse_lazy, reverse
 from django.utils import timezone
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext_lazy as _, ngettext
 from django.utils.dateparse import parse_date, parse_datetime
 from django.utils.timezone import now
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, FormView, TemplateView
@@ -78,6 +78,7 @@ from cms.forms import (
     AccessionMediaUploadForm,
     AccessionRowSpecimenForm,
     AccessionRowUpdateForm,
+    AccessionReferenceMergeSelectionForm,
     AccessionReferenceForm,
     AddAccessionRowForm,
     DrawerRegisterForm,
@@ -148,6 +149,10 @@ from django.db.models import Count
 
 
 from cms.merge import MERGE_REGISTRY, MergeMixin, merge_records
+from cms.merge.services import (
+    build_accession_reference_field_selection_form,
+    merge_accession_reference_candidates,
+)
 from cms.merge.fuzzy import score_candidates
 from cms.resources import FieldSlipResource
 from .utils import build_accession_identification_maps, build_history_entries
@@ -1000,6 +1005,125 @@ class AccessionFieldSlipMergeView(LoginRequiredMixin, PermissionRequiredMixin, V
         )
         return redirect(f"{selection_url}?{query}")
 
+
+class AccessionReferenceMergeView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = "cms.can_merge"
+    raise_exception = True
+    http_method_names = ["post"]
+    template_name = "cms/accession_reference_merge.html"
+
+    def get_accession(self, accession_id: int) -> Accession:
+        return get_object_or_404(
+            Accession.objects.prefetch_related(
+                Prefetch(
+                    "accessionreference_set",
+                    queryset=AccessionReference.objects.select_related("reference"),
+                )
+            ),
+            pk=accession_id,
+        )
+
+    def handle_no_permission(self):
+        if self.raise_exception:
+            return super().handle_no_permission()
+        return redirect("login")
+
+    def _detail_url(self, accession: Accession) -> str:
+        return reverse("accession_detail", args=[accession.pk])
+
+    def post(self, request, accession_id: int, *args, **kwargs):
+        accession = self.get_accession(accession_id)
+        detail_url = f"{self._detail_url(accession)}#accession-reference-merge"
+
+        if not getattr(settings, "MERGE_TOOL_FEATURE", False):
+            messages.error(
+                request,
+                _("Accession reference merging requires the merge tool to be enabled."),
+            )
+            return redirect(detail_url)
+
+        if not request.user.is_staff:
+            return HttpResponseForbidden()
+
+        selection_form = AccessionReferenceMergeSelectionForm(
+            accession=accession, data=request.POST
+        )
+        if not selection_form.is_valid():
+            for field, errors in selection_form.errors.items():
+                label = selection_form.fields.get(field).label if field in selection_form.fields else field
+                for error in errors:
+                    messages.error(
+                        request,
+                        _("%(field)s: %(error)s") % {"field": label, "error": error},
+                    )
+            return redirect(f"{self._detail_url(accession)}?merge_refs=open#accession-reference-merge")
+
+        selected_ids = selection_form.cleaned_data["selected_ids"]
+        target_id = selection_form.cleaned_data["target"]
+        stage = (request.POST.get("stage") or "prepare").lower()
+
+        try:
+            field_selection_form = build_accession_reference_field_selection_form(
+                candidate_ids=selected_ids,
+                target_id=target_id,
+                data=request.POST if stage == "confirm" else None,
+            )
+        except ValidationError as exc:
+            for message in exc.messages:
+                messages.error(request, message)
+            return redirect(detail_url)
+
+        selected_candidates = list(
+            accession.accessionreference_set.filter(pk__in=selected_ids).select_related("reference")
+        )
+        selected_candidates.sort(key=lambda ref: selected_ids.index(str(ref.pk)))
+
+        if stage != "confirm" or not field_selection_form.is_valid():
+            status = 400 if stage == "confirm" else 200
+            return render(
+                request,
+                self.template_name,
+                {
+                    "accession": accession,
+                    "selected_ids": selected_ids,
+                    "selected_candidates": selected_candidates,
+                    "target_id": str(target_id),
+                    "field_selection_form": field_selection_form,
+                    "cancel_url": detail_url,
+                },
+                status=status,
+            )
+
+        target = next((ref for ref in selected_candidates if str(ref.pk) == str(target_id)), None)
+        sources = [ref for ref in selected_candidates if str(ref.pk) != str(target_id)]
+
+        if target is None or not sources:
+            messages.error(
+                request,
+                _("Select a valid target and at least one source reference to merge."),
+            )
+            return redirect(detail_url)
+
+        with transaction.atomic():
+            merge_results = merge_accession_reference_candidates(
+                target=target,
+                sources=sources,
+                form=field_selection_form,
+                user=request.user,
+            )
+
+        messages.success(
+            request,
+            ngettext(
+                "Merged %(count)d reference into %(target)s.",
+                "Merged %(count)d references into %(target)s.",
+                len(merge_results),
+            )
+            % {"count": len(merge_results), "target": target},
+        )
+        return redirect(self._detail_url(accession))
+
+
 def create_fieldslip_for_accession(request, pk):
     """ Opens a modal for FieldSlip creation and links it to an Accession """
     accession = get_object_or_404(Accession, pk=pk)
@@ -1689,6 +1813,19 @@ class AccessionDetailView(DetailView):
 
         if self.request.user.has_perm("cms.can_merge") and len(related_fieldslips) >= 2:
             context["merge_fieldslip_form"] = FieldSlipMergeForm(accession=accession)
+
+        if self.request.user.has_perm("cms.can_merge") and len(references) >= 2:
+            initial_selection = [str(ref.pk) for ref in references[:2]]
+            context["reference_merge_form"] = AccessionReferenceMergeSelectionForm(
+                accession=accession,
+                initial={
+                    "selected_ids": initial_selection,
+                    "target": initial_selection[0] if initial_selection else None,
+                },
+            )
+            context["reference_merge_open"] = (
+                self.request.GET.get("merge_refs") == "open"
+            )
 
         return context
 

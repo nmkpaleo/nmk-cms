@@ -228,7 +228,7 @@ class AccessionFieldSlipMergeViewTests(TransactionTestCase):
         self.assertContains(response, "name=\"source\"")
 
         merge_form = FieldSlipMergeForm(accession=accession)
-        self.assertQuerysetEqual(
+        self.assertQuerySetEqual(
             merge_form.fields["target"].queryset.order_by("pk"),
             FieldSlip.objects.filter(pk__in=[target.pk, source.pk]).order_by("pk"),
             transform=lambda obj: obj,
