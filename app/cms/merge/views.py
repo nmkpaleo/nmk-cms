@@ -36,6 +36,7 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
     http_method_names = ["get", "post"]
     form_class = FieldSelectionForm
     model: type[MergeMixin] | None = None
+    action_url_name = "merge:merge_field_selection"
     raise_exception = True
 
     def dispatch(self, request: HttpRequest, *args, **kwargs):
@@ -46,25 +47,13 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
         return super().dispatch(request, *args, **kwargs)
 
     def get(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
-        try:
-            model = self.get_model(request)
-        except Exception as exc:  # pragma: no cover - defensive
-            logging.exception("Exception in get_model")
-            return HttpResponseBadRequest("An internal error has occurred.")
+        context = self._build_context(request, *args, **kwargs)
+        if isinstance(context, HttpResponse):
+            return context
 
-        if model is Element and not isinstance(self, ElementFieldSelectionView):
-            return ElementFieldSelectionView.as_view()(request, *args, **kwargs)
-
-        try:
-            candidates, target = self.get_candidates(request, model)
-        except Exception as exc:  # pragma: no cover - defensive
-            logging.exception("Exception in get_candidates")
-            return HttpResponseBadRequest("An internal error has occurred.")
-        form = self.form_class(
-            model=model,
-            merge_fields=self.get_mergeable_fields(model),
-            candidates=candidates,
-        )
+        form = context["form"]
+        candidates = context["candidates"]
+        target = context["target"]
 
         if self._wants_json(request):
             payload = {
@@ -79,41 +68,15 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
             }
             return JsonResponse(payload)
 
-        return render(
-            request,
-            "merge/per_field_strategy.html",
-            {
-                "form": form,
-                "model_label": model._meta.label,
-                "target_id": target.key,
-                "candidate_ids": ",".join(candidate.key for candidate in candidates),
-                "action_url": reverse("merge:merge_field_selection"),
-                "cancel_url": request.GET.get("cancel") or request.META.get("HTTP_REFERER", ""),
-            },
-        )
+        return render(request, "merge/per_field_strategy.html", context)
 
     def post(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
-        try:
-            model = self.get_model(request)
-        except Exception as exc:  # pragma: no cover - defensive
-            logging.exception("Exception in get_model")
-            return HttpResponseBadRequest("An internal error has occurred.")
-
-        if model is Element and not isinstance(self, ElementFieldSelectionView):
-            return ElementFieldSelectionView.as_view()(request, *args, **kwargs)
-
-        try:
-            candidates, target = self.get_candidates(request, model)
-        except Exception as exc:  # pragma: no cover - defensive
-            logging.exception("Exception in get_candidates")
-            return HttpResponseBadRequest("An internal error has occurred.")
-
-        form = self.form_class(
-            model=model,
-            merge_fields=self.get_mergeable_fields(model),
-            candidates=candidates,
-            data=request.POST,
-        )
+        context = self._build_context(request, *args, data=request.POST, **kwargs)
+        if isinstance(context, HttpResponse):
+            return context
+        form = context["form"]
+        candidates = context["candidates"]
+        target = context["target"]
 
         if not form.is_valid():
             if self._wants_json(request):
@@ -121,15 +84,7 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
             return render(
                 request,
                 "merge/per_field_strategy.html",
-                {
-                    "form": form,
-                    "model_label": model._meta.label,
-                    "target_id": target.key,
-                    "candidate_ids": ",".join(candidate.key for candidate in candidates),
-                    "action_url": reverse("merge:merge_field_selection"),
-                    "cancel_url": request.POST.get("cancel")
-                    or request.META.get("HTTP_REFERER", ""),
-                },
+                context,
                 status=400,
             )
 
@@ -137,30 +92,21 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
         if not sources:
             return HttpResponseBadRequest("A source record must be provided for merging.")
 
-        strategy_map = form.build_strategy_map()
         merge_results = []
         target_instance = target.instance
 
         with transaction.atomic():
             for source_candidate in sources:
-                merge_result = merge_records(
+                merge_result = self.perform_merge(
+                    form=form,
                     source=source_candidate.instance,
                     target=target_instance,
-                    strategy_map=strategy_map,
-                    user=request.user,
+                    request=request,
                 )
                 merge_results.append((source_candidate, merge_result))
                 target_instance = merge_result.target
 
-        messages.success(
-            request,
-            ngettext(
-                "Merged %(count)d source into %(target)s using field selections.",
-                "Merged %(count)d sources into %(target)s using field selections.",
-                len(merge_results),
-            )
-            % {"count": len(merge_results), "target": target_instance},
-        )
+        self._add_success_message(request, target_instance, len(merge_results))
 
         if self._wants_json(request):
             last_result = merge_results[-1][1]
@@ -179,11 +125,7 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
                 }
             )
 
-        cancel_url = (
-            request.POST.get("cancel")
-            or request.GET.get("cancel")
-            or request.META.get("HTTP_REFERER", "")
-        )
+        cancel_url = context.get("cancel_url") or request.META.get("HTTP_REFERER", "")
         if cancel_url and url_has_allowed_host_and_scheme(cancel_url, allowed_hosts={request.get_host()}):
             return redirect(cancel_url)
 
@@ -221,6 +163,76 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
                 continue
             fields.append(field)
         return fields
+
+    def _build_context(
+        self, request: HttpRequest, *args, data: Mapping[str, object] | None = None, **kwargs
+    ) -> dict[str, object] | HttpResponse:
+        try:
+            model = self.get_model(request)
+        except Exception as exc:  # pragma: no cover - defensive
+            logging.exception("Exception in get_model")
+            return HttpResponseBadRequest(_("An internal error has occurred."))
+
+        if model is Element and not isinstance(self, ElementFieldSelectionView):
+            return ElementFieldSelectionView.as_view()(request, *args, **kwargs)
+
+        try:
+            candidates, target = self.get_candidates(request, model)
+        except Exception as exc:  # pragma: no cover - defensive
+            logging.exception("Exception in get_candidates")
+            return HttpResponseBadRequest(_("An internal error has occurred."))
+
+        form = self.form_class(
+            model=model,
+            merge_fields=self.get_mergeable_fields(model),
+            candidates=candidates,
+            data=data,
+        )
+
+        cancel_url = (
+            (request.POST.get("cancel") if request.method == "POST" else request.GET.get("cancel"))
+            or request.META.get("HTTP_REFERER", "")
+        )
+
+        return {
+            "form": form,
+            "model_label": model._meta.label,
+            "target_id": target.key,
+            "target": target,
+            "candidates": candidates,
+            "candidate_ids": ",".join(candidate.key for candidate in candidates),
+            "action_url": self.get_action_url(request),
+            "cancel_url": cancel_url,
+        }
+
+    def get_action_url(self, request: HttpRequest) -> str:
+        return reverse(self.action_url_name)
+
+    def perform_merge(
+        self,
+        *,
+        form: FieldSelectionForm,
+        source: MergeMixin,
+        target: MergeMixin,
+        request: HttpRequest,
+    ):
+        return merge_records(
+            source=source,
+            target=target,
+            strategy_map=form.build_strategy_map(),
+            user=request.user,
+        )
+
+    def _add_success_message(self, request: HttpRequest, target_instance: MergeMixin, merge_count: int) -> None:
+        messages.success(
+            request,
+            ngettext(
+                "Merged %(count)d source into %(target)s using field selections.",
+                "Merged %(count)d sources into %(target)s using field selections.",
+                merge_count,
+            )
+            % {"count": merge_count, "target": target_instance},
+        )
 
     def get_candidates(
         self, request: HttpRequest, model: type[MergeMixin]
@@ -297,146 +309,27 @@ class ElementFieldSelectionView(PermissionRequiredMixin, FieldSelectionMergeView
 
     form_class = ElementFieldSelectionForm
     model = Element
+    action_url_name = "merge:merge_element_field_selection"
     permission_required = "cms.can_merge"
     raise_exception = True
 
     def get_mergeable_fields(self, model: type[MergeMixin]):
         return ElementFieldSelectionForm.get_mergeable_fields(model)
 
-    def get(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
-        try:
-            model = self.get_model(request)
-            candidates, target = self.get_candidates(request, model)
-        except Exception as exc:  # pragma: no cover - defensive
-            logging.exception("Exception in ElementFieldSelectionView.get")
-            return HttpResponseBadRequest(_("An error occurred processing your request."))
+    def get_action_url(self, request: HttpRequest) -> str:
+        return reverse(self.action_url_name)
 
-        form = self.form_class(
-            model=model,
-            merge_fields=self.get_mergeable_fields(model),
-            candidates=candidates,
+    def perform_merge(
+        self,
+        *,
+        form: ElementFieldSelectionForm,
+        source: MergeMixin,
+        target: MergeMixin,
+        request: HttpRequest,
+    ):
+        return merge_elements(
+            source=source,
+            target=target,
+            selected_fields=form.build_selected_fields(),
+            user=request.user,
         )
-
-        if self._wants_json(request):
-            payload = {
-                "fields": [
-                    self._serialise_value(
-                        {k: v for k, v in option.items() if k != "bound_field"}
-                    )
-                    for option in form.field_options
-                ],
-                "target": target.instance.pk,
-                "candidates": [candidate.key for candidate in candidates],
-            }
-            return JsonResponse(payload)
-
-        return render(
-            request,
-            "merge/per_field_strategy.html",
-            {
-                "form": form,
-                "model_label": model._meta.label,
-                "target_id": target.key,
-                "candidate_ids": ",".join(candidate.key for candidate in candidates),
-                "action_url": reverse("merge:merge_element_field_selection"),
-                "cancel_url": request.GET.get("cancel") or request.META.get("HTTP_REFERER", ""),
-            },
-        )
-
-    def post(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
-        try:
-            model = self.get_model(request)
-            candidates, target = self.get_candidates(request, model)
-        except Exception as exc:  # pragma: no cover - defensive
-            logging.exception("Exception in ElementFieldSelectionView.post")
-            return HttpResponseBadRequest(_("An error occurred processing your request."))
-
-        form = self.form_class(
-            model=model,
-            merge_fields=self.get_mergeable_fields(model),
-            candidates=candidates,
-            data=request.POST,
-        )
-
-        if not form.is_valid():
-            if self._wants_json(request):
-                return JsonResponse({"errors": form.errors}, status=400)
-            return render(
-                request,
-                "merge/per_field_strategy.html",
-                {
-                    "form": form,
-                    "model_label": model._meta.label,
-                    "target_id": target.key,
-                    "candidate_ids": ",".join(candidate.key for candidate in candidates),
-                    "action_url": reverse("merge:merge_element_field_selection"),
-                    "cancel_url": request.POST.get("cancel")
-                    or request.META.get("HTTP_REFERER", ""),
-                },
-                status=400,
-            )
-
-        sources = [candidate for candidate in candidates if candidate.role == "source"]
-        if not sources:
-            return HttpResponseBadRequest("A source record must be provided for merging.")
-
-        selected_fields = form.build_selected_fields()
-        merge_results = []
-        target_instance = target.instance
-
-        with transaction.atomic():
-            for source_candidate in sources:
-                merge_result = merge_elements(
-                    source=source_candidate.instance,
-                    target=target_instance,
-                    selected_fields=selected_fields,
-                    user=request.user,
-                )
-                merge_results.append((source_candidate, merge_result))
-                target_instance = merge_result.target
-
-        messages.success(
-            request,
-            ngettext(
-                "Merged %(count)d source into %(target)s using field selections.",
-                "Merged %(count)d sources into %(target)s using field selections.",
-                len(merge_results),
-            )
-            % {"count": len(merge_results), "target": target_instance},
-        )
-
-        if self._wants_json(request):
-            last_result = merge_results[-1][1]
-            return JsonResponse(
-                {
-                    "target_id": target_instance.pk,
-                    "resolved_fields": self._serialise_value(
-                        {
-                            field: self._serialise_resolution(resolution)
-                            for field, resolution in last_result.resolved_values.items()
-                        }
-                    ),
-                    "relation_actions": self._serialise_value(
-                        last_result.relation_actions
-                    ),
-                }
-            )
-
-        cancel_url = (
-            request.POST.get("cancel")
-            or request.GET.get("cancel")
-            or request.META.get("HTTP_REFERER", "")
-        )
-        if cancel_url and url_has_allowed_host_and_scheme(cancel_url, allowed_hosts={request.get_host()}):
-            return redirect(cancel_url)
-
-        meta = target_instance._meta
-        try:
-            change_url = reverse(
-                f"admin:{meta.app_label}_{meta.model_name}_change",
-                args=[target_instance.pk],
-            )
-        except Exception:  # pragma: no cover - defensive fallback
-            change_url = ""
-        return redirect(change_url or "/")
-
