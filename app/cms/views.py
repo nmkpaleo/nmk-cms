@@ -1153,7 +1153,8 @@ class AccessionElementMergeView(LoginRequiredMixin, PermissionRequiredMixin, Vie
         return redirect("login")
 
     def _detail_url(self, accession_row: AccessionRow) -> str:
-        return f"{reverse('accessionrow_detail', args=[accession_row.pk])}#accession-element-merge"
+        base = reverse("accessionrow_detail", args=[accession_row.pk])
+        return f"{base}?merge_elements=open#accession-element-merge"
 
     def post(self, request, accession_row_id: int, *args, **kwargs):
         accession_row = self.get_accession_row(accession_row_id)

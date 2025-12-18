@@ -177,7 +177,7 @@
               <span class="w3-hide-small w3-margin-left">{% trans "Add Element" %}</span>
             </a>
             <a
-              href="{{ request.get_full_path }}{% if request.GET %}&{% else %}?{% endif %}merge_elements=open#accession-element-merge-panel"
+              href="{{ request.path }}?merge_elements=open#accession-element-merge"
               id="accession-element-merge-toggle"
               class="w3-button w3-amber w3-round w3-bar-item"
               aria-expanded="{{ merge_elements_open|yesno:'true,false' }}"
