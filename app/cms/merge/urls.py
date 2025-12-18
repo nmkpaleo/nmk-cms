@@ -3,7 +3,12 @@
 from django.contrib.admin.views.decorators import staff_member_required
 from django.urls import path
 
-from cms.merge.views import ElementFieldSelectionView, FieldSelectionMergeView
+from cms.merge.views import (
+    ElementFieldSelectionView,
+    ElementMergeReviewView,
+    ElementMergeSelectionView,
+    FieldSelectionMergeView,
+)
 from cms.views import MergeCandidateAdminView, MergeCandidateAPIView
 
 app_name = "merge"
@@ -25,5 +30,15 @@ urlpatterns = [
         "elements/field-selection/",
         staff_member_required(ElementFieldSelectionView.as_view()),
         name="merge_element_field_selection",
+    ),
+    path(
+        "elements/",
+        staff_member_required(ElementMergeSelectionView.as_view()),
+        name="merge_element_selection",
+    ),
+    path(
+        "elements/review/",
+        staff_member_required(ElementMergeReviewView.as_view()),
+        name="merge_element_review",
     ),
 ]
