@@ -36,6 +36,7 @@
 - Refresh the primary navigation with a flex-aligned W3.CSS toolbar so the logo, links, and auth controls share one desktop row, reuse consistent nav button styling, and update developer docs plus template regression tests (T1).
 - Adopt W3.CSS styling for list filters, inventory session controls, and report layouts, trim legacy selectors from `style.css`, expand developer docs, and add widget-class regression tests.
 - Convert the admin merge workflow and reporting dashboards to W3.CSS-only markup, drop bespoke CSS bundles, refresh merge tooling JS, and document the new patterns.
+- Document accession row element merge/delete flows for collection managers, including the on-page merge panel, field-selection confirmation, and guarded delete action (T3).
 - Consolidate residual custom CSS to navigation, Select2, and drag-handle helpers while migrating account entrance flows to W3.CSS cards and backfill template tests plus docs covering the W3 regression expectations.
 - Add regression tests for the refreshed allauth templates (including ORCID CTA and skull hero) and document the W3.CSS requirements across user, admin, and developer guides (T6).
 - Document FieldSlip merge deduplication, including admin messaging and developer guidance for relation conflict handling, and update merge-tool docs accordingly (T5).

@@ -23,3 +23,10 @@ This note supplements the merge engine docs with Element specifics and QA guidan
 - The accession detail view now surfaces a **Merge references** accordion for collection managers when at least two references are linked. It instantiates the `AccessionReferenceMergeSelectionForm`, validates same-accession constraints, and hands off to the FIELD_SELECTION helper so the reference/page values are chosen before writing.
 - The view enforces the `MERGE_TOOL_FEATURE` flag and staff membership, reusing the admin merge guardrails. Errors bubble through `messages` back to the accession page; successful merges still create `MergeLog` rows and history revisions like the admin flow.
 - Coverage: regression tests validate visibility rules, permission blocks, MergeLog creation, and field-selection rendering. Run `python app/manage.py test cms.tests.test_accessionreference_merge_view cms.tests.test_accessionreference_merge_helper` to exercise the path.
+
+## Accession row element merge/delete UI
+- The accession row detail page now exposes a **Merge element** panel for staff with merge permission. It reuses the merge services for `NatureOfSpecimen` and requires the `MERGE_TOOL_FEATURE` flag.
+- Selection stage: users pick a target and at least one source; the target is auto-included in `selected_ids` to satisfy server validation. The form posts to `/accessionrows/<id>/merge-elements/?merge_elements=open` so the confirmation view can render field selections.
+- Confirmation stage: the field-selection form mirrors admin FIELD_SELECTION behavior for element attributes (name, side, condition, description, portion, fragments). Merges run sequentially inside a transaction, recording history and MergeLog entries.
+- Delete: a guarded endpoint allows authorized staff to delete an element record; it respects the merge feature flag and uses `messages` for feedback.
+- QA tips: keep the panel open with `?merge_elements=open`, ensure target plus sources are present in the payload, and verify success messages or validation errors flow through `messages` before redirects.

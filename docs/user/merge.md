@@ -33,6 +33,12 @@ The merge tool consolidates duplicate records into a single entry and now suppor
 
 - Collection managers can merge duplicate accession references from the accession detail page without visiting the admin. Open an accession, expand **Merge references**, select at least two linked references plus a target, and continue to the field-selection step to choose the reference and page values to keep. The flow reuses the same merge engine and audit trail as the admin action.
 
+### Accession row shortcut for specimen elements
+
+- Collection managers can merge duplicate specimen elements from an accession row detail page without visiting the admin. Open the accession row, choose **Merge element**, select one target and at least one source element, and submit to continue.
+- The confirmation screen lists the chosen candidates and lets you pick the preferred values for fields such as element name, side, description, portion, and fragments before applying the merge.
+- Elements must belong to the same accession row; the tool enforces staff permissions and the merge feature flag, and it records merge history for audit.
+
 ## Tips and troubleshooting
 
 - If you see a 503 or 403 response, confirm the merge feature flag is enabled and that you are logged in with staff permissions.
