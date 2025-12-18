@@ -947,11 +947,10 @@ class AccessionElementMergeSelectionForm(BaseW3Form):
 
         if target and target not in valid_ids:
             self.add_error("target", _("Choose a valid target element."))
-        if target and target not in selected_ids:
-            self.add_error(
-                "target",
-                _("The target element must be included in the merge selection."),
-            )
+        if target and target in valid_ids and target not in selected_ids:
+            selected_ids = list(selected_ids)
+            selected_ids.insert(0, target)
+            cleaned["selected_ids"] = selected_ids
 
         return cleaned
 
