@@ -284,6 +284,17 @@
             (input) => !target || input.value !== target.value
           );
 
+          if (target) {
+            const alreadySelected = form.querySelectorAll('input[type="hidden"][name="selected_ids"][value="' + target.value + '"]').length > 0;
+            if (!alreadySelected) {
+              const hiddenTarget = document.createElement("input");
+              hiddenTarget.type = "hidden";
+              hiddenTarget.name = "selected_ids";
+              hiddenTarget.value = target.value;
+              form.appendChild(hiddenTarget);
+            }
+          }
+
           if (!target || sources.length === 0) {
             event.preventDefault();
             if (status) {
