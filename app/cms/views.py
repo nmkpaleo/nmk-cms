@@ -1154,7 +1154,7 @@ class AccessionElementMergeView(LoginRequiredMixin, PermissionRequiredMixin, Vie
 
     def _detail_url(self, accession_row: AccessionRow) -> str:
         base = reverse("accessionrow_detail", args=[accession_row.pk])
-        return f"{base}?merge_elements=open#accession-element-merge"
+        return f"{base}?merge_elements=open"
 
     def post(self, request, accession_row_id: int, *args, **kwargs):
         accession_row = self.get_accession_row(accession_row_id)
@@ -1178,7 +1178,7 @@ class AccessionElementMergeView(LoginRequiredMixin, PermissionRequiredMixin, Vie
                 label = selection_form.fields.get(field).label if field in selection_form.fields else field
                 for error in errors:
                     messages.error(request, _("%(field)s: %(error)s") % {"field": label, "error": error})
-            return redirect(f"{detail_url}?merge_elements=open")
+            return redirect(detail_url)
 
         selected_ids = selection_form.cleaned_data["selected_ids"]
         target_id = selection_form.cleaned_data["target"]
