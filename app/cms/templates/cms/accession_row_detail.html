@@ -171,13 +171,118 @@
       </div>
       {% if can_manage %}
         <div class="w3-col s12 m6 w3-right-align">
-          <a href="{% url 'accessionrow_add_specimen' accessionrow.id %}" class="w3-button w3-green w3-round">
-            <i class="fa-solid fa-plus" aria-hidden="true"></i>
-            <span class="w3-hide-small w3-margin-left">{% trans "Add Element" %}</span>
-          </a>
+          <div class="w3-bar w3-margin-top-small" role="group" aria-label="{% trans 'Element actions' %}">
+            <a href="{% url 'accessionrow_add_specimen' accessionrow.id %}" class="w3-button w3-green w3-round w3-bar-item">
+              <i class="fa-solid fa-plus" aria-hidden="true"></i>
+              <span class="w3-hide-small w3-margin-left">{% trans "Add element" %}</span>
+            </a>
+            {% if element_merge_candidates %}
+              <button
+                type="button"
+                id="accession-element-merge-toggle"
+                class="w3-button w3-amber w3-round w3-bar-item"
+                aria-expanded="{{ element_merge_open|yesno:'true,false' }}"
+                aria-controls="accession-element-merge-panel"
+                aria-label="{% trans 'Toggle merge elements panel' %}"
+              >
+                <i class="fa-solid fa-object-group" aria-hidden="true"></i>
+                <span class="w3-hide-small w3-margin-left">{% trans "Merge element" %}</span>
+              </button>
+            {% endif %}
+          </div>
         </div>
       {% endif %}
     </header>
+    {% if element_merge_candidates %}
+      <div class="w3-margin-top">
+        <div
+          id="accession-element-merge-panel"
+          class="w3-card w3-round w3-white w3-padding {% if not element_merge_open %}w3-hide{% endif %}"
+          data-default-open="{{ element_merge_open|yesno:'true,false' }}"
+          role="region"
+          aria-hidden="{{ element_merge_open|yesno:'false,true' }}"
+          aria-labelledby="accession-element-merge-heading"
+        >
+          <div class="w3-row w3-padding-small">
+            <div class="w3-col s12 m8">
+              <h3 id="accession-element-merge-heading" class="w3-margin-top">
+                <i class="fa-solid fa-object-group" aria-hidden="true"></i>
+                <span class="w3-margin-left">{% trans "Merge elements" %}</span>
+              </h3>
+              <p class="w3-text-gray">
+                {% trans "Select duplicate elements linked to this accession row, choose a target record, and review field selections in the next step." %}
+              </p>
+            </div>
+            <div class="w3-col s12 m4 w3-right-align">
+              <a href="#accession-element-merge-panel" class="w3-button w3-light-grey w3-round">
+                <i class="fa-solid fa-circle-question" aria-hidden="true"></i>
+                <span class="w3-hide-small w3-margin-left">{% trans "Need help?" %}</span>
+              </a>
+            </div>
+          </div>
+          <form
+            method="post"
+            action="{% url 'merge:merge_element_selection' %}"
+            class="w3-margin-top"
+            aria-describedby="accession-element-merge-heading"
+          >
+            {% csrf_token %}
+            <input type="hidden" name="cancel" value="{{ request.get_full_path }}" />
+            <div class="w3-row-padding">
+              <div class="w3-col s12 m7">
+                <fieldset class="w3-padding-small w3-border w3-round" aria-describedby="accession-element-selection-hint">
+                  <legend class="w3-small w3-text-grey">{% trans "Elements to merge" %}</legend>
+                  <p id="accession-element-selection-hint" class="w3-small w3-text-gray">
+                    {% trans "Pick at least two elements linked to this accession row." %}
+                  </p>
+                  {% for element in element_merge_candidates %}
+                    <label class="w3-block w3-padding-small w3-hover-light-grey" for="id_element_source_{{ element.pk }}">
+                      <input
+                        type="checkbox"
+                        class="w3-check"
+                        id="id_element_source_{{ element.pk }}"
+                        name="source_ids"
+                        value="{{ element.pk }}"
+                      />
+                      <span class="w3-margin-left">{{ element.name|default:"—" }}</span>
+                    </label>
+                  {% empty %}
+                    <p class="w3-text-gray">{% trans "No elements available to merge." %}</p>
+                  {% endfor %}
+                </fieldset>
+              </div>
+              <div class="w3-col s12 m5">
+                <fieldset class="w3-padding-small w3-border w3-round">
+                  <legend class="w3-small w3-text-grey">{% trans "Target element" %}</legend>
+                  <p class="w3-small w3-text-gray">{% trans "Pick the record you want to keep after merging." %}</p>
+                  {% for element in element_merge_candidates %}
+                    <label class="w3-block w3-padding-small w3-hover-light-grey" for="id_element_target_{{ element.pk }}">
+                      <input
+                        type="radio"
+                        class="w3-radio"
+                        id="id_element_target_{{ element.pk }}"
+                        name="target"
+                        value="{{ element.pk }}"
+                        {% if forloop.first %}checked{% endif %}
+                      />
+                      <span class="w3-margin-left">{{ element.name|default:"—" }}</span>
+                    </label>
+                  {% empty %}
+                    <p class="w3-text-gray">{% trans "No elements available to select." %}</p>
+                  {% endfor %}
+                </fieldset>
+              </div>
+            </div>
+            <div class="w3-margin-top">
+              <button type="submit" class="w3-button w3-blue w3-round">
+                <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+                <span class="w3-margin-left">{% trans "Review selected elements" %}</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    {% endif %}
     <div class="w3-responsive">
       <table class="w3-table-all w3-hoverable w3-small">
         <thead>
@@ -230,4 +335,44 @@
 </main>
 {% endblock %}
 
+{% block extra_scripts %}
+  {{ block.super }}
+  <script>
+    (function () {
+      const toggleButton = document.getElementById("accession-element-merge-toggle");
+      const mergePanel = document.getElementById("accession-element-merge-panel");
+      const mergePanelCheckboxes = mergePanel
+        ? mergePanel.querySelectorAll('input[type="checkbox"][name="source_ids"]')
+        : null;
 
+      function setMergePanel(open) {
+        if (!mergePanel || !toggleButton) {
+          return;
+        }
+        if (open) {
+          mergePanel.classList.remove("w3-hide");
+          toggleButton.setAttribute("aria-expanded", "true");
+          mergePanel.setAttribute("aria-hidden", "false");
+          if (mergePanelCheckboxes && mergePanelCheckboxes.length) {
+            mergePanelCheckboxes[0].focus();
+          }
+        } else {
+          mergePanel.classList.add("w3-hide");
+          toggleButton.setAttribute("aria-expanded", "false");
+          mergePanel.setAttribute("aria-hidden", "true");
+        }
+      }
+
+      if (toggleButton && mergePanel) {
+        const defaultOpen = mergePanel.dataset.defaultOpen === "true";
+        setMergePanel(defaultOpen || !mergePanel.classList.contains("w3-hide"));
+
+        toggleButton.addEventListener("click", (event) => {
+          event.preventDefault();
+          const isOpen = !mergePanel.classList.contains("w3-hide");
+          setMergePanel(!isOpen);
+        });
+      }
+    })();
+  </script>
+{% endblock %}
