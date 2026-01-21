@@ -84,6 +84,16 @@ DB_ROOT_PASS=changeme
 #SCAN_UPLOAD_BATCH_MAX_BYTES=0
 #SCAN_UPLOAD_TIMEOUT_SECONDS=60
 #DOCKER_PROD_IMAGE=palaeontologyhelsinki/nmk-cms:latest
+
+# Redis-related variables.
+# Redis is used for caching and the Celery task queue.
+# If you are using Docker, set this to true. Otherwise, set it to false.
+# If you are using Pythonanywhere, set this to false.
+USE_REDIS=true
+ENABLE_ADMIN_MERGE=1
+TAXON_NOW_ACCEPTED_URL=https://raw.githubusercontent.com/nowcommunity/NOW-Data/refs/heads/main/data/now-export/latest_taxonomy.tsv
+TAXON_NOW_SYNONYMS_URL=https://raw.githubusercontent.com/nowcommunity/NOW-Data/refs/heads/main/data/now-export/latest_taxonomy_synonyms.tsv
+OPENAI_API_KEY=changeme
 ENV
 ```
 
