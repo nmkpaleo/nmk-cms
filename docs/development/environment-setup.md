@@ -126,7 +126,11 @@ These steps assume a Linux host (for example, Ubuntu Server) that will run conta
 ### 3.1 Install runtime tools
 
 ```bash
+# Update Linux:
 sudo apt update
+sudo apt list --upgradable
+sudo apt upgrade
+
 sudo apt install docker.io docker-compose-plugin
 sudo systemctl enable docker --now
 ```
