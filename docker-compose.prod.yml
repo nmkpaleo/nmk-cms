@@ -17,6 +17,9 @@ services:
       - GUNICORN_TIMEOUT=${GUNICORN_TIMEOUT:-90}
       - GUNICORN_MAX_REQUESTS=${GUNICORN_MAX_REQUESTS:-1000}
       - GUNICORN_MAX_REQUESTS_JITTER=${GUNICORN_MAX_REQUESTS_JITTER:-50}
+    depends_on:
+      - db
+      - redis
 
   redis:
     image: redis:7.2.4-alpine
@@ -40,9 +43,6 @@ services:
       - "--character-set-server=utf8mb4"
     volumes:
       - db:/var/lib/mysql
-    depends_on:
-      - db
-      - redis
 
   nginx:
     build: ./nginx
