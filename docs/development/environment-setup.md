@@ -143,21 +143,32 @@ sudo apt list --upgradable
 sudo apt upgrade
 
 sudo apt install docker.io docker-compose-plugin
+ OR
+sudo apt install -y docker.io docker-compose
+
 sudo systemctl enable docker --now
+```
+
+Check the installed versions:
+```bash
+sudo docker --version
+sudo docker-composer --version 
 ```
 
 Create a deployment folder and copy the repository or the necessary files onto the server:
 
 ```bash
-mkdir -p /opt/nmk-cms
-cd /opt/nmk-cms
+mkdir -p /opt/apps
+cd /opt/apps
+
+git clone https://github.com/nmkpaleo/nmk-cms.git
 ```
 
 You can either clone the repository or copy over the `docker-compose.prod.yml`, `nginx/`, and any other configuration files you maintain.
 
 ### 3.2 Provide production secrets
 
-Create `/opt/nmk-cms/.env` with values that match your server. At minimum set:
+Create `/opt/apps/nmk-cms/.env` with values that match your server. At minimum set:
 
 ```bash
 COMPOSE_FILE=docker-compose.prod.yml
