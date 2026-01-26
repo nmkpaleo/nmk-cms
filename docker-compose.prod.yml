@@ -42,7 +42,7 @@ services:
       - db:/var/lib/mysql
     depends_on:
       - db
-      -redis
+      - redis
 
   nginx:
     build: ./nginx
