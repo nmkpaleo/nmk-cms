@@ -5,7 +5,7 @@ services:
     restart: unless-stopped
     ports:
       - 8000:8000
-    command: sh -c ./scripts/entrypoint.prod.sh
+    command: ["sh", "-c", "./scripts/entrypoint.prod.sh"]
     volumes:
       - static:/vol/web
     env_file:
@@ -20,13 +20,17 @@ services:
 
   redis:
     image: redis:7.2.4-alpine
+    restart: unless-stopped
     expose:
       - "6379"
     container_name: nmk-cms-redis
   db:
     image: mariadb
+    restart: unless-stopped
+    expose:
+      - "3306"
     ports:
-      - 3306
+      - "127.0.0.1:3306:3306"
     environment:
       - MYSQL_DATABASE=${DB_NAME}
       - MYSQL_USER=${DB_USER}
@@ -36,6 +40,10 @@ services:
       - "--character-set-server=utf8mb4"
     volumes:
       - db:/var/lib/mysql
+    depends_on:
+      - db
+      -redis
+
   nginx:
     build: ./nginx
     restart: unless-stopped
@@ -49,9 +57,9 @@ services:
     environment:
       - APP_DOMAIN=${APP_DOMAIN}
       - PMA_DOMAIN=${PMA_DOMAIN}
-      - SCAN_UPLOAD_MAX_BYTES=${SCAN_UPLOAD_MAX_BYTES:-5242880}
-      - SCAN_UPLOAD_BATCH_MAX_BYTES=${SCAN_UPLOAD_BATCH_MAX_BYTES:-0}
-      - SCAN_UPLOAD_TIMEOUT_SECONDS=${SCAN_UPLOAD_TIMEOUT_SECONDS:-60}
+      - SCAN_UPLOAD_MAX_BYTES=${SCAN_UPLOAD_MAX_BYTES}
+      - SCAN_UPLOAD_BATCH_MAX_BYTES=${SCAN_UPLOAD_BATCH_MAX_BYTES}
+      - SCAN_UPLOAD_TIMEOUT_SECONDS=${SCAN_UPLOAD_TIMEOUT_SECONDS}
     labels:
       - "com.centurylinklabs.watchtower.enable=false"
     depends_on:
@@ -83,7 +91,8 @@ services:
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    command: --interval 30
+    command: --interval 300
 
 volumes:
-  static: null
+  static:
+  db:
