@@ -233,6 +233,20 @@ docker compose -f docker-compose.prod.yml pull
 docker compose -f docker-compose.prod.yml up -d
 ```
 
+To create the Django superuser manually, open the bash:
+
+```bash
+sudo docker exec -it nmk-cms_web_1 sh
+$ python manage.py createsuperuser
+Username (leave blank to use 'user'): changeme
+Email address: changeme
+Password:changeme
+Password (again):changeme
+Superuser created successfully.
+
+exit
+```
+
 ### 3.4 Watchtower auto-updates
 
 The `watchtower` service checks Docker Hub every 30 seconds (`--interval 30`). It pulls the latest tag defined in `DOCKER_PROD_IMAGE` and restarts the container when a new image appears. Keep these tips in mind:
