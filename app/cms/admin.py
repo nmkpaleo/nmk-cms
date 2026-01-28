@@ -1533,7 +1533,6 @@ admin.site.register(SpecimenGeology, SpecimenGeologyAdmin)
 admin.site.register(GeologicalContext, GeologicalContextAdmin)
 admin.site.register(UnexpectedSpecimen, HistoricalAdmin)
 
-
 @admin.register(DrawerRegister)
 class DrawerRegisterAdmin(HistoricalImportExportAdmin):
     resource_class = DrawerRegisterResource

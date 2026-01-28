@@ -404,3 +404,28 @@ class TestEditLinksInDetailPage:
         edit_url = reverse('identification_edit', args=[identification.id])
         assert edit_url in content
         assert 'Edit' in content
+
+
+class TestElementDeleteAccess:
+    """Test delete access and visibility for NatureOfSpecimen records."""
+
+    def test_element_table_has_delete_button_for_managers(self, client, collection_manager, specimen):
+        """Verify element table shows delete button for collection managers."""
+        client.force_login(collection_manager)
+        url = reverse('accessionrow_detail', args=[specimen.accession_row.id])
+        response = client.get(url)
+
+        assert response.status_code == 200
+        content = response.content.decode()
+
+        delete_url = reverse('element_delete', args=[specimen.id])
+        assert delete_url in content
+        assert 'Delete' in content
+
+    def test_element_delete_requires_login(self, client, specimen):
+        """Verify delete view requires authentication."""
+        url = reverse('element_delete', args=[specimen.id])
+        response = client.get(url)
+
+        assert response.status_code == 302
+        assert '/accounts/login/' in response.url

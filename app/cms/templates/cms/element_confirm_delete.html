@@ -1,0 +1,35 @@
+{% extends "base_generic.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Delete Element" %}{% endblock %}
+
+{% block content %}
+  <main class="w3-container w3-margin-top w3-margin-bottom" role="main">
+    <section class="w3-section w3-animate-opacity" aria-labelledby="element-delete-heading">
+      <article class="w3-panel w3-pale-red w3-leftbar w3-border-red w3-round-large">
+        <header class="w3-margin-bottom">
+          <h1 id="element-delete-heading" class="w3-xxlarge w3-text-red">
+            <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+            <span class="w3-margin-left">{% trans "Confirm deletion" %}</span>
+          </h1>
+        </header>
+        <p>
+          {% blocktrans with element=specimen.element accession_row=specimen.accession_row %}
+            Are you sure you want to delete the element <strong>{{ element }}</strong> from accession row <strong>{{ accession_row }}</strong>?
+          {% endblocktrans %}
+        </p>
+        <form method="post" class="w3-margin-top" role="form">
+          {% csrf_token %}
+          <button type="submit" class="w3-button w3-red w3-round-large w3-margin-right">
+            <i class="fa-solid fa-trash" aria-hidden="true"></i>
+            <span class="w3-margin-left">{% trans "Confirm delete" %}</span>
+          </button>
+          <a href="{% url 'accessionrow_detail' accession_row.id %}" class="w3-button w3-white w3-border w3-round-large w3-hover-light-grey">
+            <i class="fa-solid fa-arrow-left-long" aria-hidden="true"></i>
+            <span class="w3-margin-left">{% trans "Cancel" %}</span>
+          </a>
+        </form>
+      </article>
+    </section>
+  </main>
+{% endblock %}

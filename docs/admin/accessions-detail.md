@@ -14,3 +14,4 @@ Collection managers and superusers can use the accession detail page to audit da
 1. Confirm that restricted controls (Add specimen, Link field slip, Add reference, Add comment) continue to respect group membership.
 2. When reviewing large images, use the hover preview to verify labels without leaving the page. Press <kbd>Escape</kbd> or move focus away to hide the preview.
 3. Continue to use the existing buttons to edit the accession, manage field slips, or upload media; the modal workflow and permissions are unchanged, but the overlay now masks the background select widget and closes open dropdowns automatically.
+4. In the accession row detail view, confirm that the Elements table shows a delete action only for authorized managers, and that deletion requires a confirmation step before removing a record.

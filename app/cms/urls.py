@@ -19,6 +19,7 @@ from cms.views import (
     add_specimen_to_accession_row,
     edit_identification,
     edit_specimen_element,
+    NatureOfSpecimenDeleteView,
     add_reference_to_accession,
     AccessionFieldSlipMergeView,
     AccessionReferenceMergeView,
@@ -151,6 +152,7 @@ urlpatterns = [
     path('accessionrows/<int:accession_row_id>/add-identification/', add_identification_to_accession_row, name='accessionrow_add_identification'),
     path('specimens/<int:element_id>/edit/', edit_specimen_element, name='specimen_edit'),
     path('elements/<int:element_id>/edit/', edit_specimen_element, name='element_edit'),
+    path('elements/<int:pk>/delete/', NatureOfSpecimenDeleteView.as_view(), name='element_delete'),
     path('identifications/<int:identification_id>/edit/', edit_identification, name='identification_edit'),
     path(
         "accessions/generate-batch/",
