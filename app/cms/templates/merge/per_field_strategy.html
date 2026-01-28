@@ -95,14 +95,14 @@
                     {% with input_id=option.field_name|add:'-'|add:choice.key %}
                       <td class="w3-center">
                         <label class="w3-block" for="{{ input_id }}">
-                          <input
-                            class="w3-radio"
-                            type="radio"
-                            id="{{ input_id }}"
-                            name="{{ option.field_name }}"
-                            value="{{ choice.key }}"
-                            {% if selected_value == choice.key %}checked{% endif %}
-                          />
+                            <input
+                              class="w3-radio"
+                              type="radio"
+                              id="{{ input_id }}"
+                              name="{{ option.field_name }}"
+                              value="{{ choice.key }}"
+                              {% if selected_value == choice.key or not selected_value and choice.is_target %}checked{% endif %}
+                            />
                           <span class="w3-small">
                             {{ choice.value }}
                             {% if choice.role %}

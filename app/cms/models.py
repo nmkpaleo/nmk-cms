@@ -1062,7 +1062,7 @@ class UnexpectedSpecimen(BaseModel):
         return self.identifier
 
 # NatureOfSpecimen Model
-class NatureOfSpecimen(BaseModel):
+class NatureOfSpecimen(MergeMixin, BaseModel):
     accession_row = models.ForeignKey(
         AccessionRow,
         on_delete=models.CASCADE,
@@ -1102,6 +1102,15 @@ class NatureOfSpecimen(BaseModel):
         help_text="Number of fragments associated with this specimen.",
     )
     history = HistoricalRecords()
+
+    merge_fields = {
+        "element": MergeStrategy.FIELD_SELECTION,
+        "side": MergeStrategy.FIELD_SELECTION,
+        "condition": MergeStrategy.FIELD_SELECTION,
+        "verbatim_element": MergeStrategy.FIELD_SELECTION,
+        "portion": MergeStrategy.FIELD_SELECTION,
+        "fragments": MergeStrategy.FIELD_SELECTION,
+    }
 
     def get_absolute_url(self):
         return reverse('natureofspecimen-detail', args=[str(self.id)])
