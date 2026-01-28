@@ -102,7 +102,11 @@ class FieldSelectionForm(forms.Form):
 
             for candidate in self.candidates:
                 value = field.value_from_object(candidate.instance)
-                display = display_for_field(value, field, "—")
+                if isinstance(field, models.ForeignKey):
+                    related_value = getattr(candidate.instance, field.name, None)
+                    display = related_value if related_value is not None else "—"
+                else:
+                    display = display_for_field(value, field, "—")
                 choice_key = candidate.key
                 if candidate.role == "target":
                     default_key = choice_key
