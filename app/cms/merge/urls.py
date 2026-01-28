@@ -8,6 +8,7 @@ from cms.merge.views import (
     ElementMergeReviewView,
     ElementMergeSelectionView,
     FieldSelectionMergeView,
+    NatureOfSpecimenFieldSelectionView,
 )
 from cms.views import MergeCandidateAdminView, MergeCandidateAPIView
 
@@ -30,6 +31,11 @@ urlpatterns = [
         "elements/field-selection/",
         staff_member_required(ElementFieldSelectionView.as_view()),
         name="merge_element_field_selection",
+    ),
+    path(
+        "natureofspecimens/field-selection/",
+        staff_member_required(NatureOfSpecimenFieldSelectionView.as_view()),
+        name="merge_natureofspecimen_field_selection",
     ),
     path(
         "elements/",

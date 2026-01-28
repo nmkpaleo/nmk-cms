@@ -222,11 +222,13 @@
           </div>
           <form
             method="post"
-            action="{% url 'merge:merge_element_selection' %}"
+            action="{% url 'merge:merge_natureofspecimen_field_selection' %}"
             class="w3-margin-top"
             aria-describedby="accession-element-merge-heading"
+            id="accession-element-merge-form"
           >
             {% csrf_token %}
+            <input type="hidden" name="candidates" id="accession-element-merge-candidates" />
             <input type="hidden" name="cancel" value="{{ request.get_full_path }}" />
             <div class="w3-row-padding">
               <div class="w3-col s12">
@@ -259,7 +261,7 @@
                                   class="w3-radio"
                                   id="id_element_target_{{ specimen.pk }}"
                                   name="target"
-                                  value="{{ specimen.element.pk }}"
+                                  value="{{ specimen.pk }}"
                                   {% if forloop.first %}checked{% endif %}
                                 />
                                 <span class="w3-margin-left">{% trans "Target" %}</span>
@@ -272,7 +274,7 @@
                                   class="w3-check"
                                   id="id_element_source_{{ specimen.pk }}"
                                   name="source_ids"
-                                  value="{{ specimen.element.pk }}"
+                                  value="{{ specimen.pk }}"
                                 />
                                 <span class="w3-margin-left">{% trans "Source" %}</span>
                               </label>
@@ -366,6 +368,8 @@
       const mergePanelCheckboxes = mergePanel
         ? mergePanel.querySelectorAll('input[type="checkbox"][name="source_ids"]')
         : null;
+      const mergeForm = document.getElementById("accession-element-merge-form");
+      const candidateField = document.getElementById("accession-element-merge-candidates");
 
       function setMergePanel(open) {
         if (!mergePanel || !toggleButton) {
@@ -393,6 +397,22 @@
           event.preventDefault();
           const isOpen = !mergePanel.classList.contains("w3-hide");
           setMergePanel(!isOpen);
+        });
+      }
+
+      if (mergeForm && candidateField) {
+        mergeForm.addEventListener("submit", (event) => {
+          const target = mergeForm.querySelector('input[name="target"]:checked');
+          const sources = Array.from(
+            mergeForm.querySelectorAll('input[name="source_ids"]:checked')
+          ).map((input) => input.value);
+          if (!target || sources.length === 0) {
+            return;
+          }
+          const candidates = [target.value]
+            .concat(sources.filter((value) => value !== target.value))
+            .join(",");
+          candidateField.value = candidates;
         });
       }
     })();

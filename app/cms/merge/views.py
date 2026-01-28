@@ -30,7 +30,7 @@ from cms.merge.forms import (
 )
 from cms.merge.mixins import MergeMixin
 from cms.merge.services import merge_elements
-from cms.models import Element
+from cms.models import Element, NatureOfSpecimen
 
 
 class FieldSelectionMergeView(LoginRequiredMixin, View):
@@ -488,3 +488,43 @@ class ElementFieldSelectionView(PermissionRequiredMixin, FieldSelectionMergeView
             selected_fields=form.build_selected_fields(),
             user=request.user,
         )
+
+
+class NatureOfSpecimenFieldSelectionView(PermissionRequiredMixin, FieldSelectionMergeView):
+    """Per-field selection merge view for NatureOfSpecimen entries."""
+
+    model = NatureOfSpecimen
+    permission_required = "cms.can_merge"
+    raise_exception = True
+    action_url_name = "merge:merge_natureofspecimen_field_selection"
+
+    merge_field_names = (
+        "element",
+        "side",
+        "condition",
+        "verbatim_element",
+        "portion",
+        "fragments",
+    )
+
+    def get_mergeable_fields(self, model: type[MergeMixin]):
+        fields = []
+        for field_name in self.merge_field_names:
+            try:
+                fields.append(model._meta.get_field(field_name))
+            except Exception:  # pragma: no cover - defensive
+                continue
+        return tuple(fields)
+
+    def get_candidates(
+        self, request: HttpRequest, model: type[MergeMixin]
+    ) -> tuple[list[FieldSelectionCandidate], FieldSelectionCandidate]:
+        ids_param = request.GET.get("candidates") or request.POST.get("candidates") or ""
+        if not ids_param:
+            target_id = (request.POST.get("target") or "").strip()
+            source_ids = [value for value in request.POST.getlist("source_ids") if value]
+            if target_id:
+                ids_param = ",".join([target_id, *source_ids])
+                request.POST = request.POST.copy()
+                request.POST["candidates"] = ids_param
+        return super().get_candidates(request, model)
