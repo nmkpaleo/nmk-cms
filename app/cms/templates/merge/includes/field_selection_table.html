@@ -39,7 +39,7 @@
                         id="{{ input_id }}"
                         name="{{ option.field_name }}"
                         value="{{ choice.key }}"
-                        {% if selected_value == choice.key %}checked{% endif %}
+                        {% if selected_value == choice.key or not selected_value and choice.is_target %}checked{% endif %}
                       />
                       <span class="w3-small">
                         {{ choice.value }}
