@@ -1913,12 +1913,13 @@ class AccessionRowDetailView(DetailView):
         )
         context['can_manage'] = context['can_edit']
         context['show_inventory_status'] = not is_public_user(self.request.user)
-        element_candidates = [
-            nos.element for nos in context["natureofspecimens"] if getattr(nos, "element", None)
+        element_merge_rows = [
+            nos for nos in context["natureofspecimens"] if getattr(nos, "element", None)
         ]
         unique_elements = []
         seen = set()
-        for element in element_candidates:
+        for specimen in element_merge_rows:
+            element = specimen.element
             key = str(element.pk)
             if key in seen:
                 continue
@@ -1930,7 +1931,8 @@ class AccessionRowDetailView(DetailView):
             and getattr(settings, "MERGE_TOOL_FEATURE", False)
             and len(unique_elements) >= 2
         )
-        context["element_merge_candidates"] = unique_elements if can_merge_elements else []
+        context["element_merge_candidates"] = element_merge_rows if can_merge_elements else []
+        context["element_merge_unique_elements"] = unique_elements if can_merge_elements else []
         context["element_merge_open"] = self.request.GET.get("merge_elements") == "open"
         return context
 

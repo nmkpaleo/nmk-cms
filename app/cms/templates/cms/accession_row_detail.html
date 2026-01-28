@@ -229,47 +229,69 @@
             {% csrf_token %}
             <input type="hidden" name="cancel" value="{{ request.get_full_path }}" />
             <div class="w3-row-padding">
-              <div class="w3-col s12 m7">
+              <div class="w3-col s12">
                 <fieldset class="w3-padding-small w3-border w3-round" aria-describedby="accession-element-selection-hint">
                   <legend class="w3-small w3-text-grey">{% trans "Elements to merge" %}</legend>
                   <p id="accession-element-selection-hint" class="w3-small w3-text-gray">
                     {% trans "Pick at least two elements linked to this accession row." %}
                   </p>
-                  {% for element in element_merge_candidates %}
-                    <label class="w3-block w3-padding-small w3-hover-light-grey" for="id_element_source_{{ element.pk }}">
-                      <input
-                        type="checkbox"
-                        class="w3-check"
-                        id="id_element_source_{{ element.pk }}"
-                        name="source_ids"
-                        value="{{ element.pk }}"
-                      />
-                      <span class="w3-margin-left">{{ element.name|default:"—" }}</span>
-                    </label>
-                  {% empty %}
-                    <p class="w3-text-gray">{% trans "No elements available to merge." %}</p>
-                  {% endfor %}
-                </fieldset>
-              </div>
-              <div class="w3-col s12 m5">
-                <fieldset class="w3-padding-small w3-border w3-round">
-                  <legend class="w3-small w3-text-grey">{% trans "Target element" %}</legend>
-                  <p class="w3-small w3-text-gray">{% trans "Pick the record you want to keep after merging." %}</p>
-                  {% for element in element_merge_candidates %}
-                    <label class="w3-block w3-padding-small w3-hover-light-grey" for="id_element_target_{{ element.pk }}">
-                      <input
-                        type="radio"
-                        class="w3-radio"
-                        id="id_element_target_{{ element.pk }}"
-                        name="target"
-                        value="{{ element.pk }}"
-                        {% if forloop.first %}checked{% endif %}
-                      />
-                      <span class="w3-margin-left">{{ element.name|default:"—" }}</span>
-                    </label>
-                  {% empty %}
-                    <p class="w3-text-gray">{% trans "No elements available to select." %}</p>
-                  {% endfor %}
+                  <div class="w3-responsive">
+                    <table class="w3-table-all w3-hoverable w3-small" role="grid">
+                      <thead>
+                        <tr>
+                          <th scope="col">{% trans "Target" %}</th>
+                          <th scope="col">{% trans "Source" %}</th>
+                          <th scope="col">{% trans "Element" %}</th>
+                          <th scope="col">{% trans "Side" %}</th>
+                          <th scope="col">{% trans "Condition" %}</th>
+                          <th scope="col">{% trans "Description" %}</th>
+                          <th scope="col">{% trans "Portion" %}</th>
+                          <th scope="col">{% trans "Fragments" %}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {% for specimen in element_merge_candidates %}
+                          <tr>
+                            <td>
+                              <label class="w3-small" for="id_element_target_{{ specimen.pk }}">
+                                <input
+                                  type="radio"
+                                  class="w3-radio"
+                                  id="id_element_target_{{ specimen.pk }}"
+                                  name="target"
+                                  value="{{ specimen.element.pk }}"
+                                  {% if forloop.first %}checked{% endif %}
+                                />
+                                <span class="w3-margin-left">{% trans "Target" %}</span>
+                              </label>
+                            </td>
+                            <td>
+                              <label class="w3-small" for="id_element_source_{{ specimen.pk }}">
+                                <input
+                                  type="checkbox"
+                                  class="w3-check"
+                                  id="id_element_source_{{ specimen.pk }}"
+                                  name="source_ids"
+                                  value="{{ specimen.element.pk }}"
+                                />
+                                <span class="w3-margin-left">{% trans "Source" %}</span>
+                              </label>
+                            </td>
+                            <td>{{ specimen.element|default:"—" }}</td>
+                            <td>{{ specimen.side|default:"—" }}</td>
+                            <td>{{ specimen.condition|default:"—" }}</td>
+                            <td>{{ specimen.verbatim_element|default:"—" }}</td>
+                            <td>{{ specimen.portion|default:"—" }}</td>
+                            <td>{{ specimen.fragments|default:"—" }}</td>
+                          </tr>
+                        {% empty %}
+                          <tr>
+                            <td colspan="8" class="w3-center w3-text-gray">{% trans "No elements available to merge." %}</td>
+                          </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
                 </fieldset>
               </div>
             </div>
