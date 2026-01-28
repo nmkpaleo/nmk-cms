@@ -16,3 +16,4 @@
 ## Related layout considerations
 - The accession preview panel also handles geology, accession rows, field slip links, identifications, and media; comments are outside this partial but share the lower-area layout on the detail page.
 - Templates extend `base_generic.html` and use W3.CSS classes and Font Awesome icons for section headers and actions.
+- The accession row detail view exposes an Elements table with edit/delete actions for collection managers, and the delete action routes to a confirmation template before removing a NatureOfSpecimen record.

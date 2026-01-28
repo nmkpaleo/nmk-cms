@@ -1937,6 +1937,32 @@ class AccessionRowDetailView(DetailView):
         return context
 
 
+class NatureOfSpecimenDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
+    model = NatureOfSpecimen
+    template_name = "cms/element_confirm_delete.html"
+    context_object_name = "specimen"
+
+    def test_func(self):
+        user = self.request.user
+        return user.is_superuser or is_collection_manager(user)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["accession_row"] = self.object.accession_row
+        return context
+
+    def delete(self, request, *args, **kwargs):
+        response = super().delete(request, *args, **kwargs)
+        messages.success(
+            request,
+            _("Element deleted successfully."),
+        )
+        return response
+
+    def get_success_url(self):
+        return reverse("accessionrow_detail", kwargs={"pk": self.object.accession_row_id})
+
+
 class BaseAccessionRowPrintView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
     """Render a print-friendly card for a single accession row."""
 
