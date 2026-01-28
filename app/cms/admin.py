@@ -32,6 +32,7 @@ from .merge.signals import merge_failed
 from .models import (
     AccessionNumberSeries,
     NatureOfSpecimen,
+    HistoricalNatureOfSpecimen,
     Element,
     Person,
     Identification,
@@ -1532,6 +1533,7 @@ admin.site.register(Media, MediaAdmin)
 admin.site.register(SpecimenGeology, SpecimenGeologyAdmin)
 admin.site.register(GeologicalContext, GeologicalContextAdmin)
 admin.site.register(UnexpectedSpecimen, HistoricalAdmin)
+admin.site.register(HistoricalNatureOfSpecimen, HistoricalAdmin)
 
 
 @admin.register(DrawerRegister)
