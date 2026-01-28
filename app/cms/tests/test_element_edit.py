@@ -180,6 +180,64 @@ def test_accession_row_detail_shows_edit_buttons(client, collection_manager_user
     assert 'Edit' in content
 
 
+def test_accession_row_detail_shows_delete_buttons(client, collection_manager_user, accession_with_element):
+    """Test that accession row detail page shows delete buttons for elements."""
+    client.login(username="manager", password="testpass123")
+
+    accession_row = accession_with_element['accession_row']
+    element = accession_with_element['element']
+
+    url = reverse('accessionrow_detail', args=[accession_row.id])
+    response = client.get(url)
+
+    assert response.status_code == 200
+    content = response.content.decode()
+
+    delete_url = reverse('element_delete', args=[element.id])
+    assert delete_url in content
+    assert 'Delete' in content
+
+
+def test_element_delete_view_requires_login(client, accession_with_element):
+    """Test that element delete view requires authentication."""
+    element = accession_with_element['element']
+    url = reverse('element_delete', args=[element.id])
+    response = client.get(url)
+
+    assert response.status_code == 302
+    assert '/login/' in response.url or '/accounts/login/' in response.url
+
+
+def test_element_delete_view_requires_collection_manager(client, accession_with_element):
+    """Test that element delete view requires collection manager permission."""
+    regular_user = User.objects.create_user(
+        username="regular-delete",
+        password="testpass123"
+    )
+    client.login(username="regular-delete", password="testpass123")
+
+    element = accession_with_element['element']
+    url = reverse('element_delete', args=[element.id])
+    response = client.get(url)
+
+    assert response.status_code in [302, 403]
+
+
+def test_element_delete_removes_record(client, collection_manager_user, accession_with_element):
+    """Test that element delete removes the NatureOfSpecimen record."""
+    client.login(username="manager", password="testpass123")
+
+    element = accession_with_element['element']
+    accession_row = accession_with_element['accession_row']
+    url = reverse('element_delete', args=[element.id])
+
+    response = client.post(url)
+
+    assert response.status_code == 302
+    assert response.url == reverse('accessionrow_detail', args=[accession_row.id])
+    assert not NatureOfSpecimen.objects.filter(id=element.id).exists()
+
+
 def test_accession_row_specimen_form_field_order():
     """Test that AccessionRowSpecimenForm has correct field order."""
     from cms.forms import AccessionRowSpecimenForm
@@ -397,4 +455,3 @@ def test_accession_row_detail_highlights_latest_identification(client, collectio
     # Check for W3.CSS classes
     assert 'w3-pale-green' in content
     assert 'w3-pale-red' in content
-
