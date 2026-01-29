@@ -258,7 +258,7 @@
 
             <div id="accession-fieldslip-actions" class="w3-row-padding w3-margin-top">
               <div class="w3-col s12 m6">
-                <h3 class="w3-margin-top">{% trans "Add existing field slip" %}</h3>
+                <h3 class="w3-margin-top">{% trans "Link existing field slip" %}</h3>
                 {{ add_fieldslip_form.media }}
                 <form method="post" action="{% url 'accession_add_fieldslip' accession.pk %}" class="w3-margin-top">
                   {% csrf_token %}

@@ -8,7 +8,7 @@ Staff users with the **can_merge** permission on field slips can now merge dupli
 2. In the **Merge field slips** form, choose the **Target field slip** you want to keep and the **Source field slip** you want to merge into it. Only slips already linked to the accession appear in the dropdowns.
 3. Submit the form. On success, the page redirects back to the accession detail view with an updated list and a confirmation banner. If either slip is not linked or the same record is selected twice, the form shows an error and no changes are applied.
 
-Use the existing "Add existing field slip" and "Create and link new field slip" options in the same panel to manage links without merging.
+Use the existing "Link existing field slip" and "Create and link new field slip" options in the same panel to manage links without merging.
 
 ### Audit trail and rollback expectations
 
