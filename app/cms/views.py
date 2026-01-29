@@ -1929,7 +1929,7 @@ class AccessionRowDetailView(DetailView):
         can_merge_elements = (
             self.request.user.has_perm("cms.can_merge")
             and getattr(settings, "MERGE_TOOL_FEATURE", False)
-            and len(unique_elements) >= 2
+            and len(element_merge_rows) >= 2
         )
         context["element_merge_candidates"] = element_merge_rows if can_merge_elements else []
         context["element_merge_unique_elements"] = unique_elements if can_merge_elements else []
