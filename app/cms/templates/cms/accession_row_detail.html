@@ -171,24 +171,26 @@
       </div>
       {% if can_manage %}
         <div class="w3-col s12 m6 w3-right-align">
-          <div class="w3-bar w3-margin-top-small w3-right" role="group" aria-label="{% trans 'Element actions' %}">
-            {% if element_merge_candidates %}
-              <button
-                type="button"
-                id="accession-element-merge-toggle"
-                class="w3-button w3-amber w3-round w3-bar-item"
-                aria-expanded="{{ element_merge_open|yesno:'true,false' }}"
-                aria-controls="accession-element-merge-panel"
-                aria-label="{% trans 'Toggle merge elements panel' %}"
-              >
-                <i class="fa-solid fa-object-group" aria-hidden="true"></i>
-                <span class="w3-hide-small w3-margin-left">{% trans "Merge element" %}</span>
-              </button>
-            {% endif %}
-            <a href="{% url 'accessionrow_add_specimen' accessionrow.id %}" class="w3-button w3-green w3-round w3-bar-item">
-              <i class="fa-solid fa-plus" aria-hidden="true"></i>
-              <span class="w3-hide-small w3-margin-left">{% trans "Add element" %}</span>
-            </a>
+          <div class="w3-right">
+            <div class="w3-bar w3-margin-top-small" role="group" aria-label="{% trans 'Element actions' %}">
+              {% if element_merge_candidates %}
+                <button
+                  type="button"
+                  id="accession-element-merge-toggle"
+                  class="w3-button w3-amber w3-round w3-bar-item"
+                  aria-expanded="{{ element_merge_open|yesno:'true,false' }}"
+                  aria-controls="accession-element-merge-panel"
+                  aria-label="{% trans 'Toggle merge elements panel' %}"
+                >
+                  <i class="fa-solid fa-object-group" aria-hidden="true"></i>
+                  <span class="w3-hide-small w3-margin-left">{% trans "Merge element" %}</span>
+                </button>
+              {% endif %}
+              <a href="{% url 'accessionrow_add_specimen' accessionrow.id %}" class="w3-button w3-green w3-round w3-bar-item">
+                <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                <span class="w3-hide-small w3-margin-left">{% trans "Add element" %}</span>
+              </a>
+            </div>
           </div>
         </div>
       {% endif %}
