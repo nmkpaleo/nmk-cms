@@ -82,6 +82,7 @@ from cms.views import (
     StorageUpdateView,
     ManualQCImportView,
     AccessionRowPrintSmallView,
+    SpecimenListUploadView,
 )
 from .views import PreparationMediaUploadView
 from .views import FieldSlipAutocomplete, ReferenceAutocomplete
@@ -97,6 +98,7 @@ from .admin import taxonomy_sync_apply_view, taxonomy_sync_preview_view
 urlpatterns = [
     path('reports/accession-distribution/', accession_distribution_report, name='accession_distribution_report'),
     path('reports/media/', media_report_view, name='media_report'),
+    path("specimen-lists/upload/", SpecimenListUploadView.as_view(), name="specimen_list_upload"),
     path('manual-import/', ManualQCImportView.as_view(), name='manual_qc_import'),
     path('inventory/', inventory_start, name='inventory_start'),
     path('inventory/update/', inventory_update, name='inventory_update'),

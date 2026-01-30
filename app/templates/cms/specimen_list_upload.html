@@ -1,0 +1,60 @@
+{% extends "base_generic.html" %}
+{% load i18n %}
+
+{% block content %}
+<main class="w3-container w3-content" style="max-width: 960px;">
+  <header class="w3-padding-16">
+    <h1 class="w3-xxlarge">
+      <i class="fa fa-file-pdf-o" aria-hidden="true"></i>
+      {% trans "Specimen list PDF upload" %}
+    </h1>
+    <p class="w3-text-grey">
+      {% trans "Upload one or more handwritten specimen list PDFs for background page splitting and review prep." %}
+    </p>
+  </header>
+
+  <section class="w3-card w3-white w3-padding">
+    <form method="post" enctype="multipart/form-data" class="w3-container">
+      {% csrf_token %}
+
+      <div class="w3-section">
+        <label for="{{ form.source_label.id_for_label }}" class="w3-text-grey">
+          {{ form.source_label.label }}
+        </label>
+        {{ form.source_label }}
+        {% if form.source_label.help_text %}
+          <p class="w3-small w3-text-grey">{{ form.source_label.help_text }}</p>
+        {% endif %}
+        {% for error in form.source_label.errors %}
+          <p class="w3-text-red">{{ error }}</p>
+        {% endfor %}
+      </div>
+
+      <div class="w3-section">
+        <label for="{{ form.files.id_for_label }}" class="w3-text-grey">
+          {{ form.files.label }}
+        </label>
+        {{ form.files }}
+        {% for error in form.files.errors %}
+          <p class="w3-text-red">{{ error }}</p>
+        {% endfor %}
+      </div>
+
+      {% if form.non_field_errors %}
+        <div class="w3-panel w3-pale-red w3-border">
+          {% for error in form.non_field_errors %}
+            <p>{{ error }}</p>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <div class="w3-section">
+        <button class="w3-button w3-blue w3-round-large" type="submit">
+          <i class="fa fa-upload" aria-hidden="true"></i>
+          {% trans "Upload PDFs" %}
+        </button>
+      </div>
+    </form>
+  </section>
+</main>
+{% endblock %}

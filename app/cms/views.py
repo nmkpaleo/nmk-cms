@@ -99,6 +99,7 @@ from cms.forms import (
     SpecimenCompositeForm,
     StorageForm,
     ensure_manual_qc_permission,
+    SpecimenListUploadForm,
 )
 
 from cms.models import (
@@ -133,6 +134,7 @@ from cms.models import (
     MediaQCLog,
     MediaQCComment,
     LLMUsageRecord,
+    SpecimenListPDF,
 )
 from django.shortcuts import render
 from .models import Media
@@ -157,7 +159,7 @@ from cms.merge.fuzzy import score_candidates
 from cms.resources import FieldSlipResource
 from .utils import build_accession_identification_maps, build_history_entries
 from cms.utils import generate_accessions_from_series
-from cms.upload_processing import process_file
+from cms.upload_processing import process_file, queue_specimen_list_processing
 from cms.ocr_processing import process_pending_scans, describe_accession_conflicts
 from cms.qc import (
     build_preview_accession,
@@ -4534,6 +4536,44 @@ def upload_scan(request):
     }
 
     return render(request, 'admin/upload_scan.html', context)
+
+
+class SpecimenListUploadView(LoginRequiredMixin, PermissionRequiredMixin, FormView):
+    template_name = "cms/specimen_list_upload.html"
+    form_class = SpecimenListUploadForm
+    permission_required = "cms.add_specimenlistpdf"
+    success_url = reverse_lazy("specimen_list_upload")
+
+    def form_valid(self, form):
+        source_label = form.cleaned_data["source_label"]
+        files = form.cleaned_data["files"]
+        created: list[SpecimenListPDF] = []
+
+        with transaction.atomic():
+            for uploaded in files:
+                pdf = SpecimenListPDF.objects.create(
+                    source_label=source_label,
+                    original_filename=uploaded.name,
+                    stored_file=uploaded,
+                    uploaded_by=self.request.user,
+                )
+                created.append(pdf)
+                transaction.on_commit(
+                    lambda pdf_id=pdf.id: queue_specimen_list_processing(pdf_id)
+                )
+
+        count = len(created)
+        if count:
+            messages.success(
+                self.request,
+                ngettext(
+                    "Queued %(count)d specimen list PDF for processing.",
+                    "Queued %(count)d specimen list PDFs for processing.",
+                    count,
+                )
+                % {"count": count},
+            )
+        return redirect(self.get_success_url())
 
 
 def _count_pending_scans() -> int:
