@@ -64,6 +64,8 @@ from .models import (
     MergeLog,
     Organisation,
     UserOrganisation,
+    SpecimenListPDF,
+    SpecimenListPage,
 )
 from .resources import *
 
@@ -523,6 +525,53 @@ class UserOrganisationInline(admin.StackedInline):
     extra = 0
     fk_name = "user"
     verbose_name_plural = _("Organisation membership")
+
+
+class SpecimenListPageInline(admin.TabularInline):
+    model = SpecimenListPage
+    extra = 0
+    fields = (
+        "page_number",
+        "page_type",
+        "pipeline_status",
+        "assigned_reviewer",
+        "locked_at",
+        "reviewed_at",
+        "approved_at",
+    )
+    readonly_fields = ("locked_at", "reviewed_at", "approved_at")
+    ordering = ("page_number",)
+
+
+@admin.register(SpecimenListPDF)
+class SpecimenListPDFAdmin(SimpleHistoryAdmin):
+    list_display = (
+        "source_label",
+        "original_filename",
+        "status",
+        "page_count",
+        "uploaded_by",
+        "uploaded_at",
+    )
+    list_filter = ("status", "source_label")
+    search_fields = ("original_filename", "source_label", "uploaded_by__username")
+    readonly_fields = ("sha256", "page_count", "uploaded_at")
+    inlines = [SpecimenListPageInline]
+
+
+@admin.register(SpecimenListPage)
+class SpecimenListPageAdmin(SimpleHistoryAdmin):
+    list_display = (
+        "pdf",
+        "page_number",
+        "page_type",
+        "pipeline_status",
+        "assigned_reviewer",
+        "locked_at",
+    )
+    list_filter = ("pipeline_status", "page_type")
+    search_fields = ("pdf__original_filename", "pdf__source_label")
+    readonly_fields = ("locked_at", "reviewed_at", "approved_at")
 
 class DuplicateFilter(admin.SimpleListFilter):
     title = 'By Duplicate specimen_no + prefix'
