@@ -203,18 +203,22 @@ def process_specimen_list_pdf(pdf_id: int) -> None:
             output_dir = Path(tmpdir)
             page_total = _get_pdf_page_count(pdf_path)
 
-            if pdf.pages.exists():
-                pdf.pages.all().delete()
-
             pages: list[SpecimenListPage] = []
             for page_number in range(1, page_total + 1):
+                existing = pdf.pages.filter(page_number=page_number).first()
+                if existing and existing.image_file:
+                    pages.append(existing)
+                    continue
                 image_path = _split_pdf_page_to_image(
                     pdf_path,
                     output_dir,
                     dpi=SPECIMEN_LIST_DPI,
                     page_number=page_number,
                 )
-                page = SpecimenListPage(pdf=pdf, page_number=page_number)
+                page = existing or SpecimenListPage(
+                    pdf=pdf,
+                    page_number=page_number,
+                )
                 with image_path.open("rb") as handle:
                     page.image_file.save(image_path.name, File(handle), save=False)
                 page.save()
