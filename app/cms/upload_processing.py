@@ -140,6 +140,9 @@ def _page_sort_key(path: Path) -> tuple[int, str]:
 
 
 def queue_specimen_list_processing(pdf_id: int) -> None:
+    if not getattr(settings, "SPECIMEN_LIST_PROCESS_ASYNC", False):
+        process_specimen_list_pdf(pdf_id)
+        return
     thread = threading.Thread(
         target=process_specimen_list_pdf,
         args=(pdf_id,),
