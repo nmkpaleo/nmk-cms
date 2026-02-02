@@ -111,7 +111,19 @@ def _compute_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _split_pdf_to_images(pdf_path: Path, output_dir: Path, dpi: int) -> list[Path]:
+def _get_pdf_page_count(pdf_path: Path) -> int:
+    command = ["pdfinfo", str(pdf_path)]
+    result = subprocess.run(command, check=True, capture_output=True, text=True)
+    for line in result.stdout.splitlines():
+        if line.lower().startswith("pages:"):
+            value = line.split(":", 1)[1].strip()
+            return int(value)
+    raise RuntimeError("Unable to determine PDF page count via pdfinfo.")
+
+
+def _split_pdf_page_to_image(
+    pdf_path: Path, output_dir: Path, dpi: int, page_number: int
+) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     prefix = output_dir / "page"
     command = [
@@ -119,24 +131,20 @@ def _split_pdf_to_images(pdf_path: Path, output_dir: Path, dpi: int) -> list[Pat
         "-png",
         "-r",
         str(dpi),
+        "-f",
+        str(page_number),
+        "-l",
+        str(page_number),
         str(pdf_path),
         str(prefix),
     ]
     subprocess.run(command, check=True)
-    images = sorted(output_dir.glob("page-*.png"), key=_page_sort_key)
-    renamed: list[Path] = []
-    for index, image in enumerate(images, start=1):
-        renamed_path = output_dir / f"page_{index:03d}.png"
-        image.rename(renamed_path)
-        renamed.append(renamed_path)
-    return renamed
-
-
-def _page_sort_key(path: Path) -> tuple[int, str]:
-    match = re.search(r"page-(\d+)\.png$", path.name)
-    if match:
-        return int(match.group(1)), path.name
-    return 0, path.name
+    image = output_dir / f"page-{page_number}.png"
+    if not image.exists():
+        raise RuntimeError(f"Expected page image not found for page {page_number}.")
+    renamed_path = output_dir / f"page_{page_number:03d}.png"
+    image.rename(renamed_path)
+    return renamed_path
 
 
 def queue_specimen_list_processing(pdf_id: int) -> None:
@@ -187,25 +195,25 @@ def process_specimen_list_pdf(pdf_id: int) -> None:
 
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
-            image_paths = _split_pdf_to_images(
-                pdf_path, Path(tmpdir), dpi=SPECIMEN_LIST_DPI
-            )
-
-            if not image_paths:
-                raise RuntimeError("No images were produced from the PDF.")
+            output_dir = Path(tmpdir)
+            page_total = _get_pdf_page_count(pdf_path)
 
             if pdf.pages.exists():
                 pdf.pages.all().delete()
 
             pages: list[SpecimenListPage] = []
-            for index, image_path in enumerate(image_paths, start=1):
-                page = SpecimenListPage(pdf=pdf, page_number=index)
+            for page_number in range(1, page_total + 1):
+                image_path = _split_pdf_page_to_image(
+                    pdf_path,
+                    output_dir,
+                    dpi=SPECIMEN_LIST_DPI,
+                    page_number=page_number,
+                )
+                page = SpecimenListPage(pdf=pdf, page_number=page_number)
                 with image_path.open("rb") as handle:
                     page.image_file.save(image_path.name, File(handle), save=False)
-                pages.append(page)
-
-            for page in pages:
                 page.save()
+                pages.append(page)
 
             pdf.page_count = len(pages)
             pdf.status = SpecimenListPDF.Status.SPLIT
