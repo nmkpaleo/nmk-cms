@@ -1,0 +1,65 @@
+{% extends "base_generic.html" %}
+{% load i18n %}
+
+{% block content %}
+<main class="w3-container w3-content" style="max-width: 1200px;">
+  <header class="w3-padding-16">
+    <h1 class="w3-xxlarge">
+      <i class="fa fa-file-text-o" aria-hidden="true"></i>
+      {% trans "Specimen list page review" %}
+    </h1>
+    <p class="w3-text-grey">
+      {% blocktrans %}Review page {{ page.page_number }} from {{ page.pdf.original_filename }}.{% endblocktrans %}
+    </p>
+  </header>
+
+  <section class="w3-card w3-white w3-padding w3-margin-bottom">
+    <div class="w3-row-padding">
+      <div class="w3-half">
+        <p><strong>{% trans "Source" %}:</strong> {{ page.pdf.source_label }}</p>
+        <p><strong>{% trans "Status" %}:</strong> {{ page.get_pipeline_status_display }}</p>
+      </div>
+      <div class="w3-half">
+        <p><strong>{% trans "Assigned reviewer" %}:</strong> {{ page.assigned_reviewer|default:"—" }}</p>
+        <p><strong>{% trans "Lock timestamp" %}:</strong> {{ page.locked_at|default:"—" }}</p>
+      </div>
+    </div>
+
+    {% if page.assigned_reviewer and page.assigned_reviewer != request.user and not lock_expired %}
+      <div class="w3-panel w3-pale-yellow w3-border">
+        {% trans "This page is currently locked by another reviewer." %}
+      </div>
+    {% elif lock_expired and page.assigned_reviewer and page.assigned_reviewer != request.user %}
+      <div class="w3-panel w3-pale-yellow w3-border">
+        {% trans "The lock has expired. Reload to take ownership." %}
+      </div>
+    {% endif %}
+  </section>
+
+  <section class="w3-card w3-white w3-padding">
+    {% if page.image_file %}
+      <img src="{{ page.image_file.url }}" alt="{% trans 'Specimen list page image' %}" class="w3-image w3-border" />
+    {% else %}
+      <p class="w3-text-grey">{% trans "No page image is available yet." %}</p>
+    {% endif %}
+
+    <form method="post" class="w3-section">
+      {% csrf_token %}
+      <div class="w3-bar">
+        <button class="w3-button w3-green w3-round-large" type="submit" name="action" value="approve">
+          <i class="fa fa-check" aria-hidden="true"></i>
+          {% trans "Approve" %}
+        </button>
+        <button class="w3-button w3-red w3-round-large" type="submit" name="action" value="reject">
+          <i class="fa fa-times" aria-hidden="true"></i>
+          {% trans "Reject" %}
+        </button>
+        <button class="w3-button w3-light-grey w3-round-large" type="submit" name="action" value="release">
+          <i class="fa fa-unlock" aria-hidden="true"></i>
+          {% trans "Release lock" %}
+        </button>
+      </div>
+    </form>
+  </section>
+</main>
+{% endblock %}
