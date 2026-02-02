@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Add admin support for specimen list PDF ingestion, including requeue controls for failed splits and admin guidance.
 - Clarify the developer planning and coding prompts with refreshed dependency snapshots, PR messaging guidance, and documentation hygiene notes for Django 5.2.
 - Document the Django 5.2 LTS upgrade with updated dependency expectations, host/CSRF configuration guidance, auth tightening, and rollback steps across user, admin, and developer docs.
 - Harden Docker deployment assets for Django 5.2 with Gunicorn tuning defaults, compose environment alignment, and CI compile checks before image builds.

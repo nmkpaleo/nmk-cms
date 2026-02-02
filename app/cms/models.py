@@ -2694,6 +2694,9 @@ class SpecimenListPDF(BaseModel):
     def __str__(self):
         return f"{self.source_label} ({self.original_filename})"
 
+    def can_requeue(self) -> bool:
+        return self.status == self.Status.ERROR
+
 
 class SpecimenListPage(BaseModel):
     class PageType(models.TextChoices):
