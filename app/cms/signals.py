@@ -9,6 +9,8 @@ from cms.models import (
     AccessionReference,
     DrawerRegister,
     Media,
+    SpecimenListPDF,
+    SpecimenListPage,
 )
 
 User = get_user_model()
@@ -55,3 +57,15 @@ def check_series_completion(sender, instance, **kwargs):
 def delete_media_file_on_delete(sender, instance, **kwargs):
     if instance.media_location:
         instance.media_location.delete(save=False)
+
+
+@receiver(post_delete, sender=SpecimenListPDF)
+def delete_specimen_list_pdf_file_on_delete(sender, instance, **kwargs):
+    if instance.stored_file:
+        instance.stored_file.delete(save=False)
+
+
+@receiver(post_delete, sender=SpecimenListPage)
+def delete_specimen_list_page_file_on_delete(sender, instance, **kwargs):
+    if instance.image_file:
+        instance.image_file.delete(save=False)
