@@ -1,7 +1,9 @@
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
+from pathlib import Path
 
 from cms.models import (
     Accession,
@@ -9,6 +11,8 @@ from cms.models import (
     AccessionReference,
     DrawerRegister,
     Media,
+    SpecimenListPDF,
+    SpecimenListPage,
 )
 
 User = get_user_model()
@@ -55,3 +59,32 @@ def check_series_completion(sender, instance, **kwargs):
 def delete_media_file_on_delete(sender, instance, **kwargs):
     if instance.media_location:
         instance.media_location.delete(save=False)
+
+
+@receiver(post_delete, sender=SpecimenListPDF)
+def delete_specimen_list_pdf_file_on_delete(sender, instance, **kwargs):
+    if instance.stored_file:
+        instance.stored_file.delete(save=False)
+    if not instance.pk:
+        return
+    pages_dir = (
+        Path(settings.MEDIA_ROOT)
+        / "uploads"
+        / "specimen_lists"
+        / "pages"
+        / str(instance.pk)
+    )
+    try:
+        if pages_dir.exists() and pages_dir.is_dir():
+            remaining = [item for item in pages_dir.iterdir() if item.is_file()]
+            if not remaining:
+                pages_dir.rmdir()
+    except Exception:
+        # Avoid raising on cleanup; storage backends may not expose local paths.
+        return
+
+
+@receiver(post_delete, sender=SpecimenListPage)
+def delete_specimen_list_page_file_on_delete(sender, instance, **kwargs):
+    if instance.image_file:
+        instance.image_file.delete(save=False)

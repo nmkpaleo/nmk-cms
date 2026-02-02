@@ -1,6 +1,7 @@
 import csv
 import io
 import posixpath
+import re
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -1071,6 +1072,30 @@ class ScanUploadForm(BaseW3Form):
         if errors:
             raise forms.ValidationError(errors)
 
+        return uploaded_files
+
+
+class SpecimenListUploadForm(BaseW3Form):
+    source_label = forms.CharField(
+        max_length=255,
+        label=_("Source label"),
+        help_text=_("Provide the source label for this upload batch."),
+    )
+    files = MultiFileField(label=_("Specimen list PDFs"))
+
+    def clean_source_label(self):
+        raw_value = self.cleaned_data.get("source_label", "")
+        value = re.sub(r"\s+", " ", raw_value).strip()
+        if not value:
+            raise forms.ValidationError(_("Source label is required."))
+        return value
+
+    def clean_files(self):
+        uploaded_files = self.cleaned_data.get("files", [])
+        if not uploaded_files:
+            raise forms.ValidationError(
+                _("No file was submitted. Check the encoding type on the form.")
+            )
         return uploaded_files
 
 

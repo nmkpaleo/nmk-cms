@@ -10,7 +10,7 @@ from django.core.exceptions import ValidationError
 from django.urls import reverse
 from django.utils import timezone
 from django_userforeignkey.models.fields import UserForeignKey
-from django.db.models import Count, Sum, UniqueConstraint
+from django.db.models import Count, Index, Sum, UniqueConstraint
 from django.contrib.auth.models import User
 from simple_history.models import HistoricalRecords
 import os # For file handling in media class
@@ -2613,3 +2613,180 @@ class Scanning(BaseModel):
 
     def __str__(self):
         return f"{self.drawer.code} - {self.user} ({self.start_time})"
+
+
+def specimen_list_pdf_upload_to(instance: "SpecimenListPDF", filename: str) -> str:
+    extension = os.path.splitext(filename)[1] or ".pdf"
+    return f"uploads/specimen_lists/original/{uuid.uuid4()}{extension}"
+
+
+def specimen_list_page_upload_to(instance: "SpecimenListPage", filename: str) -> str:
+    extension = os.path.splitext(filename)[1] or ".png"
+    page_number = instance.page_number or 0
+    pdf_id = instance.pdf_id or "unassigned"
+    return (
+        "uploads/specimen_lists/pages/"
+        f"{pdf_id}/page_{page_number:03d}_{uuid.uuid4()}{extension}"
+    )
+
+
+class SpecimenListPDF(BaseModel):
+    class Status(models.TextChoices):
+        UPLOADED = "uploaded", _("Uploaded")
+        SPLIT = "split", _("Split")
+        PROCESSING = "processing", _("Processing")
+        DONE = "done", _("Done")
+        ERROR = "error", _("Error")
+
+    source_label = models.CharField(
+        max_length=255,
+        db_index=True,
+        help_text=_("Normalized source label for the upload batch."),
+    )
+    original_filename = models.CharField(
+        max_length=255,
+        help_text=_("Original filename provided at upload time."),
+    )
+    stored_file = models.FileField(
+        upload_to=specimen_list_pdf_upload_to,
+        help_text=_("Stored PDF file using UUID naming."),
+    )
+    sha256 = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text=_("SHA256 checksum for duplicate detection."),
+    )
+    page_count = models.PositiveIntegerField(
+        default=0,
+        help_text=_("Total number of pages extracted from the PDF."),
+    )
+    uploaded_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="specimen_list_pdfs",
+        help_text=_("User who uploaded the PDF."),
+    )
+    uploaded_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text=_("Timestamp when the PDF was uploaded."),
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.UPLOADED,
+        help_text=_("Current processing status for the PDF."),
+    )
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ["-uploaded_at"]
+        verbose_name = _("Specimen list PDF")
+        verbose_name_plural = _("Specimen list PDFs")
+
+    def clean(self):
+        user = get_current_user()
+        if not user or isinstance(user, AnonymousUser):
+            return None
+        return super().clean()
+
+    def __str__(self):
+        return f"{self.source_label} ({self.original_filename})"
+
+    def can_requeue(self) -> bool:
+        return self.status == self.Status.ERROR
+
+    def can_split(self) -> bool:
+        return self.status in {self.Status.UPLOADED, self.Status.ERROR}
+
+
+class SpecimenListPage(BaseModel):
+    class PageType(models.TextChoices):
+        UNKNOWN = "unknown", _("Unknown")
+        SPECIMEN_LIST = "specimen_list", _("Specimen list")
+        FREE_TEXT = "free_text", _("Free text")
+        TYPED_TEXT = "typed_text", _("Typed text")
+        OTHER = "other", _("Other")
+
+    class PipelineStatus(models.TextChoices):
+        PENDING = "pending", _("Pending")
+        CLASSIFIED = "classified", _("Classified")
+        OCR_DONE = "ocr_done", _("OCR done")
+        EXTRACTED = "extracted", _("Extracted")
+        IN_REVIEW = "in_review", _("In review")
+        APPROVED = "approved", _("Approved")
+        REJECTED = "rejected", _("Rejected")
+
+    pdf = models.ForeignKey(
+        SpecimenListPDF,
+        on_delete=models.CASCADE,
+        related_name="pages",
+        help_text=_("Parent specimen list PDF."),
+    )
+    page_number = models.PositiveIntegerField(
+        help_text=_("Page number within the PDF (1-based)."),
+    )
+    image_file = models.FileField(
+        upload_to=specimen_list_page_upload_to,
+        null=True,
+        blank=True,
+        help_text=_("Stored page image using UUID naming."),
+    )
+    page_type = models.CharField(
+        max_length=20,
+        choices=PageType.choices,
+        default=PageType.UNKNOWN,
+        help_text=_("Classified page type."),
+    )
+    pipeline_status = models.CharField(
+        max_length=20,
+        choices=PipelineStatus.choices,
+        default=PipelineStatus.PENDING,
+        help_text=_("Processing status within the ingestion pipeline."),
+    )
+    assigned_reviewer = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="specimen_list_pages",
+        help_text=_("Reviewer currently assigned to this page."),
+    )
+    locked_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=_("Timestamp when the page was locked for review."),
+    )
+    reviewed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=_("Timestamp when the page was reviewed."),
+    )
+    approved_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=_("Timestamp when the page was approved."),
+    )
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ["pdf", "page_number"]
+        verbose_name = _("Specimen list page")
+        verbose_name_plural = _("Specimen list pages")
+        constraints = [
+            UniqueConstraint(fields=["pdf", "page_number"], name="uniq_specimen_page"),
+        ]
+        indexes = [
+            Index(fields=["pipeline_status"]),
+            Index(fields=["page_type"]),
+        ]
+
+    def clean(self):
+        user = get_current_user()
+        if not user or isinstance(user, AnonymousUser):
+            return None
+        return super().clean()
+
+    def __str__(self):
+        return f"{self.pdf} - {self.page_number}"

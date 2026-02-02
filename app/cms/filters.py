@@ -16,6 +16,7 @@ from .models import (
     Taxon,
     TaxonRank,
     TaxonStatus,
+    SpecimenListPage,
 )
 from django.contrib.auth import get_user_model
 
@@ -198,6 +199,7 @@ class AccessionFilter(django_filters.FilterSet):
     def filter_by_family(self, queryset, name, value):
         return self._filter_by_taxon_attribute(queryset, "family", value)
 
+
     def filter_by_subfamily(self, queryset, name, value):
         return self._filter_by_taxon_attribute(queryset, "subfamily", value)
 
@@ -209,6 +211,39 @@ class AccessionFilter(django_filters.FilterSet):
 
     def filter_by_species(self, queryset, name, value):
         return self._filter_by_taxon_attribute(queryset, "species", value)
+
+
+class SpecimenListPageFilter(django_filters.FilterSet):
+    source_label = django_filters.CharFilter(
+        field_name="pdf__source_label",
+        lookup_expr="icontains",
+        label=_("Source label"),
+        widget=forms.TextInput(attrs={"class": "w3-input"}),
+    )
+    pipeline_status = django_filters.ChoiceFilter(
+        choices=SpecimenListPage.PipelineStatus.choices,
+        label=_("Pipeline status"),
+        widget=forms.Select(attrs={"class": "w3-select"}),
+    )
+    page_type = django_filters.ChoiceFilter(
+        choices=SpecimenListPage.PageType.choices,
+        label=_("Page type"),
+        widget=forms.Select(attrs={"class": "w3-select"}),
+    )
+    assigned_reviewer = django_filters.ModelChoiceFilter(
+        queryset=User.objects.none(),
+        label=_("Assigned reviewer"),
+        widget=forms.Select(attrs={"class": "w3-select"}),
+    )
+
+    class Meta:
+        model = SpecimenListPage
+        fields = ["source_label", "pipeline_status", "page_type", "assigned_reviewer"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.filters["assigned_reviewer"].queryset = User.objects.order_by("username")
+        _ensure_filters_use_w3_styles(self.filters)
 
 
 class PreparationFilter(django_filters.FilterSet):

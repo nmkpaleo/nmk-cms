@@ -34,6 +34,7 @@ from .filters import (
     PlaceFilter,
     DrawerRegisterFilter,
     StorageFilter,
+    SpecimenListPageFilter,
 )
 
 
@@ -99,6 +100,7 @@ from cms.forms import (
     SpecimenCompositeForm,
     StorageForm,
     ensure_manual_qc_permission,
+    SpecimenListUploadForm,
 )
 
 from cms.models import (
@@ -133,6 +135,8 @@ from cms.models import (
     MediaQCLog,
     MediaQCComment,
     LLMUsageRecord,
+    SpecimenListPDF,
+    SpecimenListPage,
 )
 from django.shortcuts import render
 from .models import Media
@@ -157,7 +161,7 @@ from cms.merge.fuzzy import score_candidates
 from cms.resources import FieldSlipResource
 from .utils import build_accession_identification_maps, build_history_entries
 from cms.utils import generate_accessions_from_series
-from cms.upload_processing import process_file
+from cms.upload_processing import process_file, queue_specimen_list_processing
 from cms.ocr_processing import process_pending_scans, describe_accession_conflicts
 from cms.qc import (
     build_preview_accession,
@@ -170,6 +174,17 @@ from formtools.wizard.views import SessionWizardView
 
 _ident_payload_has_meaningful_data = qc_ident_payload_has_meaningful_data
 _interpreted_value = qc_interpreted_value
+
+SPECIMEN_LIST_LOCK_TTL_SECONDS = getattr(
+    settings, "SPECIMEN_LIST_LOCK_TTL_SECONDS", 900
+)
+
+
+def _lock_is_expired(locked_at: datetime | None) -> bool:
+    if not locked_at:
+        return True
+    expires_at = locked_at + timedelta(seconds=SPECIMEN_LIST_LOCK_TTL_SECONDS)
+    return timezone.now() >= expires_at
 
 
 def is_collection_manager(user):
@@ -4534,6 +4549,140 @@ def upload_scan(request):
     }
 
     return render(request, 'admin/upload_scan.html', context)
+
+
+class SpecimenListUploadView(LoginRequiredMixin, PermissionRequiredMixin, FormView):
+    template_name = "cms/specimen_list_upload.html"
+    form_class = SpecimenListUploadForm
+    permission_required = "cms.add_specimenlistpdf"
+    success_url = reverse_lazy("specimen_list_upload")
+
+    def form_valid(self, form):
+        source_label = form.cleaned_data["source_label"]
+        files = form.cleaned_data["files"]
+        created: list[SpecimenListPDF] = []
+
+        with transaction.atomic():
+            for uploaded in files:
+                pdf = SpecimenListPDF.objects.create(
+                    source_label=source_label,
+                    original_filename=uploaded.name,
+                    stored_file=uploaded,
+                    uploaded_by=self.request.user,
+                )
+                created.append(pdf)
+                transaction.on_commit(
+                    lambda pdf_id=pdf.id: queue_specimen_list_processing(pdf_id)
+                )
+
+        count = len(created)
+        if count:
+            messages.success(
+                self.request,
+                ngettext(
+                    "Queued %(count)d specimen list PDF for processing.",
+                    "Queued %(count)d specimen list PDFs for processing.",
+                    count,
+                )
+                % {"count": count},
+            )
+        return redirect(self.get_success_url())
+
+
+class SpecimenListQueueView(LoginRequiredMixin, PermissionRequiredMixin, FilterView):
+    template_name = "cms/specimen_list_queue.html"
+    filterset_class = SpecimenListPageFilter
+    paginate_by = 25
+    permission_required = "cms.review_specimenlistpage"
+
+    def get_queryset(self):
+        return (
+            SpecimenListPage.objects.select_related("pdf", "assigned_reviewer")
+            .order_by("pipeline_status", "pdf_id", "page_number")
+        )
+
+
+class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    template_name = "cms/specimen_list_page_review.html"
+    permission_required = "cms.review_specimenlistpage"
+
+    def get(self, request, pk):
+        page = self._claim_page(request, pk)
+        context = self._build_context(request, page)
+        return render(request, self.template_name, context)
+
+    def post(self, request, pk):
+        action = request.POST.get("action")
+        page = self._update_review_status(request, pk, action)
+        context = self._build_context(request, page)
+        return render(request, self.template_name, context)
+
+    def _claim_page(self, request, pk: int) -> SpecimenListPage:
+        with transaction.atomic():
+            page = (
+                SpecimenListPage.objects.select_for_update()
+                .select_related("pdf", "assigned_reviewer")
+                .get(pk=pk)
+            )
+            if page.assigned_reviewer and page.assigned_reviewer != request.user:
+                if not _lock_is_expired(page.locked_at):
+                    return page
+
+            page.assigned_reviewer = request.user
+            page.locked_at = timezone.now()
+            page.pipeline_status = SpecimenListPage.PipelineStatus.IN_REVIEW
+            page.save(update_fields=["assigned_reviewer", "locked_at", "pipeline_status"])
+            return page
+
+    def _update_review_status(
+        self, request, pk: int, action: str | None
+    ) -> SpecimenListPage:
+        with transaction.atomic():
+            page = (
+                SpecimenListPage.objects.select_for_update()
+                .select_related("pdf", "assigned_reviewer")
+                .get(pk=pk)
+            )
+            if page.assigned_reviewer and page.assigned_reviewer != request.user:
+                if not _lock_is_expired(page.locked_at):
+                    return page
+
+            now_time = timezone.now()
+            if action == "release":
+                page.assigned_reviewer = None
+                page.locked_at = None
+                page.pipeline_status = SpecimenListPage.PipelineStatus.PENDING
+                page.save(update_fields=["assigned_reviewer", "locked_at", "pipeline_status"])
+            elif action == "approve":
+                page.pipeline_status = SpecimenListPage.PipelineStatus.APPROVED
+                page.reviewed_at = now_time
+                page.approved_at = now_time
+                page.locked_at = None
+                page.save(
+                    update_fields=[
+                        "pipeline_status",
+                        "reviewed_at",
+                        "approved_at",
+                        "locked_at",
+                    ]
+                )
+            elif action == "reject":
+                page.pipeline_status = SpecimenListPage.PipelineStatus.REJECTED
+                page.reviewed_at = now_time
+                page.locked_at = None
+                page.save(
+                    update_fields=["pipeline_status", "reviewed_at", "locked_at"]
+                )
+            return page
+
+    def _build_context(self, request, page: SpecimenListPage) -> dict[str, Any]:
+        lock_expired = _lock_is_expired(page.locked_at)
+        return {
+            "page": page,
+            "lock_expired": lock_expired,
+            "lock_ttl_seconds": SPECIMEN_LIST_LOCK_TTL_SECONDS,
+            "can_take_over": lock_expired,
+        }
 
 
 def _count_pending_scans() -> int:

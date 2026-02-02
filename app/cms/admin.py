@@ -64,6 +64,8 @@ from .models import (
     MergeLog,
     Organisation,
     UserOrganisation,
+    SpecimenListPDF,
+    SpecimenListPage,
 )
 from .resources import *
 
@@ -76,6 +78,7 @@ from django.contrib.auth import admin as auth_admin
 from django.contrib.auth import get_user_model
 
 from .taxonomy import NowTaxonomySyncService
+from cms.upload_processing import queue_specimen_list_processing
 
 # Configure the logger
 logging.basicConfig(level=logging.INFO)  # You can adjust the level as needed (DEBUG, WARNING, ERROR, etc.)
@@ -523,6 +526,91 @@ class UserOrganisationInline(admin.StackedInline):
     extra = 0
     fk_name = "user"
     verbose_name_plural = _("Organisation membership")
+
+
+class SpecimenListPageInline(admin.TabularInline):
+    model = SpecimenListPage
+    extra = 0
+    fields = (
+        "page_number",
+        "page_type",
+        "pipeline_status",
+        "assigned_reviewer",
+        "locked_at",
+        "reviewed_at",
+        "approved_at",
+    )
+    readonly_fields = ("locked_at", "reviewed_at", "approved_at")
+    ordering = ("page_number",)
+
+
+@admin.register(SpecimenListPDF)
+class SpecimenListPDFAdmin(SimpleHistoryAdmin):
+    change_form_template = "admin/specimen_list_pdf.html"
+    list_display = (
+        "source_label",
+        "original_filename",
+        "status",
+        "page_count",
+        "uploaded_by",
+        "uploaded_at",
+    )
+    list_filter = ("status", "source_label")
+    search_fields = ("original_filename", "source_label", "uploaded_by__username")
+    readonly_fields = ("sha256", "page_count", "uploaded_at")
+    inlines = [SpecimenListPageInline]
+
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        extra_context = extra_context or {}
+        if object_id:
+            pdf = self.get_object(request, object_id)
+            extra_context["specimen_list_pdf"] = pdf
+        if request.method == "POST" and "_requeue_pages" in request.POST:
+            if object_id and self.has_change_permission(request):
+                pdf = self.get_object(request, object_id)
+                if pdf and pdf.can_requeue():
+                    queue_specimen_list_processing(pdf.id)
+                    messages.success(
+                        request,
+                        _("Requeued specimen list PDF for splitting."),
+                    )
+                else:
+                    messages.warning(
+                        request,
+                        _("Specimen list PDF is not in an error state."),
+                    )
+            return redirect(request.path)
+        if request.method == "POST" and "_start_split" in request.POST:
+            if object_id and self.has_change_permission(request):
+                pdf = self.get_object(request, object_id)
+                if pdf and pdf.can_split():
+                    queue_specimen_list_processing(pdf.id)
+                    messages.success(
+                        request,
+                        _("Queued specimen list PDF for splitting."),
+                    )
+                else:
+                    messages.warning(
+                        request,
+                        _("Specimen list PDF cannot be split in its current state."),
+                    )
+            return redirect(request.path)
+        return super().changeform_view(request, object_id, form_url, extra_context)
+
+
+@admin.register(SpecimenListPage)
+class SpecimenListPageAdmin(SimpleHistoryAdmin):
+    list_display = (
+        "pdf",
+        "page_number",
+        "page_type",
+        "pipeline_status",
+        "assigned_reviewer",
+        "locked_at",
+    )
+    list_filter = ("pipeline_status", "page_type")
+    search_fields = ("pdf__original_filename", "pdf__source_label")
+    readonly_fields = ("locked_at", "reviewed_at", "approved_at")
 
 class DuplicateFilter(admin.SimpleListFilter):
     title = 'By Duplicate specimen_no + prefix'
