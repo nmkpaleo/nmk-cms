@@ -11,3 +11,7 @@ Admins can monitor specimen list PDF ingestion in Django admin, review processin
 ## Operational notes
 - Requeueing is available only for PDFs in an error state.
 - Page records are recreated during reprocessing to keep the page list consistent with the source PDF.
+
+## Rollout and rollback
+- **Rollout:** Enable the ingestion feature flag in configuration to expose the upload and review UI to staff.
+- **Rollback:** Disable the feature flag to hide the ingestion UI. Existing uploads remain stored for later reprocessing.
