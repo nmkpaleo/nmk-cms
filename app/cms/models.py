@@ -2697,6 +2697,9 @@ class SpecimenListPDF(BaseModel):
     def can_requeue(self) -> bool:
         return self.status == self.Status.ERROR
 
+    def can_split(self) -> bool:
+        return self.status in {self.Status.UPLOADED, self.Status.ERROR}
+
 
 class SpecimenListPage(BaseModel):
     class PageType(models.TextChoices):

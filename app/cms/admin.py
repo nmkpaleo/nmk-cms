@@ -580,6 +580,21 @@ class SpecimenListPDFAdmin(SimpleHistoryAdmin):
                         _("Specimen list PDF is not in an error state."),
                     )
             return redirect(request.path)
+        if request.method == "POST" and "_start_split" in request.POST:
+            if object_id and self.has_change_permission(request):
+                pdf = self.get_object(request, object_id)
+                if pdf and pdf.can_split():
+                    queue_specimen_list_processing(pdf.id)
+                    messages.success(
+                        request,
+                        _("Queued specimen list PDF for splitting."),
+                    )
+                else:
+                    messages.warning(
+                        request,
+                        _("Specimen list PDF cannot be split in its current state."),
+                    )
+            return redirect(request.path)
         return super().changeform_view(request, object_id, form_url, extra_context)
 
 

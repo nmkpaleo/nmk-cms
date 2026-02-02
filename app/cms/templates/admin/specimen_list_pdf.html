@@ -3,6 +3,14 @@
 
 {% block object-tools %}
   {{ block.super }}
+  {% if specimen_list_pdf and specimen_list_pdf.can_split %}
+    <form method="post" style="display: inline;">
+      {% csrf_token %}
+      <button type="submit" class="button" name="_start_split" value="1">
+        {% trans "Start splitting" %}
+      </button>
+    </form>
+  {% endif %}
   {% if specimen_list_pdf and specimen_list_pdf.can_requeue %}
     <form method="post" style="display: inline;">
       {% csrf_token %}
