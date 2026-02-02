@@ -139,9 +139,14 @@ def _split_pdf_page_to_image(
         str(prefix),
     ]
     subprocess.run(command, check=True)
-    image = output_dir / f"page-{page_number}.png"
-    if not image.exists():
-        raise RuntimeError(f"Expected page image not found for page {page_number}.")
+    expected_name = f"page-{page_number}.png"
+    matches = list(output_dir.glob("page-*.png"))
+    if not matches:
+        raise RuntimeError(
+            f"Expected page image not found for page {page_number}."
+        )
+    matches.sort()
+    image = matches[0]
     renamed_path = output_dir / f"page_{page_number:03d}.png"
     image.rename(renamed_path)
     return renamed_path
