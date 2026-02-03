@@ -6,6 +6,7 @@
 - Page images already exist from the PDF splitting workflow, and classification runs **before** row extraction.
 - Use current OpenAI integration (`openai` dependency is already available) and existing OCR utilities for image handling; no new external packages are required unless the current pipeline lacks a lightweight classification hook.
 - Classification results are stored as structured metadata (JSON) on the page model with status and confidence; raw OCR text is stored only for pages routed to “searchable text.”
+- Classification can be toggled via a settings-based feature flag to support staged rollout and rollback.
 
 **Apps to modify or create**
 - **Modify:** `app/cms` (models, OCR/classification utilities, background tasks, admin, views), `app/templates` (queue UI), `docs` (planning + ops guidance), `tests` (pytest suites for classification flow).
