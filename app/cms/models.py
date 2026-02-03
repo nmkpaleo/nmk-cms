@@ -7,6 +7,7 @@ from django.db.models.functions import TruncDate
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.urls import reverse
 from django.utils import timezone
 from django_userforeignkey.models.fields import UserForeignKey
@@ -2702,6 +2703,11 @@ class SpecimenListPDF(BaseModel):
 
 
 class SpecimenListPage(BaseModel):
+    class ClassificationStatus(models.TextChoices):
+        PENDING = "pending", _("Pending")
+        CLASSIFIED = "classified", _("Classified")
+        FAILED = "failed", _("Failed")
+
     class PageType(models.TextChoices):
         UNKNOWN = "unknown", _("Unknown")
         SPECIMEN_LIST = "specimen_list", _("Specimen list")
@@ -2738,6 +2744,24 @@ class SpecimenListPage(BaseModel):
         choices=PageType.choices,
         default=PageType.UNKNOWN,
         help_text=_("Classified page type."),
+    )
+    classification_status = models.CharField(
+        max_length=20,
+        choices=ClassificationStatus.choices,
+        default=ClassificationStatus.PENDING,
+        help_text=_("Status of page classification."),
+    )
+    classification_confidence = models.DecimalField(
+        max_digits=4,
+        decimal_places=3,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0.0")), MaxValueValidator(Decimal("1.0"))],
+        help_text=_("Classification confidence score between 0 and 1."),
+    )
+    classification_notes = models.TextField(
+        blank=True,
+        help_text=_("Notes from the classification response."),
     )
     pipeline_status = models.CharField(
         max_length=20,
