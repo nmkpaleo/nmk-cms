@@ -54,7 +54,9 @@ from .models import (
     Element,
     SpecimenListPage,
     SpecimenListPageOCR,
+    SpecimenListRowCandidate,
 )
+from .utils import apply_ditto_marks
 
 
 UNKNOWN_FIELD_NUMBER_PREFIX = "UNKNOWN FIELD NUMBER #"
@@ -255,6 +257,169 @@ def run_specimen_list_raw_ocr(
             time.sleep(2 ** attempt)
 
     raise RuntimeError("Specimen list OCR failed unexpectedly.") from last_error
+
+
+def _parse_row_extraction_payload(payload: dict[str, object]) -> dict[str, object]:
+    columns_detected = payload.get("columns_detected")
+    if columns_detected is None:
+        columns_detected = []
+    if not isinstance(columns_detected, list):
+        raise ValueError("Row extraction payload must include columns_detected as a list.")
+
+    rows = payload.get("rows")
+    if rows is None:
+        rows = []
+    if not isinstance(rows, list):
+        raise ValueError("Row extraction payload must include rows as a list.")
+
+    parsed_rows: list[dict[str, object]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        parsed_rows.append(row)
+
+    return {
+        "columns_detected": columns_detected,
+        "rows": parsed_rows,
+    }
+
+
+def run_specimen_list_row_extraction(
+    page: SpecimenListPage,
+    *,
+    ocr_engine: str = "chatgpt-vision",
+    model: str = "gpt-4o",
+    timeout: int = 60,
+    max_retries: int = 3,
+    force: bool = False,
+) -> list[SpecimenListRowCandidate]:
+    """Extract structured rows for specimen list detail pages and store candidates."""
+
+    if page.page_type != SpecimenListPage.PageType.SPECIMEN_LIST_DETAILS:
+        logger.info(
+            "Skipping row extraction for non-detail page.",
+            extra={"page_id": page.id, "page_type": page.page_type},
+        )
+        return []
+
+    if not getattr(settings, "SPECIMEN_LIST_ROW_EXTRACTION_ENABLED", True):
+        logger.info("Row extraction disabled by feature flag.", extra={"page_id": page.id})
+        return []
+
+    if not page.image_file:
+        raise ValueError("Specimen list page has no image file available for row extraction.")
+
+    existing_rows = list(page.row_candidates.order_by("row_index"))
+    if existing_rows and not force:
+        return existing_rows
+
+    ocr_entry = page.ocr_entries.filter(ocr_engine=ocr_engine).order_by("-created_at").first()
+    if ocr_entry is None or not ocr_entry.raw_text:
+        raise ValueError("Raw OCR text is required before row extraction can run.")
+
+    client = get_openai_client()
+    if client is None:
+        raise RuntimeError(
+            "OpenAI client is not configured. Ensure OPENAI_API_KEY is set and the openai package is installed."
+        )
+
+    image_path = Path(page.image_file.path)
+    base64_image = encode_image_to_base64(image_path)
+    prompt = (
+        "Given this handwritten page OCR + image, detect tabular rows.\n"
+        "• detect rows; infer columns carefully\n"
+        "For handwritten texts, transcribe into Latin alphabet characters only (a-z, A-Z).\n"
+        "Columns may vary. Expected fields (when present):\n"
+        "• accession_number\n"
+        "• field_number\n"
+        "• taxon\n"
+        "• element\n"
+        "• locality (sometimes called sites)\n"
+        "• green_dot (is a green dot at the beginning of a row present)\n"
+        "• red_dot (is a red dot at the beginning of a row present)\n"
+        "• return per-row confidence\n"
+        "But allow “extra columns” as free keys in data_json.\n"
+        "Pay special attention to the ditto mark shorthand sign, indicating that the words above it are to be repeated.\n"
+        "The ditto mark may be in many formats after the OCR: ″ DOUBLE PRIME, ” RIGHT DOUBLE QUOTATION MARK, "
+        "〃 DITTO MARK (CJK character),  \" QUOTATION MARK, ' APOSTROPHE (×2), or interpreted as \"11\", \"!!\", "
+        "\"((\" or similar odd markings.\n"
+        "Figure out how to best manage the ditto mark.\n"
+        "If a field is missing, return null.\n"
+        "Be precise when reading the rows. Pay special attention to the last row on the image so that it also will be included.\n"
+        "Each row should have the accession number present. Otherwise, the row would be of no use.\n"
+        "While some rows may have columns which have text on two rows, those cases should not create new rows so that there will be rows "
+        "without Accession number. Instead, those cases should be entered in the column data.\n"
+        "Do NOT invent data.\n\n"
+        "OCR text:\n"
+        f"{ocr_entry.raw_text}"
+    )
+
+    last_error: Exception | None = None
+    for attempt in range(max_retries):
+        try:
+            start_ts = time.perf_counter()
+            response = client.chat.completions.create(
+                model=model,
+                timeout=timeout,
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant that extracts rows from OCR text."},
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
+                            },
+                        ],
+                    },
+                ],
+            )
+            elapsed = max(time.perf_counter() - start_ts, 0.0)
+            content = _strip_code_fences(response.choices[0].message.content or "")
+            payload = json.loads(content)
+            if not isinstance(payload, dict):
+                raise ValueError("Row extraction response payload must be a JSON object.")
+            parsed = _parse_row_extraction_payload(payload)
+            usage_payload = build_timed_usage_payload(response, model, elapsed)
+            logger.info(
+                "Specimen list row extraction usage recorded.",
+                extra={"page_id": page.id, "usage": usage_payload},
+            )
+            rows = apply_ditto_marks([dict(row) for row in parsed["rows"]])
+            if force:
+                page.row_candidates.all().delete()
+            created_rows: list[SpecimenListRowCandidate] = []
+            for index, row in enumerate(rows):
+                accession_number = row.get("accession_number")
+                if accession_number in (None, ""):
+                    logger.warning(
+                        "Skipping row candidate without accession number.",
+                        extra={"page_id": page.id, "row_index": index},
+                    )
+                    continue
+                confidence = row.pop("confidence", None)
+                created_rows.append(
+                    SpecimenListRowCandidate.objects.create(
+                        page=page,
+                        row_index=index,
+                        data=row,
+                        confidence=confidence,
+                    )
+                )
+            return created_rows
+        except Exception as exc:
+            last_error = exc
+            logger.warning(
+                "Specimen list row extraction attempt failed.",
+                extra={"page_id": page.id, "attempt": attempt + 1, "error": str(exc)},
+            )
+            if attempt == max_retries - 1:
+                logger.exception("Specimen list row extraction failed after retries.", extra={"page_id": page.id})
+                raise
+            time.sleep(2 ** attempt)
+
+    raise RuntimeError("Specimen list row extraction failed unexpectedly.") from last_error
 
 
 def detect_card_type(image_path: Path, model: str = "gpt-4o", timeout: int = 30, max_retries: int = 3) -> dict:

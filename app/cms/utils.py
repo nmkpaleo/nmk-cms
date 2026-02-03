@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, Iterable, Tuple
 
 from django.core.exceptions import ValidationError
@@ -185,3 +186,60 @@ def build_accession_identification_maps(
                     taxonomy_map[identification_id] = match
 
     return first_identifications, identification_counts, taxonomy_map
+
+
+DITTO_MARK_TOKENS = {
+    "″",
+    "”",
+    "“",
+    "〃",
+    "\"",
+    "''",
+    "’’",
+    "``",
+    "!!",
+    "11",
+    "((",
+    "))",
+}
+
+
+def is_ditto_mark(value: Any | None) -> bool:
+    """Return ``True`` when ``value`` looks like a ditto mark placeholder."""
+
+    if value in (None, ""):
+        return False
+    if isinstance(value, (int, float)):
+        value = str(value)
+    text = str(value).strip()
+    if not text:
+        return False
+    if text in DITTO_MARK_TOKENS:
+        return True
+    if re.fullmatch(r"[\"'’“”″〃]{1,3}", text):
+        return True
+    if re.fullmatch(r"[!]{2,3}", text):
+        return True
+    if re.fullmatch(r"[1]{2,3}", text):
+        return True
+    if re.fullmatch(r"[\(\)]{2,3}", text):
+        return True
+    return False
+
+
+def apply_ditto_marks(rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Expand ditto mark placeholders using the last seen values per column."""
+
+    expanded: list[dict[str, Any]] = []
+    last_values: dict[str, Any] = {}
+    for row in rows:
+        updated: dict[str, Any] = {}
+        for key, value in row.items():
+            if is_ditto_mark(value):
+                updated[key] = last_values.get(key)
+            else:
+                updated[key] = value
+                if value not in (None, ""):
+                    last_values[key] = value
+        expanded.append(updated)
+    return expanded
