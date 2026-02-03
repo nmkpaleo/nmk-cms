@@ -17,6 +17,7 @@ from .models import (
     TaxonRank,
     TaxonStatus,
     SpecimenListPage,
+    SpecimenListRowCandidate,
 )
 from django.contrib.auth import get_user_model
 
@@ -255,6 +256,65 @@ class SpecimenListPageFilter(django_filters.FilterSet):
             "classification_status",
             "min_confidence",
             "page_type",
+            "assigned_reviewer",
+        ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.filters["assigned_reviewer"].queryset = User.objects.order_by("username")
+        _ensure_filters_use_w3_styles(self.filters)
+
+
+class SpecimenListRowCandidateFilter(django_filters.FilterSet):
+    source_label = django_filters.CharFilter(
+        field_name="page__pdf__source_label",
+        lookup_expr="icontains",
+        label=_("Source label"),
+        widget=forms.TextInput(attrs={"class": "w3-input"}),
+    )
+    page_number = django_filters.NumberFilter(
+        field_name="page__page_number",
+        label=_("Page number"),
+        widget=forms.NumberInput(attrs={"class": "w3-input", "min": "1"}),
+    )
+    page_type = django_filters.ChoiceFilter(
+        field_name="page__page_type",
+        choices=SpecimenListPage.PageType.choices,
+        label=_("Page type"),
+        widget=forms.Select(attrs={"class": "w3-select"}),
+    )
+    status = django_filters.ChoiceFilter(
+        choices=SpecimenListRowCandidate.ReviewStatus.choices,
+        label=_("Row status"),
+        widget=forms.Select(attrs={"class": "w3-select"}),
+    )
+    min_confidence = django_filters.NumberFilter(
+        field_name="confidence",
+        lookup_expr="gte",
+        label=_("Minimum confidence"),
+        widget=forms.NumberInput(attrs={"class": "w3-input", "step": "0.01", "min": "0", "max": "1"}),
+    )
+    max_confidence = django_filters.NumberFilter(
+        field_name="confidence",
+        lookup_expr="lte",
+        label=_("Maximum confidence"),
+        widget=forms.NumberInput(attrs={"class": "w3-input", "step": "0.01", "min": "0", "max": "1"}),
+    )
+    assigned_reviewer = django_filters.ModelChoiceFilter(
+        queryset=User.objects.none(),
+        label=_("Assigned reviewer"),
+        widget=forms.Select(attrs={"class": "w3-select"}),
+    )
+
+    class Meta:
+        model = SpecimenListRowCandidate
+        fields = [
+            "source_label",
+            "page_number",
+            "page_type",
+            "status",
+            "min_confidence",
+            "max_confidence",
             "assigned_reviewer",
         ]
 
