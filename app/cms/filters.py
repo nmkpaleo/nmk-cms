@@ -225,6 +225,17 @@ class SpecimenListPageFilter(django_filters.FilterSet):
         label=_("Pipeline status"),
         widget=forms.Select(attrs={"class": "w3-select"}),
     )
+    classification_status = django_filters.ChoiceFilter(
+        choices=SpecimenListPage.ClassificationStatus.choices,
+        label=_("Classification status"),
+        widget=forms.Select(attrs={"class": "w3-select"}),
+    )
+    min_confidence = django_filters.NumberFilter(
+        field_name="classification_confidence",
+        lookup_expr="gte",
+        label=_("Minimum confidence"),
+        widget=forms.NumberInput(attrs={"class": "w3-input", "step": "0.01", "min": "0", "max": "1"}),
+    )
     page_type = django_filters.ChoiceFilter(
         choices=SpecimenListPage.PageType.choices,
         label=_("Page type"),
@@ -238,7 +249,14 @@ class SpecimenListPageFilter(django_filters.FilterSet):
 
     class Meta:
         model = SpecimenListPage
-        fields = ["source_label", "pipeline_status", "page_type", "assigned_reviewer"]
+        fields = [
+            "source_label",
+            "pipeline_status",
+            "classification_status",
+            "min_confidence",
+            "page_type",
+            "assigned_reviewer",
+        ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

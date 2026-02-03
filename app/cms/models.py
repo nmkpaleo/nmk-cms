@@ -7,6 +7,7 @@ from django.db.models.functions import TruncDate
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.urls import reverse
 from django.utils import timezone
 from django_userforeignkey.models.fields import UserForeignKey
@@ -2702,9 +2703,15 @@ class SpecimenListPDF(BaseModel):
 
 
 class SpecimenListPage(BaseModel):
+    class ClassificationStatus(models.TextChoices):
+        PENDING = "pending", _("Pending")
+        CLASSIFIED = "classified", _("Classified")
+        FAILED = "failed", _("Failed")
+
     class PageType(models.TextChoices):
         UNKNOWN = "unknown", _("Unknown")
-        SPECIMEN_LIST = "specimen_list", _("Specimen list")
+        SPECIMEN_LIST_DETAILS = "specimen_list_details", _("Specimen list (accession details)")
+        SPECIMEN_LIST_RELATIONS = "specimen_list_relations", _("Specimen list (accession/field relations)")
         FREE_TEXT = "free_text", _("Free text")
         TYPED_TEXT = "typed_text", _("Typed text")
         OTHER = "other", _("Other")
@@ -2734,10 +2741,28 @@ class SpecimenListPage(BaseModel):
         help_text=_("Stored page image using UUID naming."),
     )
     page_type = models.CharField(
-        max_length=20,
+        max_length=30,
         choices=PageType.choices,
         default=PageType.UNKNOWN,
         help_text=_("Classified page type."),
+    )
+    classification_status = models.CharField(
+        max_length=20,
+        choices=ClassificationStatus.choices,
+        default=ClassificationStatus.PENDING,
+        help_text=_("Status of page classification."),
+    )
+    classification_confidence = models.DecimalField(
+        max_digits=4,
+        decimal_places=3,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0.0")), MaxValueValidator(Decimal("1.0"))],
+        help_text=_("Classification confidence score between 0 and 1."),
+    )
+    classification_notes = models.TextField(
+        blank=True,
+        help_text=_("Notes from the classification response."),
     )
     pipeline_status = models.CharField(
         max_length=20,
@@ -2787,6 +2812,14 @@ class SpecimenListPage(BaseModel):
         if not user or isinstance(user, AnonymousUser):
             return None
         return super().clean()
+
+    def reset_classification(self, *, reset_page_type: bool = True) -> None:
+        self.classification_status = self.ClassificationStatus.PENDING
+        self.classification_confidence = None
+        self.classification_notes = ""
+        if reset_page_type:
+            self.page_type = self.PageType.UNKNOWN
+        self.pipeline_status = self.PipelineStatus.PENDING
 
     def __str__(self):
         return f"{self.pdf} - {self.page_number}"

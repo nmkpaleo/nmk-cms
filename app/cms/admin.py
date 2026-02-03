@@ -534,13 +534,21 @@ class SpecimenListPageInline(admin.TabularInline):
     fields = (
         "page_number",
         "page_type",
+        "classification_status",
+        "classification_confidence",
         "pipeline_status",
         "assigned_reviewer",
         "locked_at",
         "reviewed_at",
         "approved_at",
     )
-    readonly_fields = ("locked_at", "reviewed_at", "approved_at")
+    readonly_fields = (
+        "classification_status",
+        "classification_confidence",
+        "locked_at",
+        "reviewed_at",
+        "approved_at",
+    )
     ordering = ("page_number",)
 
 
@@ -604,13 +612,44 @@ class SpecimenListPageAdmin(SimpleHistoryAdmin):
         "pdf",
         "page_number",
         "page_type",
+        "classification_status",
+        "classification_confidence",
         "pipeline_status",
         "assigned_reviewer",
         "locked_at",
     )
-    list_filter = ("pipeline_status", "page_type")
-    search_fields = ("pdf__original_filename", "pdf__source_label")
-    readonly_fields = ("locked_at", "reviewed_at", "approved_at")
+    list_filter = ("classification_status", "pipeline_status", "page_type")
+    search_fields = ("pdf__original_filename", "pdf__source_label", "classification_notes")
+    readonly_fields = (
+        "classification_status",
+        "classification_confidence",
+        "locked_at",
+        "reviewed_at",
+        "approved_at",
+    )
+    actions = ["requeue_classification"]
+
+    @admin.action(description=_("Requeue classification for selected pages"))
+    def requeue_classification(self, request, queryset):
+        updated = 0
+        for page in queryset:
+            page.reset_classification()
+            page.save(
+                update_fields=[
+                    "classification_status",
+                    "classification_confidence",
+                    "classification_notes",
+                    "page_type",
+                    "pipeline_status",
+                ]
+            )
+            updated += 1
+        if updated:
+            self.message_user(
+                request,
+                _("Requeued %(count)d page(s) for classification.") % {"count": updated},
+                messages.SUCCESS,
+            )
 
 class DuplicateFilter(admin.SimpleListFilter):
     title = 'By Duplicate specimen_no + prefix'

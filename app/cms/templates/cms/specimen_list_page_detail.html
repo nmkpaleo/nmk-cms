@@ -1,0 +1,54 @@
+{% extends "base_generic.html" %}
+{% load i18n %}
+
+{% block content %}
+<main class="w3-container w3-content" style="max-width: 1200px;">
+  <header class="w3-padding-16">
+    <h1 class="w3-xxlarge">
+      <i class="fa fa-file-text-o" aria-hidden="true"></i>
+      {% trans "Specimen list page details" %}
+    </h1>
+    <p class="w3-text-grey">
+      {% blocktrans %}Review OCR text-only content for page {{ page.page_number }} from {{ page.pdf.original_filename }}.{% endblocktrans %}
+    </p>
+  </header>
+
+  <section class="w3-card w3-white w3-padding w3-margin-bottom">
+    <div class="w3-row-padding">
+      <div class="w3-half">
+        <p><strong>{% trans "Source" %}:</strong> {{ page.pdf.source_label }}</p>
+        <p><strong>{% trans "Page type" %}:</strong> {{ page.get_page_type_display }}</p>
+        <p><strong>{% trans "Classification status" %}:</strong> {{ page.get_classification_status_display }}</p>
+      </div>
+      <div class="w3-half">
+        <p><strong>{% trans "Confidence" %}:</strong>
+          {% if page.classification_confidence %}
+            {{ page.classification_confidence|floatformat:2 }}
+          {% else %}
+            —
+          {% endif %}
+        </p>
+        <p><strong>{% trans "Reviewer" %}:</strong> {{ page.assigned_reviewer|default:"—" }}</p>
+      </div>
+    </div>
+    {% if page.classification_notes %}
+      <p class="w3-text-grey"><strong>{% trans "Classification notes" %}:</strong> {{ page.classification_notes }}</p>
+    {% endif %}
+  </section>
+
+  <section class="w3-card w3-white w3-padding">
+    {% if page.image_file %}
+      <img src="{{ page.image_file.url }}" alt="{% trans 'Specimen list page image' %}" class="w3-image w3-border" />
+    {% else %}
+      <p class="w3-text-grey">{% trans "No page image is available yet." %}</p>
+    {% endif %}
+
+    <article class="w3-section">
+      <h2 class="w3-large">{% trans "Searchable OCR text" %}</h2>
+      <p class="w3-text-grey">
+        {% trans "OCR text will appear here once it is available for non-specimen pages." %}
+      </p>
+    </article>
+  </section>
+</main>
+{% endblock %}
