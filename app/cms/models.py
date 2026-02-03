@@ -2823,3 +2823,105 @@ class SpecimenListPage(BaseModel):
 
     def __str__(self):
         return f"{self.pdf} - {self.page_number}"
+
+
+class SpecimenListPageOCR(models.Model):
+    page = models.ForeignKey(
+        SpecimenListPage,
+        on_delete=models.CASCADE,
+        related_name="ocr_entries",
+        help_text=_("Specimen list page associated with this OCR result."),
+    )
+    raw_text = models.TextField(
+        blank=True,
+        help_text=_("Raw OCR text extracted from the page image."),
+    )
+    bounding_boxes = models.JSONField(
+        null=True,
+        blank=True,
+        help_text=_("OCR bounding box data captured from the OCR engine."),
+    )
+    ocr_engine = models.CharField(
+        max_length=100,
+        default="chatgpt-vision",
+        help_text=_("OCR engine identifier used to extract the text."),
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text=_("Timestamp when the OCR result was created."),
+    )
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = _("Specimen list page OCR")
+        verbose_name_plural = _("Specimen list page OCR entries")
+        indexes = [
+            Index(fields=["ocr_engine"]),
+            Index(fields=["created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"OCR for {self.page_id} @ {self.created_at:%Y-%m-%d}"
+
+
+class SpecimenListRowCandidate(models.Model):
+    class ReviewStatus(models.TextChoices):
+        UNREVIEWED = "unreviewed", _("Unreviewed")
+        EDITED = "edited", _("Edited")
+        APPROVED = "approved", _("Approved")
+        REJECTED = "rejected", _("Rejected")
+
+    page = models.ForeignKey(
+        SpecimenListPage,
+        on_delete=models.CASCADE,
+        related_name="row_candidates",
+        help_text=_("Specimen list page associated with this row candidate."),
+    )
+    row_index = models.PositiveIntegerField(
+        help_text=_("Row order within the page (0-based)."),
+    )
+    data = models.JSONField(
+        help_text=_("Extracted row data as JSON, including extra column keys."),
+    )
+    confidence = models.DecimalField(
+        max_digits=4,
+        decimal_places=3,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0.0")), MaxValueValidator(Decimal("1.0"))],
+        help_text=_("Confidence score for the extracted row between 0 and 1."),
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=ReviewStatus.choices,
+        default=ReviewStatus.UNREVIEWED,
+        help_text=_("Review status for the row candidate."),
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text=_("Timestamp when the row candidate was created."),
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        help_text=_("Timestamp when the row candidate was last updated."),
+    )
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ["page", "row_index"]
+        verbose_name = _("Specimen list row candidate")
+        verbose_name_plural = _("Specimen list row candidates")
+        permissions = [
+            ("review_specimenlistrowcandidate", _("Can review specimen list row candidates")),
+        ]
+        constraints = [
+            UniqueConstraint(fields=["page", "row_index"], name="uniq_specimen_row_candidate"),
+        ]
+        indexes = [
+            Index(fields=["status"]),
+            Index(fields=["page", "status"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"Row {self.row_index} candidate for page {self.page_id}"
