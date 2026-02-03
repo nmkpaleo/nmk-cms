@@ -2741,7 +2741,7 @@ class SpecimenListPage(BaseModel):
         help_text=_("Stored page image using UUID naming."),
     )
     page_type = models.CharField(
-        max_length=20,
+        max_length=30,
         choices=PageType.choices,
         default=PageType.UNKNOWN,
         help_text=_("Classified page type."),
