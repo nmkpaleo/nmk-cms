@@ -8,7 +8,11 @@ import logging
 from django.db import transaction
 
 from cms.models import SpecimenListPage
-from cms.ocr_processing import classify_specimen_list_page
+from cms.ocr_processing import (
+    classify_specimen_list_page,
+    run_specimen_list_raw_ocr,
+    run_specimen_list_row_extraction,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -16,6 +20,14 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ClassificationRunSummary:
+    successes: int
+    failures: int
+    total: int
+    errors: list[str]
+
+
+@dataclass
+class OCRQueueSummary:
     successes: int
     failures: int
     total: int
@@ -50,6 +62,18 @@ def _normalize_page_type(page_type: object) -> str | None:
         "other": SpecimenListPage.PageType.OTHER,
     }
     return mapping.get(value)
+
+
+def _set_pipeline_status(page: SpecimenListPage, status: str) -> None:
+    if page.pipeline_status in {
+        SpecimenListPage.PipelineStatus.IN_REVIEW,
+        SpecimenListPage.PipelineStatus.APPROVED,
+        SpecimenListPage.PipelineStatus.REJECTED,
+    }:
+        return
+    if page.pipeline_status == status:
+        return
+    page.pipeline_status = status
 
 
 def classify_pending_specimen_pages(
@@ -134,3 +158,134 @@ def classify_pending_specimen_pages(
                 logger.exception("Classification failed for specimen list page %s", page.id)
 
     return ClassificationRunSummary(successes=successes, failures=failures, total=total, errors=errors)
+
+
+def run_specimen_list_ocr_queue(
+    *,
+    limit: int | None = None,
+    ids: list[int] | None = None,
+    force: bool = False,
+) -> OCRQueueSummary:
+    if force:
+        queryset = SpecimenListPage.objects.all().order_by("created_on", "id")
+    else:
+        queryset = SpecimenListPage.objects.filter(
+            classification_status=SpecimenListPage.ClassificationStatus.CLASSIFIED,
+            pipeline_status__in=[
+                SpecimenListPage.PipelineStatus.PENDING,
+                SpecimenListPage.PipelineStatus.CLASSIFIED,
+            ],
+        ).order_by("created_on", "id")
+
+    if ids:
+        queryset = queryset.filter(id__in=ids)
+
+    if limit:
+        queryset = queryset[:limit]
+
+    page_ids = list(queryset.values_list("id", flat=True))
+    successes = 0
+    failures = 0
+    total = 0
+    errors: list[str] = []
+
+    for page_id in page_ids:
+        total += 1
+        with transaction.atomic():
+            page = SpecimenListPage.objects.select_for_update().filter(id=page_id).first()
+            if page is None:
+                continue
+            if not force and page.pipeline_status not in {
+                SpecimenListPage.PipelineStatus.PENDING,
+                SpecimenListPage.PipelineStatus.CLASSIFIED,
+            }:
+                continue
+            if not page.image_file:
+                failures += 1
+                errors.append(f"page {page.id}: missing image file")
+                logger.warning("Specimen list page %s missing image file", page.id)
+                continue
+            try:
+                run_specimen_list_raw_ocr(page, force=force)
+                _set_pipeline_status(page, SpecimenListPage.PipelineStatus.OCR_DONE)
+                page.save(update_fields=["pipeline_status"])
+                successes += 1
+                logger.info("Completed raw OCR for specimen list page %s", page.id)
+            except Exception as exc:
+                failures += 1
+                errors.append(f"page {page.id}: raw OCR failed")
+                logger.exception("Raw OCR failed for specimen list page %s: %s", page.id, exc)
+
+    return OCRQueueSummary(successes=successes, failures=failures, total=total, errors=errors)
+
+
+def run_specimen_list_row_extraction_queue(
+    *,
+    limit: int | None = None,
+    ids: list[int] | None = None,
+    force: bool = False,
+) -> OCRQueueSummary:
+    if force:
+        queryset = SpecimenListPage.objects.filter(
+            page_type=SpecimenListPage.PageType.SPECIMEN_LIST_DETAILS
+        ).order_by("created_on", "id")
+    else:
+        queryset = SpecimenListPage.objects.filter(
+            page_type=SpecimenListPage.PageType.SPECIMEN_LIST_DETAILS,
+            pipeline_status__in=[
+                SpecimenListPage.PipelineStatus.CLASSIFIED,
+                SpecimenListPage.PipelineStatus.OCR_DONE,
+            ],
+        ).order_by("created_on", "id")
+
+    if ids:
+        queryset = queryset.filter(id__in=ids)
+
+    if limit:
+        queryset = queryset[:limit]
+
+    page_ids = list(queryset.values_list("id", flat=True))
+    successes = 0
+    failures = 0
+    total = 0
+    errors: list[str] = []
+
+    for page_id in page_ids:
+        total += 1
+        with transaction.atomic():
+            page = SpecimenListPage.objects.select_for_update().filter(id=page_id).first()
+            if page is None:
+                continue
+            if page.page_type != SpecimenListPage.PageType.SPECIMEN_LIST_DETAILS:
+                continue
+            if not force and page.pipeline_status not in {
+                SpecimenListPage.PipelineStatus.CLASSIFIED,
+                SpecimenListPage.PipelineStatus.OCR_DONE,
+            }:
+                continue
+            if not page.image_file:
+                failures += 1
+                errors.append(f"page {page.id}: missing image file")
+                logger.warning("Specimen list page %s missing image file", page.id)
+                continue
+            if not page.ocr_entries.exists():
+                failures += 1
+                errors.append(f"page {page.id}: missing raw OCR")
+                logger.warning("Specimen list page %s missing raw OCR entry", page.id)
+                continue
+            try:
+                created_rows = run_specimen_list_row_extraction(page, force=force)
+                _set_pipeline_status(page, SpecimenListPage.PipelineStatus.EXTRACTED)
+                page.save(update_fields=["pipeline_status"])
+                successes += 1
+                logger.info(
+                    "Extracted %s row candidates for specimen list page %s",
+                    len(created_rows),
+                    page.id,
+                )
+            except Exception as exc:
+                failures += 1
+                errors.append(f"page {page.id}: row extraction failed")
+                logger.exception("Row extraction failed for specimen list page %s: %s", page.id, exc)
+
+    return OCRQueueSummary(successes=successes, failures=failures, total=total, errors=errors)
