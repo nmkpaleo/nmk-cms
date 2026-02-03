@@ -2812,5 +2812,13 @@ class SpecimenListPage(BaseModel):
             return None
         return super().clean()
 
+    def reset_classification(self, *, reset_page_type: bool = True) -> None:
+        self.classification_status = self.ClassificationStatus.PENDING
+        self.classification_confidence = None
+        self.classification_notes = ""
+        if reset_page_type:
+            self.page_type = self.PageType.UNKNOWN
+        self.pipeline_status = self.PipelineStatus.PENDING
+
     def __str__(self):
         return f"{self.pdf} - {self.page_number}"
