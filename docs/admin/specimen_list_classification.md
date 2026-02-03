@@ -1,7 +1,7 @@
 # Specimen list page classification
 
 ## Overview
-Specimen list pages are classified before extraction to route them correctly. Pages categorized as specimen lists move into the review workflow, while non-specimen pages are routed to a text-only view.
+Specimen list pages are classified before extraction to route them correctly. Pages categorized as specimen lists move into the review workflow, while non-specimen pages are routed to a text-only view. Specimen list pages are split into accession detail lists and accession/field relation lists.
 
 ## Admin queue operations
 ### Requeue classification

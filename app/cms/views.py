@@ -4607,14 +4607,20 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
 
     def get(self, request, pk):
         page = self._get_page(request, pk)
-        if page.page_type == SpecimenListPage.PageType.SPECIMEN_LIST:
+        if page.page_type in {
+            SpecimenListPage.PageType.SPECIMEN_LIST_DETAILS,
+            SpecimenListPage.PageType.SPECIMEN_LIST_RELATIONS,
+        }:
             page = self._claim_page(request, pk)
         context = self._build_context(request, page)
         return render(request, self._get_template_name(page), context)
 
     def post(self, request, pk):
         page = self._get_page(request, pk)
-        if page.page_type != SpecimenListPage.PageType.SPECIMEN_LIST:
+        if page.page_type not in {
+            SpecimenListPage.PageType.SPECIMEN_LIST_DETAILS,
+            SpecimenListPage.PageType.SPECIMEN_LIST_RELATIONS,
+        }:
             context = self._build_context(request, page)
             return render(request, self._get_template_name(page), context)
         action = request.POST.get("action")
@@ -4623,7 +4629,10 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
         return render(request, self._get_template_name(page), context)
 
     def _get_template_name(self, page: SpecimenListPage) -> str:
-        if page.page_type == SpecimenListPage.PageType.SPECIMEN_LIST:
+        if page.page_type in {
+            SpecimenListPage.PageType.SPECIMEN_LIST_DETAILS,
+            SpecimenListPage.PageType.SPECIMEN_LIST_RELATIONS,
+        }:
             return "cms/specimen_list_page_review.html"
         return "cms/specimen_list_page_detail.html"
 
@@ -4690,12 +4699,16 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
 
     def _build_context(self, request, page: SpecimenListPage) -> dict[str, Any]:
         lock_expired = _lock_is_expired(page.locked_at)
+        is_specimen_list = page.page_type in {
+            SpecimenListPage.PageType.SPECIMEN_LIST_DETAILS,
+            SpecimenListPage.PageType.SPECIMEN_LIST_RELATIONS,
+        }
         return {
             "page": page,
             "lock_expired": lock_expired,
             "lock_ttl_seconds": SPECIMEN_LIST_LOCK_TTL_SECONDS,
             "can_take_over": lock_expired,
-            "is_specimen_list": page.page_type == SpecimenListPage.PageType.SPECIMEN_LIST,
+            "is_specimen_list": is_specimen_list,
         }
 
 

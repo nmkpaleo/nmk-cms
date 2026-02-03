@@ -4,7 +4,8 @@
 Specimen list pages are classified before extraction so pages can be routed to the right workflow. Pages identified as specimen lists move into the row-extraction review flow, while other page types are routed to a text-only view.
 
 ## Page types
-- **Specimen list**: Handwritten list with tabular rows.
+- **Specimen list (accession details)**: Lists accession details such as taxon/classification and element/description, often alongside Acc. No. and Field No.
+- **Specimen list (accession/field relations)**: Lists Acc. No. and Field No. pairings, sometimes repeated side by side.
 - **Handwritten text**: Narrative handwritten notes without row structure.
 - **Typewritten text**: Typed pages that are not specimen lists.
 - **Other**: Maps, drawings, or non-textual pages.

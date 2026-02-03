@@ -41,7 +41,8 @@ def _normalize_page_type(page_type: object) -> str | None:
         return None
     value = str(page_type).strip().lower()
     mapping = {
-        "specimen_list": SpecimenListPage.PageType.SPECIMEN_LIST,
+        "specimen_list_details": SpecimenListPage.PageType.SPECIMEN_LIST_DETAILS,
+        "specimen_list_relations": SpecimenListPage.PageType.SPECIMEN_LIST_RELATIONS,
         "handwritten_text": SpecimenListPage.PageType.FREE_TEXT,
         "free_text": SpecimenListPage.PageType.FREE_TEXT,
         "typewritten_text": SpecimenListPage.PageType.TYPED_TEXT,

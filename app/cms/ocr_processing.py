@@ -222,11 +222,12 @@ def classify_specimen_list_page(
     base64_image = encode_image_to_base64(image_path)
     prompt = (
         "You classify specimen list pages. Choose exactly one page type:\n"
-        "1. handwritten specimen list with rows\n"
-        "2. handwritten free text\n"
-        "3. typewritten text\n"
-        "4. other (maps, drawings, etc.)\n"
-        'Return only JSON: {"page_type":"specimen_list|handwritten_text|typewritten_text|other",'
+        "1. specimen list with accession details (columns like Acc. No., Field No., Classification/Taxon, Description/Element, Site/Locality)\n"
+        "2. specimen list with accession/field relations (Acc. No. and Field No. paired, often repeated side-by-side)\n"
+        "3. handwritten free text\n"
+        "4. typewritten text\n"
+        "5. other (maps, drawings, etc.)\n"
+        'Return only JSON: {"page_type":"specimen_list_details|specimen_list_relations|handwritten_text|typewritten_text|other",'
         ' "confidence": 0.0-1.0, "notes": "short reason"}'
     )
 

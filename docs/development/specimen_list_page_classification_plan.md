@@ -20,7 +20,7 @@
 - **No new Python deps required**; rely on existing `openai` SDK and image handling tooling already in the repository.
 
 ## 2️⃣ High-Level Plan (5–12 steps)
-1. **Model updates & migrations**: Extend the specimen list page model with classification status, page type enum (`specimen_list`, `handwritten_text`, `typewritten_text`, `other`), confidence, and notes; add django-simple-history tracking for classification changes.
+1. **Model updates & migrations**: Extend the specimen list page model with classification status, page type enum (`specimen_list_details`, `specimen_list_relations`, `handwritten_text`, `typewritten_text`, `other`), confidence, and notes; add django-simple-history tracking for classification changes.
 2. **Classification service layer**: Add a small service in the existing OCR utility module to submit page images to OpenAI with the lightweight prompt and return a structured JSON response; align with existing OCR retry/timeout behavior and usage logging.
 3. **Queue integration**: Add a background task (or management command hook) to classify pending pages in batches, respecting existing OCR throttling/quota rules; ensure idempotency and resumability.
 4. **Views, URLs & CBVs**: Add class-based views for classification status dashboards and queue actions; restrict access via permissions similar to existing OCR/admin actions.

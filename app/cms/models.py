@@ -2710,7 +2710,8 @@ class SpecimenListPage(BaseModel):
 
     class PageType(models.TextChoices):
         UNKNOWN = "unknown", _("Unknown")
-        SPECIMEN_LIST = "specimen_list", _("Specimen list")
+        SPECIMEN_LIST_DETAILS = "specimen_list_details", _("Specimen list (accession details)")
+        SPECIMEN_LIST_RELATIONS = "specimen_list_relations", _("Specimen list (accession/field relations)")
         FREE_TEXT = "free_text", _("Free text")
         TYPED_TEXT = "typed_text", _("Typed text")
         OTHER = "other", _("Other")
