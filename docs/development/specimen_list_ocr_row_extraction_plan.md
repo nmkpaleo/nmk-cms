@@ -23,3 +23,8 @@ This document outlines the staging models used to persist raw OCR output and ext
 - Retain raw OCR results to avoid repeated OCR calls and to support reprocessing.
 - Treat row candidates as staging data; no accession records are created at this stage.
 - Use feature flags or queue controls to roll out extraction in controlled batches.
+
+## Rollout & Feature Flags
+- `SPECIMEN_LIST_ROW_EXTRACTION_ENABLED` can disable row extraction while preserving raw OCR.
+- Batch size defaults can be controlled with OCR and extraction batch size settings.
+- Rollback by pausing extraction runs while leaving stored OCR and row candidates intact.

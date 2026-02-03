@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Add specimen list OCR staging, row extraction queues, and review tooling with feature-flagged rollout guidance.
 - Add admin support for specimen list PDF ingestion, including requeue controls for failed splits and admin guidance.
 - Document specimen list ingestion rollout, review workflows, and operational runbooks.
 - Add offline processing guidance for specimen list PDF splitting in production environments.

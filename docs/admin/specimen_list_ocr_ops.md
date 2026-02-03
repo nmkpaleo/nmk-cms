@@ -18,6 +18,10 @@ This guide covers the Stage A raw OCR workflow for specimen list pages. Raw OCR 
 
 Use `--limit` to cap batch sizes or configure defaults via the batch size settings.
 
+## Feature Flags
+- `SPECIMEN_LIST_ROW_EXTRACTION_ENABLED` controls whether row extraction runs.
+- Batch size defaults can be set with `SPECIMEN_LIST_OCR_BATCH_SIZE` and `SPECIMEN_LIST_ROW_EXTRACTION_BATCH_SIZE`.
+
 ## Reprocessing Guidance
 - Raw OCR results are retained for auditability.
 - Re-run OCR only when needed (for example, after image cleanup).
@@ -30,3 +34,7 @@ Use `--limit` to cap batch sizes or configure defaults via the batch size settin
 ## Failure Handling
 - Failed OCR attempts are logged with error details.
 - Retry failed pages after resolving API or network issues.
+
+## Rollback Steps
+1. Disable row extraction by setting `SPECIMEN_LIST_ROW_EXTRACTION_ENABLED` to false.
+2. Pause queue runs for row extraction while keeping raw OCR available for later reprocessing.
