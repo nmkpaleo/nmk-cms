@@ -4603,19 +4603,32 @@ class SpecimenListQueueView(LoginRequiredMixin, PermissionRequiredMixin, FilterV
 
 
 class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, View):
-    template_name = "cms/specimen_list_page_review.html"
     permission_required = "cms.review_specimenlistpage"
 
     def get(self, request, pk):
-        page = self._claim_page(request, pk)
+        page = self._get_page(request, pk)
+        if page.page_type == SpecimenListPage.PageType.SPECIMEN_LIST:
+            page = self._claim_page(request, pk)
         context = self._build_context(request, page)
-        return render(request, self.template_name, context)
+        return render(request, self._get_template_name(page), context)
 
     def post(self, request, pk):
+        page = self._get_page(request, pk)
+        if page.page_type != SpecimenListPage.PageType.SPECIMEN_LIST:
+            context = self._build_context(request, page)
+            return render(request, self._get_template_name(page), context)
         action = request.POST.get("action")
         page = self._update_review_status(request, pk, action)
         context = self._build_context(request, page)
-        return render(request, self.template_name, context)
+        return render(request, self._get_template_name(page), context)
+
+    def _get_template_name(self, page: SpecimenListPage) -> str:
+        if page.page_type == SpecimenListPage.PageType.SPECIMEN_LIST:
+            return "cms/specimen_list_page_review.html"
+        return "cms/specimen_list_page_detail.html"
+
+    def _get_page(self, request, pk: int) -> SpecimenListPage:
+        return SpecimenListPage.objects.select_related("pdf", "assigned_reviewer").get(pk=pk)
 
     def _claim_page(self, request, pk: int) -> SpecimenListPage:
         with transaction.atomic():
@@ -4682,6 +4695,7 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
             "lock_expired": lock_expired,
             "lock_ttl_seconds": SPECIMEN_LIST_LOCK_TTL_SECONDS,
             "can_take_over": lock_expired,
+            "is_specimen_list": page.page_type == SpecimenListPage.PageType.SPECIMEN_LIST,
         }
 
 
