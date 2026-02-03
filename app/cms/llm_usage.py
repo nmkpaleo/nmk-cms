@@ -80,3 +80,14 @@ def add_usage_timing(payload: dict[str, object | None], elapsed_seconds: float |
     updated = payload.copy()
     updated.setdefault("processing_seconds", round(elapsed_seconds, 3))
     return updated
+
+
+def build_timed_usage_payload(
+    response: Any,
+    model: str,
+    elapsed_seconds: float | None,
+) -> dict[str, object | None]:
+    """Build a usage payload and attach processing duration when available."""
+
+    payload = build_usage_payload(response, model)
+    return add_usage_timing(payload, elapsed_seconds)
