@@ -284,6 +284,17 @@ def _parse_row_extraction_payload(payload: dict[str, object]) -> dict[str, objec
     }
 
 
+def _load_first_json_object(content: str) -> dict[str, object]:
+    """Parse the first JSON object from a response that may contain extra text."""
+
+    decoder = json.JSONDecoder()
+    content = content.lstrip()
+    parsed, _ = decoder.raw_decode(content)
+    if not isinstance(parsed, dict):
+        raise ValueError("Row extraction response payload must be a JSON object.")
+    return parsed
+
+
 def run_specimen_list_row_extraction(
     page: SpecimenListPage,
     *,
@@ -377,9 +388,12 @@ def run_specimen_list_row_extraction(
             )
             elapsed = max(time.perf_counter() - start_ts, 0.0)
             content = _strip_code_fences(response.choices[0].message.content or "")
-            payload = json.loads(content)
-            if not isinstance(payload, dict):
-                raise ValueError("Row extraction response payload must be a JSON object.")
+            try:
+                payload = json.loads(content)
+                if not isinstance(payload, dict):
+                    raise ValueError("Row extraction response payload must be a JSON object.")
+            except json.JSONDecodeError:
+                payload = _load_first_json_object(content)
             parsed = _parse_row_extraction_payload(payload)
             usage_payload = build_timed_usage_payload(response, model, elapsed)
             logger.info(
