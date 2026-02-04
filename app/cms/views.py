@@ -4818,6 +4818,9 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
         column_order = self._build_column_order(page, low_confidence_only, confidence_threshold)
         if formset is None:
             formset = self._build_row_formset(request, page, column_order, low_confidence_only, confidence_threshold)
+        column_label_pairs = [
+            (column, column.replace("_", " ").title()) for column in column_order
+        ]
         return {
             "page": page,
             "formset": formset,
@@ -4828,7 +4831,8 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
             "low_confidence_only": low_confidence_only,
             "confidence_threshold": confidence_threshold,
             "column_order": column_order,
-            "column_labels": {column: column.replace("_", " ").title() for column in column_order},
+            "column_label_pairs": column_label_pairs,
+            "column_table_colspan": len(column_order) + 4,
         }
 
     def _build_row_formset(
