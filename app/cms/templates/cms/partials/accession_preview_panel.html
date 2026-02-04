@@ -531,14 +531,18 @@
                   <td>{{ ref.page|default:"—" }}</td>
                   {% if user|has_group:"Collection Managers" %}
                     <td class="w3-center">
-                      <a
-                        href="{% url 'accessionreference_edit' ref.pk %}"
-                        class="w3-button w3-blue w3-round w3-small"
-                        aria-label="{% blocktrans with title=ref.reference.title|default:_('reference') %}Edit reference {{ title }}{% endblocktrans %}"
-                      >
-                        <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
-                        <span class="w3-hide-small w3-margin-left">{% trans "Edit" %}</span>
-                      </a>
+                      {% if ref.pk %}
+                        <a
+                          href="{% url 'accessionreference_edit' ref.pk %}"
+                          class="w3-button w3-blue w3-round w3-small"
+                          aria-label="{% blocktrans with title=ref.reference.title|default:_('reference') %}Edit reference {{ title }}{% endblocktrans %}"
+                        >
+                          <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+                          <span class="w3-hide-small w3-margin-left">{% trans "Edit" %}</span>
+                        </a>
+                      {% else %}
+                        <span class="w3-text-gray">{% trans "Unavailable" %}</span>
+                      {% endif %}
                     </td>
                   {% endif %}
                 </tr>
