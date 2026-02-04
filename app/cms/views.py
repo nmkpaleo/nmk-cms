@@ -4882,7 +4882,17 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
                 label=column.replace("_", " ").title(),
                 widget=forms.TextInput(attrs={"class": "w3-input"}),
             )
-        return type("SpecimenListRowForm", (forms.Form,), fields)
+        class SpecimenListRowForm(forms.Form):
+            pass
+
+        SpecimenListRowForm.base_fields = fields
+
+        def _init(self, *args, **kwargs):
+            super(SpecimenListRowForm, self).__init__(*args, **kwargs)
+            self.column_fields = [(column, self[column]) for column in column_order]
+
+        SpecimenListRowForm.__init__ = _init
+        return SpecimenListRowForm
 
     def _save_row_formset(
         self,

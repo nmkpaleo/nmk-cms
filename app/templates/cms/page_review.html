@@ -117,10 +117,10 @@
                           {{ form.status.errors }}
                           {{ form.status }}
                         </td>
-                        {% for column, label in column_label_pairs %}
+                        {% for column, field in form.column_fields %}
                           <td>
-                            {{ form[column].errors }}
-                            {{ form[column] }}
+                            {{ field.errors }}
+                            {{ field }}
                           </td>
                         {% endfor %}
                         <td>{{ form.DELETE }}</td>
