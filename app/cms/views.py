@@ -4712,9 +4712,20 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
         if action in {"approve", "reject", "release", "not_specimen_list"}:
             page = self._update_review_status(request, pk, action)
         else:
-            formset = self._build_row_formset(request, page)
+            low_confidence_only = request.GET.get("low_confidence") in {"1", "true", "yes", "on"}
+            confidence_threshold = Decimal(
+                str(getattr(settings, "SPECIMEN_LIST_LOW_CONFIDENCE_THRESHOLD", "0.7"))
+            )
+            column_order = self._build_column_order(page, low_confidence_only, confidence_threshold)
+            formset = self._build_row_formset(
+                request,
+                page,
+                column_order,
+                low_confidence_only,
+                confidence_threshold,
+            )
             if formset.is_valid():
-                self._save_row_formset(page, formset)
+                self._save_row_formset(page, formset, column_order)
                 messages.success(request, _("Row updates saved."))
             else:
                 messages.error(request, _("Please correct the row review form errors."))
@@ -4804,8 +4815,9 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
             SpecimenListPage.PageType.SPECIMEN_LIST_DETAILS,
             SpecimenListPage.PageType.SPECIMEN_LIST_RELATIONS,
         }
+        column_order = self._build_column_order(page, low_confidence_only, confidence_threshold)
         if formset is None:
-            formset = self._build_row_formset(request, page)
+            formset = self._build_row_formset(request, page, column_order, low_confidence_only, confidence_threshold)
         return {
             "page": page,
             "formset": formset,
@@ -4815,23 +4827,70 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
             "is_specimen_list": is_specimen_list,
             "low_confidence_only": low_confidence_only,
             "confidence_threshold": confidence_threshold,
+            "column_order": column_order,
+            "column_labels": {column: column.replace("_", " ").title() for column in column_order},
         }
 
-    def _build_row_formset(self, request, page: SpecimenListPage) -> forms.BaseFormSet:
+    def _build_row_formset(
+        self,
+        request,
+        page: SpecimenListPage,
+        column_order: list[str],
+        low_confidence_only: bool,
+        confidence_threshold: Decimal,
+    ) -> forms.BaseFormSet:
         queryset = SpecimenListRowCandidate.objects.filter(page=page).order_by("row_index")
-        if request.GET.get("low_confidence") in {"1", "true", "yes", "on"}:
-            threshold = Decimal(
-                str(getattr(settings, "SPECIMEN_LIST_LOW_CONFIDENCE_THRESHOLD", "0.7"))
+        if low_confidence_only:
+            queryset = queryset.filter(confidence__lt=confidence_threshold)
+
+        form_class = self._build_row_form_class(column_order)
+        RowFormSet = forms.formset_factory(form_class, extra=1, can_delete=True)
+
+        if request.method == "POST":
+            return RowFormSet(request.POST, prefix="rows")
+
+        initial = []
+        for row in queryset:
+            row_data = row.data or {}
+            row_initial = {
+                "row_id": row.id,
+                "status": row.status,
+            }
+            for column in column_order:
+                row_initial[column] = row_data.get(column, "")
+            initial.append(row_initial)
+        return RowFormSet(initial=initial, prefix="rows")
+
+    def _build_row_form_class(self, column_order: list[str]) -> type[forms.Form]:
+        status_choices = SpecimenListRowCandidate.ReviewStatus.choices
+        fields: dict[str, forms.Field] = {
+            "row_id": forms.IntegerField(required=False, widget=forms.HiddenInput),
+            "status": forms.ChoiceField(
+                choices=status_choices,
+                required=False,
+                label=_("Row status"),
+                widget=forms.Select(attrs={"class": "w3-select"}),
+            ),
+        }
+        for column in column_order:
+            fields[column] = forms.CharField(
+                required=False,
+                label=column.replace("_", " ").title(),
+                widget=forms.TextInput(attrs={"class": "w3-input"}),
             )
-            queryset = queryset.filter(confidence__lt=threshold)
-        return SpecimenListRowCandidateFormSet(request.POST or None, queryset=queryset)
+        return type("SpecimenListRowForm", (forms.Form,), fields)
 
     def _save_row_formset(
-        self, page: SpecimenListPage, formset: forms.BaseFormSet
+        self,
+        page: SpecimenListPage,
+        formset: forms.BaseFormSet,
+        column_order: list[str],
     ) -> None:
         with transaction.atomic():
-            for obj in formset.deleted_objects:
-                obj.delete()
+            row_map = {
+                row.id: row
+                for row in SpecimenListRowCandidate.objects.filter(page=page)
+            }
 
             next_index = (
                 SpecimenListRowCandidate.objects.filter(page=page)
@@ -4841,15 +4900,78 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
             )
             next_index = (next_index + 1) if next_index is not None else 0
 
-            instances = formset.save(commit=False)
-            for instance in instances:
-                instance.page = page
-                if instance.pk is None:
-                    instance.row_index = next_index
-                    next_index += 1
-                    if instance.status == SpecimenListRowCandidate.ReviewStatus.UNREVIEWED:
-                        instance.status = SpecimenListRowCandidate.ReviewStatus.EDITED
-                instance.save()
+            for form in formset:
+                if not form.cleaned_data:
+                    continue
+                row_id = form.cleaned_data.get("row_id")
+                if form.cleaned_data.get("DELETE"):
+                    if row_id:
+                        row = row_map.get(row_id)
+                        if row:
+                            row.delete()
+                    continue
+
+                data = {}
+                has_content = False
+                for column in column_order:
+                    value = form.cleaned_data.get(column)
+                    if value not in (None, ""):
+                        has_content = True
+                        data[column] = value
+                    else:
+                        data[column] = None
+
+                if row_id:
+                    row = row_map.get(row_id)
+                    if not row:
+                        continue
+                    existing_data = dict(row.data or {})
+                    if "_original_data" not in existing_data:
+                        existing_data["_original_data"] = {
+                            key: value
+                            for key, value in existing_data.items()
+                            if not str(key).startswith("_")
+                        }
+                    existing_data.update(data)
+                    row.data = existing_data
+                    row.status = form.cleaned_data.get("status") or row.status
+                    row.save(update_fields=["data", "status", "updated_at"])
+                    continue
+
+                if not has_content:
+                    continue
+                status = (
+                    form.cleaned_data.get("status")
+                    or SpecimenListRowCandidate.ReviewStatus.EDITED
+                )
+                SpecimenListRowCandidate.objects.create(
+                    page=page,
+                    row_index=next_index,
+                    data=data,
+                    status=status,
+                )
+                next_index += 1
+
+    def _build_column_order(
+        self,
+        page: SpecimenListPage,
+        low_confidence_only: bool,
+        confidence_threshold: Decimal,
+    ) -> list[str]:
+        queryset = SpecimenListRowCandidate.objects.filter(page=page).order_by("row_index")
+        if low_confidence_only:
+            queryset = queryset.filter(confidence__lt=confidence_threshold)
+        base_order: list[str] = []
+        for row in queryset:
+            for key in (row.data or {}).keys():
+                if str(key).startswith("_"):
+                    continue
+                if key not in base_order:
+                    base_order.append(key)
+        preferred = getattr(settings, "SPECIMEN_LIST_COLUMN_ORDER", None) or []
+        ordered = [col for col in preferred if col in base_order]
+        remaining = [col for col in base_order if col not in ordered]
+        return ordered + remaining
 
 
 def _count_pending_scans() -> int:

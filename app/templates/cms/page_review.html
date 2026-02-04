@@ -12,7 +12,7 @@
 <main class="w3-container" role="main">
   <section class="w3-row-padding" aria-label="{% trans "Review workspace" %}">
     <article class="w3-half">
-      <div class="w3-card w3-padding">
+      <div class="w3-card w3-padding" style="max-height: 75vh; overflow-y: auto;">
         <header class="w3-container">
           <h2 class="w3-large">
             <i class="fa fa-image" aria-hidden="true"></i>
@@ -64,7 +64,7 @@
     </article>
 
     <aside class="w3-half">
-      <div class="w3-card w3-padding">
+      <div class="w3-card w3-padding" style="max-height: 75vh; overflow-y: auto;">
         <header class="w3-container">
           <h2 class="w3-large">
             <i class="fa fa-table" aria-hidden="true"></i>
@@ -100,7 +100,9 @@
                     <th>{% trans "Row" %}</th>
                     <th>{% trans "Confidence" %}</th>
                     <th>{% trans "Status" %}</th>
-                    <th>{% trans "Data" %}</th>
+                    {% for column in column_order %}
+                      <th>{{ column_labels[column] }}</th>
+                    {% endfor %}
                     <th>{% trans "Delete" %}</th>
                   </tr>
                 </thead>
@@ -108,16 +110,19 @@
                   {% for form in formset.forms %}
                     {% with row=form.instance %}
                       <tr class="{% if row.confidence and row.confidence < confidence_threshold %}w3-pale-yellow{% endif %}">
+                        {{ form.row_id }}
                         <td>{{ row.row_index|default:"—" }}</td>
                         <td>{{ row.confidence|default:"—" }}</td>
                         <td>
                           {{ form.status.errors }}
                           {{ form.status }}
                         </td>
-                        <td>
-                          {{ form.data.errors }}
-                          {{ form.data }}
-                        </td>
+                        {% for column in column_order %}
+                          <td>
+                            {{ form[column].errors }}
+                            {{ form[column] }}
+                          </td>
+                        {% endfor %}
                         <td>{{ form.DELETE }}</td>
                       </tr>
                     {% endwith %}

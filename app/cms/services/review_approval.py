@@ -45,7 +45,12 @@ class ApprovalResult:
 
 
 def _normalise_row_data(data: dict[str, Any]) -> dict[str, Any]:
-    return {str(key).strip().lower(): value for key, value in data.items()}
+    normalised: dict[str, Any] = {}
+    for key, value in data.items():
+        if str(key).startswith("_"):
+            continue
+        normalised[str(key).strip().lower()] = value
+    return normalised
 
 
 def _validate_row_data(data: dict[str, Any]) -> list[str]:
