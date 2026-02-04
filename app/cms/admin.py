@@ -66,6 +66,8 @@ from .models import (
     UserOrganisation,
     SpecimenListPDF,
     SpecimenListPage,
+    SpecimenListPageOCR,
+    SpecimenListRowCandidate,
 )
 from .resources import *
 
@@ -648,6 +650,53 @@ class SpecimenListPageAdmin(SimpleHistoryAdmin):
             self.message_user(
                 request,
                 _("Requeued %(count)d page(s) for classification.") % {"count": updated},
+                messages.SUCCESS,
+            )
+
+
+@admin.register(SpecimenListPageOCR)
+class SpecimenListPageOCRAdmin(SimpleHistoryAdmin):
+    list_display = ("page", "ocr_engine", "created_at")
+    list_filter = ("ocr_engine", "created_at")
+    search_fields = ("page__pdf__original_filename", "page__pdf__source_label", "raw_text")
+    readonly_fields = ("created_at",)
+
+
+@admin.register(SpecimenListRowCandidate)
+class SpecimenListRowCandidateAdmin(SimpleHistoryAdmin):
+    list_display = ("page", "row_index", "status", "confidence", "updated_at")
+    list_filter = ("status", "page__page_type")
+    search_fields = ("page__pdf__original_filename", "page__pdf__source_label")
+    readonly_fields = ("created_at", "updated_at")
+    actions = ["mark_as_approved", "mark_as_rejected", "mark_as_edited"]
+
+    @admin.action(description=_("Mark selected rows as approved"))
+    def mark_as_approved(self, request, queryset):
+        updated = queryset.update(status=SpecimenListRowCandidate.ReviewStatus.APPROVED)
+        if updated:
+            self.message_user(
+                request,
+                _("Marked %(count)d row(s) as approved.") % {"count": updated},
+                messages.SUCCESS,
+            )
+
+    @admin.action(description=_("Mark selected rows as rejected"))
+    def mark_as_rejected(self, request, queryset):
+        updated = queryset.update(status=SpecimenListRowCandidate.ReviewStatus.REJECTED)
+        if updated:
+            self.message_user(
+                request,
+                _("Marked %(count)d row(s) as rejected.") % {"count": updated},
+                messages.SUCCESS,
+            )
+
+    @admin.action(description=_("Mark selected rows as edited"))
+    def mark_as_edited(self, request, queryset):
+        updated = queryset.update(status=SpecimenListRowCandidate.ReviewStatus.EDITED)
+        if updated:
+            self.message_user(
+                request,
+                _("Marked %(count)d row(s) as edited.") % {"count": updated},
                 messages.SUCCESS,
             )
 

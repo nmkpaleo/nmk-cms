@@ -35,6 +35,7 @@ from .filters import (
     DrawerRegisterFilter,
     StorageFilter,
     SpecimenListPageFilter,
+    SpecimenListRowCandidateFilter,
 )
 
 
@@ -137,6 +138,7 @@ from cms.models import (
     LLMUsageRecord,
     SpecimenListPDF,
     SpecimenListPage,
+    SpecimenListRowCandidate,
 )
 from django.shortcuts import render
 from .models import Media
@@ -4600,6 +4602,88 @@ class SpecimenListQueueView(LoginRequiredMixin, PermissionRequiredMixin, FilterV
             SpecimenListPage.objects.select_related("pdf", "assigned_reviewer")
             .order_by("pipeline_status", "pdf_id", "page_number")
         )
+
+
+class SpecimenListOCRQueueView(LoginRequiredMixin, PermissionRequiredMixin, FilterView):
+    template_name = "cms/specimen_list_ocr_queue.html"
+    filterset_class = SpecimenListPageFilter
+    paginate_by = 25
+    permission_required = "cms.review_specimenlistpage"
+
+    def get_queryset(self):
+        return (
+            SpecimenListPage.objects.select_related("pdf", "assigned_reviewer")
+            .order_by("pipeline_status", "pdf_id", "page_number")
+        )
+
+
+class SpecimenListRowCandidateForm(forms.Form):
+    row_id = forms.IntegerField(widget=forms.HiddenInput)
+    status = forms.ChoiceField(
+        choices=SpecimenListRowCandidate.ReviewStatus.choices,
+        label=_("Row status"),
+        widget=forms.Select(attrs={"class": "w3-select"}),
+    )
+    data = forms.JSONField(
+        required=False,
+        label=_("Row data JSON"),
+        widget=forms.Textarea(attrs={"class": "w3-input", "rows": 4}),
+    )
+
+
+class SpecimenListRowReviewView(LoginRequiredMixin, PermissionRequiredMixin, FilterView):
+    template_name = "cms/specimen_list_row_review.html"
+    filterset_class = SpecimenListRowCandidateFilter
+    paginate_by = 25
+    permission_required = "cms.review_specimenlistrowcandidate"
+
+    def get_queryset(self):
+        return (
+            SpecimenListRowCandidate.objects.select_related("page", "page__pdf", "page__assigned_reviewer")
+            .order_by("page_id", "row_index")
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["row_status_choices"] = SpecimenListRowCandidate.ReviewStatus.choices
+        return context
+
+    def post(self, request, *args, **kwargs):
+        form = SpecimenListRowCandidateForm(request.POST)
+        if not form.is_valid():
+            messages.error(request, _("Please correct the row review form errors."))
+            return redirect(request.get_full_path())
+
+        row_id = form.cleaned_data["row_id"]
+        action = request.POST.get("action", "")
+        with transaction.atomic():
+            row = (
+                SpecimenListRowCandidate.objects.select_for_update()
+                .select_related("page", "page__pdf")
+                .get(pk=row_id)
+            )
+            update_fields: list[str] = []
+
+            if action == "approve":
+                row.status = SpecimenListRowCandidate.ReviewStatus.APPROVED
+                update_fields.append("status")
+            elif action == "reject":
+                row.status = SpecimenListRowCandidate.ReviewStatus.REJECTED
+                update_fields.append("status")
+            else:
+                row.status = form.cleaned_data["status"]
+                update_fields.append("status")
+
+            data = form.cleaned_data.get("data")
+            if data is not None:
+                row.data = data
+                update_fields.append("data")
+
+            if update_fields:
+                row.save(update_fields=update_fields + ["updated_at"])
+
+        messages.success(request, _("Row candidate updated."))
+        return redirect(request.get_full_path())
 
 
 class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, View):

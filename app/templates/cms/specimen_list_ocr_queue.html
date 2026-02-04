@@ -1,0 +1,91 @@
+{% extends "base_generic.html" %}
+{% load i18n %}
+
+{% block content %}
+<main class="w3-container w3-content" style="max-width: 1200px;">
+  <header class="w3-padding-16">
+    <h1 class="w3-xxlarge">
+      <i class="fa fa-file-lines" aria-hidden="true"></i>
+      {% trans "Specimen list OCR queue" %}
+    </h1>
+    <p class="w3-text-grey">
+      {% trans "Monitor OCR and extraction progress before row review." %}
+    </p>
+  </header>
+
+  <section class="w3-card w3-white w3-padding w3-margin-bottom" aria-label="{% trans 'OCR queue filters' %}">
+    <form method="get" class="w3-container">
+      <div class="w3-row-padding">
+        {% for field in filter.form %}
+          <div class="w3-third w3-section">
+            <label class="w3-text-grey" for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+          </div>
+        {% endfor %}
+      </div>
+      <div class="w3-section">
+        <button class="w3-button w3-blue w3-round-large" type="submit">
+          <i class="fa fa-filter" aria-hidden="true"></i>
+          {% trans "Apply filters" %}
+        </button>
+      </div>
+    </form>
+  </section>
+
+  <section class="w3-card w3-white w3-padding" aria-label="{% trans 'OCR queue results' %}">
+    <div class="w3-responsive">
+      <table class="w3-table w3-striped">
+        <thead>
+          <tr>
+            <th>{% trans "Source" %}</th>
+            <th>{% trans "PDF" %}</th>
+            <th>{% trans "Page" %}</th>
+            <th>{% trans "Type" %}</th>
+            <th>{% trans "Classification" %}</th>
+            <th>{% trans "Confidence" %}</th>
+            <th>{% trans "Pipeline" %}</th>
+            <th>{% trans "Reviewer" %}</th>
+            <th>{% trans "Actions" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for page in page_obj %}
+            <tr>
+              <td>{{ page.pdf.source_label }}</td>
+              <td>{{ page.pdf.original_filename }}</td>
+              <td>{{ page.page_number }}</td>
+              <td>{{ page.get_page_type_display }}</td>
+              <td>{{ page.get_classification_status_display }}</td>
+              <td>
+                {% if page.classification_confidence %}
+                  {{ page.classification_confidence|floatformat:2 }}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td>{{ page.get_pipeline_status_display }}</td>
+              <td>{{ page.assigned_reviewer|default:"—" }}</td>
+              <td>
+                {% if page.page_type == "specimen_list_details" %}
+                  <a class="w3-button w3-small w3-blue w3-round-large" href="{% url 'specimen_list_row_review' %}">
+                    <i class="fa fa-table" aria-hidden="true"></i>
+                    {% trans "Review rows" %}
+                  </a>
+                {% else %}
+                  <span class="w3-text-grey">{% trans "No row review" %}</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="9" class="w3-center w3-text-grey">
+                {% trans "No pages match the current filters." %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+{% endblock %}
