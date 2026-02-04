@@ -9,6 +9,7 @@ import csv
 import json
 import os
 from datetime import date, datetime, timedelta
+import json
 from decimal import Decimal
 from decimal import Decimal
 from pathlib import Path
@@ -4818,8 +4819,24 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
         column_order = self._build_column_order(page, low_confidence_only, confidence_threshold)
         if formset is None:
             formset = self._build_row_formset(request, page, column_order, low_confidence_only, confidence_threshold)
+        low_confidence_ids = set(
+            str(row.id)
+            for row in SpecimenListRowCandidate.objects.filter(page=page)
+            .exclude(confidence__isnull=True)
+            .filter(confidence__lt=confidence_threshold)
+        )
         column_label_pairs = [
-            (column, column.replace("_", " ").title()) for column in column_order
+            ("red_dot", _("Red Dot")),
+            ("green_dot", _("Green Dot")),
+            ("accession_number", _("Accession Number")),
+            ("field_number", _("Field Number")),
+            ("taxon", _("Taxon")),
+            ("element", _("Element")),
+            ("locality", _("Locality")),
+            ("data_json", _("Data Json")),
+            ("row_index", _("Row")),
+            ("confidence", _("Confidence")),
+            ("status", _("Status")),
         ]
         return {
             "page": page,
@@ -4832,7 +4849,8 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
             "confidence_threshold": confidence_threshold,
             "column_order": column_order,
             "column_label_pairs": column_label_pairs,
-            "column_table_colspan": len(column_order) + 4,
+            "column_table_colspan": len(column_label_pairs) + 1,
+            "low_confidence_ids": low_confidence_ids,
         }
 
     def _build_row_formset(
@@ -4859,9 +4877,21 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
             row_initial = {
                 "row_id": row.id,
                 "status": row.status,
+                "row_index": row.row_index,
+                "confidence": row.confidence,
+                "red_dot": self._coerce_boolean(row_data.get("red_dot")),
+                "green_dot": self._coerce_boolean(row_data.get("green_dot")),
             }
             for column in column_order:
                 row_initial[column] = row_data.get(column, "")
+            extra_data = {
+                key: value
+                for key, value in row_data.items()
+                if key not in column_order and not str(key).startswith("_")
+                and key not in {"red_dot", "green_dot"}
+            }
+            if extra_data:
+                row_initial["data_json"] = json.dumps(extra_data, ensure_ascii=False)
             initial.append(row_initial)
         return RowFormSet(initial=initial, prefix="rows")
 
@@ -4869,6 +4899,56 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
         status_choices = SpecimenListRowCandidate.ReviewStatus.choices
         fields: dict[str, forms.Field] = {
             "row_id": forms.IntegerField(required=False, widget=forms.HiddenInput),
+            "red_dot": forms.BooleanField(
+                required=False,
+                label=_("Red Dot"),
+                widget=forms.CheckboxInput(attrs={"class": "w3-check"}),
+            ),
+            "green_dot": forms.BooleanField(
+                required=False,
+                label=_("Green Dot"),
+                widget=forms.CheckboxInput(attrs={"class": "w3-check"}),
+            ),
+            "accession_number": forms.CharField(
+                required=False,
+                label=_("Accession Number"),
+                widget=forms.TextInput(attrs={"class": "w3-input"}),
+            ),
+            "field_number": forms.CharField(
+                required=False,
+                label=_("Field Number"),
+                widget=forms.TextInput(attrs={"class": "w3-input"}),
+            ),
+            "taxon": forms.CharField(
+                required=False,
+                label=_("Taxon"),
+                widget=forms.TextInput(attrs={"class": "w3-input"}),
+            ),
+            "element": forms.CharField(
+                required=False,
+                label=_("Element"),
+                widget=forms.TextInput(attrs={"class": "w3-input"}),
+            ),
+            "locality": forms.CharField(
+                required=False,
+                label=_("Locality"),
+                widget=forms.TextInput(attrs={"class": "w3-input"}),
+            ),
+            "data_json": forms.JSONField(
+                required=False,
+                label=_("Data Json"),
+                widget=forms.Textarea(attrs={"class": "w3-input", "rows": 3}),
+            ),
+            "row_index": forms.CharField(
+                required=False,
+                label=_("Row"),
+                widget=forms.TextInput(attrs={"class": "w3-input", "readonly": "readonly"}),
+            ),
+            "confidence": forms.CharField(
+                required=False,
+                label=_("Confidence"),
+                widget=forms.TextInput(attrs={"class": "w3-input", "readonly": "readonly"}),
+            ),
             "status": forms.ChoiceField(
                 choices=status_choices,
                 required=False,
@@ -4876,12 +4956,19 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
                 widget=forms.Select(attrs={"class": "w3-select"}),
             ),
         }
-        for column in column_order:
-            fields[column] = forms.CharField(
-                required=False,
-                label=column.replace("_", " ").title(),
-                widget=forms.TextInput(attrs={"class": "w3-input"}),
-            )
+        ordered_names = [
+            "red_dot",
+            "green_dot",
+            "accession_number",
+            "field_number",
+            "taxon",
+            "element",
+            "locality",
+            "data_json",
+            "row_index",
+            "confidence",
+            "status",
+        ]
         class SpecimenListRowForm(forms.Form):
             pass
 
@@ -4889,7 +4976,7 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
 
         def _init(self, *args, **kwargs):
             super(SpecimenListRowForm, self).__init__(*args, **kwargs)
-            self.column_fields = [(column, self[column]) for column in column_order]
+            self.ordered_fields = [(name, self[name]) for name in ordered_names]
 
         SpecimenListRowForm.__init__ = _init
         return SpecimenListRowForm
@@ -4935,6 +5022,13 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
                     else:
                         data[column] = None
 
+                data["red_dot"] = bool(form.cleaned_data.get("red_dot"))
+                data["green_dot"] = bool(form.cleaned_data.get("green_dot"))
+
+                data_json_payload = form.cleaned_data.get("data_json")
+                if isinstance(data_json_payload, dict):
+                    data.update(data_json_payload)
+
                 if row_id:
                     row = row_map.get(row_id)
                     if not row:
@@ -4972,20 +5066,21 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
         low_confidence_only: bool,
         confidence_threshold: Decimal,
     ) -> list[str]:
-        queryset = SpecimenListRowCandidate.objects.filter(page=page).order_by("row_index")
-        if low_confidence_only:
-            queryset = queryset.filter(confidence__lt=confidence_threshold)
-        base_order: list[str] = []
-        for row in queryset:
-            for key in (row.data or {}).keys():
-                if str(key).startswith("_"):
-                    continue
-                if key not in base_order:
-                    base_order.append(key)
-        preferred = getattr(settings, "SPECIMEN_LIST_COLUMN_ORDER", None) or []
-        ordered = [col for col in preferred if col in base_order]
-        remaining = [col for col in base_order if col not in ordered]
-        return ordered + remaining
+        return [
+            "accession_number",
+            "field_number",
+            "taxon",
+            "element",
+            "locality",
+        ]
+
+    @staticmethod
+    def _coerce_boolean(value: object) -> bool:
+        if value in (True, False):
+            return bool(value)
+        if value is None:
+            return False
+        return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _count_pending_scans() -> int:

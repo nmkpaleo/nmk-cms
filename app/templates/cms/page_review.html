@@ -9,9 +9,9 @@
   </h1>
 </header>
 
-<main class="w3-container" role="main">
-  <section class="w3-row-padding" aria-label="{% trans "Review workspace" %}">
-    <article class="w3-half">
+<main class="w3-container w3-padding-0" role="main">
+  <section class="w3-row-padding" aria-label="{% trans "Review workspace" %}" style="max-width: none;">
+    <article class="w3-col l6 m12 s12">
       <div class="w3-card w3-padding" style="max-height: 75vh; overflow-y: auto;">
         <header class="w3-container">
           <h2 class="w3-large">
@@ -63,7 +63,7 @@
       </div>
     </article>
 
-    <aside class="w3-half">
+    <aside class="w3-col l6 m12 s12">
       <div class="w3-card w3-padding" style="max-height: 75vh; overflow-y: auto;">
         <header class="w3-container">
           <h2 class="w3-large">
@@ -108,24 +108,16 @@
                 </thead>
                 <tbody>
                   {% for form in formset.forms %}
-                    {% with row=form.instance %}
-                      <tr class="{% if row.confidence and row.confidence < confidence_threshold %}w3-pale-yellow{% endif %}">
-                        {{ form.row_id }}
-                        <td>{{ row.row_index|default:"—" }}</td>
-                        <td>{{ row.confidence|default:"—" }}</td>
+                    <tr class="{% if form.row_id.value and form.row_id.value|stringformat:'s' in low_confidence_ids %}w3-pale-yellow{% endif %}">
+                      {{ form.row_id }}
+                      {% for name, field in form.ordered_fields %}
                         <td>
-                          {{ form.status.errors }}
-                          {{ form.status }}
+                          {{ field.errors }}
+                          {{ field }}
                         </td>
-                        {% for column, field in form.column_fields %}
-                          <td>
-                            {{ field.errors }}
-                            {{ field }}
-                          </td>
-                        {% endfor %}
-                        <td>{{ form.DELETE }}</td>
-                      </tr>
-                    {% endwith %}
+                      {% endfor %}
+                      <td>{{ form.DELETE }}</td>
+                    </tr>
                   {% empty %}
                     <tr>
                       <td colspan="{{ column_table_colspan }}" class="w3-text-grey">{% trans "No rows available." %}</td>
