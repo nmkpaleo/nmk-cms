@@ -1,0 +1,182 @@
+{% extends "base_generic.html" %}
+{% load i18n %}
+
+{% block content %}
+<header class="w3-container">
+  <h1 class="w3-xxlarge">
+    <i class="fa fa-file-text-o" aria-hidden="true"></i>
+    {% trans "Specimen List Page Review" %}
+  </h1>
+</header>
+
+<main class="w3-container" role="main">
+  <section class="w3-row-padding" aria-label="{% trans "Review workspace" %}">
+    <article class="w3-half">
+      <div class="w3-card w3-padding">
+        <header class="w3-container">
+          <h2 class="w3-large">
+            <i class="fa fa-image" aria-hidden="true"></i>
+            {% trans "Page image" %}
+          </h2>
+        </header>
+        <div class="w3-section">
+          {% if page.image_file %}
+            <div class="w3-margin-bottom">
+              <label class="w3-small" for="zoom-range">{% trans "Zoom" %}</label>
+              <input
+                class="w3-input"
+                id="zoom-range"
+                type="range"
+                min="50"
+                max="200"
+                value="100"
+                aria-label="{% trans "Zoom level" %}"
+              />
+            </div>
+            <div class="w3-margin-bottom">
+              <label class="w3-small">
+                <input
+                  class="w3-check"
+                  type="checkbox"
+                  id="toggle-ocr"
+                  aria-describedby="ocr-help"
+                />
+                {% trans "Show OCR overlay" %}
+              </label>
+              <p class="w3-small w3-text-grey" id="ocr-help">
+                {% trans "Overlay appears when OCR data is available." %}
+              </p>
+            </div>
+            <div class="w3-border w3-padding" style="position: relative; overflow: auto;">
+              <img
+                id="page-image"
+                src="{{ page.image_file.url }}"
+                alt="{% trans "Specimen list page image" %}"
+                style="max-width: 100%; transform-origin: top left;"
+              />
+              <div id="ocr-overlay" class="w3-border" style="display: none; position: absolute; inset: 0; pointer-events: none;"></div>
+            </div>
+          {% else %}
+            <p class="w3-text-grey">{% trans "No page image available." %}</p>
+          {% endif %}
+        </div>
+      </div>
+    </article>
+
+    <aside class="w3-half">
+      <div class="w3-card w3-padding">
+        <header class="w3-container">
+          <h2 class="w3-large">
+            <i class="fa fa-table" aria-hidden="true"></i>
+            {% trans "Extracted rows" %}
+          </h2>
+        </header>
+
+        <div class="w3-section">
+          <div class="w3-bar w3-margin-bottom">
+            {% if low_confidence_only %}
+              <a class="w3-button w3-light-grey" href="?">{% trans "Show all rows" %}</a>
+            {% else %}
+              <a class="w3-button w3-light-grey" href="?low_confidence=1">{% trans "Show low-confidence only" %}</a>
+            {% endif %}
+            <span class="w3-small w3-text-grey w3-margin-left">
+              {% blocktrans %}Threshold: {{ confidence_threshold }}{% endblocktrans %}
+            </span>
+          </div>
+
+          <form method="post" class="w3-container" novalidate>
+            {% csrf_token %}
+            {{ formset.management_form }}
+            {% if formset.non_form_errors %}
+              <div class="w3-panel w3-red">
+                {{ formset.non_form_errors }}
+              </div>
+            {% endif %}
+
+            <div class="w3-responsive">
+              <table class="w3-table w3-bordered w3-small">
+                <thead>
+                  <tr class="w3-light-grey">
+                    <th>{% trans "Row" %}</th>
+                    <th>{% trans "Confidence" %}</th>
+                    <th>{% trans "Status" %}</th>
+                    <th>{% trans "Data" %}</th>
+                    <th>{% trans "Delete" %}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for form in formset.forms %}
+                    {% with row=form.instance %}
+                      <tr class="{% if row.confidence and row.confidence < confidence_threshold %}w3-pale-yellow{% endif %}">
+                        <td>{{ row.row_index|default:"—" }}</td>
+                        <td>{{ row.confidence|default:"—" }}</td>
+                        <td>
+                          {{ form.status.errors }}
+                          {{ form.status }}
+                        </td>
+                        <td>
+                          {{ form.data.errors }}
+                          {{ form.data }}
+                        </td>
+                        <td>{{ form.DELETE }}</td>
+                      </tr>
+                    {% endwith %}
+                  {% empty %}
+                    <tr>
+                      <td colspan="5" class="w3-text-grey">{% trans "No rows available." %}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+
+            <div class="w3-bar w3-margin-top">
+              <button class="w3-button w3-blue" type="submit" name="action" value="save">
+                <i class="fa fa-save" aria-hidden="true"></i>
+                {% trans "Save draft" %}
+              </button>
+              <button class="w3-button w3-light-grey" type="submit" name="action" value="release">
+                {% trans "Release" %}
+              </button>
+              <button class="w3-button w3-green" type="submit" name="action" value="approve">
+                {% trans "Approve page" %}
+              </button>
+              <button class="w3-button w3-red" type="submit" name="action" value="reject">
+                {% trans "Reject page" %}
+              </button>
+              <button class="w3-button w3-orange" type="submit" name="action" value="not_specimen_list">
+                {% trans "Not a specimen list" %}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </aside>
+  </section>
+</main>
+
+<footer class="w3-container w3-small w3-text-grey">
+  <p>{% trans "Review changes are saved to the audit history." %}</p>
+</footer>
+
+<script>
+  (function () {
+    var zoomRange = document.getElementById("zoom-range");
+    var image = document.getElementById("page-image");
+    var toggle = document.getElementById("toggle-ocr");
+    var overlay = document.getElementById("ocr-overlay");
+
+    if (zoomRange && image) {
+      zoomRange.addEventListener("input", function () {
+        image.style.transform = "scale(" + (zoomRange.value / 100) + ")";
+      });
+    }
+
+    if (toggle && overlay) {
+      toggle.addEventListener("change", function () {
+        overlay.style.display = toggle.checked ? "block" : "none";
+      });
+    }
+  })();
+</script>
+{% endblock %}

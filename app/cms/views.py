@@ -10,6 +10,7 @@ import json
 import os
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
@@ -99,6 +100,7 @@ from cms.forms import (
     ReferenceWidget,
     ScanUploadForm,
     SpecimenCompositeForm,
+    SpecimenListRowCandidateFormSet,
     StorageForm,
     ensure_manual_qc_permission,
     SpecimenListUploadForm,
@@ -4681,7 +4683,7 @@ class SpecimenListRowReviewView(LoginRequiredMixin, PermissionRequiredMixin, Fil
 
 
 class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, View):
-    permission_required = "cms.review_specimenlistpage"
+    permission_required = "cms.change_specimenlistpage"
 
     def get(self, request, pk):
         page = self._get_page(request, pk)
@@ -4702,7 +4704,17 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
             context = self._build_context(request, page)
             return render(request, self._get_template_name(page), context)
         action = request.POST.get("action")
-        page = self._update_review_status(request, pk, action)
+        if action in {"approve", "reject", "release", "not_specimen_list"}:
+            page = self._update_review_status(request, pk, action)
+        else:
+            formset = self._build_row_formset(request, page)
+            if formset.is_valid():
+                self._save_row_formset(page, formset)
+                messages.success(request, _("Row updates saved."))
+            else:
+                messages.error(request, _("Please correct the row review form errors."))
+                context = self._build_context(request, page, formset=formset)
+                return render(request, self._get_template_name(page), context)
         context = self._build_context(request, page)
         return render(request, self._get_template_name(page), context)
 
@@ -4711,7 +4723,7 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
             SpecimenListPage.PageType.SPECIMEN_LIST_DETAILS,
             SpecimenListPage.PageType.SPECIMEN_LIST_RELATIONS,
         }:
-            return "cms/specimen_list_page_review.html"
+            return "cms/page_review.html"
         return "cms/specimen_list_page_detail.html"
 
     def _get_page(self, request, pk: int) -> SpecimenListPage:
@@ -4764,21 +4776,85 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
                         "locked_at",
                     ]
                 )
+            elif action == "not_specimen_list":
+                page.page_type = SpecimenListPage.PageType.OTHER
+                page.pipeline_status = SpecimenListPage.PipelineStatus.REJECTED
+                page.review_status = SpecimenListPage.ReviewStatus.REJECTED
+                page.reviewed_at = now_time
+                page.locked_at = None
+                page.save(
+                    update_fields=[
+                        "page_type",
+                        "pipeline_status",
+                        "review_status",
+                        "reviewed_at",
+                        "locked_at",
+                    ]
+                )
             return page
 
-    def _build_context(self, request, page: SpecimenListPage) -> dict[str, Any]:
+    def _build_context(
+        self,
+        request,
+        page: SpecimenListPage,
+        *,
+        formset: forms.BaseFormSet | None = None,
+    ) -> dict[str, Any]:
         lock_expired = lock_is_expired(page.locked_at)
+        low_confidence_only = request.GET.get("low_confidence") in {"1", "true", "yes", "on"}
+        confidence_threshold = Decimal(
+            str(getattr(settings, "SPECIMEN_LIST_LOW_CONFIDENCE_THRESHOLD", "0.7"))
+        )
         is_specimen_list = page.page_type in {
             SpecimenListPage.PageType.SPECIMEN_LIST_DETAILS,
             SpecimenListPage.PageType.SPECIMEN_LIST_RELATIONS,
         }
+        if formset is None:
+            formset = self._build_row_formset(request, page)
         return {
             "page": page,
+            "formset": formset,
             "lock_expired": lock_expired,
             "lock_ttl_seconds": SPECIMEN_LIST_LOCK_TTL_SECONDS,
             "can_take_over": lock_expired,
             "is_specimen_list": is_specimen_list,
+            "low_confidence_only": low_confidence_only,
+            "confidence_threshold": confidence_threshold,
         }
+
+    def _build_row_formset(self, request, page: SpecimenListPage) -> forms.BaseFormSet:
+        queryset = SpecimenListRowCandidate.objects.filter(page=page).order_by("row_index")
+        if request.GET.get("low_confidence") in {"1", "true", "yes", "on"}:
+            threshold = Decimal(
+                str(getattr(settings, "SPECIMEN_LIST_LOW_CONFIDENCE_THRESHOLD", "0.7"))
+            )
+            queryset = queryset.filter(confidence__lt=threshold)
+        return SpecimenListRowCandidateFormSet(request.POST or None, queryset=queryset)
+
+    def _save_row_formset(
+        self, page: SpecimenListPage, formset: forms.BaseFormSet
+    ) -> None:
+        with transaction.atomic():
+            for obj in formset.deleted_objects:
+                obj.delete()
+
+            next_index = (
+                SpecimenListRowCandidate.objects.filter(page=page)
+                .order_by("-row_index")
+                .values_list("row_index", flat=True)
+                .first()
+            )
+            next_index = (next_index + 1) if next_index is not None else 0
+
+            instances = formset.save(commit=False)
+            for instance in instances:
+                instance.page = page
+                if instance.pk is None:
+                    instance.row_index = next_index
+                    next_index += 1
+                    if instance.status == SpecimenListRowCandidate.ReviewStatus.UNREVIEWED:
+                        instance.status = SpecimenListRowCandidate.ReviewStatus.EDITED
+                instance.save()
 
 
 def _count_pending_scans() -> int:
