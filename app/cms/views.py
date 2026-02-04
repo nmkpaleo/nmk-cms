@@ -66,6 +66,7 @@ from django.utils.dateparse import parse_date, parse_datetime
 from django.utils.timezone import now
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, FormView, TemplateView
 from django.core.serializers.json import DjangoJSONEncoder
+from django.core.exceptions import PermissionDenied
 
 User = get_user_model()
 
@@ -180,6 +181,7 @@ from cms.services.review_locks import (
     lock_is_expired,
     release_review_lock,
 )
+from cms.services.review_approval import approve_page, approve_row
 from formtools.wizard.views import SessionWizardView
 
 _ident_payload_has_meaningful_data = qc_ident_payload_has_meaningful_data
@@ -4661,8 +4663,8 @@ class SpecimenListRowReviewView(LoginRequiredMixin, PermissionRequiredMixin, Fil
             update_fields: list[str] = []
 
             if action == "approve":
-                row.status = SpecimenListRowCandidate.ReviewStatus.APPROVED
-                update_fields.append("status")
+                if not request.user.has_perm("cms.approve_specimenlistpage"):
+                    raise PermissionDenied
             elif action == "reject":
                 row.status = SpecimenListRowCandidate.ReviewStatus.REJECTED
                 update_fields.append("status")
@@ -4677,6 +4679,9 @@ class SpecimenListRowReviewView(LoginRequiredMixin, PermissionRequiredMixin, Fil
 
             if update_fields:
                 row.save(update_fields=update_fields + ["updated_at"])
+
+            if action == "approve":
+                approve_row(row=row, reviewer=request.user)
 
         messages.success(request, _("Row candidate updated."))
         return redirect(request.get_full_path())
@@ -4749,20 +4754,10 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
             if action == "release":
                 return release_review_lock(page_id=pk, reviewer=request.user)
             elif action == "approve":
-                page.pipeline_status = SpecimenListPage.PipelineStatus.APPROVED
-                page.review_status = SpecimenListPage.ReviewStatus.APPROVED
-                page.reviewed_at = now_time
-                page.approved_at = now_time
-                page.locked_at = None
-                page.save(
-                    update_fields=[
-                        "pipeline_status",
-                        "review_status",
-                        "reviewed_at",
-                        "approved_at",
-                        "locked_at",
-                    ]
-                )
+                if not request.user.has_perm("cms.approve_specimenlistpage"):
+                    raise PermissionDenied
+                approve_page(page=page, reviewer=request.user)
+                page.refresh_from_db()
             elif action == "reject":
                 page.pipeline_status = SpecimenListPage.PipelineStatus.REJECTED
                 page.review_status = SpecimenListPage.ReviewStatus.REJECTED
