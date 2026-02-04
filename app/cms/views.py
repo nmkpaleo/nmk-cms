@@ -172,22 +172,16 @@ from cms.qc import (
     interpreted_value as qc_interpreted_value,
 )
 from cms import scanning_utils
+from cms.services.review_locks import (
+    SPECIMEN_LIST_LOCK_TTL_SECONDS,
+    acquire_review_lock,
+    lock_is_expired,
+    release_review_lock,
+)
 from formtools.wizard.views import SessionWizardView
 
 _ident_payload_has_meaningful_data = qc_ident_payload_has_meaningful_data
 _interpreted_value = qc_interpreted_value
-
-SPECIMEN_LIST_LOCK_TTL_SECONDS = getattr(
-    settings, "SPECIMEN_LIST_LOCK_TTL_SECONDS", 900
-)
-
-
-def _lock_is_expired(locked_at: datetime | None) -> bool:
-    if not locked_at:
-        return True
-    expires_at = locked_at + timedelta(seconds=SPECIMEN_LIST_LOCK_TTL_SECONDS)
-    return timezone.now() >= expires_at
-
 
 def is_collection_manager(user):
     if not getattr(user, "is_authenticated", False):
@@ -4724,21 +4718,7 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
         return SpecimenListPage.objects.select_related("pdf", "assigned_reviewer").get(pk=pk)
 
     def _claim_page(self, request, pk: int) -> SpecimenListPage:
-        with transaction.atomic():
-            page = (
-                SpecimenListPage.objects.select_for_update()
-                .select_related("pdf", "assigned_reviewer")
-                .get(pk=pk)
-            )
-            if page.assigned_reviewer and page.assigned_reviewer != request.user:
-                if not _lock_is_expired(page.locked_at):
-                    return page
-
-            page.assigned_reviewer = request.user
-            page.locked_at = timezone.now()
-            page.pipeline_status = SpecimenListPage.PipelineStatus.IN_REVIEW
-            page.save(update_fields=["assigned_reviewer", "locked_at", "pipeline_status"])
-            return page
+        return acquire_review_lock(page_id=pk, reviewer=request.user)
 
     def _update_review_status(
         self, request, pk: int, action: str | None
@@ -4750,23 +4730,22 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
                 .get(pk=pk)
             )
             if page.assigned_reviewer and page.assigned_reviewer != request.user:
-                if not _lock_is_expired(page.locked_at):
+                if not lock_is_expired(page.locked_at):
                     return page
 
             now_time = timezone.now()
             if action == "release":
-                page.assigned_reviewer = None
-                page.locked_at = None
-                page.pipeline_status = SpecimenListPage.PipelineStatus.PENDING
-                page.save(update_fields=["assigned_reviewer", "locked_at", "pipeline_status"])
+                return release_review_lock(page_id=pk, reviewer=request.user)
             elif action == "approve":
                 page.pipeline_status = SpecimenListPage.PipelineStatus.APPROVED
+                page.review_status = SpecimenListPage.ReviewStatus.APPROVED
                 page.reviewed_at = now_time
                 page.approved_at = now_time
                 page.locked_at = None
                 page.save(
                     update_fields=[
                         "pipeline_status",
+                        "review_status",
                         "reviewed_at",
                         "approved_at",
                         "locked_at",
@@ -4774,15 +4753,21 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
                 )
             elif action == "reject":
                 page.pipeline_status = SpecimenListPage.PipelineStatus.REJECTED
+                page.review_status = SpecimenListPage.ReviewStatus.REJECTED
                 page.reviewed_at = now_time
                 page.locked_at = None
                 page.save(
-                    update_fields=["pipeline_status", "reviewed_at", "locked_at"]
+                    update_fields=[
+                        "pipeline_status",
+                        "review_status",
+                        "reviewed_at",
+                        "locked_at",
+                    ]
                 )
             return page
 
     def _build_context(self, request, page: SpecimenListPage) -> dict[str, Any]:
-        lock_expired = _lock_is_expired(page.locked_at)
+        lock_expired = lock_is_expired(page.locked_at)
         is_specimen_list = page.page_type in {
             SpecimenListPage.PageType.SPECIMEN_LIST_DETAILS,
             SpecimenListPage.PageType.SPECIMEN_LIST_RELATIONS,
