@@ -42,8 +42,9 @@
       </header>
 
       <section class="w3-row-padding" aria-label="{% trans "Review workspace" %}" style="max-width: none;">
-        <article class="w3-col l6 m12 s12">
-          <div class="w3-card w3-padding" style="max-height: 75vh; overflow-y: auto;">
+        <div class="w3-card w3-padding review-split" id="review-split">
+          <article class="review-pane" id="review-pane-left">
+            <div class="review-pane-inner">
         <header class="w3-container">
           <h2 class="w3-large">
             <i class="fa fa-image" aria-hidden="true"></i>
@@ -94,10 +95,11 @@
       </div>
     </article>
 
-        </article>
-
-        <aside class="w3-col l6 m12 s12">
-          <div class="w3-card w3-padding" style="max-height: 75vh; overflow-y: auto;">
+            </div>
+          </article>
+          <div class="review-divider" id="review-divider" role="separator" aria-orientation="vertical" aria-label="{% trans "Resize panes" %}"></div>
+          <aside class="review-pane" id="review-pane-right">
+            <div class="review-pane-inner">
         <header class="w3-container">
           <h2 class="w3-large">
             <i class="fa fa-table" aria-hidden="true"></i>
@@ -177,8 +179,9 @@
             </div>
           </form>
         </div>
-      </div>
-    </aside>
+            </div>
+          </aside>
+        </div>
   </section>
 </main>
 
@@ -205,7 +208,92 @@
         overlay.style.display = toggle.checked ? "block" : "none";
       });
     }
+
+    var split = document.getElementById("review-split");
+    var divider = document.getElementById("review-divider");
+    var leftPane = document.getElementById("review-pane-left");
+    var rightPane = document.getElementById("review-pane-right");
+    var dragging = false;
+
+    function setWidths(clientX) {
+      if (!split || !leftPane || !rightPane) {
+        return;
+      }
+      var rect = split.getBoundingClientRect();
+      var minWidth = 240;
+      var maxWidth = rect.width - minWidth;
+      var offset = Math.min(Math.max(clientX - rect.left, minWidth), maxWidth);
+      var leftPercent = (offset / rect.width) * 100;
+      leftPane.style.flexBasis = leftPercent + "%";
+      rightPane.style.flexBasis = (100 - leftPercent) + "%";
+    }
+
+    function startDrag(event) {
+      dragging = true;
+      document.body.classList.add("w3-unselectable");
+      setWidths(event.clientX);
+    }
+
+    function stopDrag() {
+      if (!dragging) {
+        return;
+      }
+      dragging = false;
+      document.body.classList.remove("w3-unselectable");
+    }
+
+    if (divider) {
+      divider.addEventListener("mousedown", function (event) {
+        event.preventDefault();
+        startDrag(event);
+      });
+    }
+
+    document.addEventListener("mousemove", function (event) {
+      if (dragging) {
+        setWidths(event.clientX);
+      }
+    });
+
+    document.addEventListener("mouseup", stopDrag);
   })();
 </script>
+<style>
+  .review-split {
+    display: flex;
+    gap: 0;
+    max-height: 75vh;
+    overflow: hidden;
+  }
+  .review-pane {
+    flex: 1 1 50%;
+    min-width: 240px;
+    display: flex;
+  }
+  .review-pane-inner {
+    flex: 1 1 auto;
+    max-height: 75vh;
+    overflow-y: auto;
+  }
+  .review-divider {
+    width: 6px;
+    cursor: col-resize;
+    background: #e2e2e2;
+  }
+  .w3-unselectable {
+    user-select: none;
+  }
+  @media (max-width: 992px) {
+    .review-split {
+      flex-direction: column;
+      max-height: none;
+    }
+    .review-divider {
+      width: 100%;
+      height: 6px;
+      cursor: row-resize;
+    }
+  }
+</style>
   </body>
 </html>
