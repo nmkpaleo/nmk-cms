@@ -13,7 +13,9 @@ from app.cms.models import (
     AccessionRow,
     Collection,
     FieldSlip,
+    Identification,
     Locality,
+    NatureOfSpecimen,
     SpecimenListPage,
     SpecimenListPDF,
     SpecimenListRowCandidate,
@@ -86,6 +88,8 @@ def test_approve_page_creates_records_and_moves_image(tmp_path):
     assert AccessionRow.objects.count() == 1
     assert FieldSlip.objects.count() == 1
     assert AccessionFieldSlip.objects.count() == 1
+    assert Identification.objects.count() == 1
+    assert NatureOfSpecimen.objects.count() == 1
 
     result_payload = row.data.get("_import_result")
     assert result_payload

@@ -17,7 +17,10 @@ from cms.models import (
     AccessionFieldSlip,
     AccessionRow,
     Collection,
+    Element,
+    Identification,
     Locality,
+    NatureOfSpecimen,
     SpecimenListPage,
     SpecimenListRowCandidate,
 )
@@ -133,6 +136,33 @@ def _build_field_slip(row_data: dict[str, Any]) -> tuple[AccessionFieldSlip | No
     return accession_field_slip, errors
 
 
+def _build_identification(accession_row: AccessionRow, row_data: dict[str, Any]) -> None:
+    taxon = row_data.get("taxon")
+    if taxon in (None, ""):
+        return
+    Identification.objects.get_or_create(
+        accession_row=accession_row,
+        taxon_verbatim=str(taxon).strip(),
+        defaults={"taxon": str(taxon).strip()},
+    )
+
+
+def _build_nature_of_specimen(accession_row: AccessionRow, row_data: dict[str, Any]) -> None:
+    element_name = row_data.get("element") or row_data.get("verbatim_element")
+    if element_name in (None, ""):
+        return
+    cleaned_name = str(element_name).strip()
+    element, _ = Element.objects.get_or_create(name=cleaned_name)
+    NatureOfSpecimen.objects.get_or_create(
+        accession_row=accession_row,
+        element=element,
+        defaults={
+            "verbatim_element": cleaned_name,
+            "fragments": 0,
+        },
+    )
+
+
 def _store_row_result(row: SpecimenListRowCandidate, result: ApprovalResult) -> None:
     row.data = dict(row.data or {})
     row.data["_import_result"] = result.as_dict()
@@ -213,6 +243,13 @@ def approve_row(*, row: SpecimenListRowCandidate, reviewer) -> ApprovalResult:
         finally:
             set_current_user(None)
         accession_row_id = accession_row.id
+
+        set_current_user(reviewer)
+        try:
+            _build_identification(accession_row, row_data)
+            _build_nature_of_specimen(accession_row, row_data)
+        finally:
+            set_current_user(None)
 
         slip_data = dict(row_data)
         slip_data["accession"] = accession

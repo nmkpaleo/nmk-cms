@@ -4600,6 +4600,7 @@ class SpecimenListQueueView(LoginRequiredMixin, PermissionRequiredMixin, FilterV
     def get_queryset(self):
         return (
             SpecimenListPage.objects.select_related("pdf", "assigned_reviewer")
+            .exclude(review_status=SpecimenListPage.ReviewStatus.APPROVED)
             .order_by("pipeline_status", "pdf_id", "page_number")
         )
 
@@ -4613,6 +4614,7 @@ class SpecimenListOCRQueueView(LoginRequiredMixin, PermissionRequiredMixin, Filt
     def get_queryset(self):
         return (
             SpecimenListPage.objects.select_related("pdf", "assigned_reviewer")
+            .exclude(review_status=SpecimenListPage.ReviewStatus.APPROVED)
             .order_by("pipeline_status", "pdf_id", "page_number")
         )
 
@@ -4694,6 +4696,9 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
 
     def get(self, request, pk):
         page = self._get_page(request, pk)
+        if page.review_status == SpecimenListPage.ReviewStatus.APPROVED:
+            messages.info(request, _("This page has already been approved."))
+            return redirect("specimen_list_queue")
         if page.page_type in {
             SpecimenListPage.PageType.SPECIMEN_LIST_DETAILS,
             SpecimenListPage.PageType.SPECIMEN_LIST_RELATIONS,
@@ -4704,6 +4709,9 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
 
     def post(self, request, pk):
         page = self._get_page(request, pk)
+        if page.review_status == SpecimenListPage.ReviewStatus.APPROVED:
+            messages.info(request, _("This page has already been approved."))
+            return redirect("specimen_list_queue")
         if page.page_type not in {
             SpecimenListPage.PageType.SPECIMEN_LIST_DETAILS,
             SpecimenListPage.PageType.SPECIMEN_LIST_RELATIONS,
@@ -4713,6 +4721,7 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
         action = request.POST.get("action")
         if action in {"approve", "reject", "release", "not_specimen_list"}:
             page = self._update_review_status(request, pk, action)
+            return redirect("specimen_list_queue")
         else:
             low_confidence_only = request.GET.get("low_confidence") in {"1", "true", "yes", "on"}
             confidence_threshold = Decimal(
@@ -4846,7 +4855,6 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
             ("review_comment", _("Review comment")),
             ("row_index", _("Row")),
             ("confidence", _("Confidence")),
-            ("status", _("Status")),
         ]
         return {
             "page": page,
@@ -4969,7 +4977,7 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
                 choices=status_choices,
                 required=False,
                 label=_("Row status"),
-                widget=forms.Select(attrs={"class": "w3-select"}),
+                widget=forms.HiddenInput(),
             ),
         }
         ordered_names = [
@@ -4984,7 +4992,6 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
             "review_comment",
             "row_index",
             "confidence",
-            "status",
         ]
         class SpecimenListRowForm(forms.Form):
             pass
