@@ -12,6 +12,7 @@ from app.cms.models import (
     AccessionFieldSlip,
     AccessionRow,
     Collection,
+    Element,
     FieldSlip,
     Identification,
     Locality,
@@ -55,6 +56,7 @@ def _ensure_collection_and_locality(user):
 def test_approve_page_creates_records_and_moves_image(tmp_path):
     reviewer = _build_reviewer()
     _ensure_collection_and_locality(reviewer)
+    Element.objects.create(name="Femur")
     pdf = _build_pdf()
     page = SpecimenListPage.objects.create(pdf=pdf, page_number=1)
     image_file = SimpleUploadedFile("page.png", b"fake-image-data", content_type="image/png")
