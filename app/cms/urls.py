@@ -83,6 +83,10 @@ from cms.views import (
     ManualQCImportView,
     AccessionRowPrintSmallView,
     SpecimenListUploadView,
+    SpecimenListQueueView,
+    SpecimenListOCRQueueView,
+    SpecimenListPageReviewView,
+    SpecimenListRowReviewView,
 )
 from .views import PreparationMediaUploadView
 from .views import FieldSlipAutocomplete, ReferenceAutocomplete
@@ -99,6 +103,18 @@ urlpatterns = [
     path('reports/accession-distribution/', accession_distribution_report, name='accession_distribution_report'),
     path('reports/media/', media_report_view, name='media_report'),
     path("specimen-lists/upload/", SpecimenListUploadView.as_view(), name="specimen_list_upload"),
+    path("specimen-lists/queue/", SpecimenListQueueView.as_view(), name="specimen_list_queue"),
+    path("specimen-lists/queue/ocr/", SpecimenListOCRQueueView.as_view(), name="specimen_list_ocr_queue"),
+    path(
+        "specimen-lists/pages/<int:pk>/review/",
+        SpecimenListPageReviewView.as_view(),
+        name="specimen_list_page_review",
+    ),
+    path(
+        "specimen-lists/rows/review/",
+        SpecimenListRowReviewView.as_view(),
+        name="specimen_list_row_review",
+    ),
     path('manual-import/', ManualQCImportView.as_view(), name='manual_qc_import'),
     path('inventory/', inventory_start, name='inventory_start'),
     path('inventory/update/', inventory_update, name='inventory_update'),

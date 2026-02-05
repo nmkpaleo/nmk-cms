@@ -629,7 +629,7 @@ class SpecimenListPageAdmin(SimpleHistoryAdmin):
         "reviewed_at",
         "approved_at",
     )
-    actions = ["requeue_classification"]
+    actions = ["requeue_classification", "release_review_locks"]
 
     @admin.action(description=_("Requeue classification for selected pages"))
     def requeue_classification(self, request, queryset):
@@ -650,6 +650,16 @@ class SpecimenListPageAdmin(SimpleHistoryAdmin):
             self.message_user(
                 request,
                 _("Requeued %(count)d page(s) for classification.") % {"count": updated},
+                messages.SUCCESS,
+            )
+
+    @admin.action(description=_("Release review locks for selected pages"))
+    def release_review_locks(self, request, queryset):
+        updated = queryset.update(assigned_reviewer=None, locked_at=None)
+        if updated:
+            self.message_user(
+                request,
+                _("Released review locks for %(count)d page(s).") % {"count": updated},
                 messages.SUCCESS,
             )
 

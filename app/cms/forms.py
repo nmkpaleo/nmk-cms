@@ -60,6 +60,7 @@ from .models import (
     Taxon,
     TaxonRank,
     TaxonStatus,
+    SpecimenListRowCandidate,
     _resolve_user_organisation,
 )
 
@@ -1097,6 +1098,29 @@ class SpecimenListUploadForm(BaseW3Form):
                 _("No file was submitted. Check the encoding type on the form.")
             )
         return uploaded_files
+
+
+class SpecimenListRowCandidateForm(BaseW3ModelForm):
+    class Meta:
+        model = SpecimenListRowCandidate
+        fields = ["status", "data"]
+        widgets = {
+            "data": forms.Textarea(attrs={"rows": 4, "class": "w3-input"}),
+        }
+
+    def clean_data(self):
+        data = self.cleaned_data.get("data")
+        if data in (None, "", []):
+            raise forms.ValidationError(_("Row data is required."))
+        return data
+
+
+SpecimenListRowCandidateFormSet = forms.modelformset_factory(
+    SpecimenListRowCandidate,
+    form=SpecimenListRowCandidateForm,
+    can_delete=True,
+    extra=1,
+)
 
 
 class AddAccessionRowForm(BaseW3ModelForm):
