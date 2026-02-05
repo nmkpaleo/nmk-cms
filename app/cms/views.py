@@ -182,6 +182,7 @@ from cms.services.review_locks import (
     lock_is_expired,
     release_review_lock,
 )
+from cms.permissions import can_approve_specimen_list_page, can_override_review_lock
 from cms.services.review_approval import approve_page, approve_row
 from formtools.wizard.views import SessionWizardView
 
@@ -4664,7 +4665,7 @@ class SpecimenListRowReviewView(LoginRequiredMixin, PermissionRequiredMixin, Fil
             update_fields: list[str] = []
 
             if action == "approve":
-                if not request.user.has_perm("cms.approve_specimenlistpage"):
+                if not can_approve_specimen_list_page(request.user):
                     raise PermissionDenied
             elif action == "reject":
                 row.status = SpecimenListRowCandidate.ReviewStatus.REJECTED
@@ -4747,7 +4748,11 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
         return SpecimenListPage.objects.select_related("pdf", "assigned_reviewer").get(pk=pk)
 
     def _claim_page(self, request, pk: int) -> SpecimenListPage:
-        return acquire_review_lock(page_id=pk, reviewer=request.user)
+        return acquire_review_lock(
+            page_id=pk,
+            reviewer=request.user,
+            allow_override=can_override_review_lock(request.user),
+        )
 
     def _update_review_status(
         self, request, pk: int, action: str | None
@@ -4764,9 +4769,13 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
 
             now_time = timezone.now()
             if action == "release":
-                return release_review_lock(page_id=pk, reviewer=request.user)
+                return release_review_lock(
+                    page_id=pk,
+                    reviewer=request.user,
+                    allow_override=can_override_review_lock(request.user),
+                )
             elif action == "approve":
-                if not request.user.has_perm("cms.approve_specimenlistpage"):
+                if not can_approve_specimen_list_page(request.user):
                     raise PermissionDenied
                 approve_page(page=page, reviewer=request.user)
                 page.refresh_from_db()
