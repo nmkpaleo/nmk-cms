@@ -4834,6 +4834,7 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
             ("element", _("Element")),
             ("locality", _("Locality")),
             ("data_json", _("Data Json")),
+            ("review_comment", _("Review comment")),
             ("row_index", _("Row")),
             ("confidence", _("Confidence")),
             ("status", _("Status")),
@@ -4877,7 +4878,7 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
             row_initial = {
                 "row_id": row.id,
                 "status": row.status,
-                "row_index": row.row_index,
+                "row_index": row.row_index + 1,
                 "confidence": row.confidence,
                 "red_dot": self._coerce_boolean(row_data.get("red_dot")),
                 "green_dot": self._coerce_boolean(row_data.get("green_dot")),
@@ -4888,10 +4889,11 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
                 key: value
                 for key, value in row_data.items()
                 if key not in column_order and not str(key).startswith("_")
-                and key not in {"red_dot", "green_dot"}
+                and key not in {"red_dot", "green_dot", "review_comment"}
             }
             if extra_data:
                 row_initial["data_json"] = json.dumps(extra_data, ensure_ascii=False)
+            row_initial["review_comment"] = row_data.get("review_comment", "")
             initial.append(row_initial)
         return RowFormSet(initial=initial, prefix="rows")
 
@@ -4939,6 +4941,11 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
                 label=_("Data Json"),
                 widget=forms.Textarea(attrs={"class": "w3-input", "rows": 3}),
             ),
+            "review_comment": forms.CharField(
+                required=False,
+                label=_("Review comment"),
+                widget=forms.Textarea(attrs={"class": "w3-input", "rows": 2}),
+            ),
             "row_index": forms.CharField(
                 required=False,
                 label=_("Row"),
@@ -4965,6 +4972,7 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
             "element",
             "locality",
             "data_json",
+            "review_comment",
             "row_index",
             "confidence",
             "status",
@@ -5024,6 +5032,7 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
 
                 data["red_dot"] = bool(form.cleaned_data.get("red_dot"))
                 data["green_dot"] = bool(form.cleaned_data.get("green_dot"))
+                data["review_comment"] = form.cleaned_data.get("review_comment") or ""
 
                 data_json_payload = form.cleaned_data.get("data_json")
                 if isinstance(data_json_payload, dict):
@@ -5072,6 +5081,7 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
             "taxon",
             "element",
             "locality",
+            "review_comment",
         ]
 
     @staticmethod
