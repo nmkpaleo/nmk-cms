@@ -1,18 +1,49 @@
-{% extends "base_generic.html" %}
+{% load static user_tags %}
 {% load i18n %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-{% block content %}
-<header class="w3-container">
-  <h1 class="w3-xxlarge">
-    <i class="fa fa-file-text-o" aria-hidden="true"></i>
-    {% trans "Specimen List Page Review" %}
-  </h1>
-</header>
+    <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css" />
+    <link rel="stylesheet" href="{% static 'css/style.css' %}" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" />
 
-<main class="w3-container w3-padding-0" role="main">
-  <section class="w3-row-padding" aria-label="{% trans "Review workspace" %}" style="max-width: none;">
-    <article class="w3-col l6 m12 s12">
-      <div class="w3-card w3-padding" style="max-height: 75vh; overflow-y: auto;">
+    <title>{% trans "Specimen List Page Review" %}</title>
+  </head>
+  <body>
+    <header class="site-header">
+      <nav class="site-navigation w3-bar w3-white w3-card" role="navigation" aria-label="{% trans 'Primary navigation' %}">
+        <a class="nav-logo w3-bar-item w3-button w3-hover-none w3-padding-16" href="{% url 'index' %}">
+          <span class="sr-only">{% trans "National Museums of Kenya home" %}</span>
+          <img src="{% static 'images/logo.jpg' %}" class="logo_image" alt="{% trans 'National Museums of Kenya logo' %}">
+        </a>
+        <div class="nav-items w3-hide-small">
+          {% include "includes/navigation_links.html" with layout="desktop" %}
+        </div>
+        <button id="nav-toggle" class="w3-bar-item w3-button w3-hide-large w3-hide-medium" type="button" aria-expanded="false" aria-controls="primary-navigation">
+          <span class="fa fa-bars" aria-hidden="true"></span>
+          <span class="sr-only">{% trans "Toggle navigation" %}</span>
+        </button>
+        <div id="primary-navigation" class="w3-bar-block w3-white w3-hide w3-hide-large w3-hide-medium" data-collapsed="true">
+          {% include "includes/navigation_links.html" with layout="mobile" %}
+        </div>
+      </nav>
+    </header>
+
+    <main class="w3-container w3-padding-0" role="main">
+      <header class="w3-container">
+        <h1 class="w3-xxlarge">
+          <i class="fa fa-file-text-o" aria-hidden="true"></i>
+          {% trans "Specimen List Page Review" %}
+        </h1>
+      </header>
+
+      <section class="w3-row-padding" aria-label="{% trans "Review workspace" %}" style="max-width: none;">
+        <article class="w3-col l6 m12 s12">
+          <div class="w3-card w3-padding" style="max-height: 75vh; overflow-y: auto;">
         <header class="w3-container">
           <h2 class="w3-large">
             <i class="fa fa-image" aria-hidden="true"></i>
@@ -63,8 +94,10 @@
       </div>
     </article>
 
-    <aside class="w3-col l6 m12 s12">
-      <div class="w3-card w3-padding" style="max-height: 75vh; overflow-y: auto;">
+        </article>
+
+        <aside class="w3-col l6 m12 s12">
+          <div class="w3-card w3-padding" style="max-height: 75vh; overflow-y: auto;">
         <header class="w3-container">
           <h2 class="w3-large">
             <i class="fa fa-table" aria-hidden="true"></i>
@@ -97,9 +130,6 @@
               <table class="w3-table w3-bordered w3-small">
                 <thead>
                   <tr class="w3-light-grey">
-                    <th>{% trans "Row" %}</th>
-                    <th>{% trans "Confidence" %}</th>
-                    <th>{% trans "Status" %}</th>
                     {% for column, label in column_label_pairs %}
                       <th>{{ label }}</th>
                     {% endfor %}
@@ -156,6 +186,7 @@
   <p>{% trans "Review changes are saved to the audit history." %}</p>
 </footer>
 
+<script src="{% static 'javascript.js' %}"></script>
 <script>
   (function () {
     var zoomRange = document.getElementById("zoom-range");
@@ -176,4 +207,5 @@
     }
   })();
 </script>
-{% endblock %}
+  </body>
+</html>
