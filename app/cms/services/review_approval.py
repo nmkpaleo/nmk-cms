@@ -154,10 +154,10 @@ def _build_nature_of_specimen(accession_row: AccessionRow, row_data: dict[str, A
     cleaned_name = str(element_name).strip()
     element = Element.objects.filter(name__iexact=cleaned_name).first()
     if not element:
-        return
-    verbatim_element = row_data.get("verbatim_element")
-    if verbatim_element in (None, "") and row_data.get("element") in (None, ""):
-        verbatim_element = cleaned_name
+        element = Element.objects.filter(name="-Undefined").first()
+        if element is None:
+            element = Element.objects.create(name="-Undefined")
+    verbatim_element = row_data.get("verbatim_element") or cleaned_name
     NatureOfSpecimen.objects.get_or_create(
         accession_row=accession_row,
         element=element,

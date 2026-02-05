@@ -114,3 +114,31 @@ def test_approve_row_records_errors():
     row.refresh_from_db()
     assert result.errors
     assert row.data.get("_import_result")
+
+
+def test_approve_row_creates_nature_of_specimen_with_verbatim_element():
+    reviewer = _build_reviewer()
+    _ensure_collection_and_locality(reviewer)
+    pdf = _build_pdf()
+    page = SpecimenListPage.objects.create(pdf=pdf, page_number=1)
+    row = SpecimenListRowCandidate.objects.create(
+        page=page,
+        row_index=0,
+        data={
+            "accession_number": "KNM-ER 456",
+            "taxon": "Homo",
+            "element": "clavicle",
+            "side": "left",
+            "portion": "proximal",
+            "condition": "fragment",
+        },
+    )
+
+    approve_row(row=row, reviewer=reviewer)
+
+    row.refresh_from_db()
+    nature = NatureOfSpecimen.objects.get(accession_row__accession__specimen_no=456)
+    assert nature.verbatim_element == "clavicle"
+    assert nature.side == "left"
+    assert nature.portion == "proximal"
+    assert nature.condition == "fragment"
