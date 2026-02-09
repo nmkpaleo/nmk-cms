@@ -4975,7 +4975,14 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
             "data_json": forms.JSONField(
                 required=False,
                 label=_("Data Json"),
-                widget=forms.Textarea(attrs={"class": "w3-input", "rows": 3}),
+                widget=forms.Textarea(
+                    attrs={
+                        "class": "w3-input review-narrow",
+                        "rows": 3,
+                        "readonly": "readonly",
+                        "aria-readonly": "true",
+                    }
+                ),
             ),
             "review_comment": forms.CharField(
                 required=False,
@@ -4985,12 +4992,24 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
             "row_index": forms.CharField(
                 required=False,
                 label=_("Row"),
-                widget=forms.TextInput(attrs={"class": "w3-input", "readonly": "readonly"}),
+                widget=forms.TextInput(
+                    attrs={
+                        "class": "w3-input review-narrow",
+                        "readonly": "readonly",
+                        "aria-readonly": "true",
+                    }
+                ),
             ),
             "confidence": forms.CharField(
                 required=False,
                 label=_("Confidence"),
-                widget=forms.TextInput(attrs={"class": "w3-input", "readonly": "readonly"}),
+                widget=forms.TextInput(
+                    attrs={
+                        "class": "w3-input review-narrow",
+                        "readonly": "readonly",
+                        "aria-readonly": "true",
+                    }
+                ),
             ),
             "status": forms.ChoiceField(
                 choices=status_choices,

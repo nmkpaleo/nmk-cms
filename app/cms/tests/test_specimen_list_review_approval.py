@@ -113,6 +113,8 @@ def test_approve_page_creates_records_and_moves_image(tmp_path):
 
     fieldslip_link = AccessionFieldSlip.objects.filter(accession=accession).first()
     assert fieldslip_link.notes == "QC check ok."
+    fieldslip = FieldSlip.objects.get(field_number=field_number)
+    assert fieldslip.comment == "QC check ok."
 
     summary_line = [line for line in page.classification_notes.splitlines() if line][-1]
     summary = json.loads(summary_line)

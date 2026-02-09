@@ -152,6 +152,13 @@ def _build_field_slip(row_data: dict[str, Any]) -> tuple[AccessionFieldSlip | No
         if updated_notes != existing_notes:
             accession_field_slip.notes = updated_notes
             accession_field_slip.save(update_fields=["notes"])
+        existing_comment = field_slip.comment or ""
+        updated_comment = "\n\n".join(
+            part for part in [existing_comment, str(review_comment).strip()] if part
+        )
+        if updated_comment != existing_comment:
+            field_slip.comment = updated_comment
+            field_slip.save(update_fields=["comment"])
     return accession_field_slip, errors
 
 

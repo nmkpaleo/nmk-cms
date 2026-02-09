@@ -756,6 +756,7 @@ class FieldSlip(MergeMixin, BaseModel):
     verbatim_SRS = models.CharField(max_length=255, null=True, blank=True, help_text="Spatial reference system used in the field.")
     verbatim_coordinate_system = models.CharField(max_length=255, null=True, blank=True, help_text="Coordinate system used in the field (WGS84 etc.).")
     verbatim_elevation = models.CharField(max_length=255, null=True, blank=True, help_text="Elevation as recorded.")
+    comment = models.TextField(null=True, blank=True, help_text="Additional notes from review.")
 
     history = HistoricalRecords()
 

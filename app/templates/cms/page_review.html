@@ -133,7 +133,21 @@
                 <thead>
                   <tr class="w3-light-grey">
                     {% for column, label in column_label_pairs %}
-                      <th>{{ label }}</th>
+                      <th data-column="{{ column }}">
+                        <div class="review-header">
+                          <span>{{ label }}</span>
+                          {% if column not in "data_json,row_index,confidence" %}
+                            <span class="review-shift-controls" aria-label="{% trans 'Shift column values' %}">
+                              <button class="w3-button w3-tiny w3-light-grey shift-control" type="button" data-shift="up" data-column="{{ column }}" title="{% trans 'Shift up from selected row' %}">
+                                <i class="fa fa-arrow-up" aria-hidden="true"></i>
+                              </button>
+                              <button class="w3-button w3-tiny w3-light-grey shift-control" type="button" data-shift="down" data-column="{{ column }}" title="{% trans 'Shift down from selected row' %}">
+                                <i class="fa fa-arrow-down" aria-hidden="true"></i>
+                              </button>
+                            </span>
+                          {% endif %}
+                        </div>
+                      </th>
                     {% endfor %}
                     <th>{% trans "Delete" %}</th>
                   </tr>
@@ -143,9 +157,21 @@
                     <tr class="{% if form.row_id.value and form.row_id.value|stringformat:'s' in low_confidence_ids %}w3-pale-yellow{% endif %}">
                       {{ form.row_id }}
                       {% for name, field in form.ordered_fields %}
-                        <td>
+                        <td data-column="{{ name }}">
                           {{ field.errors }}
-                          {{ field }}
+                          <div class="review-cell">
+                            {{ field }}
+                            {% if name not in "data_json,row_index,confidence" %}
+                              <div class="review-cell-shift">
+                                <button class="w3-button w3-tiny w3-light-grey shift-control" type="button" data-shift="up" title="{% trans 'Shift up from this row' %}">
+                                  <i class="fa fa-arrow-up" aria-hidden="true"></i>
+                                </button>
+                                <button class="w3-button w3-tiny w3-light-grey shift-control" type="button" data-shift="down" title="{% trans 'Shift down from this row' %}">
+                                  <i class="fa fa-arrow-down" aria-hidden="true"></i>
+                                </button>
+                              </div>
+                            {% endif %}
+                          </div>
                         </td>
                       {% endfor %}
                       <td>{{ form.DELETE }}</td>
@@ -259,6 +285,82 @@
 
     var reviewTable = document.querySelector(".review-table");
     if (reviewTable) {
+      function getCellInput(cell) {
+        return cell ? cell.querySelector("input, textarea, select") : null;
+      }
+
+      function readCellValue(input) {
+        if (!input) {
+          return null;
+        }
+        if (input.type === "checkbox") {
+          return input.checked;
+        }
+        return input.value;
+      }
+
+      function writeCellValue(input, value) {
+        if (!input) {
+          return;
+        }
+        if (input.type === "checkbox") {
+          input.checked = Boolean(value);
+        } else {
+          input.value = value ?? "";
+        }
+      }
+
+      function shiftColumn(startRowIndex, cellIndex, direction) {
+        var body = reviewTable.querySelector("tbody");
+        if (!body) {
+          return;
+        }
+        var rows = Array.prototype.slice.call(body.querySelectorAll("tr"));
+        if (startRowIndex < 0 || startRowIndex >= rows.length) {
+          return;
+        }
+        if (direction === "up") {
+          for (var i = startRowIndex; i < rows.length - 1; i += 1) {
+            var sourceInput = getCellInput(rows[i + 1].children[cellIndex]);
+            var targetInput = getCellInput(rows[i].children[cellIndex]);
+            writeCellValue(targetInput, readCellValue(sourceInput));
+          }
+          var lastInput = getCellInput(rows[rows.length - 1].children[cellIndex]);
+          writeCellValue(lastInput, "");
+        } else if (direction === "down") {
+          for (var j = rows.length - 1; j > startRowIndex; j -= 1) {
+            var fromInput = getCellInput(rows[j - 1].children[cellIndex]);
+            var toInput = getCellInput(rows[j].children[cellIndex]);
+            writeCellValue(toInput, readCellValue(fromInput));
+          }
+          var firstInput = getCellInput(rows[startRowIndex].children[cellIndex]);
+          writeCellValue(firstInput, "");
+        }
+      }
+
+      reviewTable.addEventListener("click", function (event) {
+        var button = event.target.closest(".shift-control");
+        if (!button) {
+          return;
+        }
+        var cell = button.closest("td");
+        if (!cell) {
+          return;
+        }
+        var row = button.closest("tr");
+        if (!row) {
+          return;
+        }
+        var body = row.parentElement;
+        var rowIndex = Array.prototype.indexOf.call(body.children, row);
+        var cellIndex = Array.prototype.indexOf.call(row.children, cell);
+        var direction = button.getAttribute("data-shift");
+        if (!direction) {
+          return;
+        }
+        shiftColumn(rowIndex, cellIndex, direction);
+      });
+
       reviewTable.addEventListener("keydown", function (event) {
         if (!["ArrowUp", "ArrowDown"].includes(event.key)) {
           return;
@@ -320,6 +422,34 @@
     width: 6px;
     cursor: col-resize;
     background: #e2e2e2;
+  }
+  .review-narrow {
+    max-width: 140px;
+  }
+  .review-table td[data-column="data_json"] textarea {
+    max-width: 160px;
+  }
+  .review-table td[data-column="row_index"] input,
+  .review-table td[data-column="confidence"] input {
+    max-width: 80px;
+  }
+  .review-header {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .review-shift-controls {
+    display: flex;
+    gap: 4px;
+  }
+  .review-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .review-cell-shift {
+    display: flex;
+    gap: 4px;
   }
   .w3-unselectable {
     user-select: none;
