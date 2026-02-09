@@ -4600,6 +4600,7 @@ class SpecimenListQueueView(LoginRequiredMixin, PermissionRequiredMixin, FilterV
     def get_queryset(self):
         return (
             SpecimenListPage.objects.select_related("pdf", "assigned_reviewer")
+            .filter(page_type=SpecimenListPage.PageType.SPECIMEN_LIST_DETAILS)
             .exclude(review_status=SpecimenListPage.ReviewStatus.APPROVED)
             .order_by("pipeline_status", "pdf_id", "page_number")
         )
