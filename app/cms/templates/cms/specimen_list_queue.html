@@ -96,17 +96,18 @@
       </table>
     </div>
 
-    {% if is_paginated %}
-      <div class="w3-bar w3-padding-16">
-        {% if page_obj.has_previous %}
-          <a class="w3-button" href="?page={{ page_obj.previous_page_number }}">&laquo;</a>
-        {% endif %}
-        <span class="w3-bar-item">{% blocktrans %}Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}{% endblocktrans %}</span>
-        {% if page_obj.has_next %}
-          <a class="w3-button" href="?page={{ page_obj.next_page_number }}">&raquo;</a>
-        {% endif %}
-      </div>
-    {% endif %}
   </section>
+
+  {% if is_paginated %}
+    <div class="w3-bar w3-padding-16 w3-center">
+      {% if page_obj.has_previous %}
+        <a class="w3-button" href="?page={{ page_obj.previous_page_number }}">&laquo;</a>
+      {% endif %}
+      <span class="w3-bar-item">{% blocktrans %}Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}{% endblocktrans %}</span>
+      {% if page_obj.has_next %}
+        <a class="w3-button" href="?page={{ page_obj.next_page_number }}">&raquo;</a>
+      {% endif %}
+    </div>
+  {% endif %}
 </main>
 {% endblock %}
