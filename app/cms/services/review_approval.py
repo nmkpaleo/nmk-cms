@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+import os
 from typing import Any
 
 from crum import set_current_user
@@ -20,6 +21,7 @@ from cms.models import (
     Element,
     Identification,
     Locality,
+    Media,
     NatureOfSpecimen,
     SpecimenListPage,
     SpecimenListRowCandidate,
@@ -53,6 +55,12 @@ def _normalise_row_data(data: dict[str, Any]) -> dict[str, Any]:
         if str(key).startswith("_"):
             continue
         normalised[str(key).strip().lower()] = value
+    accession_number = normalised.get("accession_number")
+    if accession_number not in (None, ""):
+        cleaned_accession = str(accession_number).strip()
+        if not cleaned_accession.upper().startswith("KNM-"):
+            cleaned_accession = f"KNM-{cleaned_accession}"
+        normalised["accession_number"] = cleaned_accession
     return normalised
 
 
@@ -99,6 +107,8 @@ def _build_accession(row_data: dict[str, Any]) -> tuple[Accession | None, list[s
         specimen_no=specimen_no,
         defaults={"instance_number": 1},
     )
+    if _coerce_boolean(row_data.get("red_dot")):
+        Accession.objects.filter(pk=accession.pk).update(is_published=True)
     return accession, errors
 
 
@@ -133,6 +143,15 @@ def _build_field_slip(row_data: dict[str, Any]) -> tuple[AccessionFieldSlip | No
         accession=accession,
         fieldslip=field_slip,
     )
+    review_comment = row_data.get("review_comment")
+    if review_comment not in (None, ""):
+        existing_notes = accession_field_slip.notes or ""
+        updated_notes = "\n\n".join(
+            part for part in [existing_notes, str(review_comment).strip()] if part
+        )
+        if updated_notes != existing_notes:
+            accession_field_slip.notes = updated_notes
+            accession_field_slip.save(update_fields=["notes"])
     return accession_field_slip, errors
 
 
@@ -169,6 +188,58 @@ def _build_nature_of_specimen(accession_row: AccessionRow, row_data: dict[str, A
             "fragments": 0,
         },
     )
+
+
+def _store_row_draft(row: SpecimenListRowCandidate, row_data: dict[str, Any]) -> None:
+    row.data = dict(row.data or {})
+    row.data["_draft"] = {
+        "saved_at": timezone.now().isoformat(),
+        "data": row_data,
+    }
+    row.save(update_fields=["data", "updated_at"])
+
+
+def _coerce_boolean(value: object) -> bool:
+    if value in (True, False):
+        return bool(value)
+    if value is None:
+        return False
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _ensure_media_for_page(
+    *,
+    page: SpecimenListPage,
+    accession: Accession | None,
+    accession_row: AccessionRow | None,
+    reviewer,
+) -> None:
+    if not page.image_file:
+        return
+    if accession is None and accession_row is None:
+        return
+    existing = Media.objects.filter(
+        accession=accession,
+        accession_row=accession_row,
+        media_location=page.image_file.name,
+    ).first()
+    if existing:
+        return
+    file_name = os.path.basename(page.image_file.name)
+    _, extension = os.path.splitext(file_name)
+    media_format = extension.lstrip(".").lower() if extension else None
+    set_current_user(reviewer)
+    try:
+        Media.objects.create(
+            accession=accession,
+            accession_row=accession_row,
+            file_name=file_name,
+            type="document",
+            format=media_format or None,
+            media_location=page.image_file,
+        )
+    finally:
+        set_current_user(None)
 
 
 def _store_row_result(row: SpecimenListRowCandidate, result: ApprovalResult) -> None:
@@ -235,6 +306,8 @@ def approve_row(*, row: SpecimenListRowCandidate, reviewer) -> ApprovalResult:
         _store_row_result(row, result)
         return result
 
+    _store_row_draft(row, row_data)
+
     set_current_user(reviewer)
     try:
         accession, accession_errors = _build_accession(row_data)
@@ -295,6 +368,24 @@ def approve_page(*, page: SpecimenListPage, reviewer) -> list[ApprovalResult]:
         rows = page.row_candidates.all().order_by("row_index")
         for row in rows:
             results.append(approve_row(row=row, reviewer=reviewer))
+
+        for accession_id, accession_row_id in {
+            (result.accession_id, result.accession_row_id) for result in results
+        }:
+            accession = (
+                Accession.objects.filter(pk=accession_id).first() if accession_id else None
+            )
+            accession_row = (
+                AccessionRow.objects.filter(pk=accession_row_id).first()
+                if accession_row_id
+                else None
+            )
+            _ensure_media_for_page(
+                page=page,
+                accession=accession,
+                accession_row=accession_row,
+                reviewer=reviewer,
+            )
 
         page.pipeline_status = SpecimenListPage.PipelineStatus.APPROVED
         page.review_status = SpecimenListPage.ReviewStatus.APPROVED
