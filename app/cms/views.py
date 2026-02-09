@@ -4720,6 +4720,25 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
             return render(request, self._get_template_name(page), context)
         action = request.POST.get("action")
         if action in {"approve", "reject", "release", "not_specimen_list"}:
+            if action == "approve":
+                low_confidence_only = request.GET.get("low_confidence") in {"1", "true", "yes", "on"}
+                confidence_threshold = Decimal(
+                    str(getattr(settings, "SPECIMEN_LIST_LOW_CONFIDENCE_THRESHOLD", "0.7"))
+                )
+                column_order = self._build_column_order(page, low_confidence_only, confidence_threshold)
+                formset = self._build_row_formset(
+                    request,
+                    page,
+                    column_order,
+                    low_confidence_only,
+                    confidence_threshold,
+                )
+                if formset.is_valid():
+                    self._save_row_formset(page, formset, column_order)
+                else:
+                    messages.error(request, _("Please correct the row review form errors."))
+                    context = self._build_context(request, page, formset=formset)
+                    return render(request, self._get_template_name(page), context)
             page = self._update_review_status(request, pk, action)
             return redirect("specimen_list_queue")
         else:
