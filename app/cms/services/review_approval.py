@@ -139,7 +139,7 @@ def _build_field_slip(row_data: dict[str, Any]) -> tuple[AccessionFieldSlip | No
     if not field_slip:
         errors.append(str(_("Field slip data is incomplete.")))
         return None, errors
-    accession_field_slip, _ = AccessionFieldSlip.objects.get_or_create(
+    accession_field_slip, created_link = AccessionFieldSlip.objects.get_or_create(
         accession=accession,
         fieldslip=field_slip,
     )
