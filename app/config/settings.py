@@ -59,6 +59,7 @@ DEBUG = bool(int(get_var("DEBUG", 1)))
 
 # Feature rollout flags
 MERGE_TOOL_FEATURE = bool(int(get_var("ENABLE_ADMIN_MERGE", 0)))
+FEATURE_REVIEW_UI_ENABLED = bool(int(get_var("FEATURE_REVIEW_UI_ENABLED", 1)))
 
 ALLOWED_HOSTS = []
 ALLOWED_HOSTS_ENV = get_var("ALLOWED_HOSTS")

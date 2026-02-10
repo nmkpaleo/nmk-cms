@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Add FEATURE_REVIEW_UI_ENABLED rollout gate for specimen list review UI endpoints and document user/admin/developer review workflow operations.
 - Add specimen list OCR staging, row extraction queues, and review tooling with feature-flagged rollout guidance.
 - Add admin support for specimen list PDF ingestion, including requeue controls for failed splits and admin guidance.
 - Document specimen list ingestion rollout, review workflows, and operational runbooks.

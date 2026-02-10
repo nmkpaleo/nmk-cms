@@ -43,7 +43,6 @@
             <th>{% trans "Type" %}</th>
             <th>{% trans "Classification" %}</th>
             <th>{% trans "Confidence" %}</th>
-            <th>{% trans "Status" %}</th>
             <th>{% trans "Reviewer" %}</th>
             <th>{% trans "Lock" %}</th>
             <th>{% trans "Action" %}</th>
@@ -64,7 +63,6 @@
                   —
                 {% endif %}
               </td>
-              <td>{{ page.get_pipeline_status_display }}</td>
               <td>{{ page.assigned_reviewer|default:"—" }}</td>
               <td>
                 {% if page.locked_at %}
@@ -75,10 +73,17 @@
               </td>
               <td>
                 {% if page.page_type == "specimen_list_details" or page.page_type == "specimen_list_relations" %}
-                  <a class="w3-button w3-small w3-blue w3-round-large" href="{% url 'specimen_list_page_review' page.pk %}">
-                    <i class="fa fa-eye" aria-hidden="true"></i>
-                    {% trans "Review" %}
-                  </a>
+                  {% if page.pipeline_status == "approved" %}
+                    <a class="w3-button w3-small w3-light-grey w3-round-large" href="{% url 'specimen_list_page_review' page.pk %}?mode=view">
+                      <i class="fa fa-eye" aria-hidden="true"></i>
+                      {% trans "View" %}
+                    </a>
+                  {% else %}
+                    <a class="w3-button w3-small w3-blue w3-round-large" href="{% url 'specimen_list_page_review' page.pk %}">
+                      <i class="fa fa-eye" aria-hidden="true"></i>
+                      {% trans "Review" %}
+                    </a>
+                  {% endif %}
                 {% else %}
                   <a class="w3-button w3-small w3-light-grey w3-round-large" href="{% url 'specimen_list_page_review' page.pk %}">
                     <i class="fa fa-file-text-o" aria-hidden="true"></i>
@@ -89,7 +94,7 @@
             </tr>
           {% empty %}
             <tr>
-              <td colspan="10" class="w3-center w3-text-grey">
+              <td colspan="9" class="w3-center w3-text-grey">
                 {% trans "No pages match the current filters." %}
               </td>
             </tr>
@@ -98,17 +103,18 @@
       </table>
     </div>
 
-    {% if is_paginated %}
-      <div class="w3-bar w3-padding-16">
-        {% if page_obj.has_previous %}
-          <a class="w3-button" href="?page={{ page_obj.previous_page_number }}">&laquo;</a>
-        {% endif %}
-        <span class="w3-bar-item">{% blocktrans %}Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}{% endblocktrans %}</span>
-        {% if page_obj.has_next %}
-          <a class="w3-button" href="?page={{ page_obj.next_page_number }}">&raquo;</a>
-        {% endif %}
-      </div>
-    {% endif %}
   </section>
+
+  {% if is_paginated %}
+    <div class="w3-bar w3-padding-16 w3-center">
+      {% if page_obj.has_previous %}
+        <a class="w3-button" href="?page={{ page_obj.previous_page_number }}">&laquo;</a>
+      {% endif %}
+      <span class="w3-bar-item">{% blocktrans %}Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}{% endblocktrans %}</span>
+      {% if page_obj.has_next %}
+        <a class="w3-button" href="?page={{ page_obj.next_page_number }}">&raquo;</a>
+      {% endif %}
+    </div>
+  {% endif %}
 </main>
 {% endblock %}

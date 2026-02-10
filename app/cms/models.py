@@ -756,6 +756,7 @@ class FieldSlip(MergeMixin, BaseModel):
     verbatim_SRS = models.CharField(max_length=255, null=True, blank=True, help_text="Spatial reference system used in the field.")
     verbatim_coordinate_system = models.CharField(max_length=255, null=True, blank=True, help_text="Coordinate system used in the field (WGS84 etc.).")
     verbatim_elevation = models.CharField(max_length=255, null=True, blank=True, help_text="Elevation as recorded.")
+    comment = models.TextField(null=True, blank=True, help_text="Additional notes from review.")
 
     history = HistoricalRecords()
 
@@ -2708,6 +2709,12 @@ class SpecimenListPage(BaseModel):
         CLASSIFIED = "classified", _("Classified")
         FAILED = "failed", _("Failed")
 
+    class ReviewStatus(models.TextChoices):
+        PENDING = "pending", _("Pending")
+        IN_REVIEW = "in_review", _("In review")
+        APPROVED = "approved", _("Approved")
+        REJECTED = "rejected", _("Rejected")
+
     class PageType(models.TextChoices):
         UNKNOWN = "unknown", _("Unknown")
         SPECIMEN_LIST_DETAILS = "specimen_list_details", _("Specimen list (accession details)")
@@ -2770,6 +2777,12 @@ class SpecimenListPage(BaseModel):
         default=PipelineStatus.PENDING,
         help_text=_("Processing status within the ingestion pipeline."),
     )
+    review_status = models.CharField(
+        max_length=20,
+        choices=ReviewStatus.choices,
+        default=ReviewStatus.PENDING,
+        help_text=_("Status of the human review workflow."),
+    )
     assigned_reviewer = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
@@ -2804,6 +2817,7 @@ class SpecimenListPage(BaseModel):
         ]
         indexes = [
             Index(fields=["pipeline_status"]),
+            Index(fields=["review_status"]),
             Index(fields=["page_type"]),
         ]
 

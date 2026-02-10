@@ -46,6 +46,10 @@
               <dt class="w3-text-gray">{% trans "Verbatim locality" %}</dt>
               <dd class="w3-margin-0">{{ fieldslip.verbatim_locality|default:"—" }}</dd>
             </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Comment" %}</dt>
+              <dd class="w3-margin-0">{{ fieldslip.comment|default:"—" }}</dd>
+            </div>
           </dl>
         </div>
       </article>
@@ -121,5 +125,4 @@
   {% include "cms/partials/accession_basic_list.html" with accessions=accessions section_id="fieldslip-related-accessions" section_icon="fa-diagram-project" section_title=related_accessions_title empty_message=related_accessions_empty show_staff_columns=show_accession_staff_columns %}
 </main>
 {% endblock %}
-
 

@@ -9,6 +9,8 @@ import csv
 import json
 import os
 from datetime import date, datetime, timedelta
+import json
+from decimal import Decimal
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -65,6 +67,7 @@ from django.utils.dateparse import parse_date, parse_datetime
 from django.utils.timezone import now
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, FormView, TemplateView
 from django.core.serializers.json import DjangoJSONEncoder
+from django.core.exceptions import PermissionDenied
 
 User = get_user_model()
 
@@ -99,6 +102,7 @@ from cms.forms import (
     ReferenceWidget,
     ScanUploadForm,
     SpecimenCompositeForm,
+    SpecimenListRowCandidateFormSet,
     StorageForm,
     ensure_manual_qc_permission,
     SpecimenListUploadForm,
@@ -172,22 +176,18 @@ from cms.qc import (
     interpreted_value as qc_interpreted_value,
 )
 from cms import scanning_utils
+from cms.services.review_locks import (
+    SPECIMEN_LIST_LOCK_TTL_SECONDS,
+    acquire_review_lock,
+    lock_is_expired,
+    release_review_lock,
+)
+from cms.permissions import can_approve_specimen_list_page, can_override_review_lock
+from cms.services.review_approval import approve_page, approve_row
 from formtools.wizard.views import SessionWizardView
 
 _ident_payload_has_meaningful_data = qc_ident_payload_has_meaningful_data
 _interpreted_value = qc_interpreted_value
-
-SPECIMEN_LIST_LOCK_TTL_SECONDS = getattr(
-    settings, "SPECIMEN_LIST_LOCK_TTL_SECONDS", 900
-)
-
-
-def _lock_is_expired(locked_at: datetime | None) -> bool:
-    if not locked_at:
-        return True
-    expires_at = locked_at + timedelta(seconds=SPECIMEN_LIST_LOCK_TTL_SECONDS)
-    return timezone.now() >= expires_at
-
 
 def is_collection_manager(user):
     if not getattr(user, "is_authenticated", False):
@@ -4597,9 +4597,15 @@ class SpecimenListQueueView(LoginRequiredMixin, PermissionRequiredMixin, FilterV
     paginate_by = 25
     permission_required = "cms.review_specimenlistpage"
 
+    def dispatch(self, request, *args, **kwargs):
+        if not getattr(settings, "FEATURE_REVIEW_UI_ENABLED", True):
+            raise Http404("Specimen list review UI is disabled.")
+        return super().dispatch(request, *args, **kwargs)
+
     def get_queryset(self):
         return (
             SpecimenListPage.objects.select_related("pdf", "assigned_reviewer")
+            .filter(page_type=SpecimenListPage.PageType.SPECIMEN_LIST_DETAILS)
             .order_by("pipeline_status", "pdf_id", "page_number")
         )
 
@@ -4610,9 +4616,15 @@ class SpecimenListOCRQueueView(LoginRequiredMixin, PermissionRequiredMixin, Filt
     paginate_by = 25
     permission_required = "cms.review_specimenlistpage"
 
+    def dispatch(self, request, *args, **kwargs):
+        if not getattr(settings, "FEATURE_REVIEW_UI_ENABLED", True):
+            raise Http404("Specimen list review UI is disabled.")
+        return super().dispatch(request, *args, **kwargs)
+
     def get_queryset(self):
         return (
             SpecimenListPage.objects.select_related("pdf", "assigned_reviewer")
+            .exclude(review_status=SpecimenListPage.ReviewStatus.APPROVED)
             .order_by("pipeline_status", "pdf_id", "page_number")
         )
 
@@ -4665,8 +4677,8 @@ class SpecimenListRowReviewView(LoginRequiredMixin, PermissionRequiredMixin, Fil
             update_fields: list[str] = []
 
             if action == "approve":
-                row.status = SpecimenListRowCandidate.ReviewStatus.APPROVED
-                update_fields.append("status")
+                if not can_approve_specimen_list_page(request.user):
+                    raise PermissionDenied
             elif action == "reject":
                 row.status = SpecimenListRowCandidate.ReviewStatus.REJECTED
                 update_fields.append("status")
@@ -4682,25 +4694,46 @@ class SpecimenListRowReviewView(LoginRequiredMixin, PermissionRequiredMixin, Fil
             if update_fields:
                 row.save(update_fields=update_fields + ["updated_at"])
 
+            if action == "approve":
+                approve_row(row=row, reviewer=request.user)
+
         messages.success(request, _("Row candidate updated."))
         return redirect(request.get_full_path())
 
 
 class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, View):
-    permission_required = "cms.review_specimenlistpage"
+    permission_required = "cms.change_specimenlistpage"
+
+    def dispatch(self, request, *args, **kwargs):
+        if not getattr(settings, "FEATURE_REVIEW_UI_ENABLED", True):
+            raise Http404("Specimen list review UI is disabled.")
+        return super().dispatch(request, *args, **kwargs)
 
     def get(self, request, pk):
         page = self._get_page(request, pk)
+        read_only = request.GET.get("mode") == "view" or page.pipeline_status == SpecimenListPage.PipelineStatus.APPROVED
+        if page.review_status == SpecimenListPage.ReviewStatus.APPROVED and not read_only:
+            messages.info(request, _("This page has already been approved."))
+            return redirect("specimen_list_queue")
         if page.page_type in {
             SpecimenListPage.PageType.SPECIMEN_LIST_DETAILS,
             SpecimenListPage.PageType.SPECIMEN_LIST_RELATIONS,
         }:
-            page = self._claim_page(request, pk)
-        context = self._build_context(request, page)
+            if not read_only:
+                page = self._claim_page(request, pk)
+        context = self._build_context(request, page, read_only=read_only)
         return render(request, self._get_template_name(page), context)
 
     def post(self, request, pk):
         page = self._get_page(request, pk)
+        read_only = request.GET.get("mode") == "view" or page.pipeline_status == SpecimenListPage.PipelineStatus.APPROVED
+        if read_only:
+            messages.info(request, _("Viewing mode: edits are disabled."))
+            target_url = page.get_absolute_url()
+            return redirect(f"{target_url}?mode=view")
+        if page.review_status == SpecimenListPage.ReviewStatus.APPROVED:
+            messages.info(request, _("This page has already been approved."))
+            return redirect("specimen_list_queue")
         if page.page_type not in {
             SpecimenListPage.PageType.SPECIMEN_LIST_DETAILS,
             SpecimenListPage.PageType.SPECIMEN_LIST_RELATIONS,
@@ -4708,7 +4741,48 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
             context = self._build_context(request, page)
             return render(request, self._get_template_name(page), context)
         action = request.POST.get("action")
-        page = self._update_review_status(request, pk, action)
+        if action in {"approve", "reject", "release", "not_specimen_list"}:
+            if action == "approve":
+                low_confidence_only = request.GET.get("low_confidence") in {"1", "true", "yes", "on"}
+                confidence_threshold = Decimal(
+                    str(getattr(settings, "SPECIMEN_LIST_LOW_CONFIDENCE_THRESHOLD", "0.7"))
+                )
+                column_order = self._build_column_order(page, low_confidence_only, confidence_threshold)
+                formset = self._build_row_formset(
+                    request,
+                    page,
+                    column_order,
+                    low_confidence_only,
+                    confidence_threshold,
+                )
+                if formset.is_valid():
+                    self._save_row_formset(page, formset, column_order)
+                else:
+                    messages.error(request, _("Please correct the row review form errors."))
+                    context = self._build_context(request, page, formset=formset)
+                    return render(request, self._get_template_name(page), context)
+            page = self._update_review_status(request, pk, action)
+            return redirect("specimen_list_queue")
+        else:
+            low_confidence_only = request.GET.get("low_confidence") in {"1", "true", "yes", "on"}
+            confidence_threshold = Decimal(
+                str(getattr(settings, "SPECIMEN_LIST_LOW_CONFIDENCE_THRESHOLD", "0.7"))
+            )
+            column_order = self._build_column_order(page, low_confidence_only, confidence_threshold)
+            formset = self._build_row_formset(
+                request,
+                page,
+                column_order,
+                low_confidence_only,
+                confidence_threshold,
+            )
+            if formset.is_valid():
+                self._save_row_formset(page, formset, column_order)
+                messages.success(request, _("Row updates saved."))
+            else:
+                messages.error(request, _("Please correct the row review form errors."))
+                context = self._build_context(request, page, formset=formset)
+                return render(request, self._get_template_name(page), context)
         context = self._build_context(request, page)
         return render(request, self._get_template_name(page), context)
 
@@ -4717,28 +4791,18 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
             SpecimenListPage.PageType.SPECIMEN_LIST_DETAILS,
             SpecimenListPage.PageType.SPECIMEN_LIST_RELATIONS,
         }:
-            return "cms/specimen_list_page_review.html"
+            return "cms/page_review.html"
         return "cms/specimen_list_page_detail.html"
 
     def _get_page(self, request, pk: int) -> SpecimenListPage:
         return SpecimenListPage.objects.select_related("pdf", "assigned_reviewer").get(pk=pk)
 
     def _claim_page(self, request, pk: int) -> SpecimenListPage:
-        with transaction.atomic():
-            page = (
-                SpecimenListPage.objects.select_for_update()
-                .select_related("pdf", "assigned_reviewer")
-                .get(pk=pk)
-            )
-            if page.assigned_reviewer and page.assigned_reviewer != request.user:
-                if not _lock_is_expired(page.locked_at):
-                    return page
-
-            page.assigned_reviewer = request.user
-            page.locked_at = timezone.now()
-            page.pipeline_status = SpecimenListPage.PipelineStatus.IN_REVIEW
-            page.save(update_fields=["assigned_reviewer", "locked_at", "pipeline_status"])
-            return page
+        return acquire_review_lock(
+            page_id=pk,
+            reviewer=request.user,
+            allow_override=can_override_review_lock(request.user),
+        )
 
     def _update_review_status(
         self, request, pk: int, action: str | None
@@ -4750,50 +4814,361 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
                 .get(pk=pk)
             )
             if page.assigned_reviewer and page.assigned_reviewer != request.user:
-                if not _lock_is_expired(page.locked_at):
+                if not lock_is_expired(page.locked_at):
                     return page
 
             now_time = timezone.now()
             if action == "release":
-                page.assigned_reviewer = None
-                page.locked_at = None
-                page.pipeline_status = SpecimenListPage.PipelineStatus.PENDING
-                page.save(update_fields=["assigned_reviewer", "locked_at", "pipeline_status"])
+                return release_review_lock(
+                    page_id=pk,
+                    reviewer=request.user,
+                    allow_override=can_override_review_lock(request.user),
+                )
             elif action == "approve":
-                page.pipeline_status = SpecimenListPage.PipelineStatus.APPROVED
+                if not can_approve_specimen_list_page(request.user):
+                    raise PermissionDenied
+                approve_page(page=page, reviewer=request.user)
+                page.refresh_from_db()
+            elif action == "reject":
+                page.pipeline_status = SpecimenListPage.PipelineStatus.REJECTED
+                page.review_status = SpecimenListPage.ReviewStatus.REJECTED
                 page.reviewed_at = now_time
-                page.approved_at = now_time
                 page.locked_at = None
                 page.save(
                     update_fields=[
                         "pipeline_status",
+                        "review_status",
                         "reviewed_at",
-                        "approved_at",
                         "locked_at",
                     ]
                 )
-            elif action == "reject":
+            elif action == "not_specimen_list":
+                page.page_type = SpecimenListPage.PageType.OTHER
                 page.pipeline_status = SpecimenListPage.PipelineStatus.REJECTED
+                page.review_status = SpecimenListPage.ReviewStatus.REJECTED
                 page.reviewed_at = now_time
                 page.locked_at = None
                 page.save(
-                    update_fields=["pipeline_status", "reviewed_at", "locked_at"]
+                    update_fields=[
+                        "page_type",
+                        "pipeline_status",
+                        "review_status",
+                        "reviewed_at",
+                        "locked_at",
+                    ]
                 )
             return page
 
-    def _build_context(self, request, page: SpecimenListPage) -> dict[str, Any]:
-        lock_expired = _lock_is_expired(page.locked_at)
+    def _build_context(
+        self,
+        request,
+        page: SpecimenListPage,
+        *,
+        formset: forms.BaseFormSet | None = None,
+        read_only: bool = False,
+    ) -> dict[str, Any]:
+        lock_expired = lock_is_expired(page.locked_at)
+        low_confidence_only = request.GET.get("low_confidence") in {"1", "true", "yes", "on"}
+        confidence_threshold = Decimal(
+            str(getattr(settings, "SPECIMEN_LIST_LOW_CONFIDENCE_THRESHOLD", "0.7"))
+        )
         is_specimen_list = page.page_type in {
             SpecimenListPage.PageType.SPECIMEN_LIST_DETAILS,
             SpecimenListPage.PageType.SPECIMEN_LIST_RELATIONS,
         }
+        column_order = self._build_column_order(page, low_confidence_only, confidence_threshold)
+        if formset is None:
+            formset = self._build_row_formset(request, page, column_order, low_confidence_only, confidence_threshold)
+        low_confidence_ids = set(
+            str(row.id)
+            for row in SpecimenListRowCandidate.objects.filter(page=page)
+            .exclude(confidence__isnull=True)
+            .filter(confidence__lt=confidence_threshold)
+        )
+        column_label_pairs = [
+            ("red_dot", _("Red Dot")),
+            ("green_dot", _("Green Dot")),
+            ("accession_number", _("Accession Number")),
+            ("field_number", _("Field Number")),
+            ("taxon", _("Taxon")),
+            ("element", _("Element")),
+            ("locality", _("Locality")),
+            ("data_json", _("Data Json")),
+            ("review_comment", _("Review comment")),
+            ("row_index", _("Row")),
+            ("confidence", _("Confidence")),
+        ]
         return {
             "page": page,
+            "formset": formset,
             "lock_expired": lock_expired,
             "lock_ttl_seconds": SPECIMEN_LIST_LOCK_TTL_SECONDS,
             "can_take_over": lock_expired,
             "is_specimen_list": is_specimen_list,
+            "low_confidence_only": low_confidence_only,
+            "confidence_threshold": confidence_threshold,
+            "column_order": column_order,
+            "column_label_pairs": column_label_pairs,
+            "column_table_colspan": len(column_label_pairs) + 1,
+            "low_confidence_ids": low_confidence_ids,
+            "read_only": read_only,
         }
+
+    def _build_row_formset(
+        self,
+        request,
+        page: SpecimenListPage,
+        column_order: list[str],
+        low_confidence_only: bool,
+        confidence_threshold: Decimal,
+    ) -> forms.BaseFormSet:
+        queryset = SpecimenListRowCandidate.objects.filter(page=page).order_by("row_index")
+        if low_confidence_only:
+            queryset = queryset.filter(confidence__lt=confidence_threshold)
+
+        form_class = self._build_row_form_class(column_order)
+        RowFormSet = forms.formset_factory(form_class, extra=1, can_delete=True)
+
+        if request.method == "POST":
+            return RowFormSet(request.POST, prefix="rows")
+
+        initial = []
+        for row in queryset:
+            row_data = row.data or {}
+            row_initial = {
+                "row_id": row.id,
+                "status": row.status,
+                "row_index": row.row_index + 1,
+                "confidence": row.confidence,
+                "red_dot": self._coerce_boolean(row_data.get("red_dot")),
+                "green_dot": self._coerce_boolean(row_data.get("green_dot")),
+            }
+            for column in column_order:
+                row_initial[column] = row_data.get(column, "")
+            extra_data = {
+                key: value
+                for key, value in row_data.items()
+                if key not in column_order and not str(key).startswith("_")
+                and key not in {"red_dot", "green_dot", "review_comment"}
+            }
+            if extra_data:
+                row_initial["data_json"] = json.dumps(extra_data, ensure_ascii=False)
+            row_initial["review_comment"] = row_data.get("review_comment", "")
+            initial.append(row_initial)
+        return RowFormSet(initial=initial, prefix="rows")
+
+    def _build_row_form_class(self, column_order: list[str]) -> type[forms.Form]:
+        status_choices = SpecimenListRowCandidate.ReviewStatus.choices
+        fields: dict[str, forms.Field] = {
+            "row_id": forms.IntegerField(required=False, widget=forms.HiddenInput),
+            "red_dot": forms.BooleanField(
+                required=False,
+                label=_("Red Dot"),
+                widget=forms.CheckboxInput(attrs={"class": "w3-check"}),
+            ),
+            "green_dot": forms.BooleanField(
+                required=False,
+                label=_("Green Dot"),
+                widget=forms.CheckboxInput(attrs={"class": "w3-check"}),
+            ),
+            "accession_number": forms.CharField(
+                required=False,
+                label=_("Accession Number"),
+                widget=forms.TextInput(attrs={"class": "w3-input"}),
+            ),
+            "field_number": forms.CharField(
+                required=False,
+                label=_("Field Number"),
+                widget=forms.TextInput(attrs={"class": "w3-input"}),
+            ),
+            "taxon": forms.CharField(
+                required=False,
+                label=_("Taxon"),
+                widget=forms.TextInput(attrs={"class": "w3-input"}),
+            ),
+            "element": forms.CharField(
+                required=False,
+                label=_("Element"),
+                widget=forms.TextInput(attrs={"class": "w3-input"}),
+            ),
+            "locality": forms.CharField(
+                required=False,
+                label=_("Locality"),
+                widget=forms.TextInput(attrs={"class": "w3-input"}),
+            ),
+            "data_json": forms.JSONField(
+                required=False,
+                label=_("Data Json"),
+                widget=forms.Textarea(
+                    attrs={
+                        "class": "w3-input review-narrow",
+                        "rows": 3,
+                        "readonly": "readonly",
+                        "aria-readonly": "true",
+                    }
+                ),
+            ),
+            "review_comment": forms.CharField(
+                required=False,
+                label=_("Review comment"),
+                widget=forms.Textarea(attrs={"class": "w3-input", "rows": 2}),
+            ),
+            "row_index": forms.CharField(
+                required=False,
+                label=_("Row"),
+                widget=forms.TextInput(
+                    attrs={
+                        "class": "w3-input review-narrow",
+                        "readonly": "readonly",
+                        "aria-readonly": "true",
+                    }
+                ),
+            ),
+            "confidence": forms.CharField(
+                required=False,
+                label=_("Confidence"),
+                widget=forms.TextInput(
+                    attrs={
+                        "class": "w3-input review-narrow",
+                        "readonly": "readonly",
+                        "aria-readonly": "true",
+                    }
+                ),
+            ),
+            "status": forms.ChoiceField(
+                choices=status_choices,
+                required=False,
+                label=_("Row status"),
+                widget=forms.HiddenInput(),
+            ),
+        }
+        ordered_names = [
+            "red_dot",
+            "green_dot",
+            "accession_number",
+            "field_number",
+            "taxon",
+            "element",
+            "locality",
+            "data_json",
+            "review_comment",
+            "row_index",
+            "confidence",
+        ]
+        class SpecimenListRowForm(forms.Form):
+            pass
+
+        SpecimenListRowForm.base_fields = fields
+
+        def _init(self, *args, **kwargs):
+            super(SpecimenListRowForm, self).__init__(*args, **kwargs)
+            self.ordered_fields = [(name, self[name]) for name in ordered_names]
+
+        SpecimenListRowForm.__init__ = _init
+        return SpecimenListRowForm
+
+    def _save_row_formset(
+        self,
+        page: SpecimenListPage,
+        formset: forms.BaseFormSet,
+        column_order: list[str],
+    ) -> None:
+        with transaction.atomic():
+            row_map = {
+                row.id: row
+                for row in SpecimenListRowCandidate.objects.filter(page=page)
+            }
+
+            next_index = (
+                SpecimenListRowCandidate.objects.filter(page=page)
+                .order_by("-row_index")
+                .values_list("row_index", flat=True)
+                .first()
+            )
+            next_index = (next_index + 1) if next_index is not None else 0
+
+            for form in formset:
+                if not form.cleaned_data:
+                    continue
+                row_id = form.cleaned_data.get("row_id")
+                if form.cleaned_data.get("DELETE"):
+                    if row_id:
+                        row = row_map.get(row_id)
+                        if row:
+                            row.delete()
+                    continue
+
+                data = {}
+                has_content = False
+                for column in column_order:
+                    value = form.cleaned_data.get(column)
+                    if value not in (None, ""):
+                        has_content = True
+                        data[column] = value
+                    else:
+                        data[column] = None
+
+                data["red_dot"] = bool(form.cleaned_data.get("red_dot"))
+                data["green_dot"] = bool(form.cleaned_data.get("green_dot"))
+                data["review_comment"] = form.cleaned_data.get("review_comment") or ""
+
+                data_json_payload = form.cleaned_data.get("data_json")
+                if isinstance(data_json_payload, dict):
+                    data.update(data_json_payload)
+
+                if row_id:
+                    row = row_map.get(row_id)
+                    if not row:
+                        continue
+                    existing_data = dict(row.data or {})
+                    if "_original_data" not in existing_data:
+                        existing_data["_original_data"] = {
+                            key: value
+                            for key, value in existing_data.items()
+                            if not str(key).startswith("_")
+                        }
+                    existing_data.update(data)
+                    row.data = existing_data
+                    row.status = form.cleaned_data.get("status") or row.status
+                    row.save(update_fields=["data", "status", "updated_at"])
+                    continue
+
+                if not has_content:
+                    continue
+                status = (
+                    form.cleaned_data.get("status")
+                    or SpecimenListRowCandidate.ReviewStatus.EDITED
+                )
+                SpecimenListRowCandidate.objects.create(
+                    page=page,
+                    row_index=next_index,
+                    data=data,
+                    status=status,
+                )
+                next_index += 1
+
+    def _build_column_order(
+        self,
+        page: SpecimenListPage,
+        low_confidence_only: bool,
+        confidence_threshold: Decimal,
+    ) -> list[str]:
+        return [
+            "accession_number",
+            "field_number",
+            "taxon",
+            "element",
+            "locality",
+            "review_comment",
+        ]
+
+    @staticmethod
+    def _coerce_boolean(value: object) -> bool:
+        if value in (True, False):
+            return bool(value)
+        if value is None:
+            return False
+        return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _count_pending_scans() -> int:
