@@ -4664,7 +4664,7 @@ class SpecimenListRowReviewView(LoginRequiredMixin, PermissionRequiredMixin, Fil
         form = SpecimenListRowCandidateForm(request.POST)
         if not form.is_valid():
             messages.error(request, _("Please correct the row review form errors."))
-            return redirect(request.path)
+            return redirect(request.path_info)
 
         row_id = form.cleaned_data["row_id"]
         action = request.POST.get("action", "")
@@ -4698,7 +4698,7 @@ class SpecimenListRowReviewView(LoginRequiredMixin, PermissionRequiredMixin, Fil
                 approve_row(row=row, reviewer=request.user)
 
         messages.success(request, _("Row candidate updated."))
-        return redirect(request.path)
+        return redirect(request.path_info)
 
 
 class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, View):
