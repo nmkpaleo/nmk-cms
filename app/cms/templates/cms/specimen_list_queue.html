@@ -73,10 +73,17 @@
               </td>
               <td>
                 {% if page.page_type == "specimen_list_details" or page.page_type == "specimen_list_relations" %}
-                  <a class="w3-button w3-small w3-blue w3-round-large" href="{% url 'specimen_list_page_review' page.pk %}">
-                    <i class="fa fa-eye" aria-hidden="true"></i>
-                    {% trans "Review" %}
-                  </a>
+                  {% if page.pipeline_status == "approved" %}
+                    <a class="w3-button w3-small w3-light-grey w3-round-large" href="{% url 'specimen_list_page_review' page.pk %}?mode=view">
+                      <i class="fa fa-eye" aria-hidden="true"></i>
+                      {% trans "View" %}
+                    </a>
+                  {% else %}
+                    <a class="w3-button w3-small w3-blue w3-round-large" href="{% url 'specimen_list_page_review' page.pk %}">
+                      <i class="fa fa-eye" aria-hidden="true"></i>
+                      {% trans "Review" %}
+                    </a>
+                  {% endif %}
                 {% else %}
                   <a class="w3-button w3-small w3-light-grey w3-round-large" href="{% url 'specimen_list_page_review' page.pk %}">
                     <i class="fa fa-file-text-o" aria-hidden="true"></i>

@@ -4601,7 +4601,6 @@ class SpecimenListQueueView(LoginRequiredMixin, PermissionRequiredMixin, FilterV
         return (
             SpecimenListPage.objects.select_related("pdf", "assigned_reviewer")
             .filter(page_type=SpecimenListPage.PageType.SPECIMEN_LIST_DETAILS)
-            .exclude(review_status=SpecimenListPage.ReviewStatus.APPROVED)
             .order_by("pipeline_status", "pdf_id", "page_number")
         )
 
@@ -4697,19 +4696,25 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
 
     def get(self, request, pk):
         page = self._get_page(request, pk)
-        if page.review_status == SpecimenListPage.ReviewStatus.APPROVED:
+        read_only = request.GET.get("mode") == "view" or page.pipeline_status == SpecimenListPage.PipelineStatus.APPROVED
+        if page.review_status == SpecimenListPage.ReviewStatus.APPROVED and not read_only:
             messages.info(request, _("This page has already been approved."))
             return redirect("specimen_list_queue")
         if page.page_type in {
             SpecimenListPage.PageType.SPECIMEN_LIST_DETAILS,
             SpecimenListPage.PageType.SPECIMEN_LIST_RELATIONS,
         }:
-            page = self._claim_page(request, pk)
-        context = self._build_context(request, page)
+            if not read_only:
+                page = self._claim_page(request, pk)
+        context = self._build_context(request, page, read_only=read_only)
         return render(request, self._get_template_name(page), context)
 
     def post(self, request, pk):
         page = self._get_page(request, pk)
+        read_only = request.GET.get("mode") == "view" or page.pipeline_status == SpecimenListPage.PipelineStatus.APPROVED
+        if read_only:
+            messages.info(request, _("Viewing mode: edits are disabled."))
+            return redirect(f"{request.path}?mode=view")
         if page.review_status == SpecimenListPage.ReviewStatus.APPROVED:
             messages.info(request, _("This page has already been approved."))
             return redirect("specimen_list_queue")
@@ -4844,6 +4849,7 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
         page: SpecimenListPage,
         *,
         formset: forms.BaseFormSet | None = None,
+        read_only: bool = False,
     ) -> dict[str, Any]:
         lock_expired = lock_is_expired(page.locked_at)
         low_confidence_only = request.GET.get("low_confidence") in {"1", "true", "yes", "on"}
@@ -4889,6 +4895,7 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
             "column_label_pairs": column_label_pairs,
             "column_table_colspan": len(column_label_pairs) + 1,
             "low_confidence_ids": low_confidence_ids,
+            "read_only": read_only,
         }
 
     def _build_row_formset(
