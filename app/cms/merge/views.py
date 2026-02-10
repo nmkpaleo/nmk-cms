@@ -357,7 +357,7 @@ class ElementMergeSelectionView(LoginRequiredMixin, PermissionRequiredMixin, Vie
                 request,
                 _("Select a target and at least one source element to merge."),
             )
-            return redirect(request.path)
+            return redirect(reverse("merge:merge_element_selection"))
 
         candidate_ids: list[str] = []
         for value in [target, *sources]:
@@ -369,7 +369,7 @@ class ElementMergeSelectionView(LoginRequiredMixin, PermissionRequiredMixin, Vie
             Element.objects.filter(pk__in=candidate_ids).distinct().order_by().get(pk=target)
         except Element.DoesNotExist:
             messages.error(request, _("Select valid elements to merge."))
-            return redirect(request.path)
+            return redirect(reverse("merge:merge_element_selection"))
 
         cancel_url = request.POST.get("cancel") or request.META.get("HTTP_REFERER", "")
         params = {
