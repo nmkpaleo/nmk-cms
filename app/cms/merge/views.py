@@ -371,7 +371,17 @@ class ElementMergeSelectionView(LoginRequiredMixin, PermissionRequiredMixin, Vie
             messages.error(request, _("Select valid elements to merge."))
             return redirect(reverse("merge:merge_element_selection"))
 
-        cancel_url = request.POST.get("cancel") or request.META.get("HTTP_REFERER", "")
+        cancel_url = (request.POST.get("cancel") or request.META.get("HTTP_REFERER", "")).strip()
+        # Validate the cancel URL so that any later use as a redirect target is safe.
+        if cancel_url:
+            # Only allow URLs that point to this host and use an allowed scheme, or are relative.
+            if not url_has_allowed_host_and_scheme(
+                url=cancel_url,
+                allowed_hosts={request.get_host()},
+                require_https=request.is_secure(),
+            ):
+                cancel_url = reverse("merge:merge_element_selection")
+
         params = {
             "target": target,
             "candidates": ",".join(candidate_ids),
