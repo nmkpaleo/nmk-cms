@@ -4729,7 +4729,8 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
         read_only = request.GET.get("mode") == "view" or page.pipeline_status == SpecimenListPage.PipelineStatus.APPROVED
         if read_only:
             messages.info(request, _("Viewing mode: edits are disabled."))
-            return redirect(f"{request.path}?mode=view")
+            target_url = page.get_absolute_url()
+            return redirect(f"{target_url}?mode=view")
         if page.review_status == SpecimenListPage.ReviewStatus.APPROVED:
             messages.info(request, _("This page has already been approved."))
             return redirect("specimen_list_queue")
