@@ -41,3 +41,7 @@ seaborn
 # Fuzzy matching libraries used for merge candidate discovery
 python-Levenshtein>=0.25.0
 rapidfuzz>=3.4.0
+
+# Tooth-marking inference
+torch
+torchvision
