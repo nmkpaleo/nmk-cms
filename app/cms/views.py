@@ -4597,6 +4597,11 @@ class SpecimenListQueueView(LoginRequiredMixin, PermissionRequiredMixin, FilterV
     paginate_by = 25
     permission_required = "cms.review_specimenlistpage"
 
+    def dispatch(self, request, *args, **kwargs):
+        if not getattr(settings, "FEATURE_REVIEW_UI_ENABLED", True):
+            raise Http404("Specimen list review UI is disabled.")
+        return super().dispatch(request, *args, **kwargs)
+
     def get_queryset(self):
         return (
             SpecimenListPage.objects.select_related("pdf", "assigned_reviewer")
@@ -4610,6 +4615,11 @@ class SpecimenListOCRQueueView(LoginRequiredMixin, PermissionRequiredMixin, Filt
     filterset_class = SpecimenListPageFilter
     paginate_by = 25
     permission_required = "cms.review_specimenlistpage"
+
+    def dispatch(self, request, *args, **kwargs):
+        if not getattr(settings, "FEATURE_REVIEW_UI_ENABLED", True):
+            raise Http404("Specimen list review UI is disabled.")
+        return super().dispatch(request, *args, **kwargs)
 
     def get_queryset(self):
         return (
@@ -4693,6 +4703,11 @@ class SpecimenListRowReviewView(LoginRequiredMixin, PermissionRequiredMixin, Fil
 
 class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, View):
     permission_required = "cms.change_specimenlistpage"
+
+    def dispatch(self, request, *args, **kwargs):
+        if not getattr(settings, "FEATURE_REVIEW_UI_ENABLED", True):
+            raise Http404("Specimen list review UI is disabled.")
+        return super().dispatch(request, *args, **kwargs)
 
     def get(self, request, pk):
         page = self._get_page(request, pk)
