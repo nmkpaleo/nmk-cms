@@ -29,3 +29,12 @@ If Tesseract is installed at a non-default path, set:
 ## ROI behavior
 The backend supports region-of-interest OCR using `(x1, y1, x2, y2)` coordinates.
 Returned token coordinates are remapped into full-page coordinates.
+
+
+## Optional PaddleOCR backend
+PaddleOCR support is optional and enabled only when `OCR_BOX_ENGINE=paddle`.
+
+Behavior:
+- The Paddle module is lazy-loaded and instantiated only when this engine value is set.
+- If PaddleOCR import/initialization/runtime fails, the backend logs a warning and returns an empty token list.
+- This fallback is non-fatal and allows the surrounding OCR pipeline to continue.
