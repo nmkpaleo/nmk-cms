@@ -35,6 +35,14 @@
 
     <main class="w3-container w3-padding-0" role="main">
       <header class="w3-container">
+        {% if read_only %}
+          <div class="w3-margin-top">
+            <a class="w3-button w3-light-grey w3-round" href="{% url 'specimen_list_queue' %}">
+              <i class="fa fa-arrow-left" aria-hidden="true"></i>
+              {% trans "Back to queue" %}
+            </a>
+          </div>
+        {% endif %}
         <h1 class="w3-xxlarge">
           <i class="fa fa-file-text-o" aria-hidden="true"></i>
           {% trans "Specimen List Page Review" %}

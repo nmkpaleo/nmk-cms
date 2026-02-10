@@ -29,6 +29,29 @@ from cms.models import (
 from cms.ocr_processing import _ensure_field_slip
 
 
+QUALIFIER_TOKENS = {"cf.", "cf", "aff.", "aff", "sp.", "sp", "nr.", "nr"}
+
+
+def _split_taxon_and_qualifier(value: str | None) -> tuple[str | None, str | None]:
+    text = (value or "").strip()
+    if not text:
+        return None, None
+
+    tokens = text.split()
+    qualifier_tokens: list[str] = []
+    base_tokens: list[str] = []
+
+    for token in tokens:
+        if token.lower() in QUALIFIER_TOKENS:
+            qualifier_tokens.append(token if token.endswith(".") else f"{token}.")
+            continue
+        base_tokens.append(token)
+
+    qualifier = " ".join(qualifier_tokens) or None
+    base_taxon = " ".join(base_tokens).strip() or None
+    return base_taxon, qualifier
+
+
 @dataclass
 class ApprovalResult:
     row_id: int
@@ -166,10 +189,20 @@ def _build_identification(accession_row: AccessionRow, row_data: dict[str, Any])
     taxon = row_data.get("taxon")
     if taxon in (None, ""):
         return
+    raw_taxon = str(taxon).strip()
+    stripped_taxon, qualifier = _split_taxon_and_qualifier(raw_taxon)
+    normalized_taxon = stripped_taxon or raw_taxon
+    verbatim_identification = " ".join(
+        part for part in [qualifier, normalized_taxon] if part
+    ) or normalized_taxon
     Identification.objects.get_or_create(
         accession_row=accession_row,
-        taxon_verbatim=str(taxon).strip(),
-        defaults={"taxon": str(taxon).strip()},
+        taxon_verbatim=normalized_taxon,
+        defaults={
+            "taxon": normalized_taxon,
+            "identification_qualifier": qualifier,
+            "verbatim_identification": verbatim_identification,
+        },
     )
 
 

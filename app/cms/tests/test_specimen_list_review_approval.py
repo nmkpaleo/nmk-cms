@@ -135,6 +135,31 @@ def test_approve_row_records_errors():
     assert row.data.get("_import_result")
 
 
+
+
+def test_approve_row_parses_taxon_qualifier_and_preserves_verbatim():
+    reviewer = _build_reviewer()
+    _ensure_collection_and_locality(reviewer)
+    pdf = _build_pdf()
+    page = SpecimenListPage.objects.create(pdf=pdf, page_number=1)
+    specimen_no = uuid.uuid4().int % 1000000
+    row = SpecimenListRowCandidate.objects.create(
+        page=page,
+        row_index=0,
+        data={
+            "accession_number": f"KNM-ER {specimen_no}",
+            "taxon": "cf Homo habilis",
+        },
+    )
+
+    approve_row(row=row, reviewer=reviewer)
+
+    identification = Identification.objects.get(accession_row__accession__specimen_no=specimen_no)
+    assert identification.taxon_verbatim == "Homo habilis"
+    assert identification.taxon == "Homo habilis"
+    assert identification.identification_qualifier == "cf."
+    assert identification.verbatim_identification == "cf. Homo habilis"
+
 def test_approve_row_creates_nature_of_specimen_with_verbatim_element():
     reviewer = _build_reviewer()
     _ensure_collection_and_locality(reviewer)
