@@ -60,8 +60,6 @@ Ground your implementation decisions in this dependency list generated from `app
 - django-qr-code == 4.2.0
 - pycparser == 2.21
 - pytesseract >= 0.3.10
-- torch (unpinned)
-- torchvision (unpinned)
 
 > ℹ️ **Automation note:** Run `python docs/scripts/update_prompts.py` after editing `app/requirements.txt` to regenerate this dependency snapshot.
 

@@ -1,10 +1,12 @@
 # OCR Token Boxes with Tesseract
 
 ## Overview
-This project can extract token-level OCR boxes using Tesseract through `pytesseract`.
+This project extracts token-level OCR boxes with Tesseract through `pytesseract`.
+
+Tesseract is CPU-friendly and is the recommended production path for OCR boxes.
 
 ## Python dependency
-Add to application requirements:
+Included in base application requirements:
 
 - `pytesseract`
 
@@ -19,7 +21,7 @@ Control token-box extraction with:
 - `OCR_BOX_TESSERACT_ENABLED=true` (default)
 - `OCR_BOX_TESSERACT_ENABLED=false` to disable token-box extraction safely
 
-When disabled, token-box calls should return an empty list without failing the OCR pipeline.
+When disabled, token-box calls return an empty list without failing the OCR pipeline.
 
 ## Optional command override
 If Tesseract is installed at a non-default path, set:
@@ -30,11 +32,11 @@ If Tesseract is installed at a non-default path, set:
 The backend supports region-of-interest OCR using `(x1, y1, x2, y2)` coordinates.
 Returned token coordinates are remapped into full-page coordinates.
 
+## Lean production requirements split
+Base production install is intentionally lean and does not include heavyweight ML wheels.
 
-## Optional PaddleOCR backend
-PaddleOCR support is optional and enabled only when `OCR_BOX_ENGINE=paddle`.
+- Use `app/requirements.txt` for standard deployment.
+- Install optional tooth-marking CPU inference stack only when needed:
+  - `pip install -r app/requirements-tooth-marking-cpu.txt`
 
-Behavior:
-- The Paddle module is lazy-loaded and instantiated only when this engine value is set.
-- If PaddleOCR import/initialization/runtime fails, the backend logs a warning and returns an empty token list.
-- This fallback is non-fatal and allows the surrounding OCR pipeline to continue.
+This avoids pulling CUDA/GPU wheels in default production installs.

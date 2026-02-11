@@ -6,7 +6,7 @@
 - Project is Django 5.2.9 with MySQL and `django-simple-history` already active on key OCR/QC models.
 - Current OCR pipeline is OpenAI Vision–first for both accession cards and specimen list pages; this plan keeps that behavior and inserts tooth-marking correction as an incremental post-processing layer.
 - We will not refactor existing ingestion or approval flows; we add bounded hooks in existing services/functions.
-- Bounding-box OCR must be CPU-friendly on Linux servers; Tesseract is primary engine, PaddleOCR optional behind a feature flag.
+- Bounding-box OCR must be CPU-friendly on Linux servers; Tesseract is the chosen engine for production deployments.
 - Backward compatibility is required: if box OCR is disabled/missing dependencies, pipeline must proceed using raw element text.
 
 ### Apps to modify or create
@@ -26,7 +26,7 @@
 ### Required packages
 - Reuse existing OCR stack and PIL dependency (`pillow`).
 - Add `pytesseract` for token box extraction (justified by simple deploy and TSV boxes).
-- Keep PaddleOCR optional and gated (`OCR_BOX_ENGINE=paddle`) to avoid mandatory heavy dependencies.
+- Avoid PaddleOCR in production to keep dependencies lean and installation size low.
 - Document system package dependency: `tesseract-ocr`.
 
 ### Repo archaeology map (current pipeline)
@@ -63,46 +63,41 @@
    - Support ROI OCR with coordinate remap to full-page space.
    - Preserve stable per-page `token_id`; include optional `line_id`/`block_id` when present.
 
-3. **Add optional PaddleOCR backend (`paddle_boxes.py`) behind flag**
-   - Load only when selected by env var and dependency present.
-   - On import/runtime failure, log warning and fallback to tesseract/no-op per feature flag policy.
-
-4. **Create tooth-marking integration helper (`cms/tooth_markings/integration.py`)**
+3. **Create tooth-marking integration helper (`cms/tooth_markings/integration.py`)**
    - Implement `apply_tooth_marking_correction(page_image, element_text, roi=None)`.
    - Pipeline: token boxes -> token crops -> `correct_element_text(...)`.
    - Return deterministic payload: raw input, corrected output, detections, replacements applied, confidence-filtered decisions.
 
-5. **Hook accession-card OCR flow pre-QC**
+4. **Hook accession-card OCR flow pre-QC**
    - Integration point: after OCR JSON parse (or just before `_apply_rows` writes nature rows), where element/verbatim element is available.
    - For each candidate element text, keep `element_raw`; compute/store `element_corrected`.
    - Apply confidence gate (`TOOTH_MARKING_MIN_CONF`, default `0.85`) before rewriting tokens.
    - Fail-safe behavior: if box OCR unavailable/fails, keep raw text and continue pipeline.
 
-6. **Hook specimen-list flow pre-QC persistence**
+5. **Hook specimen-list flow pre-QC persistence**
    - Integration point: when row candidates are built or normalized before `approve_row` writes domain objects.
    - Phase 1: token-driven matching over full page boxes (no per-row ROI yet).
    - Persist corrected element in row candidate data used by QC (`element` and/or `verbatim_element`), while preserving raw value.
 
-7. **Minimal schema update for QC evidence (JSON-first)**
+6. **Minimal schema update for QC evidence (JSON-first)**
    - Add JSON/text fields on extracted record(s) used by QC (recommended: row candidate data schema first; optional dedicated JSONField for accession-card extraction metadata).
    - Store detection evidence: token, notation, confidence, bbox, whether replacement applied.
    - Add migrations compatible with MySQL JSON support.
 
-8. **Logging, observability, and feature flags**
+7. **Logging, observability, and feature flags**
    - Add structured logs with page/media IDs: number of suspect tokens, detections, applied replacements, fallback reasons.
    - Feature flags/env vars:
      - `TOOTH_MARKING_ENABLED` (default true in non-test env)
      - `OCR_BOX_ENABLED` (default true when engine available)
-     - `OCR_BOX_ENGINE=tesseract|paddle`
      - `TOOTH_MARKING_MIN_CONF=0.85`
 
-9. **Testing/CI strategy (pytest + Django checks)**
+8. **Testing/CI strategy (pytest + Django checks)**
    - Unit tests for token-box extraction and ROI coordinate remap.
    - Unit tests for integration helper contract and confidence threshold behavior.
    - Integration tests for accession-card and specimen-list hooks ensuring corrected value reaches QC persistence paths.
    - CI expectations: `pytest/pytest-django`, coverage target `>=90%`, `makemigrations --check`, and docs lint/build checks appropriate for Markdown docs (no MkDocs build).
 
-10. **Docs, rollout, and PR hygiene**
+9. **Docs, rollout, and PR hygiene**
    - Update docs in `/docs/development`, `/docs/admin`, `/docs/user` with feature flags and troubleshooting.
    - Update `CHANGELOG.md`.
    - Roll out behind feature flags; enable on staging first, verify sample pages and rollback path.
@@ -115,7 +110,6 @@ app/cms/ocr_boxes/
   __init__.py
   base.py
   tesseract_boxes.py
-  paddle_boxes.py          # optional implementation
   service.py
 
 app/cms/tooth_markings/
@@ -183,22 +177,6 @@ app/cms/tooth_markings/
         "Engine returns non-empty boxes on known test image.",
         "ROI OCR returns boxes in full-page coordinates.",
         "Missing tesseract binary is handled gracefully when feature-flagged off."
-      ]
-    },
-    {
-      "id": "TM-003",
-      "title": "Add optional PaddleOCR backend behind feature flag",
-      "type": "backend",
-      "paths": [
-        "app/cms/ocr_boxes/paddle_boxes.py",
-        "docs/development/*.md"
-      ],
-      "depends_on": [
-        "TM-001"
-      ],
-      "acceptance_criteria": [
-        "Backend is lazy-loaded only when OCR_BOX_ENGINE=paddle.",
-        "Import/runtime errors fall back cleanly with warning logs."
       ]
     },
     {
@@ -342,7 +320,7 @@ app/cms/tooth_markings/
   - *Mitigation*: wrap new user-facing strings in gettext and keep docs/user language clear.
 
 - **Dependency vulnerability risk**: OCR dependencies may increase CVE surface area.
-  - *Mitigation*: pin `pytesseract` version, monitor advisories, keep Paddle optional.
+  - *Mitigation*: pin `pytesseract` version, monitor advisories, keep OCR dependency footprint minimal.
 
 - **Rollback risk**: Incorrect rewrites might affect downstream QC/import quality.
   - *Mitigation*: feature flags to disable correction instantly; preserve raw values; rollback migration plan documented.
