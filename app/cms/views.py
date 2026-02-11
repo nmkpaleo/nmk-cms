@@ -4761,7 +4761,12 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
                     messages.error(request, _("Please correct the row review form errors."))
                     context = self._build_context(request, page, formset=formset)
                     return render(request, self._get_template_name(page), context)
-            page = self._update_review_status(request, pk, action)
+            try:
+                page = self._update_review_status(request, pk, action)
+            except ValidationError as exc:
+                messages.error(request, " ".join(str(message) for message in exc.messages))
+                context = self._build_context(request, page)
+                return render(request, self._get_template_name(page), context)
             return redirect("specimen_list_queue")
         else:
             low_confidence_only = request.GET.get("low_confidence") in {"1", "true", "yes", "on"}
