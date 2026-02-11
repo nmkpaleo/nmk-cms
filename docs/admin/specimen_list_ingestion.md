@@ -34,34 +34,75 @@ After upload, PDFs are queued for split/processing. The next admin steps are:
                     │ Caption: Requires cms.add_specimenlistpdf.
                     ▼
 ┌────────────────────────────────────────────┐
-│ B) PDF queued and original file persisted  │
+│ B) Queue + Initial status                  │
+│ PDF status: uploaded                       │
 └───────────────────┬────────────────────────┘
                     │
-                    │ Caption: Processing can be async or command-driven.
+                    │ Caption: Processing is queued (async/background-friendly).
                     ▼
 ┌────────────────────────────────────────────┐
-│ C) PDF split into page images              │
+│ C) Split worker                            │
+│ uploaded -> processing -> split | error    │
 └───────────────────┬────────────────────────┘
                     │
-                    │ Caption: Page objects are created for downstream stages.
+                    │ Caption: PDF pages become image records.
                     ▼
 ┌────────────────────────────────────────────┐
-│ D) OCR stages + row extraction             │
+│ D) Page pipeline worker stages             │
+│ pending -> classified -> ocr_done -> extracted │
 └───────────────────┬────────────────────────┘
                     │
-                    │ Caption: Operations monitor OCR queues and retries.
+                    │ Caption: Classification + raw OCR + row extraction.
                     ▼
 ┌────────────────────────────────────────────┐
-│ E) Review queues + approvals               │
+│ E) Review + approval                       │
+│ review_status: pending/in_review/...       │
+│ pipeline_status: in_review/approved/rejected│
 └───────────────────┬────────────────────────┘
                     │
                     │ Caption: Requires cms.review_specimenlistpage.
                     ▼
 ┌────────────────────────────────────────────┐
-│ F) Approved data persisted + image moved   │
+│ F) Persisted outcomes                      │
+│ accession rows / field slips / media links │
 └────────────────────────────────────────────┘
-Caption: Audit trail and status updates are retained.
+Caption: Approval writes curated data and audit metadata.
 ```
+
+## Status codes and trigger events
+
+### PDF status (`SpecimenListPDF.status`)
+- `uploaded`: set on upload creation.
+- `processing`: set when `process_specimen_list_pdf` starts.
+- `split`: set when all pages are split and saved.
+- `error`: set on missing file/path or split failure.
+
+### Page status (`SpecimenListPage.pipeline_status`)
+- `pending`: created page, no stage completed yet.
+- `classified`: set by classification queue.
+- `ocr_done`: set by raw OCR queue.
+- `extracted`: set by row extraction queue.
+- `in_review`: set when page is actively reviewed.
+- `approved` / `rejected`: set by review outcomes.
+
+### Review status (`SpecimenListPage.review_status`)
+- `pending`: unclaimed.
+- `in_review`: claimed/locked.
+- `approved` / `rejected`: completed review state.
+
+## Async/background behavior
+- Upload always queues processing.
+- Split can run asynchronously (deployment setting) or manually through management commands.
+- OCR and extraction stages run in queue batches and can be targeted by page IDs.
+
+## Re-run and error recovery
+1. **PDF split errors** (`status=error`):
+   - Re-run: `python app/manage.py process_specimen_list_pdfs --ids <pdf_id>`
+2. **OCR stage issues**:
+   - Raw OCR: `python app/manage.py process_specimen_list_ocr --stage raw --ids <page_id>`
+   - Row extraction: `python app/manage.py process_specimen_list_ocr --stage rows --ids <page_id>`
+3. **Force refresh existing results**:
+   - Add `--force` to re-run OCR/extraction despite existing outputs.
 
 ## Related guides
 - [Specimen list OCR operations](specimen_list_ocr_ops.md)

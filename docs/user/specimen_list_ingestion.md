@@ -54,35 +54,73 @@ Related user guides:
                 │
                 │ Caption: User submits one or more PDFs with Source label.
                 ▼
-┌───────────────────────────────┐
-│ 2) Queue + Store Original PDF │
-└───────────────┬───────────────┘
+┌──────────────────────────────────────────────────┐
+│ 2) Queue Processing                              │
+│ PDF status: uploaded                             │
+└───────────────┬──────────────────────────────────┘
                 │
-                │ Caption: System saves originals and starts background processing.
+                │ Caption: Upload is accepted and queued for background split.
                 ▼
-┌───────────────────────────────┐
-│ 3) Split PDF into Page Images │
-└───────────────┬───────────────┘
+┌──────────────────────────────────────────────────┐
+│ 3) Background Split Worker                       │
+│ uploaded -> processing -> split | error          │
+└───────────────┬──────────────────────────────────┘
                 │
-                │ Caption: One record per page is created.
+                │ Caption: Worker creates page images from each PDF.
                 ▼
-┌───────────────────────────────┐
-│ 4) OCR + Row Extraction       │
-└───────────────┬───────────────┘
+┌──────────────────────────────────────────────────┐
+│ 4) Page Pipeline                                 │
+│ pending -> classified -> ocr_done -> extracted   │
+└───────────────┬──────────────────────────────────┘
                 │
-                │ Caption: OCR text and row candidates are prepared for review.
+                │ Caption: Classification, OCR, and row extraction run.
                 ▼
 ┌───────────────────────────────┐
 │ 5) Review Queue + Row Review  │
+│ review: pending/in_review/... │
 └───────────────┬───────────────┘
                 │
                 │ Caption: Reviewer validates, edits, approves, or rejects.
                 ▼
 ┌───────────────────────────────┐
 │ 6) Approval + Persistence     │
+│ page: approved/rejected       │
 └───────────────────────────────┘
 Caption: Approved rows create/update accession data.
 ```
+
+## Status transitions and triggers
+
+### PDF status (`SpecimenListPDF.status`)
+- `uploaded`: set immediately after upload; queued for split.
+- `processing`: set when background/manual split starts.
+- `split`: set when page images are successfully created.
+- `error`: set when split fails (missing file/path or split command failure).
+
+### Page pipeline status (`SpecimenListPage.pipeline_status`)
+- `pending`: initial page state after split.
+- `classified`: set after successful page-type classification.
+- `ocr_done`: set after raw OCR completes.
+- `extracted`: set after row extraction completes.
+- `in_review`: set when review lock/assignment starts.
+- `approved` / `rejected`: set by reviewer decisions.
+
+### Page review status (`SpecimenListPage.review_status`)
+- `pending`: ready for review assignment.
+- `in_review`: actively locked by a reviewer.
+- `approved` / `rejected`: final review outcome.
+
+## Async/background processing and manual processing
+- Upload enqueues processing; split can run in the background.
+- If your deployment runs queues manually, admins can trigger stages with:
+  - `python app/manage.py process_specimen_list_pdfs`
+  - `python app/manage.py process_specimen_list_ocr --stage raw`
+  - `python app/manage.py process_specimen_list_ocr --stage rows`
+
+## Re-run after errors
+- If a PDF is in `error`, an admin can re-run split processing.
+- OCR and row extraction can be re-run on failed/incomplete pages using the OCR command with `--stage` and optional `--force`.
+- Review can proceed once page status reaches `extracted` and rows are available.
 
 ## Rollout and rollback
 - **Rollout:** Enable the ingestion feature flag in configuration so the upload page is visible to permitted users.
