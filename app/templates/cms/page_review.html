@@ -47,6 +47,16 @@
         </h1>
       </header>
 
+      {% if messages %}
+        <section class="w3-container w3-margin-bottom" aria-label="{% trans 'Status messages' %}">
+          {% for message in messages %}
+            <div class="w3-panel {% if message.tags == 'error' %}w3-pale-red w3-border-red{% elif message.tags == 'warning' %}w3-pale-yellow w3-border-yellow{% elif message.tags == 'success' %}w3-pale-green w3-border-green{% else %}w3-pale-blue w3-border-blue{% endif %} w3-border" role="alert">
+              <p class="w3-margin-0">{{ message }}</p>
+            </div>
+          {% endfor %}
+        </section>
+      {% endif %}
+
       <section class="w3-row-padding" aria-label="{% trans "Review workspace" %}" style="max-width: none;">
         <div class="w3-card w3-padding review-split" id="review-split">
           <article class="review-pane" id="review-pane-left">
