@@ -29,6 +29,19 @@ Related review pages use a separate permission (**Review specimen list page**, `
 ## Next page after upload
 After a successful upload, you stay on the same upload page and see a success message confirming how many PDFs were queued.
 
+## Next steps after upload
+After upload and queueing, continue with these steps:
+
+1. Open the review queue and find newly created pages.
+2. Check OCR and extraction status.
+3. Review and approve/reject pages and rows as needed.
+
+Related user guides:
+- [Specimen list OCR](specimen_list_ocr.md)
+- [Review queue](review_queue.md)
+- [Specimen list review](specimen_list_review.md)
+- [Specimen list row review](specimen_list_row_review.md)
+
 ## Rollout and rollback
 - **Rollout:** Enable the ingestion feature flag in configuration so the upload page is visible to permitted users.
 - **Rollback:** Disable the feature flag to hide the upload UI. Existing PDFs and page images remain stored for future processing.
