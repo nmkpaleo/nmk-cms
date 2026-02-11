@@ -4767,6 +4767,33 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
                 messages.error(request, " ".join(str(message) for message in exc.messages))
                 context = self._build_context(request, page)
                 return render(request, self._get_template_name(page), context)
+
+            if action == "approve":
+                page.refresh_from_db()
+                if page.review_status != SpecimenListPage.ReviewStatus.APPROVED:
+                    row_errors: list[str] = []
+                    for row in page.row_candidates.all().order_by("row_index"):
+                        import_result = (row.data or {}).get("_import_result")
+                        if not isinstance(import_result, dict):
+                            continue
+                        errors = import_result.get("errors")
+                        if not isinstance(errors, list) or not errors:
+                            continue
+                        error_text = ", ".join(str(err) for err in errors)
+                        row_errors.append(
+                            _("Row %(index)s: %(errors)s")
+                            % {"index": row.row_index + 1, "errors": error_text}
+                        )
+
+                    if row_errors:
+                        messages.error(request, " ".join(row_errors))
+                    else:
+                        messages.error(
+                            request,
+                            _("Page approval did not complete. Please review row data and try again."),
+                        )
+                    context = self._build_context(request, page)
+                    return render(request, self._get_template_name(page), context)
             return redirect("specimen_list_queue")
         else:
             low_confidence_only = request.GET.get("low_confidence") in {"1", "true", "yes", "on"}
