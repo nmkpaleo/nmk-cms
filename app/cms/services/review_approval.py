@@ -125,7 +125,7 @@ def _build_accession(row_data: dict[str, Any]) -> tuple[Accession | None, list[s
         errors.append(str(_("Specimen number is required.")))
         return None, errors
 
-    accession, _ = Accession.objects.get_or_create(
+    accession, _created = Accession.objects.get_or_create(
         collection=collection,
         specimen_prefix=specimen_prefix,
         specimen_no=specimen_no,
@@ -139,7 +139,7 @@ def _build_accession(row_data: dict[str, Any]) -> tuple[Accession | None, list[s
 def _build_accession_row(accession: Accession, row_data: dict[str, Any]) -> AccessionRow:
     context = parse_accession_number(row_data.get("accession_number"))
     suffix = context.specimen_suffix or "-"
-    accession_row, _ = AccessionRow.objects.get_or_create(
+    accession_row, _created = AccessionRow.objects.get_or_create(
         accession=accession,
         specimen_suffix=suffix,
     )
