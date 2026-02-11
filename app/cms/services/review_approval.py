@@ -27,6 +27,7 @@ from cms.models import (
     SpecimenListRowCandidate,
 )
 from cms.ocr_processing import _ensure_field_slip
+from cms.tooth_markings.integration import apply_tooth_marking_correction
 
 
 QUALIFIER_TOKENS = {"cf.", "cf", "aff.", "aff", "sp.", "sp", "nr.", "nr"}
@@ -207,7 +208,11 @@ def _build_identification(accession_row: AccessionRow, row_data: dict[str, Any])
 
 
 def _build_nature_of_specimen(accession_row: AccessionRow, row_data: dict[str, Any]) -> None:
-    element_name = row_data.get("element") or row_data.get("verbatim_element")
+    element_name = (
+        row_data.get("element_corrected")
+        or row_data.get("element")
+        or row_data.get("verbatim_element")
+    )
     if element_name in (None, ""):
         return
     cleaned_name = str(element_name).strip()
@@ -216,7 +221,12 @@ def _build_nature_of_specimen(accession_row: AccessionRow, row_data: dict[str, A
         element = Element.objects.filter(name="-Undefined").first()
         if element is None:
             element = Element.objects.create(name="-Undefined")
-    verbatim_element = row_data.get("verbatim_element") or cleaned_name
+    verbatim_element = row_data.get("element_corrected") or row_data.get("verbatim_element") or cleaned_name
+    raw_detections = row_data.get("tooth_marking_detections")
+    detections: list[dict[str, Any]] = []
+    if isinstance(raw_detections, list):
+        detections = [det for det in raw_detections if isinstance(det, dict)]
+
     NatureOfSpecimen.objects.get_or_create(
         accession_row=accession_row,
         element=element,
@@ -224,11 +234,65 @@ def _build_nature_of_specimen(accession_row: AccessionRow, row_data: dict[str, A
             "side": row_data.get("side"),
             "condition": row_data.get("condition"),
             "verbatim_element": verbatim_element,
+            "verbatim_element_raw": row_data.get("element_raw") or row_data.get("verbatim_element"),
+            "tooth_marking_detections": detections,
             "portion": row_data.get("portion"),
             "fragments": 0,
         },
     )
 
+
+
+def _apply_tooth_marking_to_row_data(
+    row: SpecimenListRowCandidate,
+    row_data: dict[str, Any],
+) -> dict[str, Any]:
+    """Apply tooth-marking correction for specimen-list row element text.
+
+    Stores raw/corrected/detections back into row_data and row.data metadata so
+    QC has evidence even before persistence to NatureOfSpecimen.
+    """
+
+    source_element = row_data.get("element") or row_data.get("verbatim_element")
+    if source_element in (None, ""):
+        return row_data
+
+    element_text = str(source_element).strip()
+    if not element_text:
+        return row_data
+
+    image_path: str | None = None
+    if row.page and row.page.image_file:
+        try:
+            image_path = row.page.image_file.path
+        except Exception:
+            image_path = None
+
+    correction = apply_tooth_marking_correction(image_path, element_text)
+
+    row_data["element_raw"] = correction.get("element_raw") or element_text
+    row_data["element_corrected"] = correction.get("element_corrected") or element_text
+    row_data["element"] = row_data["element_corrected"]
+    row_data["verbatim_element"] = row_data["element_corrected"]
+
+    raw_detections = correction.get("detections")
+    detections: list[dict[str, Any]] = []
+    if isinstance(raw_detections, list):
+        detections = [det for det in raw_detections if isinstance(det, dict)]
+
+    row_data["tooth_marking_detections"] = detections
+
+    row.data = dict(row.data or {})
+    row.data["_tooth_marking"] = {
+        "element_raw": row_data["element_raw"],
+        "element_corrected": row_data["element_corrected"],
+        "detections": detections,
+        "replacements_applied": correction.get("replacements_applied", 0),
+        "min_confidence": correction.get("min_confidence"),
+        "error": correction.get("error"),
+    }
+
+    return row_data
 
 def _store_row_draft(row: SpecimenListRowCandidate, row_data: dict[str, Any]) -> None:
     row.data = dict(row.data or {})
@@ -346,6 +410,7 @@ def approve_row(*, row: SpecimenListRowCandidate, reviewer) -> ApprovalResult:
         _store_row_result(row, result)
         return result
 
+    row_data = _apply_tooth_marking_to_row_data(row, row_data)
     _store_row_draft(row, row_data)
 
     set_current_user(reviewer)
