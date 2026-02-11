@@ -42,6 +42,48 @@ Related user guides:
 - [Specimen list review](specimen_list_review.md)
 - [Specimen list row review](specimen_list_row_review.md)
 
+
+
+## Workflow diagram
+
+```text
+┌───────────────────────────────┐
+│ 1) Upload PDF                 │
+│ Page: /specimen-lists/upload/ │
+└───────────────┬───────────────┘
+                │
+                │ Caption: User submits one or more PDFs with Source label.
+                ▼
+┌───────────────────────────────┐
+│ 2) Queue + Store Original PDF │
+└───────────────┬───────────────┘
+                │
+                │ Caption: System saves originals and starts background processing.
+                ▼
+┌───────────────────────────────┐
+│ 3) Split PDF into Page Images │
+└───────────────┬───────────────┘
+                │
+                │ Caption: One record per page is created.
+                ▼
+┌───────────────────────────────┐
+│ 4) OCR + Row Extraction       │
+└───────────────┬───────────────┘
+                │
+                │ Caption: OCR text and row candidates are prepared for review.
+                ▼
+┌───────────────────────────────┐
+│ 5) Review Queue + Row Review  │
+└───────────────┬───────────────┘
+                │
+                │ Caption: Reviewer validates, edits, approves, or rejects.
+                ▼
+┌───────────────────────────────┐
+│ 6) Approval + Persistence     │
+└───────────────────────────────┘
+Caption: Approved rows create/update accession data.
+```
+
 ## Rollout and rollback
 - **Rollout:** Enable the ingestion feature flag in configuration so the upload page is visible to permitted users.
 - **Rollback:** Disable the feature flag to hide the upload UI. Existing PDFs and page images remain stored for future processing.
