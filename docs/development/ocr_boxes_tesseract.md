@@ -40,3 +40,26 @@ Base production install is intentionally lean and does not include heavyweight M
   - `pip install -r app/requirements-tooth-marking-cpu.txt`
 
 This avoids pulling CUDA/GPU wheels in default production installs.
+
+## Manual debug command
+Use the debug command when validating tooth-marking correction on a single page image.
+
+```bash
+cd app
+python manage.py tooth_marking_debug \
+  --image /path/to/page.png \
+  --text "Ml" \
+  --roi 100,200,500,650 \
+  --overlay-out /tmp/tooth_marking_overlay.png
+```
+
+What it does:
+
+- Prints raw element text, corrected element text, and number of replacements applied.
+- Prints a detection summary (`token_raw`, notation, confidence, span).
+- Optionally saves a debug overlay image with token boxes highlighted.
+
+Tips:
+
+- Omit `--roi` to run on the full page.
+- Use `--min-confidence 0.90` to test stricter replacement thresholds during manual verification.
