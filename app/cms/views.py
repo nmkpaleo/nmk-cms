@@ -4924,6 +4924,9 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
             ("field_number", _("Field Number")),
             ("taxon", _("Taxon")),
             ("element", _("Element")),
+            ("element_raw", _("Element (raw OCR)")),
+            ("element_corrected", _("Element (corrected)")),
+            ("tooth_marking_detections", _("Tooth-marking detections")),
             ("locality", _("Locality")),
             ("review_comment", _("Review comment")),
             ("row_index", _("Row")),
@@ -4973,7 +4976,10 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
                 "green_dot": self._coerce_boolean(row_data.get("green_dot")),
             }
             for column in column_order:
-                row_initial[column] = row_data.get(column, "")
+                value = row_data.get(column, "")
+                if column == "tooth_marking_detections" and value not in (None, ""):
+                    value = json.dumps(value, ensure_ascii=False)
+                row_initial[column] = value
             extra_data = {
                 key: value
                 for key, value in row_data.items()
@@ -5019,6 +5025,40 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
                 required=False,
                 label=_("Element"),
                 widget=forms.TextInput(attrs={"class": "w3-input"}),
+            ),
+            "element_raw": forms.CharField(
+                required=False,
+                label=_("Element (raw OCR)"),
+                widget=forms.TextInput(
+                    attrs={
+                        "class": "w3-input review-narrow",
+                        "readonly": "readonly",
+                        "aria-readonly": "true",
+                    }
+                ),
+            ),
+            "element_corrected": forms.CharField(
+                required=False,
+                label=_("Element (corrected)"),
+                widget=forms.TextInput(
+                    attrs={
+                        "class": "w3-input review-narrow",
+                        "readonly": "readonly",
+                        "aria-readonly": "true",
+                    }
+                ),
+            ),
+            "tooth_marking_detections": forms.CharField(
+                required=False,
+                label=_("Tooth-marking detections"),
+                widget=forms.Textarea(
+                    attrs={
+                        "class": "w3-input review-narrow",
+                        "rows": 2,
+                        "readonly": "readonly",
+                        "aria-readonly": "true",
+                    }
+                ),
             ),
             "locality": forms.CharField(
                 required=False,
@@ -5067,6 +5107,9 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
             "field_number",
             "taxon",
             "element",
+            "element_raw",
+            "element_corrected",
+            "tooth_marking_detections",
             "locality",
             "review_comment",
             "row_index",
@@ -5118,6 +5161,10 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
                 has_content = False
                 for column in column_order:
                     value = form.cleaned_data.get(column)
+                    if column == "tooth_marking_detections":
+                        value = row.data.get("tooth_marking_detections") if row_id and row_id in row_map else None
+                    if column in {"element_raw", "element_corrected"}:
+                        value = row.data.get(column) if row_id and row_id in row_map else None
                     if value not in (None, ""):
                         has_content = True
                         data[column] = value
@@ -5174,6 +5221,9 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
             "field_number",
             "taxon",
             "element",
+            "element_raw",
+            "element_corrected",
+            "tooth_marking_detections",
             "locality",
             "review_comment",
         ]

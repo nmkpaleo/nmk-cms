@@ -125,3 +125,12 @@ Caption: Approved rows create/update accession data.
 ## Rollout and rollback
 - **Rollout:** Enable the ingestion feature flag in configuration so the upload page is visible to permitted users.
 - **Rollback:** Disable the feature flag to hide the upload UI. Existing PDFs and page images remain stored for future processing.
+
+## QC evidence during review
+When reviewing extracted rows, the table includes read-only QC evidence columns:
+
+- **Element (raw OCR)**
+- **Element (corrected)**
+- **Tooth-marking detections**
+
+Use these to verify why a replacement was applied before approving the page.

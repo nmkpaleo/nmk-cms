@@ -63,3 +63,13 @@ Tips:
 
 - Omit `--roi` to run on the full page.
 - Use `--min-confidence 0.90` to test stricter replacement thresholds during manual verification.
+
+## Feature flags, dependencies, and fallback behavior
+- `OCR_BOX_TESSERACT_ENABLED` controls token-box extraction (`true` by default).
+- `OCR_BOX_ENGINE` can select optional engines; non-configured/missing engines fail safe and return empty token boxes.
+- `TOOTH_MARKING_MIN_CONF` controls replacement confidence threshold in the integration helper.
+
+Fallback behavior is defensive:
+
+- Missing Tesseract binary/import errors: token-box calls return empty lists with warning logs.
+- Tooth-marking correction exceptions: the helper preserves raw text, returns deterministic keys, and sets `error` in payload.

@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Surface tooth-marking QC evidence in page review/admin (raw vs corrected element + detections), add the `tooth_marking_debug` management command with overlay output, and document flags/dependencies/fallback behavior across user/admin/developer guides (TM-009).
 - Add FEATURE_REVIEW_UI_ENABLED rollout gate for specimen list review UI endpoints and document user/admin/developer review workflow operations.
 - Add specimen list OCR staging, row extraction queues, and review tooling with feature-flagged rollout guidance.
 - Add admin support for specimen list PDF ingestion, including requeue controls for failed splits and admin guidance.

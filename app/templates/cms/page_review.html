@@ -129,6 +129,9 @@
               <p class="w3-margin-0">{% trans "Viewing mode: edits and actions are disabled." %}</p>
             </div>
           {% endif %}
+          <p class="w3-small w3-text-grey">
+            {% trans "QC columns show Element (raw OCR), Element (corrected), and Tooth-marking detections for review traceability." %}
+          </p>
           <div class="w3-bar w3-margin-bottom">
             {% if low_confidence_only %}
               <a class="w3-button w3-light-grey" href="?">{% trans "Show all rows" %}</a>
@@ -157,7 +160,7 @@
                       <th data-column="{{ column }}">
                         <div class="review-header">
                           <span>{{ label }}</span>
-                          {% if column not in "data_json,row_index,confidence" %}
+                          {% if column not in "data_json,row_index,confidence,element_raw,element_corrected,tooth_marking_detections" %}
                             <span class="review-shift-controls" aria-label="{% trans 'Shift column values' %}">
                               <button class="w3-button w3-tiny w3-light-grey shift-control" type="button" data-shift="up" data-column="{{ column }}" title="{% trans 'Shift up from selected row' %}">
                                 <i class="fa fa-arrow-up" aria-hidden="true"></i>
@@ -182,7 +185,7 @@
                           {{ field.errors }}
                           <div class="review-cell">
                             {{ field }}
-                            {% if name not in "data_json,row_index,confidence" %}
+                            {% if name not in "data_json,row_index,confidence,element_raw,element_corrected,tooth_marking_detections" %}
                               <div class="review-cell-shift">
                                 <button class="w3-button w3-tiny w3-light-grey shift-control" type="button" data-shift="up" title="{% trans 'Shift up from this row' %}">
                                   <i class="fa fa-arrow-up" aria-hidden="true"></i>

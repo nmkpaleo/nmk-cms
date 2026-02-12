@@ -109,3 +109,16 @@ Caption: Approval writes curated data and audit metadata.
 - [Approval workflow](approval_workflow.md)
 - [User ingestion walkthrough](../user/specimen_list_ingestion.md)
 - [User review queue](../user/review_queue.md)
+
+## QC surfacing for tooth-marking corrections
+On the page review table, reviewers can inspect correction evidence directly in dedicated columns:
+
+- **Element (raw OCR)**: the pre-correction element text.
+- **Element (corrected)**: confidence-filtered corrected value used for persistence/QC.
+- **Tooth-marking detections**: detection payload used to produce replacements.
+
+In Django admin, `NatureOfSpecimen` records expose:
+
+- `verbatim_element` (corrected value),
+- `verbatim_element_raw` (original OCR value),
+- tooth-marking detection count and full detection JSON for audit checks.
