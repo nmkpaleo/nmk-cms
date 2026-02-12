@@ -57,6 +57,7 @@ def _split_taxon_and_qualifier(value: str | None) -> tuple[str | None, str | Non
 @dataclass
 class ApprovalResult:
     row_id: int
+    row_number: int
     accession_id: int | None
     accession_row_id: int | None
     field_slip_id: int | None
@@ -66,6 +67,7 @@ class ApprovalResult:
     def as_dict(self) -> dict[str, Any]:
         return {
             "row_id": self.row_id,
+            "row_number": self.row_number,
             "accession_id": self.accession_id,
             "accession_row_id": self.accession_row_id,
             "field_slip_id": self.field_slip_id,
@@ -464,6 +466,7 @@ def approve_row(*, row: SpecimenListRowCandidate, reviewer) -> ApprovalResult:
     if errors:
         result = ApprovalResult(
             row_id=row.id,
+            row_number=row.row_index + 1,
             accession_id=None,
             accession_row_id=None,
             field_slip_id=None,
@@ -514,6 +517,7 @@ def approve_row(*, row: SpecimenListRowCandidate, reviewer) -> ApprovalResult:
 
     result = ApprovalResult(
         row_id=row.id,
+        row_number=row.row_index + 1,
         accession_id=accession.id if accession else None,
         accession_row_id=accession_row_id,
         field_slip_id=field_slip_id,
@@ -539,14 +543,16 @@ def approve_page(*, page: SpecimenListPage, reviewer) -> list[ApprovalResult]:
 
         errored_rows = [result for result in results if result.errors]
         if errored_rows:
+            row_numbers = sorted({result.row_number for result in errored_rows})
+            row_numbers_text = ",".join(str(number) for number in row_numbers)
             details = "; ".join(
-                f"row {result.row_id}: {', '.join(result.errors)}" for result in errored_rows
+                f"row {result.row_number}: {', '.join(result.errors)}" for result in errored_rows
             )
             raise ValidationError(
                 _(
-                    "Page approval blocked because one or more rows have invalid accession formats or missing references: %(details)s"
+                    "Page approval blocked. Invalid accession data in rows %(rows)s. Details: %(details)s"
                 )
-                % {"details": details}
+                % {"rows": row_numbers_text, "details": details}
             )
 
         for accession_id, accession_row_id in {

@@ -4925,10 +4925,8 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
             ("taxon", _("Taxon")),
             ("element", _("Element")),
             ("locality", _("Locality")),
-            ("data_json", _("Data Json")),
             ("review_comment", _("Review comment")),
             ("row_index", _("Row")),
-            ("confidence", _("Confidence")),
         ]
         return {
             "page": page,
@@ -4971,7 +4969,6 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
                 "row_id": row.id,
                 "status": row.status,
                 "row_index": row.row_index + 1,
-                "confidence": row.confidence,
                 "red_dot": self._coerce_boolean(row_data.get("red_dot")),
                 "green_dot": self._coerce_boolean(row_data.get("green_dot")),
             }
@@ -5056,17 +5053,6 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
                     }
                 ),
             ),
-            "confidence": forms.CharField(
-                required=False,
-                label=_("Confidence"),
-                widget=forms.TextInput(
-                    attrs={
-                        "class": "w3-input review-narrow",
-                        "readonly": "readonly",
-                        "aria-readonly": "true",
-                    }
-                ),
-            ),
             "status": forms.ChoiceField(
                 choices=status_choices,
                 required=False,
@@ -5082,10 +5068,8 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
             "taxon",
             "element",
             "locality",
-            "data_json",
             "review_comment",
             "row_index",
-            "confidence",
         ]
         class SpecimenListRowForm(forms.Form):
             pass
