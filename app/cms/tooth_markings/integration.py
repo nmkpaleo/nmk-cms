@@ -117,12 +117,16 @@ def apply_tooth_marking_correction(
         result["element_corrected"] = corrected_text
         result["replacements_applied"] = replacements_applied
 
+        detections_count = int(len(detections))
+        applied_count = int(replacements_applied)
+        confidence_value = float(min_confidence)
+
         logger.info(
             "Tooth-marking correction completed.",
             extra={
-                "detections": len(detections),
-                "replacements_applied": replacements_applied,
-                "min_confidence": min_confidence,
+                "detections": detections_count,
+                "replacements_applied": applied_count,
+                "min_confidence": confidence_value,
             },
         )
     except Exception as exc:  # pragma: no cover - defensive fallback path
