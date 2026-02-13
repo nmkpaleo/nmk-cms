@@ -7,6 +7,7 @@ gunicorn==23.0.0
 django-userforeignkey~=0.5.0
 django-import-export>=3.3.7
 pillow>=10.4.0
+pytesseract>=0.3.10
 watchdog>=4.0.0
 
 #certifi==2021.10.8
@@ -42,6 +43,3 @@ seaborn
 python-Levenshtein>=0.25.0
 rapidfuzz>=3.4.0
 
-# Tooth-marking inference
-torch
-torchvision

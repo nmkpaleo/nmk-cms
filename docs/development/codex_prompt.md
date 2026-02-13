@@ -11,7 +11,7 @@ Use this dependency overview (generated from `app/requirements.txt`) to ground a
 ### Core Framework & Runtime
 - asgiref >= 3.8.1
 - debugpy == 1.5.1
-- Django == 5.2.9
+- Django == 5.2.11
 - gunicorn == 23.0.0
 - sqlparse == 0.5.1
 - watchdog >= 4.0.0
@@ -44,7 +44,7 @@ Use this dependency overview (generated from `app/requirements.txt`) to ground a
 - idna == 3.7
 - python-dotenv >= 1.0.1
 - requests == 2.32.4
-- urllib3 == 2.6.0
+- urllib3 == 2.6.3
 
 ### Analytics, AI & Matching
 - matplotlib (unpinned)
@@ -59,6 +59,7 @@ Use this dependency overview (generated from `app/requirements.txt`) to ground a
 ### Additional Dependencies
 - django-qr-code == 4.2.0
 - pycparser == 2.21
+- pytesseract >= 0.3.10
 
 > ℹ️ **Automation note:** Run `python docs/scripts/update_prompts.py` after editing `app/requirements.txt` to regenerate this dependency snapshot.
 

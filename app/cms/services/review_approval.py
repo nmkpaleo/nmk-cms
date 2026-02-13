@@ -6,6 +6,7 @@ import os
 from typing import Any
 
 from crum import set_current_user
+from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db import transaction
@@ -27,6 +28,7 @@ from cms.models import (
     SpecimenListRowCandidate,
 )
 from cms.ocr_processing import _ensure_field_slip
+from cms.tooth_markings.integration import apply_tooth_marking_correction
 
 
 QUALIFIER_TOKENS = {"cf.", "cf", "aff.", "aff", "sp.", "sp", "nr.", "nr"}
@@ -55,6 +57,7 @@ def _split_taxon_and_qualifier(value: str | None) -> tuple[str | None, str | Non
 @dataclass
 class ApprovalResult:
     row_id: int
+    row_number: int
     accession_id: int | None
     accession_row_id: int | None
     field_slip_id: int | None
@@ -64,6 +67,7 @@ class ApprovalResult:
     def as_dict(self) -> dict[str, Any]:
         return {
             "row_id": self.row_id,
+            "row_number": self.row_number,
             "accession_id": self.accession_id,
             "accession_row_id": self.accession_row_id,
             "field_slip_id": self.field_slip_id,
@@ -78,53 +82,115 @@ def _normalise_row_data(data: dict[str, Any]) -> dict[str, Any]:
         if str(key).startswith("_"):
             continue
         normalised[str(key).strip().lower()] = value
-    accession_number = normalised.get("accession_number")
-    if accession_number not in (None, ""):
-        cleaned_accession = str(accession_number).strip()
-        if not cleaned_accession.upper().startswith("KNM-"):
-            cleaned_accession = f"KNM-{cleaned_accession}"
-        normalised["accession_number"] = cleaned_accession
     return normalised
 
 
+
+_ALLOWED_COLLECTIONS = {"KNM", "KNMI", "KNMP"}
+
+
+def _clean_text(value: object) -> str | None:
+    if value in (None, ""):
+        return None
+    cleaned = str(value).strip()
+    return cleaned or None
+
+
+def _resolve_accession_context(row_data: dict[str, Any]):
+    """Resolve accession context from combined or split columns."""
+
+    raw_accession = _clean_text(row_data.get("accession_number"))
+
+    split_collection = _clean_text(
+        row_data.get("collection_abbreviation")
+        or row_data.get("collection")
+        or row_data.get("collection_code")
+    )
+    split_prefix = _clean_text(
+        row_data.get("specimen_prefix")
+        or row_data.get("specimen_prefix_abbreviation")
+        or row_data.get("locality_abbreviation")
+        or row_data.get("prefix")
+    )
+    split_number = _clean_text(
+        row_data.get("specimen_no")
+        or row_data.get("number")
+        or row_data.get("specimen_number")
+    )
+
+    if raw_accession:
+        context = parse_accession_number(raw_accession)
+    else:
+        composed = "-".join(part for part in [split_collection, split_prefix, split_number] if part)
+        context = parse_accession_number(composed) if composed else parse_accession_number(None)
+
+    collection_abbr = (split_collection or context.collection_abbreviation or "").upper() or None
+    prefix_abbr = (split_prefix or context.specimen_prefix or "").upper() or None
+    specimen_no = context.specimen_number
+    if specimen_no is None and split_number:
+        try:
+            specimen_no = int(split_number)
+        except (TypeError, ValueError):
+            specimen_no = None
+
+    suffix = context.specimen_suffix
+    if raw_accession is None and collection_abbr and prefix_abbr and specimen_no is not None:
+        raw_accession = f"{collection_abbr}-{prefix_abbr}-{specimen_no}"
+        row_data["accession_number"] = raw_accession
+
+    return raw_accession, collection_abbr, prefix_abbr, specimen_no, suffix
+
 def _validate_row_data(data: dict[str, Any]) -> list[str]:
     errors: list[str] = []
-    accession_number = data.get("accession_number")
+    accession_number, collection_abbr, prefix_abbr, specimen_no, _suffix = _resolve_accession_context(data)
+
     if accession_number in (None, ""):
         errors.append(str(_("Accession number is required.")))
+    if not collection_abbr:
+        errors.append(str(_("Collection abbreviation is required (KNM/KNMI/KNMP).")))
+    elif collection_abbr not in _ALLOWED_COLLECTIONS:
+        errors.append(
+            str(_("Collection abbreviation must be one of KNM, KNMI, KNMP."))
+        )
+    if not prefix_abbr:
+        errors.append(str(_("Specimen prefix (locality abbreviation) is required.")))
+    elif not Locality.objects.filter(abbreviation=prefix_abbr).exists():
+        errors.append(
+            str(_("Locality abbreviation %(abbr)s does not exist.") % {"abbr": prefix_abbr})
+        )
+    if specimen_no is None:
+        errors.append(str(_("Specimen number is required and must be numeric.")))
     return errors
 
 
 def _build_accession(row_data: dict[str, Any]) -> tuple[Accession | None, list[str]]:
     errors: list[str] = []
-    accession_number = row_data.get("accession_number")
+    accession_number, collection_abbr, prefix_abbr, specimen_no, _suffix = _resolve_accession_context(row_data)
     if accession_number in (None, ""):
         return None, [str(_("Accession number is required."))]
 
-    context = parse_accession_number(accession_number)
-    collection_abbr = context.collection_abbreviation or "KNM"
+    if not collection_abbr or collection_abbr not in _ALLOWED_COLLECTIONS:
+        errors.append(str(_("Collection abbreviation must be one of KNM, KNMI, KNMP.")))
+        return None, errors
+
     collection = Collection.objects.filter(abbreviation=collection_abbr).first()
     if not collection:
         errors.append(str(_("Collection %(abbr)s not found.") % {"abbr": collection_abbr}))
         return None, errors
 
-    prefix_abbr = context.specimen_prefix
     if not prefix_abbr:
         errors.append(str(_("Specimen prefix is required.")))
         return None, errors
     specimen_prefix = Locality.objects.filter(abbreviation=prefix_abbr).first()
     if not specimen_prefix:
-        specimen_prefix = Locality.objects.create(
-            abbreviation=prefix_abbr,
-            name=str(_("Temporary Locality %(abbr)s")) % {"abbr": prefix_abbr},
-        )
+        errors.append(str(_("Locality abbreviation %(abbr)s does not exist.") % {"abbr": prefix_abbr}))
+        return None, errors
 
-    specimen_no = context.specimen_number
     if specimen_no is None:
         errors.append(str(_("Specimen number is required.")))
         return None, errors
 
-    accession, _ = Accession.objects.get_or_create(
+    accession, _created = Accession.objects.get_or_create(
         collection=collection,
         specimen_prefix=specimen_prefix,
         specimen_no=specimen_no,
@@ -136,9 +202,9 @@ def _build_accession(row_data: dict[str, Any]) -> tuple[Accession | None, list[s
 
 
 def _build_accession_row(accession: Accession, row_data: dict[str, Any]) -> AccessionRow:
-    context = parse_accession_number(row_data.get("accession_number"))
-    suffix = context.specimen_suffix or "-"
-    accession_row, _ = AccessionRow.objects.get_or_create(
+    _accession_number, _collection_abbr, _prefix_abbr, _specimen_no, suffix = _resolve_accession_context(row_data)
+    suffix = suffix or "-"
+    accession_row, _created = AccessionRow.objects.get_or_create(
         accession=accession,
         specimen_suffix=suffix,
     )
@@ -207,7 +273,11 @@ def _build_identification(accession_row: AccessionRow, row_data: dict[str, Any])
 
 
 def _build_nature_of_specimen(accession_row: AccessionRow, row_data: dict[str, Any]) -> None:
-    element_name = row_data.get("element") or row_data.get("verbatim_element")
+    element_name = (
+        row_data.get("element_corrected")
+        or row_data.get("element")
+        or row_data.get("verbatim_element")
+    )
     if element_name in (None, ""):
         return
     cleaned_name = str(element_name).strip()
@@ -216,7 +286,12 @@ def _build_nature_of_specimen(accession_row: AccessionRow, row_data: dict[str, A
         element = Element.objects.filter(name="-Undefined").first()
         if element is None:
             element = Element.objects.create(name="-Undefined")
-    verbatim_element = row_data.get("verbatim_element") or cleaned_name
+    verbatim_element = row_data.get("element_corrected") or row_data.get("verbatim_element") or cleaned_name
+    raw_detections = row_data.get("tooth_marking_detections")
+    detections: list[dict[str, Any]] = []
+    if isinstance(raw_detections, list):
+        detections = [det for det in raw_detections if isinstance(det, dict)]
+
     NatureOfSpecimen.objects.get_or_create(
         accession_row=accession_row,
         element=element,
@@ -224,11 +299,65 @@ def _build_nature_of_specimen(accession_row: AccessionRow, row_data: dict[str, A
             "side": row_data.get("side"),
             "condition": row_data.get("condition"),
             "verbatim_element": verbatim_element,
+            "verbatim_element_raw": row_data.get("element_raw") or row_data.get("verbatim_element"),
+            "tooth_marking_detections": detections,
             "portion": row_data.get("portion"),
             "fragments": 0,
         },
     )
 
+
+
+def _apply_tooth_marking_to_row_data(
+    row: SpecimenListRowCandidate,
+    row_data: dict[str, Any],
+) -> dict[str, Any]:
+    """Apply tooth-marking correction for specimen-list row element text.
+
+    Stores raw/corrected/detections back into row_data and row.data metadata so
+    QC has evidence even before persistence to NatureOfSpecimen.
+    """
+
+    source_element = row_data.get("element") or row_data.get("verbatim_element")
+    if source_element in (None, ""):
+        return row_data
+
+    element_text = str(source_element).strip()
+    if not element_text:
+        return row_data
+
+    image_path: str | None = None
+    if row.page and row.page.image_file:
+        try:
+            image_path = row.page.image_file.path
+        except Exception:
+            image_path = None
+
+    correction = apply_tooth_marking_correction(image_path, element_text)
+
+    row_data["element_raw"] = correction.get("element_raw") or element_text
+    row_data["element_corrected"] = correction.get("element_corrected") or element_text
+    row_data["element"] = row_data["element_corrected"]
+    row_data["verbatim_element"] = row_data["element_corrected"]
+
+    raw_detections = correction.get("detections")
+    detections: list[dict[str, Any]] = []
+    if isinstance(raw_detections, list):
+        detections = [det for det in raw_detections if isinstance(det, dict)]
+
+    row_data["tooth_marking_detections"] = detections
+
+    row.data = dict(row.data or {})
+    row.data["_tooth_marking"] = {
+        "element_raw": row_data["element_raw"],
+        "element_corrected": row_data["element_corrected"],
+        "detections": detections,
+        "replacements_applied": correction.get("replacements_applied", 0),
+        "min_confidence": correction.get("min_confidence"),
+        "error": correction.get("error"),
+    }
+
+    return row_data
 
 def _store_row_draft(row: SpecimenListRowCandidate, row_data: dict[str, Any]) -> None:
     row.data = dict(row.data or {})
@@ -337,6 +466,7 @@ def approve_row(*, row: SpecimenListRowCandidate, reviewer) -> ApprovalResult:
     if errors:
         result = ApprovalResult(
             row_id=row.id,
+            row_number=row.row_index + 1,
             accession_id=None,
             accession_row_id=None,
             field_slip_id=None,
@@ -346,6 +476,7 @@ def approve_row(*, row: SpecimenListRowCandidate, reviewer) -> ApprovalResult:
         _store_row_result(row, result)
         return result
 
+    row_data = _apply_tooth_marking_to_row_data(row, row_data)
     _store_row_draft(row, row_data)
 
     set_current_user(reviewer)
@@ -386,6 +517,7 @@ def approve_row(*, row: SpecimenListRowCandidate, reviewer) -> ApprovalResult:
 
     result = ApprovalResult(
         row_id=row.id,
+        row_number=row.row_index + 1,
         accession_id=accession.id if accession else None,
         accession_row_id=accession_row_id,
         field_slip_id=field_slip_id,
@@ -408,6 +540,20 @@ def approve_page(*, page: SpecimenListPage, reviewer) -> list[ApprovalResult]:
         rows = page.row_candidates.all().order_by("row_index")
         for row in rows:
             results.append(approve_row(row=row, reviewer=reviewer))
+
+        errored_rows = [result for result in results if result.errors]
+        if errored_rows:
+            row_numbers = sorted({result.row_number for result in errored_rows})
+            row_numbers_text = ",".join(str(number) for number in row_numbers)
+            details = "; ".join(
+                f"row {result.row_number}: {', '.join(result.errors)}" for result in errored_rows
+            )
+            raise ValidationError(
+                _(
+                    "Page approval blocked. Invalid accession data in rows %(rows)s. Details: %(details)s"
+                )
+                % {"rows": row_numbers_text, "details": details}
+            )
 
         for accession_id, accession_row_id in {
             (result.accession_id, result.accession_row_id) for result in results

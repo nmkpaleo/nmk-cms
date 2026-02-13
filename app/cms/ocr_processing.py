@@ -57,6 +57,7 @@ from .models import (
     SpecimenListRowCandidate,
 )
 from .utils import apply_ditto_marks
+from .tooth_markings.integration import apply_tooth_marking_correction
 
 
 UNKNOWN_FIELD_NUMBER_PREFIX = "UNKNOWN FIELD NUMBER #"
@@ -1136,6 +1137,8 @@ def _apply_rows(
     accession: Accession,
     rows: list[dict[str, object]],
     selection: set[str] | None = None,
+    *,
+    page_image: object | None = None,
 ) -> None:
     last_ident_data: dict[str, object] | None = None
     last_natures_data: list[dict[str, object]] = []
@@ -1210,7 +1213,31 @@ def _apply_rows(
         for nature in natures_to_apply:
             element_name = _clean_string(nature.get("element_name"))
             verbatim_element = _clean_string(nature.get("verbatim_element"))
-            resolved_name = element_name or verbatim_element
+
+            correction_source = verbatim_element or element_name or ""
+            corrected_element = correction_source
+            detections: list[dict[str, object]] = []
+            if correction_source and page_image is not None:
+                correction = apply_tooth_marking_correction(page_image, correction_source)
+                corrected_element = str(correction.get("element_corrected") or correction_source)
+                raw_element = str(correction.get("element_raw") or correction_source)
+                raw_detections = correction.get("detections")
+                if isinstance(raw_detections, list):
+                    detections = [det for det in raw_detections if isinstance(det, dict)]
+                replacements_applied = int(correction.get("replacements_applied") or 0)
+                min_confidence = correction.get("min_confidence")
+                for index, detection in enumerate(detections):
+                    detection.setdefault("replacement_applied", index < replacements_applied)
+                    detection.setdefault("min_confidence", min_confidence)
+                nature["verbatim_element_raw"] = raw_element
+                nature["verbatim_element"] = corrected_element
+                nature["tooth_marking_detections"] = detections
+            else:
+                nature["verbatim_element_raw"] = correction_source or None
+                nature["verbatim_element"] = corrected_element or None
+                nature["tooth_marking_detections"] = detections
+
+            resolved_name = element_name or corrected_element or verbatim_element
             element = Element.objects.filter(name=resolved_name).first() if resolved_name else None
             parent = Element.objects.filter(name="-Undefined").first()
             resolved_element = element or parent
@@ -1238,6 +1265,8 @@ def _apply_rows(
                 side=nature.get("side"),
                 condition=nature.get("condition"),
                 verbatim_element=nature.get("verbatim_element"),
+                verbatim_element_raw=nature.get("verbatim_element_raw"),
+                tooth_marking_detections=nature.get("tooth_marking_detections") or [],
                 portion=nature.get("portion"),
                 fragments=fragments_value,
             )
@@ -1296,6 +1325,8 @@ def _serialize_accession(accession: Accession) -> dict[str, object]:
                     "side": nature.side,
                     "condition": nature.condition,
                     "verbatim_element": nature.verbatim_element,
+                    "verbatim_element_raw": nature.verbatim_element_raw,
+                    "tooth_marking_detections": nature.tooth_marking_detections,
                     "portion": nature.portion,
                     "fragments": nature.fragments,
                 }
@@ -1608,7 +1639,7 @@ def create_accessions_from_media(
                 )
                 _apply_references(accession, components.get("references", []))
                 _apply_field_slips(accession, components.get("field_slips", []))
-                _apply_rows(accession, components.get("rows", []))
+                _apply_rows(accession, components.get("rows", []), page_image=_get_media_image_for_correction(media))
             elif action == "update_existing":
                 accession = existing_qs.filter(pk=resolution_entry.get("accession_id")).first() or existing_qs.first()
                 fields = resolution_entry.get("fields") or {}
@@ -1644,7 +1675,7 @@ def create_accessions_from_media(
                     if suffix not in (None, "")
                 }
                 if row_selection:
-                    _apply_rows(accession, components.get("rows", []), row_selection)
+                    _apply_rows(accession, components.get("rows", []), row_selection, page_image=_get_media_image_for_correction(media))
 
                 record = {
                     "key": key,
@@ -1684,7 +1715,7 @@ def create_accessions_from_media(
             )
             _apply_references(accession, components.get("references", []))
             _apply_field_slips(accession, components.get("field_slips", []))
-            _apply_rows(accession, components.get("rows", []))
+            _apply_rows(accession, components.get("rows", []), page_image=_get_media_image_for_correction(media))
 
         if first_accession is None:
             first_accession = accession
@@ -1723,6 +1754,18 @@ def create_accessions_from_media(
 
     return {"created": created_records, "conflicts": conflicts}
 
+
+
+def _get_media_image_for_correction(media: Media) -> object | None:
+    """Return a local image path for tooth-marking correction when available."""
+
+    location = getattr(media, "media_location", None)
+    if not location:
+        return None
+    try:
+        return location.path
+    except Exception:
+        return None
 
 def _mark_scan_failed(media: Media, path: Path, failed_dir: Path, exc: Exception | str) -> None:
     """Move ``path`` to the failed directory and persist failure metadata."""

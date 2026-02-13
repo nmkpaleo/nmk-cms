@@ -7,6 +7,7 @@
 - [References](references.md)
 - [Preparations](preparations.md)
 - [Scan Uploads](scan-uploads.md)
+- [Specimen list ingestion](specimen_list_ingestion.md)
 - [Manual QC Import](manual-import.md)
 - [Accession detail review](accessions-detail.md)
 - [Accession Reference merges](accession-reference-merges.md)

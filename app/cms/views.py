@@ -4761,7 +4761,39 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
                     messages.error(request, _("Please correct the row review form errors."))
                     context = self._build_context(request, page, formset=formset)
                     return render(request, self._get_template_name(page), context)
-            page = self._update_review_status(request, pk, action)
+            try:
+                page = self._update_review_status(request, pk, action)
+            except ValidationError as exc:
+                messages.error(request, " ".join(str(message) for message in exc.messages))
+                context = self._build_context(request, page)
+                return render(request, self._get_template_name(page), context)
+
+            if action == "approve":
+                page.refresh_from_db()
+                if page.review_status != SpecimenListPage.ReviewStatus.APPROVED:
+                    row_errors: list[str] = []
+                    for row in page.row_candidates.all().order_by("row_index"):
+                        import_result = (row.data or {}).get("_import_result")
+                        if not isinstance(import_result, dict):
+                            continue
+                        errors = import_result.get("errors")
+                        if not isinstance(errors, list) or not errors:
+                            continue
+                        error_text = ", ".join(str(err) for err in errors)
+                        row_errors.append(
+                            _("Row %(index)s: %(errors)s")
+                            % {"index": row.row_index + 1, "errors": error_text}
+                        )
+
+                    if row_errors:
+                        messages.error(request, " ".join(row_errors))
+                    else:
+                        messages.error(
+                            request,
+                            _("Page approval did not complete. Please review row data and try again."),
+                        )
+                    context = self._build_context(request, page)
+                    return render(request, self._get_template_name(page), context)
             return redirect("specimen_list_queue")
         else:
             low_confidence_only = request.GET.get("low_confidence") in {"1", "true", "yes", "on"}
@@ -4892,11 +4924,12 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
             ("field_number", _("Field Number")),
             ("taxon", _("Taxon")),
             ("element", _("Element")),
+            ("element_raw", _("Element (raw OCR)")),
+            ("element_corrected", _("Element (corrected)")),
+            ("tooth_marking_detections", _("Tooth-marking detections")),
             ("locality", _("Locality")),
-            ("data_json", _("Data Json")),
             ("review_comment", _("Review comment")),
             ("row_index", _("Row")),
-            ("confidence", _("Confidence")),
         ]
         return {
             "page": page,
@@ -4939,12 +4972,14 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
                 "row_id": row.id,
                 "status": row.status,
                 "row_index": row.row_index + 1,
-                "confidence": row.confidence,
                 "red_dot": self._coerce_boolean(row_data.get("red_dot")),
                 "green_dot": self._coerce_boolean(row_data.get("green_dot")),
             }
             for column in column_order:
-                row_initial[column] = row_data.get(column, "")
+                value = row_data.get(column, "")
+                if column == "tooth_marking_detections" and value not in (None, ""):
+                    value = json.dumps(value, ensure_ascii=False)
+                row_initial[column] = value
             extra_data = {
                 key: value
                 for key, value in row_data.items()
@@ -4991,6 +5026,40 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
                 label=_("Element"),
                 widget=forms.TextInput(attrs={"class": "w3-input"}),
             ),
+            "element_raw": forms.CharField(
+                required=False,
+                label=_("Element (raw OCR)"),
+                widget=forms.TextInput(
+                    attrs={
+                        "class": "w3-input review-narrow",
+                        "readonly": "readonly",
+                        "aria-readonly": "true",
+                    }
+                ),
+            ),
+            "element_corrected": forms.CharField(
+                required=False,
+                label=_("Element (corrected)"),
+                widget=forms.TextInput(
+                    attrs={
+                        "class": "w3-input review-narrow",
+                        "readonly": "readonly",
+                        "aria-readonly": "true",
+                    }
+                ),
+            ),
+            "tooth_marking_detections": forms.CharField(
+                required=False,
+                label=_("Tooth-marking detections"),
+                widget=forms.Textarea(
+                    attrs={
+                        "class": "w3-input review-narrow",
+                        "rows": 2,
+                        "readonly": "readonly",
+                        "aria-readonly": "true",
+                    }
+                ),
+            ),
             "locality": forms.CharField(
                 required=False,
                 label=_("Locality"),
@@ -5024,17 +5093,6 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
                     }
                 ),
             ),
-            "confidence": forms.CharField(
-                required=False,
-                label=_("Confidence"),
-                widget=forms.TextInput(
-                    attrs={
-                        "class": "w3-input review-narrow",
-                        "readonly": "readonly",
-                        "aria-readonly": "true",
-                    }
-                ),
-            ),
             "status": forms.ChoiceField(
                 choices=status_choices,
                 required=False,
@@ -5049,11 +5107,12 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
             "field_number",
             "taxon",
             "element",
+            "element_raw",
+            "element_corrected",
+            "tooth_marking_detections",
             "locality",
-            "data_json",
             "review_comment",
             "row_index",
-            "confidence",
         ]
         class SpecimenListRowForm(forms.Form):
             pass
@@ -5102,6 +5161,10 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
                 has_content = False
                 for column in column_order:
                     value = form.cleaned_data.get(column)
+                    if column == "tooth_marking_detections":
+                        value = row.data.get("tooth_marking_detections") if row_id and row_id in row_map else None
+                    if column in {"element_raw", "element_corrected"}:
+                        value = row.data.get(column) if row_id and row_id in row_map else None
                     if value not in (None, ""):
                         has_content = True
                         data[column] = value
@@ -5158,6 +5221,9 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
             "field_number",
             "taxon",
             "element",
+            "element_raw",
+            "element_corrected",
+            "tooth_marking_detections",
             "locality",
             "review_comment",
         ]

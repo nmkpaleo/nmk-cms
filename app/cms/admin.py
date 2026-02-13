@@ -1492,9 +1492,39 @@ class LLMUsageRecordAdmin(admin.ModelAdmin):
 # NatureOfSpecimen Model
 class NatureOfSpecimenAdmin(HistoricalImportExportAdmin):
     resource_class = NatureOfSpecimenResource
-    list_display = ('accession_row', 'element', 'side', 'condition', 'fragments')
-    search_fields = ('accession_row__id', 'element__name', 'side', 'condition')
+    list_display = (
+        'accession_row',
+        'element',
+        'verbatim_element',
+        'verbatim_element_raw',
+        'tooth_marking_detections_count',
+        'side',
+        'condition',
+        'fragments',
+    )
+    search_fields = (
+        'accession_row__id',
+        'element__name',
+        'verbatim_element',
+        'verbatim_element_raw',
+        'side',
+        'condition',
+    )
+    readonly_fields = ('tooth_marking_detections_pretty',)
     ordering = ('accession_row', 'element')
+
+    def tooth_marking_detections_count(self, obj):
+        detections = obj.tooth_marking_detections or []
+        return len(detections)
+
+    tooth_marking_detections_count.short_description = 'Tooth detections'
+
+    def tooth_marking_detections_pretty(self, obj):
+        import json
+
+        return json.dumps(obj.tooth_marking_detections or [], indent=2, ensure_ascii=False)
+
+    tooth_marking_detections_pretty.short_description = 'Tooth-marking detections (JSON)'
 
 # Person Model
 class PersonAdmin(HistoricalImportExportAdmin):

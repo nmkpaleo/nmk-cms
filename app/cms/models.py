@@ -1091,7 +1091,18 @@ class NatureOfSpecimen(MergeMixin, BaseModel):
         max_length=255,
         blank=True,
         null=True,
-        help_text="Element description as originally recorded.",
+        help_text="Element description used for QC and persistence.",
+    )
+    verbatim_element_raw = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Original extracted element text before tooth-marking correction.",
+    )
+    tooth_marking_detections = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="Tooth-marking detection metadata (token, notation, confidence, bbox, replacement_applied).",
     )
     portion = models.CharField(
         max_length=255,
@@ -1110,6 +1121,8 @@ class NatureOfSpecimen(MergeMixin, BaseModel):
         "side": MergeStrategy.FIELD_SELECTION,
         "condition": MergeStrategy.FIELD_SELECTION,
         "verbatim_element": MergeStrategy.FIELD_SELECTION,
+        "verbatim_element_raw": MergeStrategy.FIELD_SELECTION,
+        "tooth_marking_detections": MergeStrategy.FIELD_SELECTION,
         "portion": MergeStrategy.FIELD_SELECTION,
         "fragments": MergeStrategy.FIELD_SELECTION,
     }
