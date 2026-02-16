@@ -99,6 +99,10 @@
       </div>
     </main>
 
+    <footer class="w3-container w3-small w3-text-grey w3-padding-16" aria-label="Application version">
+      <span>{% trans "Version" %}: {{ application_version }}</span>
+    </footer>
+
     <script src="{% static 'javascript.js' %}"></script>
 
     {% block extra_scripts %}

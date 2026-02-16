@@ -17,6 +17,8 @@ from decimal import Decimal
 
 from pathlib import Path
 
+from config.versioning import get_application_version
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -60,6 +62,7 @@ DEBUG = bool(int(get_var("DEBUG", 1)))
 # Feature rollout flags
 MERGE_TOOL_FEATURE = bool(int(get_var("ENABLE_ADMIN_MERGE", 0)))
 FEATURE_REVIEW_UI_ENABLED = bool(int(get_var("FEATURE_REVIEW_UI_ENABLED", 1)))
+APP_VERSION = get_application_version()
 
 ALLOWED_HOSTS = []
 ALLOWED_HOSTS_ENV = get_var("ALLOWED_HOSTS")
@@ -132,6 +135,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "cms.context_processors.merge_feature_flag",
+                "cms.context_processors.application_version",
             ],
         },
     },
