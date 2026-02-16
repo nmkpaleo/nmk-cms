@@ -15,7 +15,14 @@ The collection management system renders list and search pages with a consistent
 1. **Toggle filters:** Click the “Show/Hide Filters” button to reveal the W3 accordion. The state persists per page load.
 2. **Apply filters:** Enter filter values and press the blue “Apply Filters” button. Use the grey “Clear” button to reset all criteria.
 3. **Pagination:** Pagination controls appear below the table via the shared block in `base_generic.html`. They render accessible previous/next buttons with icons and text labels.
+   - Active filter selections now persist when you click **Previous** or **Next**.
+   - This applies to list pages such as **Accessions** and **Localities**, including multi-select filters.
 4. **Mobile controls:** On small screens, header actions stack vertically and tables scroll horizontally inside the `w3-responsive` wrapper.
+
+## Filter persistence examples
+
+- If you filter Accessions by organisation or specimen prefix, moving to page 2 keeps the same filtered set.
+- If you filter Localities by multiple geological times, paging forward/back keeps all selected geological time values.
 
 ## Accessibility considerations
 

@@ -1,7 +1,7 @@
 # Changelog
 
 ## Unreleased
-- Preserve active GET filters in shared list pagination links so next/previous navigation keeps filtered result sets on pages like Accessions and Localities.
+- Preserve active GET filters in shared list pagination links so next/previous navigation keeps filtered result sets on pages like Accessions and Localities, with updated user/admin/development rollout and rollback guidance.
 - Document tooth-marking dependency rollout and rollback runbooks across user/admin/development guides, including operational checks for optional CPU inference updates (TM-006).
 - Surface tooth-marking QC evidence in page review/admin (raw vs corrected element + detections), add the `tooth_marking_debug` management command with overlay output, and document flags/dependencies/fallback behavior across user/admin/developer guides (TM-009).
 - Add FEATURE_REVIEW_UI_ENABLED rollout gate for specimen list review UI endpoints and document user/admin/developer review workflow operations.

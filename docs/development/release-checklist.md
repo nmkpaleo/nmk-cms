@@ -19,6 +19,20 @@ This project ships production releases by merging a pull request from `main` int
 4. Review changelog impact and migrations.
 5. Merge PR into `prod`.
 
+## Pagination filter persistence rollout notes
+
+Use this checklist when releasing list pagination changes that must preserve active filter query parameters.
+
+### Rollout
+1. Validate Accessions and Localities filtered lists in staging.
+2. Confirm **Previous/Next** links keep active filter parameters, including repeated values from multi-select fields.
+3. Ask support users to smoke-test common filtered queues after deployment.
+
+### Rollback
+1. Revert the shared pagination template change in the release branch.
+2. Redeploy and re-run smoke tests for Accessions and Localities lists.
+3. Notify support teams that pagination has temporarily returned to previous behavior while a fix is prepared.
+
 ## What happens after merge
 
 1. `release-on-prod-merge` computes the next `v*` tag.
