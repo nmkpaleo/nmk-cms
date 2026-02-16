@@ -77,3 +77,26 @@ _Last updated: 2025-02-15_
 1. Revert the feature commit in Git and redeploy.
 2. Re-run `python manage.py collectstatic --noinput` to restore the prior asset bundle and purge caches for the affected static files.
 3. Spot-check the accession detail page to confirm the legacy layout and thumbnail interactions are restored.
+
+## Tooth-marking CI hardening checks (TM-005)
+
+Run these checks from the repository root for tooth-marking regression validation and CI parity:
+
+```bash
+pytest -q app/cms/tests/test_tooth_marking_detection_normalization.py \
+         app/cms/tests/test_tooth_marking_integration.py \
+         app/cms/tests/test_tooth_marking_debug_command.py \
+         tests/cms/test_tooth_markings_service.py
+```
+
+```bash
+pytest -q --cov=cms.tests.test_tooth_marking_detection_normalization \
+         --cov-report=term-missing --cov-fail-under=90 \
+         app/cms/tests/test_tooth_marking_detection_normalization.py
+```
+
+```bash
+cd app && python manage.py makemigrations --check --dry-run
+```
+
+Documentation checks should run using repository tooling only. Do not run MkDocs commands for this project.

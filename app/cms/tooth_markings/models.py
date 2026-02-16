@@ -45,7 +45,17 @@ def _validate_not_lfs_pointer(path: Path) -> None:
 
 def _load_model(path: Path, device: torch.device) -> torch.nn.Module:
     _validate_not_lfs_pointer(path)
-    model = torch.load(path, map_location=device)
+
+    # Torch 2.6+ changed default torch.load behavior toward ``weights_only=True``.
+    # Our packaged .pt assets may contain full serialized modules, so we force
+    # ``weights_only=False`` when supported and gracefully fall back for older
+    # torch versions that do not expose this keyword argument.
+    try:
+        model = torch.load(path, map_location=device, weights_only=False)
+    except TypeError:
+        model = torch.load(path, map_location=device)
+
+    model = model.to(device)
     model.eval()
     return model
 

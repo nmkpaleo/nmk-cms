@@ -38,3 +38,22 @@ Use `--limit` to cap batch sizes or configure defaults via the batch size settin
 ## Rollback Steps
 1. Disable row extraction by setting `SPECIMEN_LIST_ROW_EXTRACTION_ENABLED` to false.
 2. Pause queue runs for row extraction while keeping raw OCR available for later reprocessing.
+
+
+## Tooth-marking dependency rollout checklist
+
+When enabling or updating the optional tooth-marking CPU inference stack:
+
+1. Confirm the environment can install from `app/requirements-tooth-marking-cpu.txt`.
+2. Run the tooth-marking debug command with a known sample image and confirm corrected output is reasonable.
+3. Validate that row review still saves corrected element text and detection evidence.
+4. Spot-check Nature of Specimen records in admin to ensure detection JSON is readable.
+
+## Tooth-marking rollback checklist
+
+If a dependency update causes regressions:
+
+1. Restore the last known-good optional CPU dependency pins.
+2. Rebuild/redeploy the application environment.
+3. Re-run a small OCR/review sample and confirm corrections and detections are stable.
+4. Keep review queues active; historical detection data remains intact.

@@ -73,3 +73,21 @@ Fallback behavior is defensive:
 
 - Missing Tesseract binary/import errors: token-box calls return empty lists with warning logs.
 - Tooth-marking correction exceptions: the helper preserves raw text, returns deterministic keys, and sets `error` in payload.
+
+
+## Torch CPU dependency rollout and rollback
+
+Use this rollout checklist before changing optional tooth-marking CPU pins:
+
+1. Keep production installs on `app/requirements.txt` unless tooth-marking inference is required.
+2. Validate candidate `torch` and `torchvision` CPU wheels in CI/build runners that can access the PyTorch CPU index.
+3. Run tooth-marking regression tests and migration checks after any dependency pin change.
+4. Promote to staging first and verify sample page corrections, confidence thresholds, and admin detection rendering.
+5. Deploy to production only after staging sign-off.
+
+Rollback plan:
+
+1. Revert `app/requirements-tooth-marking-cpu.txt` to the last known-good torch/torchvision pins.
+2. Rebuild the application image/environment and restart workers.
+3. Re-run the tooth-marking debug command on a known sample image to confirm restored behavior.
+4. Continue OCR and review operations; previously stored detections remain available for audit.

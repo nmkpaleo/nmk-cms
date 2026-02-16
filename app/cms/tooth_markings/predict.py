@@ -27,6 +27,12 @@ def _idx_to_class(head: str, index: int) -> str:
 def _infer(model: torch.nn.Module, input_batch: Tensor) -> Tuple[int, float]:
     with torch.inference_mode():
         logits = model(input_batch)
+
+        # Keep compatibility with model wrappers that return a tuple/list
+        # (e.g., (logits, aux)) rather than a bare tensor.
+        if isinstance(logits, (tuple, list)):
+            logits = logits[0]
+
         probs = torch.softmax(logits, dim=1)
         best_prob, best_idx = torch.max(probs, dim=1)
         return int(best_idx.item()), float(best_prob.item())

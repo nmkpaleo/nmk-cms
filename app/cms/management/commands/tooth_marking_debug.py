@@ -9,6 +9,17 @@ from cms.ocr_boxes.service import get_token_boxes
 from cms.tooth_markings.integration import apply_tooth_marking_correction
 
 
+def _normalize_detections(raw_detections: object) -> list[dict[str, object]]:
+    if not isinstance(raw_detections, list):
+        return []
+
+    detections: list[dict[str, object]] = []
+    for detection in raw_detections:
+        if isinstance(detection, dict):
+            detections.append(detection)
+    return detections
+
+
 class Command(BaseCommand):
     help = "Debug tooth-marking correction on a single page image and element text."
 
@@ -66,9 +77,7 @@ class Command(BaseCommand):
         if correction.get("error"):
             self.stdout.write(self.style.WARNING(f"- error: {correction['error']}"))
 
-        detections = correction.get("detections")
-        if not isinstance(detections, list):
-            detections = []
+        detections = _normalize_detections(correction.get("detections"))
 
         self.stdout.write("Detection summary:")
         if not detections:

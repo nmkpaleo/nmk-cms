@@ -1513,16 +1513,22 @@ class NatureOfSpecimenAdmin(HistoricalImportExportAdmin):
     readonly_fields = ('tooth_marking_detections_pretty',)
     ordering = ('accession_row', 'element')
 
+    @staticmethod
+    def _normalized_tooth_detections(obj) -> list[dict]:
+        raw = obj.tooth_marking_detections
+        if not isinstance(raw, list):
+            return []
+        return [det for det in raw if isinstance(det, dict)]
+
     def tooth_marking_detections_count(self, obj):
-        detections = obj.tooth_marking_detections or []
-        return len(detections)
+        return len(self._normalized_tooth_detections(obj))
 
     tooth_marking_detections_count.short_description = 'Tooth detections'
 
     def tooth_marking_detections_pretty(self, obj):
         import json
 
-        return json.dumps(obj.tooth_marking_detections or [], indent=2, ensure_ascii=False)
+        return json.dumps(self._normalized_tooth_detections(obj), indent=2, ensure_ascii=False)
 
     tooth_marking_detections_pretty.short_description = 'Tooth-marking detections (JSON)'
 

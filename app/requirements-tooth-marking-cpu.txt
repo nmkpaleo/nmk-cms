@@ -2,6 +2,13 @@
 
 # Optional tooth-marking ML inference dependencies (CPU-only)
 # Keeps production install lean and avoids CUDA/GPU wheels.
+#
+# TM-002 decision:
+# - Runtime pins are intentionally retained because TM-001 feasibility validation
+#   could not complete against https://download.pytorch.org/whl/cpu in this
+#   environment (network/proxy restriction).
+# - Upgrade to torch>=2.8.0+cpu is deferred until CI/build runners can resolve
+#   both torch and torchvision +cpu wheels successfully.
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.5.1+cpu
 torchvision==0.20.1+cpu

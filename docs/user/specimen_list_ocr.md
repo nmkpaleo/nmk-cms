@@ -17,3 +17,12 @@ Specimen list OCR runs in two stages:
 
 ## Rollback Guidance
 If row extraction needs to be paused, an administrator can disable it via the feature flag. Raw OCR remains available for later reprocessing.
+
+
+## Tooth-marking assistance availability
+
+For element text corrections, the system may apply optional tooth-marking assistance when that runtime is enabled.
+
+- If assistance is active, reviewers may see corrected element text and detection evidence in review workflows.
+- If assistance is unavailable or temporarily disabled, review still works and preserves the original OCR text.
+- You can continue approving rows while operations teams validate or roll back optional dependency updates.
