@@ -7,3 +7,4 @@ This directory contains documentation for the NMK CMS project.
 - [Environment Setup Guide](development/environment-setup.md)
 - [User Guides](user/README.md)
 - [User Rights](user-rights.md)
+- [Release Checklist](development/release-checklist.md)

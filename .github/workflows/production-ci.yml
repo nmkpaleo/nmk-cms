@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - 'prod'
+    tags:
+      - 'v*'
 
 permissions:
   contents: read
@@ -73,4 +75,8 @@ jobs:
         with:
           context: ./app
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_PROJECTNAME }}:latest
+          build-args: |
+            APP_VERSION=${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_PROJECTNAME }}:latest
+            ${{ github.ref_type == 'tag' && format('{0}/{1}:{2}', secrets.DOCKERHUB_USERNAME, secrets.DOCKERHUB_PROJECTNAME, github.ref_name) || '' }}
