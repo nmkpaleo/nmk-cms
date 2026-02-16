@@ -105,6 +105,24 @@ def make_interpreted_value(
     return payload
 
 
+def _normalize_tooth_marking_detections(raw_detections: object) -> list[dict[str, object]]:
+    """Return JSON-serializable tooth-marking detections."""
+    if not isinstance(raw_detections, list):
+        return []
+
+    detections: list[dict[str, object]] = []
+    for detection in raw_detections:
+        if not isinstance(detection, dict):
+            continue
+        try:
+            serialized = json.loads(json.dumps(detection, ensure_ascii=False))
+        except (TypeError, ValueError):
+            continue
+        if isinstance(serialized, dict):
+            detections.append(serialized)
+    return detections
+
+
 def _load_env() -> None:
     """Load environment variables from the project root .env file."""
     env_path = Path(__file__).resolve().parents[2] / ".env"
@@ -1221,9 +1239,7 @@ def _apply_rows(
                 correction = apply_tooth_marking_correction(page_image, correction_source)
                 corrected_element = str(correction.get("element_corrected") or correction_source)
                 raw_element = str(correction.get("element_raw") or correction_source)
-                raw_detections = correction.get("detections")
-                if isinstance(raw_detections, list):
-                    detections = [det for det in raw_detections if isinstance(det, dict)]
+                detections = _normalize_tooth_marking_detections(correction.get("detections"))
                 replacements_applied = int(correction.get("replacements_applied") or 0)
                 min_confidence = correction.get("min_confidence")
                 for index, detection in enumerate(detections):

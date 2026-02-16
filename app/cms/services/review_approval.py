@@ -86,6 +86,24 @@ def _normalise_row_data(data: dict[str, Any]) -> dict[str, Any]:
 
 
 
+def _normalize_tooth_marking_detections(raw_detections: object) -> list[dict[str, Any]]:
+    """Return a JSON-serializable list of detection dictionaries."""
+    if not isinstance(raw_detections, list):
+        return []
+
+    normalized: list[dict[str, Any]] = []
+    for detection in raw_detections:
+        if not isinstance(detection, dict):
+            continue
+        try:
+            serialized = json.loads(json.dumps(detection, ensure_ascii=False))
+        except (TypeError, ValueError):
+            continue
+        if isinstance(serialized, dict):
+            normalized.append(serialized)
+    return normalized
+
+
 _ALLOWED_COLLECTIONS = {"KNM", "KNMI", "KNMP"}
 
 
@@ -287,10 +305,7 @@ def _build_nature_of_specimen(accession_row: AccessionRow, row_data: dict[str, A
         if element is None:
             element = Element.objects.create(name="-Undefined")
     verbatim_element = row_data.get("element_corrected") or row_data.get("verbatim_element") or cleaned_name
-    raw_detections = row_data.get("tooth_marking_detections")
-    detections: list[dict[str, Any]] = []
-    if isinstance(raw_detections, list):
-        detections = [det for det in raw_detections if isinstance(det, dict)]
+    detections = _normalize_tooth_marking_detections(row_data.get("tooth_marking_detections"))
 
     NatureOfSpecimen.objects.get_or_create(
         accession_row=accession_row,
@@ -340,10 +355,7 @@ def _apply_tooth_marking_to_row_data(
     row_data["element"] = row_data["element_corrected"]
     row_data["verbatim_element"] = row_data["element_corrected"]
 
-    raw_detections = correction.get("detections")
-    detections: list[dict[str, Any]] = []
-    if isinstance(raw_detections, list):
-        detections = [det for det in raw_detections if isinstance(det, dict)]
+    detections = _normalize_tooth_marking_detections(correction.get("detections"))
 
     row_data["tooth_marking_detections"] = detections
 
