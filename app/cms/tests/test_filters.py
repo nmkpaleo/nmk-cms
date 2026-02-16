@@ -1,4 +1,7 @@
 import random
+import re
+from html import unescape
+from urllib.parse import parse_qs
 
 from crum import get_current_user, set_current_user
 from django.contrib.auth import get_user_model
@@ -315,3 +318,20 @@ class AccessionFilterTests(TestCase):
         self.assertEqual(page_obj.paginator.count, 12)
         self.assertEqual(page_obj.number, 2)
         self.assertEqual(len(page_obj.object_list), 2)
+
+        self.client.force_login(user)
+        rendered_response = self.client.get(
+            "/accessions/", {"organisation": organisation.pk, "page": 1}
+        )
+        self.assertEqual(rendered_response.status_code, 200)
+
+        content = rendered_response.content.decode()
+        hrefs = re.findall(r'href="([^"]+)"', content)
+        self.assertTrue(
+            any(
+                parse_qs(unescape(href).lstrip("?")).get("organisation")
+                == [str(organisation.pk)]
+                and parse_qs(unescape(href).lstrip("?")).get("page") == ["2"]
+                for href in hrefs
+            )
+        )
