@@ -122,6 +122,52 @@ def test_locality_list_includes_geological_times_and_accession_counts(client):
     assert ">2<" in content
 
 
+def test_locality_list_keeps_multiselect_geological_time_filters_on_pagination(client):
+    selected_times = [
+        Locality.GeologicalTime.MIOCENE,
+        Locality.GeologicalTime.PLIOCENE,
+    ]
+
+    for index in range(12):
+        geological_time = selected_times[index % len(selected_times)]
+        create_locality(
+            abbreviation=f"L{index:02d}",
+            name=f"Locality {index:02d}",
+            geological_times=[geological_time],
+        )
+
+    for index in range(3):
+        create_locality(
+            abbreviation=f"H{index:02d}",
+            name=f"Holocene {index:02d}",
+            geological_times=[Locality.GeologicalTime.HOLOCENE],
+        )
+
+    response = client.get(
+        reverse("locality_list"),
+        {"geological_times": selected_times, "page": 2},
+    )
+
+    assert response.status_code == 200
+    page_obj = response.context["page_obj"]
+    assert page_obj.paginator.count == 12
+    assert page_obj.number == 2
+    assert len(page_obj.object_list) == 2
+    assert all(
+        any(time in locality.geological_times for time in selected_times)
+        for locality in page_obj.object_list
+    )
+
+    content = response.content.decode()
+    hrefs = re.findall(r'href="([^"]+)"', content)
+    assert any(
+        parse_qs(unescape(href).lstrip("?")).get("page") == ["1"]
+        and set(parse_qs(unescape(href).lstrip("?")).get("geological_times", []))
+        == set(selected_times)
+        for href in hrefs
+    )
+
+
 def test_accession_list_keeps_filters_on_pagination_and_page_two_results(client):
     filtered_locality = create_locality(abbreviation="AF", name="Accession Filtered")
     other_locality = create_locality(abbreviation="AO", name="Accession Other")
