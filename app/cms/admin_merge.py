@@ -14,8 +14,10 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import redirect, render
-from django.urls import path, reverse
-from django.utils.translation import gettext_lazy as _
+from django.urls import NoReverseMatch, path, reverse
+from urllib.parse import urlencode
+from django.utils.text import capfirst
+from django.utils.translation import gettext_lazy as _, ngettext
 
 from .merge import merge_records
 from .merge.constants import MERGE_STRATEGY_CHOICES, MergeStrategy
@@ -149,7 +151,26 @@ class MergeAdminForm(forms.Form):
             raise ValidationError(_("Source and target must be different records."))
 
         raw_ids = cleaned_data.get("selected_ids") or ""
-        self.selected_ids = [value for value in (item.strip() for item in raw_ids.split(",")) if value]
+        parsed_ids = self._normalise_ids(raw_ids)
+
+        target_pk = self._pk_value(cleaned_data.get("target"))
+        source_pk = self._pk_value(cleaned_data.get("source"))
+
+        parsed_ids = [pk for pk in parsed_ids if pk != target_pk]
+        ordered_ids: list[str] = []
+        if target_pk:
+            ordered_ids.append(target_pk)
+        for value in parsed_ids:
+            if value not in ordered_ids:
+                ordered_ids.append(value)
+        if source_pk and source_pk not in ordered_ids:
+            ordered_ids.append(source_pk)
+
+        if len(ordered_ids) < 2:
+            raise ValidationError(_("Select at least two records to merge."))
+
+        self.selected_ids = ordered_ids
+        cleaned_data["selected_ids"] = ",".join(ordered_ids)
 
         for config in self.field_configs:
             strategy_name = config["strategy_name"]
@@ -174,6 +195,22 @@ class MergeAdminForm(forms.Form):
                     cleaned_data[value_name] = manual_value.pk
 
         return cleaned_data
+
+    def _normalise_ids(self, raw_ids: str) -> list[str]:
+        """Split and de-duplicate a comma-separated list of identifiers."""
+
+        values: list[str] = []
+        for raw_value in raw_ids.split(","):
+            value = raw_value.strip()
+            if not value or value in values:
+                continue
+            values.append(value)
+        return values
+
+    def _pk_value(self, obj: models.Model | None) -> str:
+        if obj is None:
+            return ""
+        return str(getattr(obj, "pk", ""))
 
     def build_strategy_map(self) -> dict[str, Any]:
         """Return a strategy payload suitable for :func:`merge_records`."""
@@ -218,7 +255,6 @@ class MergeAdminMixin:
     merge_form_class = MergeAdminForm
 
     class Media:
-        css = {"all": ("cms/css/merge_admin.css",)}
         js = ("cms/js/merge_admin.js",)
 
     def is_merge_tool_enabled(self) -> bool:
@@ -304,6 +340,9 @@ class MergeAdminMixin:
 
         merge_fields = self.get_mergeable_fields()
         selected_ids = self._extract_selected_ids(request)
+        changelist_url = reverse(
+            f"admin:{self.model._meta.app_label}_{self.model._meta.model_name}_changelist"
+        )
 
         initial_source = request.GET.get("source") or (selected_ids[1] if len(selected_ids) > 1 else "")
         initial_target = request.GET.get("target") or (selected_ids[0] if selected_ids else "")
@@ -338,64 +377,95 @@ class MergeAdminMixin:
         target_obj = form.get_bound_instance("target")
 
         if request.method == "POST" and form.is_valid():
-            try:
-                merge_result = merge_records(
-                    form.cleaned_data["source"],
-                    form.cleaned_data["target"],
-                    form.build_strategy_map(),
-                    user=request.user,
-                )
-            except Exception as exc:  # pragma: no cover - surfaced to admin UI
-                source = form.cleaned_data.get("source")
-                target = form.cleaned_data.get("target")
-                logger.exception(
-                    "Merge failed for %s into %s", source, target, exc_info=exc
-                )
-                merge_failed.send(
-                    sender=self.__class__,
-                    request=request,
-                    source=source,
-                    target=target,
-                    error=exc,
-                )
-                if sentry_sdk is not None:  # pragma: no cover - optional dependency
-                    sentry_sdk.add_breadcrumb(
-                        category="merge",
-                        message="Merge operation failed",
-                        level="error",
-                        data={
-                            "model": f"{self.model._meta.app_label}.{self.model._meta.model_name}",
-                            "source": getattr(source, "pk", None),
-                            "target": getattr(target, "pk", None),
-                        },
-                    )
-                    sentry_sdk.capture_exception(exc)
-                self.message_user(request, str(exc), level=messages.ERROR)
-            else:
-                target = merge_result.target
-                source = form.cleaned_data["source"]
-                self.log_change(
-                    request,
-                    target,
-                    f"Merged {source.pk} into {target.pk}",
-                )
+            selected_ids = getattr(form, "selected_ids", selected_ids)
+            field_selection_url = self._build_field_selection_url(
+                selected_ids=selected_ids,
+                source_obj=source_obj,
+                target_obj=target_obj,
+                cancel_url=changelist_url,
+            )
+            if self._requires_field_selection(form) and field_selection_url:
                 self.message_user(
                     request,
-                    _("Merged %(source)s into %(target)s (%(count)s fields updated).")
-                    % {
-                        "source": source,
-                        "target": target,
-                        "count": len(merge_result.resolved_values),
-                    },
-                    level=messages.SUCCESS,
+                    _(
+                        "Field selection is required for this merge. "
+                        "Choose per-field values before continuing."
+                    ),
+                    level=messages.INFO,
                 )
-                info = self.model._meta.app_label, self.model._meta.model_name
-                return redirect(f"admin:{info[0]}_{info[1]}_change", target.pk)
+                return redirect(field_selection_url)
+
+            merges_to_perform = self._ordered_merge_sources(
+                form=form, selected_ids=selected_ids, target=target_obj
+            )
+            if not merges_to_perform:
+                self.message_user(
+                    request,
+                    _("Select at least one source record to merge."),
+                    level=messages.WARNING,
+                )
+            else:
+                strategy_map = form.build_strategy_map()
+                merge_results: list[dict[str, Any]] = []
+                for source in merges_to_perform:
+                    merge_result = self._execute_merge(
+                        request,
+                        source=source,
+                        target=target_obj,
+                        strategy_map=strategy_map,
+                    )
+                    if merge_result is None:
+                        break
+                    merge_results.append({"source": source, "result": merge_result})
+                    target_obj = merge_result.target
+
+                if merge_results and len(merge_results) == len(merges_to_perform):
+                    merged_sources = [item["source"] for item in merge_results]
+                    field_updates = sum(
+                        len(item["result"].resolved_values) for item in merge_results
+                    )
+                    base_message = ngettext(
+                        "Merged %(count)d source into %(target)s (%(fields)d fields updated).",
+                        "Merged %(count)d sources into %(target)s (%(fields)d fields updated).",
+                        len(merged_sources),
+                    ) % {
+                        "count": len(merged_sources),
+                        "target": target_obj,
+                        "fields": field_updates,
+                    }
+                    base_message += _(" Sources: %(sources)s.") % {
+                        "sources": ", ".join(str(obj) for obj in merged_sources)
+                    }
+                    for item in merge_results:
+                        self.log_change(
+                            request,
+                            target_obj,
+                            f"Merged {item['source'].pk} into {target_obj.pk}",
+                        )
+                    self.message_user(
+                        request,
+                        base_message,
+                        level=messages.SUCCESS,
+                    )
+                    relation_summary_text = self._relation_summary_text(
+                        [item["result"].relation_actions for item in merge_results]
+                    )
+                    if relation_summary_text:
+                        self.message_user(
+                            request,
+                            _("Relation updates: %(summary)s")
+                            % {"summary": relation_summary_text},
+                            level=messages.INFO,
+                        )
+                    info = self.model._meta.app_label, self.model._meta.model_name
+                    return redirect(
+                        f"admin:{info[0]}_{info[1]}_change", target_obj.pk
+                    )
 
         context = self._build_merge_context(
             request,
             form=form,
-            selected_ids=selected_ids,
+            selected_ids=getattr(form, "selected_ids", selected_ids),
             source_obj=source_obj,
             target_obj=target_obj,
             merge_fields=merge_fields,
@@ -405,6 +475,68 @@ class MergeAdminMixin:
     def _extract_selected_ids(self, request: HttpRequest) -> list[str]:
         raw = request.GET.get("ids") or request.POST.get("selected_ids") or ""
         return [value for value in (item.strip() for item in raw.split(",")) if value]
+
+    def _ordered_merge_sources(
+        self,
+        *,
+        form: MergeAdminForm,
+        selected_ids: Iterable[str],
+        target: models.Model | None,
+    ) -> list[models.Model]:
+        sources: list[models.Model] = []
+        target_pk = str(getattr(target, "pk", ""))
+
+        if form.cleaned_data.get("source"):
+            sources.append(form.cleaned_data["source"])
+
+        seen: set[str] = {str(getattr(source, "pk", "")) for source in sources if source}
+        for raw_id in selected_ids:
+            if raw_id in seen or raw_id == target_pk:
+                continue
+            try:
+                obj = self.model._default_manager.get(pk=raw_id)
+            except self.model.DoesNotExist:  # type: ignore[attr-defined]
+                continue
+            seen.add(raw_id)
+            sources.append(obj)
+
+        return sources
+
+    def _execute_merge(
+        self,
+        request: HttpRequest,
+        *,
+        source: models.Model,
+        target: models.Model,
+        strategy_map: Mapping[str, Any],
+    ) -> Any:
+        try:
+            return merge_records(
+                source,
+                target,
+                strategy_map,
+                user=request.user,
+            )
+        except Exception as exc:  # pragma: no cover - surfaced to admin UI
+            logger.exception("Merge failed for %s into %s", source, target, exc_info=exc)
+            merge_failed.send(
+                sender=self.__class__,
+                request=request,
+                source=source,
+                target=target,
+                error=exc,
+            )
+            if sentry_sdk is not None:  # pragma: no cover - optional dependency
+                try:
+                    sentry_sdk.capture_exception(exc)
+                except Exception:  # pragma: no cover - safety net
+                    pass
+            self.message_user(
+                request,
+                _("Merge failed. %(error)s") % {"error": exc},
+                level=messages.ERROR,
+            )
+            return None
 
     def _get_object_or_none(self, pk: str | None) -> models.Model | None:
         if not pk:
@@ -453,13 +585,140 @@ class MergeAdminMixin:
             "selected_objects": selected_objects,
             "source_summary": self._serialise_instance(source_obj),
             "target_summary": self._serialise_instance(target_obj),
+            "source_objects": [
+                obj
+                for obj in selected_objects
+                if not target_obj or str(obj.get("pk")) != str(getattr(target_obj, "pk", ""))
+            ],
             "changelist_url": changelist_url,
-            "search_url": reverse("merge_candidate_search")
-            if self.is_merge_tool_enabled()
-            else "",
+            "search_url": self._safe_reverse("merge:merge_candidate_search"),
+            "field_selection_url": self._build_field_selection_url(
+                selected_ids=selected_ids,
+                source_obj=source_obj,
+                target_obj=target_obj,
+                cancel_url=changelist_url,
+            ),
+            "field_selection_help": _(
+                "Use the Field selection strategy when you need to pick a value "
+                "for each field. If you choose it here without providing per-field "
+                "selections, the merge will keep the existing target values."
+            ),
             "model_label": f"{opts.app_label}.{opts.model_name}",
+            "merge_tool_enabled": self.is_merge_tool_enabled(),
         }
         return context
+
+    def _requires_field_selection(self, form: MergeAdminForm) -> bool:
+        for config in form.field_configs:
+            raw_strategy = form.cleaned_data.get(config["strategy_name"])
+            if not raw_strategy:
+                continue
+            try:
+                strategy = MergeStrategy(raw_strategy)
+            except Exception:
+                continue
+            if strategy is MergeStrategy.FIELD_SELECTION:
+                return True
+        return False
+
+    def _build_field_selection_url(
+        self,
+        *,
+        selected_ids: Iterable[str],
+        source_obj: models.Model | None,
+        target_obj: models.Model | None,
+        cancel_url: str,
+    ) -> str:
+        base_url = self._safe_reverse("merge:merge_field_selection")
+        if not base_url:
+            return ""
+
+        opts = self.model._meta
+        target_id = getattr(target_obj, "pk", None) or (selected_ids[0] if selected_ids else "")
+        candidate_ids: list[str] = []
+        for value in selected_ids:
+            if value not in candidate_ids:
+                candidate_ids.append(value)
+        for obj in (source_obj, target_obj):
+            if obj is None:
+                continue
+            obj_pk = str(getattr(obj, "pk", ""))
+            if obj_pk and obj_pk not in candidate_ids:
+                candidate_ids.append(obj_pk)
+
+        params = {
+            "model": f"{opts.app_label}.{opts.model_name}",
+            "target": target_id,
+            "candidates": ",".join(candidate_ids),
+            "cancel": cancel_url,
+        }
+
+        return f"{base_url}?{urlencode(params)}"
+
+    def _safe_reverse(self, url_name: str) -> str:
+        if not self.is_merge_tool_enabled():
+            return ""
+        try:
+            return reverse(url_name)
+        except NoReverseMatch:
+            if url_name == "merge:merge_candidate_search":
+                return "/merge/search/"
+            if url_name == "merge:merge_field_selection":
+                return "/merge/field-selection/"
+            return ""
+
+    def _relation_summary_text(
+        self,
+        relation_logs: Iterable[Mapping[str, Mapping[str, Any]]],
+    ) -> str:
+        return "; ".join(self._summarize_relation_actions(relation_logs))
+
+    def _summarize_relation_actions(
+        self,
+        relation_logs: Iterable[Mapping[str, Mapping[str, Any]]],
+    ) -> list[str]:
+        totals: dict[str, dict[str, int | str]] = {}
+        for relation_actions in relation_logs:
+            for name, payload in relation_actions.items():
+                aggregate = totals.setdefault(name, {"action": payload.get("action", "")})
+                for key in ("updated", "added", "deleted", "would_delete", "skipped"):
+                    value = payload.get(key)
+                    if isinstance(value, int):
+                        aggregate[key] = int(aggregate.get(key, 0)) + value
+
+        summaries: list[str] = []
+        for name, aggregate in totals.items():
+            label = self._relation_label(name)
+            fragments: list[str] = []
+            for key, singular, plural in (
+                ("updated", "%(count)d updated", "%(count)d updated"),
+                ("added", "%(count)d added", "%(count)d added"),
+                ("deleted", "%(count)d deleted", "%(count)d deleted"),
+                ("would_delete", "%(count)d would delete", "%(count)d would delete"),
+                ("skipped", "%(count)d skipped", "%(count)d skipped"),
+            ):
+                count = int(aggregate.get(key, 0) or 0)
+                if count:
+                    fragments.append(
+                        ngettext(singular, plural, count) % {"count": count}
+                    )
+
+            action_value = aggregate.get("action")
+            if not fragments and action_value:
+                fragments.append(str(action_value))
+
+            if fragments:
+                summaries.append(f"{label} — {', '.join(fragments)}")
+
+        return summaries
+
+    def _relation_label(self, relation_name: str) -> str:
+        try:
+            field = self.model._meta.get_field(relation_name)
+            verbose = getattr(field, "verbose_name", relation_name)
+        except Exception:
+            verbose = relation_name.replace("_", " ")
+        return capfirst(str(verbose))
 
     def _serialise_objects(self, ids: Iterable[str]) -> list[dict[str, Any]]:
         objects = self.model._default_manager.filter(pk__in=ids)

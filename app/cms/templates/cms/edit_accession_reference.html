@@ -1,0 +1,18 @@
+{% extends "base_generic.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Edit Accession Reference" %}{% endblock %}
+
+{% block content %}
+  {% trans "Update reference" as update_reference_label %}
+  {% trans "Edit accession reference" as edit_reference_title %}
+  <main class="w3-container w3-margin-top w3-margin-bottom" role="main">
+    {% include "includes/base_form.html" with form=form submit_label=update_reference_label submit_icon="fa-pen-to-square" method="post" action=request.path title=edit_reference_title access=accession heading_id="edit-accession-reference-form" custom_heading=edit_reference_title %}
+    <div class="w3-margin-top">
+      <a href="{% url 'accession_detail' accession.id %}" class="w3-button w3-white w3-border w3-round-large w3-hover-light-grey">
+        <i class="fa-solid fa-arrow-left-long" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "Back to accession" %}</span>
+      </a>
+    </div>
+  </main>
+{% endblock %}

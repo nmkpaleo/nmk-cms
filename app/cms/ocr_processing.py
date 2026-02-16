@@ -6,6 +6,7 @@ import re
 import shutil
 import time
 import textwrap
+from datetime import date
 from pathlib import Path
 from typing import Any, Optional
 
@@ -32,7 +33,9 @@ except ImportError:  # pragma: no cover
 
 from django.conf import settings
 from django.db.models import Max, Prefetch
+from django.utils.dateparse import parse_date
 
+from .llm_usage import add_usage_timing, build_timed_usage_payload, build_usage_payload
 from .models import (
     Media,
     LLMUsageRecord,
@@ -49,7 +52,12 @@ from .models import (
     Identification,
     NatureOfSpecimen,
     Element,
+    SpecimenListPage,
+    SpecimenListPageOCR,
+    SpecimenListRowCandidate,
 )
+from .utils import apply_ditto_marks
+from .tooth_markings.integration import apply_tooth_marking_correction
 
 
 UNKNOWN_FIELD_NUMBER_PREFIX = "UNKNOWN FIELD NUMBER #"
@@ -72,6 +80,47 @@ logger = logging.getLogger(__name__)
 
 
 MAX_OCR_ROWS_PER_ACCESSION = 50
+
+
+def make_interpreted_value(
+    interpreted: object | None,
+    *,
+    raw: object | None = None,
+    confidence: float | None = None,
+) -> dict[str, object]:
+    """Return a minimal OCR-style value dictionary.
+
+    When ``interpreted`` is falsy the function returns an empty dictionary so
+    that downstream lookups using ``.get('interpreted')`` behave consistently.
+    """
+
+    if interpreted in (None, "") and raw in (None, "") and confidence is None:
+        return {}
+
+    payload: dict[str, object] = {"interpreted": interpreted}
+    if raw is not None:
+        payload["raw"] = raw
+    if confidence is not None:
+        payload["confidence"] = confidence
+    return payload
+
+
+def _normalize_tooth_marking_detections(raw_detections: object) -> list[dict[str, object]]:
+    """Return JSON-serializable tooth-marking detections."""
+    if not isinstance(raw_detections, list):
+        return []
+
+    detections: list[dict[str, object]] = []
+    for detection in raw_detections:
+        if not isinstance(detection, dict):
+            continue
+        try:
+            serialized = json.loads(json.dumps(detection, ensure_ascii=False))
+        except (TypeError, ValueError):
+            continue
+        if isinstance(serialized, dict):
+            detections.append(serialized)
+    return detections
 
 
 def _load_env() -> None:
@@ -127,78 +176,283 @@ def get_openai_client() -> Any:
     return _client
 
 
-def _object_to_dict(obj: Any) -> dict[str, object]:
-    if obj is None:
-        return {}
-    if isinstance(obj, dict):
-        return obj
-    for attr in ("model_dump", "to_dict", "dict"):
-        method = getattr(obj, attr, None)
-        if callable(method):
-            try:
-                data = method()
-            except Exception:  # pragma: no cover - defensive in case API changes
-                continue
-            if isinstance(data, dict):
-                return data
-    return {}
-
-
-def build_usage_payload(response: Any, model: str) -> dict[str, object | None]:
-    """Return pricing and token usage metadata for an OpenAI response."""
-
-    usage = getattr(response, "usage", None)
-    prompt_tokens = getattr(usage, "prompt_tokens", 0) if usage else 0
-    completion_tokens = getattr(usage, "completion_tokens", 0) if usage else 0
-    total_tokens = getattr(usage, "total_tokens", 0) if usage else 0
-
-    if not total_tokens and (prompt_tokens or completion_tokens):
-        total_tokens = prompt_tokens + completion_tokens
-
-    pricing = getattr(settings, "OPENAI_PRICING", {}) or {}
-    rates = pricing.get(model, {}) or {}
-    prompt_rate = rates.get("prompt")
-    completion_rate = rates.get("completion")
-
-    def _cost(tokens: int, rate: float | None) -> float | None:
-        if rate is None or tokens is None:
-            return None
-        return round(tokens * rate, 6)
-
-    prompt_cost = _cost(prompt_tokens, prompt_rate)
-    completion_cost = _cost(completion_tokens, completion_rate)
-    total_cost: float | None = None
-    if prompt_cost is not None or completion_cost is not None:
-        total_cost = round((prompt_cost or 0.0) + (completion_cost or 0.0), 6)
-
-    usage_dict = _object_to_dict(usage)
-    remaining_quota = None
-    for key in ("remaining_quota", "remaining_quota_usd", "remaining_budget", "remaining_budget_usd"):
-        value = usage_dict.get(key)
-        if value not in (None, ""):
-            remaining_quota = value
-            break
-
-    payload = {
-        "model": getattr(response, "model", model) or model,
-        "request_id": getattr(response, "id", None),
-        "prompt_tokens": prompt_tokens,
-        "completion_tokens": completion_tokens,
-        "total_tokens": total_tokens,
-        "prompt_cost_usd": prompt_cost,
-        "completion_cost_usd": completion_cost,
-        "total_cost_usd": total_cost,
-    }
-
-    if remaining_quota not in (None, ""):
-        payload["remaining_quota_usd"] = remaining_quota
-
-    return payload
-
-
 def encode_image_to_base64(image_path: Path) -> str:
     with open(image_path, "rb") as f:
         return base64.b64encode(f.read()).decode("utf-8")
+
+
+def _strip_code_fences(content: str) -> str:
+    if not content:
+        return content
+    if not content.strip().startswith("```"):
+        return content
+    return "\n".join(line for line in content.splitlines() if not line.strip().startswith("```"))
+
+
+def run_specimen_list_raw_ocr(
+    page: SpecimenListPage,
+    *,
+    ocr_engine: str = "chatgpt-vision",
+    model: str = "gpt-5.2",
+    timeout: int = 60,
+    max_retries: int = 3,
+    force: bool = False,
+) -> SpecimenListPageOCR:
+    """Run raw OCR on a specimen list page and persist the verbatim output."""
+
+    if not page.image_file:
+        raise ValueError("Specimen list page has no image file available for OCR.")
+
+    if not force:
+        existing = page.ocr_entries.filter(ocr_engine=ocr_engine).order_by("-created_at").first()
+        if existing is not None:
+            return existing
+
+    client = get_openai_client()
+    if client is None:
+        raise RuntimeError(
+            "OpenAI client is not configured. Ensure OPENAI_API_KEY is set and the openai package is installed."
+        )
+
+    image_path = Path(page.image_file.path)
+    base64_image = encode_image_to_base64(image_path)
+    prompt = (
+        "You are performing OCR on a specimen list page. Return ONLY a JSON object with:\n"
+        '- "raw_text": the full transcription as plain text (preserve line breaks as seen),\n'
+        '- "bounding_boxes": an array of objects with keys {text, x, y, width, height, confidence} when available.\n'
+        "If bounding boxes are unavailable, return an empty array."
+    )
+
+    last_error: Exception | None = None
+    for attempt in range(max_retries):
+        try:
+            start_ts = time.perf_counter()
+            response = client.chat.completions.create(
+                model=model,
+                timeout=timeout,
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant that extracts OCR text from images."},
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
+                            },
+                        ],
+                    },
+                ],
+            )
+            elapsed = max(time.perf_counter() - start_ts, 0.0)
+            content = _strip_code_fences(response.choices[0].message.content or "")
+            payload = json.loads(content)
+            if not isinstance(payload, dict):
+                raise ValueError("OCR response payload must be a JSON object.")
+            raw_text = payload.get("raw_text") or ""
+            if not isinstance(raw_text, str):
+                raw_text = str(raw_text)
+            bounding_boxes = payload.get("bounding_boxes")
+            usage_payload = build_timed_usage_payload(response, model, elapsed)
+            logger.info(
+                "Specimen list OCR usage recorded.",
+                extra={"page_id": page.id, "usage": usage_payload},
+            )
+            return SpecimenListPageOCR.objects.create(
+                page=page,
+                raw_text=raw_text,
+                bounding_boxes=bounding_boxes,
+                ocr_engine=ocr_engine,
+            )
+        except Exception as exc:
+            last_error = exc
+            logger.warning(
+                "Specimen list OCR attempt failed.",
+                extra={"page_id": page.id, "attempt": attempt + 1, "error": str(exc)},
+            )
+            if attempt == max_retries - 1:
+                logger.exception("Specimen list OCR failed after retries.", extra={"page_id": page.id})
+                raise
+            time.sleep(2 ** attempt)
+
+    raise RuntimeError("Specimen list OCR failed unexpectedly.") from last_error
+
+
+def _parse_row_extraction_payload(payload: dict[str, object]) -> dict[str, object]:
+    columns_detected = payload.get("columns_detected")
+    if columns_detected is None:
+        columns_detected = []
+    if not isinstance(columns_detected, list):
+        raise ValueError("Row extraction payload must include columns_detected as a list.")
+
+    rows = payload.get("rows")
+    if rows is None:
+        rows = []
+    if not isinstance(rows, list):
+        raise ValueError("Row extraction payload must include rows as a list.")
+
+    parsed_rows: list[dict[str, object]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        parsed_rows.append(row)
+
+    return {
+        "columns_detected": columns_detected,
+        "rows": parsed_rows,
+    }
+
+
+def _load_first_json_object(content: str) -> dict[str, object]:
+    """Parse the first JSON object from a response that may contain extra text."""
+
+    decoder = json.JSONDecoder()
+    content = content.lstrip()
+    parsed, _ = decoder.raw_decode(content)
+    if not isinstance(parsed, dict):
+        raise ValueError("Row extraction response payload must be a JSON object.")
+    return parsed
+
+
+def run_specimen_list_row_extraction(
+    page: SpecimenListPage,
+    *,
+    ocr_engine: str = "chatgpt-vision",
+    model: str = "gpt-5.2",
+    timeout: int = 120,
+    max_retries: int = 3,
+    force: bool = False,
+) -> list[SpecimenListRowCandidate]:
+    """Extract structured rows for specimen list detail pages and store candidates."""
+
+    if page.page_type != SpecimenListPage.PageType.SPECIMEN_LIST_DETAILS:
+        logger.info(
+            "Skipping row extraction for non-detail page.",
+            extra={"page_id": page.id, "page_type": page.page_type},
+        )
+        return []
+
+    if not getattr(settings, "SPECIMEN_LIST_ROW_EXTRACTION_ENABLED", True):
+        logger.info("Row extraction disabled by feature flag.", extra={"page_id": page.id})
+        return []
+
+    if not page.image_file:
+        raise ValueError("Specimen list page has no image file available for row extraction.")
+
+    existing_rows = list(page.row_candidates.order_by("row_index"))
+    if existing_rows and not force:
+        return existing_rows
+
+    ocr_entry = page.ocr_entries.filter(ocr_engine=ocr_engine).order_by("-created_at").first()
+    if ocr_entry is None or not ocr_entry.raw_text:
+        raise ValueError("Raw OCR text is required before row extraction can run.")
+
+    client = get_openai_client()
+    if client is None:
+        raise RuntimeError(
+            "OpenAI client is not configured. Ensure OPENAI_API_KEY is set and the openai package is installed."
+        )
+
+    image_path = Path(page.image_file.path)
+    base64_image = encode_image_to_base64(image_path)
+    prompt = (
+        "Given this handwritten page OCR + image, detect tabular rows.\n"
+        "• detect rows; infer columns carefully\n"
+        "For handwritten texts, transcribe into Latin alphabet characters only (a-z, A-Z).\n"
+        "Columns may vary. Expected fields (when present):\n"
+        "• accession_number\n"
+        "• field_number\n"
+        "• taxon\n"
+        "• element\n"
+        "• locality (sometimes called sites)\n"
+        "• green_dot (is a green dot at the beginning of a row present)\n"
+        "• red_dot (is a red dot at the beginning of a row present)\n"
+        "• return per-row confidence\n"
+        "But allow “extra columns” as free keys in data_json.\n"
+        "Pay special attention to the ditto mark shorthand sign, indicating that the words above it are to be repeated.\n"
+        "The ditto mark may be in many formats after the OCR: ″ DOUBLE PRIME, ” RIGHT DOUBLE QUOTATION MARK, "
+        "〃 DITTO MARK (CJK character),  \" QUOTATION MARK, ' APOSTROPHE (×2), or interpreted as \"11\", \"!!\", "
+        "\"((\" or similar odd markings.\n"
+        "Figure out how to best manage the ditto mark.\n"
+        "If a field is missing, return null.\n"
+        "Be precise when reading the rows. Pay special attention to the last row on the image so that it also will be included.\n"
+        "Each row should have the accession number present. Otherwise, the row would be of no use.\n"
+        "While some rows may have columns which have text on two rows, those cases should not create new rows so that there will be rows "
+        "without Accession number. Instead, those cases should be entered in the column data.\n"
+        "Do NOT invent data.\n\n"
+        "OCR text:\n"
+        f"{ocr_entry.raw_text}"
+    )
+
+    last_error: Exception | None = None
+    for attempt in range(max_retries):
+        try:
+            start_ts = time.perf_counter()
+            response = client.chat.completions.create(
+                model=model,
+                timeout=timeout,
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant that extracts rows from OCR text."},
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
+                            },
+                        ],
+                    },
+                ],
+            )
+            elapsed = max(time.perf_counter() - start_ts, 0.0)
+            content = _strip_code_fences(response.choices[0].message.content or "")
+            try:
+                payload = json.loads(content)
+                if not isinstance(payload, dict):
+                    raise ValueError("Row extraction response payload must be a JSON object.")
+            except json.JSONDecodeError:
+                payload = _load_first_json_object(content)
+            parsed = _parse_row_extraction_payload(payload)
+            usage_payload = build_timed_usage_payload(response, model, elapsed)
+            logger.info(
+                "Specimen list row extraction usage recorded.",
+                extra={"page_id": page.id, "usage": usage_payload},
+            )
+            rows = apply_ditto_marks([dict(row) for row in parsed["rows"]])
+            if force:
+                page.row_candidates.all().delete()
+            created_rows: list[SpecimenListRowCandidate] = []
+            for index, row in enumerate(rows):
+                accession_number = row.get("accession_number")
+                if accession_number in (None, ""):
+                    logger.warning(
+                        "Skipping row candidate without accession number.",
+                        extra={"page_id": page.id, "row_index": index},
+                    )
+                    continue
+                confidence = row.pop("confidence", None)
+                created_rows.append(
+                    SpecimenListRowCandidate.objects.create(
+                        page=page,
+                        row_index=index,
+                        data=row,
+                        confidence=confidence,
+                    )
+                )
+            return created_rows
+        except Exception as exc:
+            last_error = exc
+            logger.warning(
+                "Specimen list row extraction attempt failed.",
+                extra={"page_id": page.id, "attempt": attempt + 1, "error": str(exc)},
+            )
+            if attempt == max_retries - 1:
+                logger.exception("Specimen list row extraction failed after retries.", extra={"page_id": page.id})
+                raise
+            time.sleep(2 ** attempt)
+
+    raise RuntimeError("Specimen list row extraction failed unexpectedly.") from last_error
 
 
 def detect_card_type(image_path: Path, model: str = "gpt-4o", timeout: int = 30, max_retries: int = 3) -> dict:
@@ -243,6 +497,70 @@ def detect_card_type(image_path: Path, model: str = "gpt-4o", timeout: int = 30,
                     line for line in raw.splitlines() if not line.strip().startswith("```")
                 )
             return json.loads(raw)
+        except Exception:
+            if attempt == max_retries - 1:
+                raise
+            time.sleep(2 ** attempt)
+
+
+def classify_specimen_list_page(
+    image_path: Path,
+    *,
+    model: str = "gpt-4o",
+    timeout: int = 30,
+    max_retries: int = 3,
+) -> dict[str, object]:
+    client = get_openai_client()
+    if client is None:
+        raise RuntimeError(
+            "OpenAI client is not configured. Ensure OPENAI_API_KEY is set and the openai package is installed."
+        )
+
+    base64_image = encode_image_to_base64(image_path)
+    prompt = (
+        "You classify specimen list pages. Choose exactly one page type:\n"
+        "1. specimen list with accession details (columns like Acc. No., Field No., Classification/Taxon, Description/Element, Site/Locality)\n"
+        "2. specimen list with accession/field relations (Acc. No. and Field No. paired, often repeated side-by-side)\n"
+        "3. handwritten free text\n"
+        "4. typewritten text\n"
+        "5. other (maps, drawings, etc.)\n"
+        'Return only JSON: {"page_type":"specimen_list_details|specimen_list_relations|handwritten_text|typewritten_text|other",'
+        ' "confidence": 0.0-1.0, "notes": "short reason"}'
+    )
+
+    for attempt in range(max_retries):
+        try:
+            start_ts = time.perf_counter()
+            response = client.chat.completions.create(
+                model=model,
+                timeout=timeout,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a helpful assistant that classifies document page types.",
+                    },
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
+                            },
+                        ],
+                    },
+                ],
+            )
+            elapsed = max(time.perf_counter() - start_ts, 0.0)
+            raw = response.choices[0].message.content.strip()
+            if raw.startswith("```"):
+                raw = "\n".join(
+                    line for line in raw.splitlines() if not line.strip().startswith("```")
+                )
+            result = json.loads(raw)
+            usage_payload = build_usage_payload(response, model)
+            result["usage"] = add_usage_timing(usage_payload, elapsed)
+            return result
         except Exception:
             if attempt == max_retries - 1:
                 raise
@@ -532,6 +850,7 @@ def _extract_entry_components(entry: dict) -> dict[str, object]:
             {
                 "index": index,
                 "field_number": (slip.get("field_number") or {}).get("interpreted"),
+                "collection_date": (slip.get("collection_date") or {}).get("interpreted"),
                 "verbatim_locality": (slip.get("verbatim_locality") or {}).get("interpreted"),
                 "verbatim_taxon": (slip.get("verbatim_taxon") or {}).get("interpreted"),
                 "verbatim_element": (slip.get("verbatim_element") or {}).get("interpreted"),
@@ -554,6 +873,7 @@ def _extract_entry_components(entry: dict) -> dict[str, object]:
         ident = identifications[index] if index < len(identifications) else {}
         ident_data = {
             "taxon": (ident.get("taxon") or {}).get("interpreted"),
+            "taxon_verbatim": (ident.get("taxon_verbatim") or {}).get("interpreted"),
             "identification_qualifier": (ident.get("identification_qualifier") or {}).get("interpreted"),
             "verbatim_identification": (ident.get("verbatim_identification") or {}).get("interpreted"),
             "identification_remarks": (ident.get("identification_remarks") or {}).get("interpreted"),
@@ -658,11 +978,23 @@ def _clean_string(value: object) -> str | None:
     return cleaned or None
 
 
+def _parse_collection_date_value(value: str | None) -> date | None:
+    if not value:
+        return None
+    if re.fullmatch(r"\d{4}", value):
+        try:
+            return date(int(value), 1, 1)
+        except ValueError:
+            return None
+    return parse_date(value)
+
+
 def _has_identification_data(data: dict[str, object]) -> bool:
     if not isinstance(data, dict):
         return False
     for key in (
         "taxon",
+        "taxon_verbatim",
         "identification_qualifier",
         "verbatim_identification",
         "identification_remarks",
@@ -729,6 +1061,8 @@ def _ensure_field_slip(data: dict[str, object]) -> FieldSlip | None:
     verbatim_latitude = _clean_string(data.get("verbatim_latitude"))
     verbatim_longitude = _clean_string(data.get("verbatim_longitude"))
     verbatim_elevation = _clean_string(data.get("verbatim_elevation"))
+    collection_date_value = _clean_string(data.get("collection_date"))
+    collection_date = _parse_collection_date_value(collection_date_value)
 
     base_queryset = FieldSlip.objects.filter(
         verbatim_locality=verb_locality,
@@ -738,12 +1072,18 @@ def _ensure_field_slip(data: dict[str, object]) -> FieldSlip | None:
     if field_number:
         field_slip = base_queryset.filter(field_number=field_number).first()
         if field_slip:
+            if collection_date and field_slip.collection_date != collection_date:
+                field_slip.collection_date = collection_date
+                field_slip.save(update_fields=["collection_date"])
             return field_slip
     else:
         field_slip = base_queryset.filter(
             field_number__startswith=UNKNOWN_FIELD_NUMBER_PREFIX
         ).first()
         if field_slip:
+            if collection_date and field_slip.collection_date != collection_date:
+                field_slip.collection_date = collection_date
+                field_slip.save(update_fields=["collection_date"])
             return field_slip
         field_number = _generate_unknown_field_number()
 
@@ -769,6 +1109,7 @@ def _ensure_field_slip(data: dict[str, object]) -> FieldSlip | None:
         verbatim_latitude=verbatim_latitude,
         verbatim_longitude=verbatim_longitude,
         verbatim_elevation=verbatim_elevation,
+        collection_date=collection_date,
     )
 
 
@@ -814,6 +1155,8 @@ def _apply_rows(
     accession: Accession,
     rows: list[dict[str, object]],
     selection: set[str] | None = None,
+    *,
+    page_image: object | None = None,
 ) -> None:
     last_ident_data: dict[str, object] | None = None
     last_natures_data: list[dict[str, object]] = []
@@ -870,6 +1213,7 @@ def _apply_rows(
             Identification.objects.create(
                 accession_row=row_obj,
                 taxon=ident_to_apply.get("taxon"),
+                taxon_verbatim=ident_to_apply.get("taxon_verbatim"),
                 identification_qualifier=ident_to_apply.get("identification_qualifier"),
                 verbatim_identification=ident_to_apply.get("verbatim_identification"),
                 identification_remarks=ident_to_apply.get("identification_remarks"),
@@ -887,23 +1231,42 @@ def _apply_rows(
         for nature in natures_to_apply:
             element_name = _clean_string(nature.get("element_name"))
             verbatim_element = _clean_string(nature.get("verbatim_element"))
-            resolved_name = element_name or verbatim_element
-            element = None
-            if resolved_name:
-                element = Element.objects.filter(name=resolved_name).first()
+
+            correction_source = verbatim_element or element_name or ""
+            corrected_element = correction_source
+            detections: list[dict[str, object]] = []
+            if correction_source and page_image is not None:
+                correction = apply_tooth_marking_correction(page_image, correction_source)
+                corrected_element = str(correction.get("element_corrected") or correction_source)
+                raw_element = str(correction.get("element_raw") or correction_source)
+                detections = _normalize_tooth_marking_detections(correction.get("detections"))
+                replacements_applied = int(correction.get("replacements_applied") or 0)
+                min_confidence = correction.get("min_confidence")
+                for index, detection in enumerate(detections):
+                    detection.setdefault("replacement_applied", index < replacements_applied)
+                    detection.setdefault("min_confidence", min_confidence)
+                nature["verbatim_element_raw"] = raw_element
+                nature["verbatim_element"] = corrected_element
+                nature["tooth_marking_detections"] = detections
+            else:
+                nature["verbatim_element_raw"] = correction_source or None
+                nature["verbatim_element"] = corrected_element or None
+                nature["tooth_marking_detections"] = detections
+
+            resolved_name = element_name or corrected_element or verbatim_element
+            element = Element.objects.filter(name=resolved_name).first() if resolved_name else None
             parent = Element.objects.filter(name="-Undefined").first()
-            if element is None:
-                if parent is None:
-                    parent = Element.objects.create(name="-Undefined")
-                if not resolved_name or resolved_name == parent.name:
-                    element = parent
-                    resolved_name = parent.name
-                else:
-                    element = Element.objects.create(
-                        name=resolved_name,
-                        parent_element=parent,
-                    )
+            resolved_element = element or parent
+            resolved_name = resolved_name or getattr(resolved_element, "name", None)
             nature["element_name"] = resolved_name
+            if resolved_element is None:
+                logger.warning(
+                    "Skipped nature for accession %s (suffix %s) due to missing element '[REDACTED]' and no placeholder",
+                    accession.pk,
+                    suffix,
+                    # resolved_name intentionally omitted to avoid logging potentially sensitive data.
+                )
+                continue
             fragments = nature.get("fragments")
             if fragments in (None, ""):
                 fragments_value = 0
@@ -914,10 +1277,12 @@ def _apply_rows(
                     fragments_value = 0
             NatureOfSpecimen.objects.create(
                 accession_row=row_obj,
-                element=element,
+                element=resolved_element,
                 side=nature.get("side"),
                 condition=nature.get("condition"),
                 verbatim_element=nature.get("verbatim_element"),
+                verbatim_element_raw=nature.get("verbatim_element_raw"),
+                tooth_marking_detections=nature.get("tooth_marking_detections") or [],
                 portion=nature.get("portion"),
                 fragments=fragments_value,
             )
@@ -976,6 +1341,8 @@ def _serialize_accession(accession: Accession) -> dict[str, object]:
                     "side": nature.side,
                     "condition": nature.condition,
                     "verbatim_element": nature.verbatim_element,
+                    "verbatim_element_raw": nature.verbatim_element_raw,
+                    "tooth_marking_detections": nature.tooth_marking_detections,
                     "portion": nature.portion,
                     "fragments": nature.fragments,
                 }
@@ -1288,7 +1655,7 @@ def create_accessions_from_media(
                 )
                 _apply_references(accession, components.get("references", []))
                 _apply_field_slips(accession, components.get("field_slips", []))
-                _apply_rows(accession, components.get("rows", []))
+                _apply_rows(accession, components.get("rows", []), page_image=_get_media_image_for_correction(media))
             elif action == "update_existing":
                 accession = existing_qs.filter(pk=resolution_entry.get("accession_id")).first() or existing_qs.first()
                 fields = resolution_entry.get("fields") or {}
@@ -1324,7 +1691,7 @@ def create_accessions_from_media(
                     if suffix not in (None, "")
                 }
                 if row_selection:
-                    _apply_rows(accession, components.get("rows", []), row_selection)
+                    _apply_rows(accession, components.get("rows", []), row_selection, page_image=_get_media_image_for_correction(media))
 
                 record = {
                     "key": key,
@@ -1364,7 +1731,7 @@ def create_accessions_from_media(
             )
             _apply_references(accession, components.get("references", []))
             _apply_field_slips(accession, components.get("field_slips", []))
-            _apply_rows(accession, components.get("rows", []))
+            _apply_rows(accession, components.get("rows", []), page_image=_get_media_image_for_correction(media))
 
         if first_accession is None:
             first_accession = accession
@@ -1403,6 +1770,18 @@ def create_accessions_from_media(
 
     return {"created": created_records, "conflicts": conflicts}
 
+
+
+def _get_media_image_for_correction(media: Media) -> object | None:
+    """Return a local image path for tooth-marking correction when available."""
+
+    location = getattr(media, "media_location", None)
+    if not location:
+        return None
+    try:
+        return location.path
+    except Exception:
+        return None
 
 def _mark_scan_failed(media: Media, path: Path, failed_dir: Path, exc: Exception | str) -> None:
     """Move ``path`` to the failed directory and persist failure metadata."""

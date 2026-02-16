@@ -1,165 +1,32 @@
 {% extends "base_generic.html" %}
 
-{% load custom_filters %}
+{% load i18n custom_filters %}
 
 {% block title %}Storage {{ storage.area }}{% endblock %}
 
 {% block content %}
-<div class="w3-container w3-margin-top">
-  <div class="w3-row w3-margin-bottom w3-padding-16 w3-border-bottom">
+<main class="w3-container w3-margin-top" role="main">
+  <header class="w3-row w3-margin-bottom w3-padding-16 w3-border-bottom w3-white w3-round-large" aria-labelledby="storage-details-heading">
     <div class="w3-col s12 m6 l6">
-      <h2 class="w3-margin-0">Storage {{ storage.area }}</h2>
+      <h1 id="storage-details-heading" class="w3-margin-0">{% blocktrans with area=storage.area %}Storage {{ area }}{% endblocktrans %}</h1>
     </div>
     <div class="w3-col s12 m6 l6 w3-right-align w3-margin-top">
       {% if can_edit %}
-        <a href="{% url 'storage_edit' storage.pk %}" class="w3-button w3-blue w3-round">
-          <i class="fa-solid fa-pen-to-square"></i>
-          Edit Storage
+        <a href="{% url 'storage_edit' storage.pk %}" class="w3-button w3-blue w3-round" aria-label="{% trans 'Edit storage' %}">
+          <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+          <span class="w3-hide-small w3-margin-left">{% trans "Edit Storage" %}</span>
         </a>
       {% endif %}
     </div>
-  </div>
+  </header>
 
-  <div class="w3-row-padding w3-margin-top">
-    <div class="w3-col s12 m6 l4">
-      <div class="w3-card w3-white w3-padding">
-        <h3 class="w3-margin-top">Details</h3>
-        <p><strong>Area:</strong> {{ storage.area }}</p>
-        <p>
-          <strong>Parent Area:</strong>
-          {% if storage.parent_area %}
-            <a href="{% url 'storage_detail' storage.parent_area.pk %}">{{ storage.parent_area.area }}</a>
-          {% else %}
-            <span class="w3-text-gray">None</span>
-          {% endif %}
-        </p>
-        <p><strong>Total Specimens:</strong> {{ specimen_count }}</p>
-      </div>
-    </div>
-    <div class="w3-col s12 m6 l8">
-      <div class="w3-card w3-white w3-padding">
-        <h3 class="w3-margin-top">Child Storages</h3>
-        {% if children %}
-          <ul class="w3-ul w3-margin-0">
-            {% for child in children %}
-              <li><a href="{% url 'storage_detail' child.pk %}">{{ child.area }}</a></li>
-            {% endfor %}
-          </ul>
-        {% else %}
-          <p class="w3-text-gray w3-margin-0">No child storages.</p>
-        {% endif %}
-      </div>
-    </div>
-  </div>
-
-  <div class="w3-margin-top">
-    <h3>Specimens</h3>
-    <div class="w3-responsive">
-      <table class="w3-table-all w3-hoverable">
-        <thead>
-          <tr>
-            <th>Accession</th>
-            <th>Specimen</th>
-            <th>Inventory Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for specimen in specimens %}
-            <tr>
-              <td><a href="{% url 'accession_detail' specimen.accession.pk %}">{{ specimen.accession }}</a></td>
-              <td><a href="{% url 'accessionrow_detail' specimen.pk %}">{{ specimen.specimen_suffix|default:"-" }}</a></td>
-              <td>{{ specimen.get_status_display|default:"Not recorded" }}</td>
-            </tr>
-          {% empty %}
-            <tr>
-              <td colspan="3" class="w3-center">No specimens recorded for this storage.</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% if specimen_page_obj.paginator.num_pages > 1 %}
-      <div class="w3-container w3-center w3-margin-top">
-        <div class="w3-bar w3-border w3-round-large w3-white w3-card">
-          {% if specimen_page_obj.has_previous %}
-            <a href="?{% querystring_replace page=specimen_page_obj.previous_page_number %}" class="w3-bar-item w3-button" aria-label="Previous page">
-              <i class="fa-solid fa-angles-left"></i>
-              <span class="w3-hide-small">Previous</span>
-            </a>
-          {% else %}
-            <span class="w3-bar-item w3-button w3-disabled">
-              <i class="fa-solid fa-angles-left"></i>
-              <span class="w3-hide-small">Previous</span>
-            </span>
-          {% endif %}
-
-          <span class="w3-bar-item">
-            Page {{ specimen_page_obj.number }} of {{ specimen_page_obj.paginator.num_pages }}
-          </span>
-
-          {% if specimen_page_obj.has_next %}
-            <a href="?{% querystring_replace page=specimen_page_obj.next_page_number %}" class="w3-bar-item w3-button" aria-label="Next page">
-              <span class="w3-hide-small">Next</span>
-              <i class="fa-solid fa-angles-right"></i>
-            </a>
-          {% else %}
-            <span class="w3-bar-item w3-button w3-disabled">
-              <span class="w3-hide-small">Next</span>
-              <i class="fa-solid fa-angles-right"></i>
-            </span>
-          {% endif %}
-        </div>
-      </div>
-    {% endif %}
-  </div>
-
-  <div class="w3-margin-top">
-    <h3>Change Log</h3>
-    {% if history_entries %}
-      <div class="w3-responsive">
-        <table class="w3-table-all w3-small">
-          <thead>
-            <tr>
-              <th>Date/Time</th>
-              <th>Action</th>
-              <th>Comment</th>
-              <th>Changed By</th>
-              <th>Changes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for entry in history_entries %}
-              <tr>
-                <td>{{ entry.log.history_date|date:"Y-m-d H:i" }}</td>
-                <td>{{ entry.log.history_type }}</td>
-                <td>{{ entry.log.history_change_reason|default:"" }}</td>
-                <td>{{ entry.log.history_user|default:"System or Unknown" }}</td>
-                <td>
-                  {% if entry.changes %}
-                    <ul class="w3-ul w3-border-0 w3-margin-0">
-                      {% for change in entry.changes %}
-                        <li><strong>{{ change.field }}:</strong> {{ change.old }} → {{ change.new }}</li>
-                      {% endfor %}
-                    </ul>
-                  {% else %}
-                    Initial version
-                  {% endif %}
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    {% else %}
-      <p class="w3-text-gray">No changes logged.</p>
-    {% endif %}
-  </div>
+  {% include "cms/partials/tabs.html" with tabs=storage_tabs tabs_heading_id="storage-tabs-heading" heading_label=_("Storage content") heading_icon="fa-box-archive" %}
 
   <div class="w3-margin-top">
     <a href="{% url 'storage_list' %}" class="w3-button w3-light-grey w3-round">
-      <i class="fa-solid fa-arrow-left"></i>
-      Back to Storages
+      <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+      <span class="w3-margin-left">{% trans "Back to Storages" %}</span>
     </a>
   </div>
-</div>
+</main>
 {% endblock %}

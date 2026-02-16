@@ -1,12 +1,30 @@
+from __future__ import annotations
+
+import re
+from typing import Any, Dict, Iterable, Tuple
+
 from django.core.exceptions import ValidationError
 from django.db import models
-from cms.models import Accession, AccessionNumberSeries
+from django.db.models import Q
+
+from cms.models import (
+    Accession,
+    AccessionNumberSeries,
+    AccessionRow,
+    Identification,
+    Taxon,
+)
+
 
 def generate_accessions_from_series(series_user, count, collection, specimen_prefix, creator_user=None):
     try:
-        series = AccessionNumberSeries.objects.get(user=series_user, is_active=True)
+        series = AccessionNumberSeries.objects.active_for_user(series_user).get()
     except AccessionNumberSeries.DoesNotExist:
-        raise ValueError(f"No active accession number series found for user {series_user.username}.")
+        organisation = getattr(getattr(series_user, "organisation_membership", None), "organisation", None)
+        org_display = f" in {organisation}" if organisation else ""
+        raise ValueError(
+            f"No active accession number series found for user {series_user.username}{org_display}."
+        )
 
     start = series.current_number
     end = start + count - 1
@@ -36,8 +54,9 @@ def generate_accessions_from_series(series_user, count, collection, specimen_pre
 
     return accessions
 
+
 def get_active_series_for_user(user):
-    return AccessionNumberSeries.objects.filter(user=user, is_active=True).first()
+    return AccessionNumberSeries.objects.active_for_user(user).first()
 
 
 def build_history_entries(instance):
@@ -76,3 +95,151 @@ def build_history_entries(instance):
         history_entries.append({"log": log, "changes": changes})
     return history_entries
 
+
+def coerce_stripped(value: Any | None) -> str | None:
+    """Return ``value`` as a stripped string or ``None`` if empty."""
+
+    if value in (None, ""):
+        return None
+    if isinstance(value, str):
+        result = value.strip()
+        if result == "\\N":
+            return None
+        return result or None
+    result = str(value).strip()
+    if result == "\\N":
+        return None
+    return result or None
+
+
+def normalise_yes_no(value: Any | None) -> bool:
+    """Interpret common truthy strings (yes/true/1) as ``True``."""
+
+    if value in (None, ""):
+        return False
+    return str(value).strip().lower() in {"yes", "true", "1", "y", "t"}
+
+
+def build_accession_identification_maps(
+    rows: Iterable[AccessionRow],
+) -> Tuple[Dict[int, Identification], Dict[int, int], Dict[int, Taxon]]:
+    """Return cached identification metadata for accession rows.
+
+    The return value contains three dictionaries keyed by accession row ID and
+    identification ID respectively:
+
+    ``first_identifications``
+        Maps each row ID to its most recent identification (if any).
+
+    ``identification_counts``
+        Maps each row ID to the total number of related identifications.
+
+    ``taxonomy_map``
+        Maps the identification ID for the first identification to a resolved
+        :class:`Taxon` instance. The taxon is sourced from the
+        ``taxon_record`` relation when present and falls back to a batched
+        lookup on ``taxon`` values when that relation is absent.
+    """
+
+    first_identifications: Dict[int, Identification] = {}
+    identification_counts: Dict[int, int] = {}
+    taxonomy_map: Dict[int, Taxon] = {}
+    pending_taxa: Dict[int, str] = {}
+
+    for row in rows:
+        identifications = list(row.identification_set.all())
+        if not identifications:
+            continue
+
+        first_identification = identifications[0]
+        first_identifications[row.id] = first_identification
+        identification_counts[row.id] = len(identifications)
+
+        taxon_record = first_identification.taxon_record
+        if taxon_record is not None:
+            taxonomy_map[first_identification.id] = taxon_record
+            continue
+
+        taxon_name = (first_identification.taxon or "").strip()
+        if taxon_name:
+            pending_taxa[first_identification.id] = taxon_name
+
+    if pending_taxa:
+        query = Q()
+        seen_names = set()
+        for name in pending_taxa.values():
+            lowered = name.lower()
+            if lowered in seen_names:
+                continue
+            seen_names.add(lowered)
+            query |= Q(taxon_name__iexact=name)
+
+        if query:
+            matched_taxa = Taxon.objects.filter(query)
+            taxonomy_lookup: Dict[str, Taxon] = {}
+            for taxon in matched_taxa:
+                taxonomy_lookup.setdefault(taxon.taxon_name.lower(), taxon)
+
+            for identification_id, taxon_name in pending_taxa.items():
+                match = taxonomy_lookup.get(taxon_name.lower())
+                if match is not None:
+                    taxonomy_map[identification_id] = match
+
+    return first_identifications, identification_counts, taxonomy_map
+
+
+DITTO_MARK_TOKENS = {
+    "″",
+    "”",
+    "“",
+    "〃",
+    "\"",
+    "''",
+    "’’",
+    "``",
+    "!!",
+    "11",
+    "((",
+    "))",
+}
+
+
+def is_ditto_mark(value: Any | None) -> bool:
+    """Return ``True`` when ``value`` looks like a ditto mark placeholder."""
+
+    if value in (None, ""):
+        return False
+    if isinstance(value, (int, float)):
+        value = str(value)
+    text = str(value).strip()
+    if not text:
+        return False
+    if text in DITTO_MARK_TOKENS:
+        return True
+    if re.fullmatch(r"[\"'’“”″〃]{1,3}", text):
+        return True
+    if re.fullmatch(r"[!]{2,3}", text):
+        return True
+    if re.fullmatch(r"[1]{2,3}", text):
+        return True
+    if re.fullmatch(r"[\(\)]{2,3}", text):
+        return True
+    return False
+
+
+def apply_ditto_marks(rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Expand ditto mark placeholders using the last seen values per column."""
+
+    expanded: list[dict[str, Any]] = []
+    last_values: dict[str, Any] = {}
+    for row in rows:
+        updated: dict[str, Any] = {}
+        for key, value in row.items():
+            if is_ditto_mark(value):
+                updated[key] = last_values.get(key)
+            else:
+                updated[key] = value
+                if value not in (None, ""):
+                    last_values[key] = value
+        expanded.append(updated)
+    return expanded

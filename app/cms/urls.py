@@ -1,21 +1,29 @@
 from django.urls import include, path
 from django.conf.urls.static import static
 from django.conf import settings
-from django.contrib.admin.views.decorators import staff_member_required as staff_login_required
+from django.contrib.auth.decorators import login_required
 from django_filters.views import FilterView
 from cms.models import Accession
 from cms.views import (
     accession_create,
+    accession_distribution_report,
     accession_edit,
     add_accession_row,
     AccessionRowDetailView,
+    AccessionRowPrintView,
     AccessionRowUpdateView,
     add_fieldslip_to_accession,
     add_comment_to_accession,
     add_geology_to_accession,
     add_identification_to_accession_row,
     add_specimen_to_accession_row,
+    edit_identification,
+    edit_specimen_element,
+    NatureOfSpecimenDeleteView,
     add_reference_to_accession,
+    AccessionFieldSlipMergeView,
+    AccessionReferenceMergeView,
+    AccessionReferenceUpdateView,
     create_fieldslip_for_accession,
     fieldslip_create,
     fieldslip_edit,
@@ -23,7 +31,7 @@ from cms.views import (
     FieldSlipListView,
     fieldslip_export,
     fieldslip_import,
-    generate_accession_batch,
+    GenerateAccessionBatchView,
     AccessionListView,
     AccessionDetailView,
     ReferenceListView,
@@ -31,6 +39,7 @@ from cms.views import (
     reference_create,
     reference_edit,
     LocalityListView,
+    LocalityPrintView,
     LocalityDetailView,
     locality_create,
     locality_edit,
@@ -71,8 +80,13 @@ from cms.views import (
     StorageDetailView,
     StorageCreateView,
     StorageUpdateView,
-    MergeCandidateAdminView,
-    MergeCandidateAPIView,
+    ManualQCImportView,
+    AccessionRowPrintSmallView,
+    SpecimenListUploadView,
+    SpecimenListQueueView,
+    SpecimenListOCRQueueView,
+    SpecimenListPageReviewView,
+    SpecimenListRowReviewView,
 )
 from .views import PreparationMediaUploadView
 from .views import FieldSlipAutocomplete, ReferenceAutocomplete
@@ -83,10 +97,25 @@ from cms.forms import (AccessionForm,
                        SpecimenCompositeForm)
 from cms.views import AccessionWizard
 from cms.views import media_report_view
-
+from .admin import taxonomy_sync_apply_view, taxonomy_sync_preview_view
 
 urlpatterns = [
+    path('reports/accession-distribution/', accession_distribution_report, name='accession_distribution_report'),
     path('reports/media/', media_report_view, name='media_report'),
+    path("specimen-lists/upload/", SpecimenListUploadView.as_view(), name="specimen_list_upload"),
+    path("specimen-lists/queue/", SpecimenListQueueView.as_view(), name="specimen_list_queue"),
+    path("specimen-lists/queue/ocr/", SpecimenListOCRQueueView.as_view(), name="specimen_list_ocr_queue"),
+    path(
+        "specimen-lists/pages/<int:pk>/review/",
+        SpecimenListPageReviewView.as_view(),
+        name="specimen_list_page_review",
+    ),
+    path(
+        "specimen-lists/rows/review/",
+        SpecimenListRowReviewView.as_view(),
+        name="specimen_list_row_review",
+    ),
+    path('manual-import/', ManualQCImportView.as_view(), name='manual_qc_import'),
     path('inventory/', inventory_start, name='inventory_start'),
     path('inventory/update/', inventory_update, name='inventory_update'),
     path('inventory/reset/', inventory_reset, name='inventory_reset'),
@@ -113,16 +142,41 @@ urlpatterns = [
     path('accessions/<int:pk>/edit/', accession_edit, name='accession_edit'),
     path('accessions/<int:pk>/add-fieldslip/', add_fieldslip_to_accession, name='accession_add_fieldslip'),
     path('accessions/<int:pk>/create-fieldslip/', create_fieldslip_for_accession, name='accession_create_fieldslip'),
+    path(
+        'accessions/<int:pk>/merge-fieldslips/',
+        AccessionFieldSlipMergeView.as_view(),
+        name='accession_merge_fieldslips',
+    ),
+    path(
+        "accessions/<int:accession_id>/merge-references/",
+        AccessionReferenceMergeView.as_view(),
+        name="accession_merge_references",
+    ),
     path('accessions/<int:accession_id>/add-row/', add_accession_row, name='accession_add_row'),
     path('accessions/<int:accession_id>/add-comment/', add_comment_to_accession, name='accession_add_comment'),
     path('accessions/<int:accession_id>/add-geology/', add_geology_to_accession, name='accession_add_geology'),
     path('accessions/<int:accession_id>/add-reference/', add_reference_to_accession, name='accession_add_reference'),
+    path(
+        "accession-references/<int:pk>/edit/",
+        AccessionReferenceUpdateView.as_view(),
+        name="accessionreference_edit",
+    ),
     path('accessions/<int:accession_id>/upload-media/', upload_media, name='accession_upload_media'),
     path('accessionrows/<int:pk>/', AccessionRowDetailView.as_view(), name='accessionrow_detail'),
+    path('accessionrows/<int:pk>/print/', AccessionRowPrintView.as_view(), name='accessionrow_print'),
+    path('accessionrows/<int:pk>/print/small/', AccessionRowPrintSmallView.as_view(), name='accessionrow_print_small'),
     path('accessionrows/<int:pk>/edit/', AccessionRowUpdateView.as_view(), name='accessionrow_edit'),
     path('accessionrows/<int:accession_row_id>/add-specimen/', add_specimen_to_accession_row, name='accessionrow_add_specimen'),
     path('accessionrows/<int:accession_row_id>/add-identification/', add_identification_to_accession_row, name='accessionrow_add_identification'),
-    path("accessions/generate-batch/", generate_accession_batch, name="accession_generate_batch"),
+    path('specimens/<int:element_id>/edit/', edit_specimen_element, name='specimen_edit'),
+    path('elements/<int:element_id>/edit/', edit_specimen_element, name='element_edit'),
+    path('elements/<int:pk>/delete/', NatureOfSpecimenDeleteView.as_view(), name='element_delete'),
+    path('identifications/<int:identification_id>/edit/', edit_identification, name='identification_edit'),
+    path(
+        "accessions/generate-batch/",
+        login_required(GenerateAccessionBatchView.as_view()),
+        name="accession-generate-batch",
+    ),
     path('accession-wizard/', AccessionWizard.as_view([AccessionNumberSelectForm, AccessionForm,
                                                        SpecimenCompositeForm]), name='accession-wizard'),
     path('references/', ReferenceListView.as_view(), name='reference_list'),
@@ -135,6 +189,7 @@ urlpatterns = [
 
 
     path('localities/', LocalityListView.as_view(), name='locality_list'),
+    path('localities/print/', LocalityPrintView.as_view(), name='locality_print'),
     path('localities/new/', locality_create, name='locality_create'),
     path('localities/<int:pk>/', LocalityDetailView.as_view(), name='locality_detail'),
     path('localities/<int:pk>/edit/', locality_edit, name='locality_edit'),
@@ -177,20 +232,15 @@ urlpatterns += [
     path("autocomplete/fieldslip/", FieldSlipAutocomplete.as_view(), name="fieldslip-autocomplete"),
 ]
 
-if getattr(settings, "MERGE_TOOL_FEATURE", False):
-    urlpatterns += [
-        path(
-            "merge/",
-            staff_login_required(MergeCandidateAdminView.as_view()),
-            name="merge_candidates",
-        ),
-        path(
-            "merge/search/",
-            staff_login_required(MergeCandidateAPIView.as_view()),
-            name="merge_candidate_search",
-        ),
-    ]
+urlpatterns += [
+    path("merge/", include(("cms.merge.urls", "merge"), namespace="merge"))
+]
 
 urlpatterns += [
     path("dashboard/", dashboard, name="dashboard"),
+]
+
+urlpatterns += [
+    path("taxonomy/sync/", taxonomy_sync_preview_view, name="taxonomy_sync_preview"),
+    path("taxonomy/sync/apply/", taxonomy_sync_apply_view, name="taxonomy_sync_apply"),
 ]

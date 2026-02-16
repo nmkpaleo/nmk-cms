@@ -1,0 +1,68 @@
+{% load i18n %}
+<div class="w3-responsive">
+  <table class="w3-table w3-bordered w3-striped" role="grid" aria-describedby="{{ help_element_id|default:'' }}">
+    <thead>
+      <tr>
+        <th scope="col" class="w3-text-grey">{% trans "Field" %}</th>
+        {% for candidate in form.candidates %}
+          <th scope="col" class="w3-center">{{ candidate.label }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for option in form.field_options %}
+        {% with bound_field=option.bound_field %}
+          {% with selected_value=bound_field.value %}
+            <tr>
+              <th scope="row" class="w3-text-dark-grey">
+                {% with first_choice=option.choices|first %}
+                  {% if first_choice %}
+                    <label for="{{ option.field_name }}-{{ first_choice.key }}" class="w3-small">{{ option.label }}</label>
+                  {% else %}
+                    <span class="w3-small">{{ option.label }}</span>
+                  {% endif %}
+                {% endwith %}
+                {% if bound_field.help_text %}
+                  <p class="w3-text-grey w3-tiny">{{ bound_field.help_text }}</p>
+                {% endif %}
+                {% if bound_field.errors %}
+                  <p class="w3-text-red w3-tiny">{{ bound_field.errors|join:", " }}</p>
+                {% endif %}
+              </th>
+              {% for choice in option.choices %}
+                {% with input_id=option.field_name|add:'-'|add:choice.key %}
+                  <td class="w3-center">
+                    <label class="w3-block" for="{{ input_id }}">
+                      <input
+                        class="w3-radio"
+                        type="radio"
+                        id="{{ input_id }}"
+                        name="{{ option.field_name }}"
+                        value="{{ choice.key }}"
+                        {% if selected_value == choice.key or not selected_value and choice.is_target %}checked{% endif %}
+                      />
+                      <span class="w3-small">
+                        {{ choice.value }}
+                        {% if choice.role %}
+                          {% if choice.role == 'target' %}
+                            <span class="w3-tag w3-round w3-margin-left w3-blue">{{ choice.role|title }}</span>
+                          {% else %}
+                            <span class="w3-tag w3-round w3-margin-left w3-light-grey">{{ choice.role|title }}</span>
+                          {% endif %}
+                        {% endif %}
+                      </span>
+                    </label>
+                  </td>
+                {% endwith %}
+              {% endfor %}
+            </tr>
+          {% endwith %}
+        {% endwith %}
+      {% empty %}
+        <tr>
+          <td colspan="{{ form.candidates|length|add:1 }}" class="w3-center w3-text-grey">{% trans "No mergeable fields available." %}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

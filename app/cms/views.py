@@ -1,7 +1,7 @@
 """CMS view logic.
 
 Template context inventory and authentication coverage are catalogued in
-``docs/dev/frontend-guidelines.md`` to aid upcoming template refactors.
+``docs/development/frontend-guidelines.md`` to aid upcoming template refactors.
 """
 
 import copy
@@ -9,6 +9,8 @@ import csv
 import json
 import os
 from datetime import date, datetime, timedelta
+import json
+from decimal import Decimal
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -34,6 +36,8 @@ from .filters import (
     PlaceFilter,
     DrawerRegisterFilter,
     StorageFilter,
+    SpecimenListPageFilter,
+    SpecimenListRowCandidateFilter,
 )
 
 
@@ -43,32 +47,66 @@ from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
 from django.conf import settings
 
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required, user_passes_test
-from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.contrib.auth.mixins import (
+    LoginRequiredMixin,
+    PermissionRequiredMixin,
+    UserPassesTestMixin,
+)
 from django.core.exceptions import FieldDoesNotExist, ValidationError
 from django.forms import BaseFormSet, formset_factory, modelformset_factory
 from django.forms.widgets import Media as FormsMedia
-from django.http import HttpResponse, HttpResponseForbidden
+from django.http import Http404, HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse_lazy, reverse
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _, ngettext
 from django.utils.dateparse import parse_date, parse_datetime
 from django.utils.timezone import now
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, FormView, TemplateView
 from django.core.serializers.json import DjangoJSONEncoder
+from django.core.exceptions import PermissionDenied
 
-from cms.forms import (AccessionBatchForm, AccessionCommentForm,
-                    AccessionForm, AccessionFieldSlipForm, AccessionGeologyForm,
-                    AccessionNumberSelectForm,
-                    AccessionRowIdentificationForm, AccessionMediaUploadForm,
-                    AccessionRowSpecimenForm, AccessionRowUpdateForm,
-                    AccessionReferenceForm, AddAccessionRowForm, FieldSlipForm,
-                    MediaUploadForm, NatureOfSpecimenForm, PreparationForm,
-                    PreparationApprovalForm, PreparationMediaUploadForm,
-                    SpecimenCompositeForm, ReferenceForm, LocalityForm,
-                    PlaceForm, DrawerRegisterForm, StorageForm, ScanUploadForm,
-                    ReferenceWidget)
+User = get_user_model()
+
+from cms.forms import (
+    AccessionBatchForm,
+    AccessionCommentForm,
+    AccessionForm,
+    AccessionFieldSlipForm,
+    AccessionGeologyForm,
+    AccessionNumberSelectForm,
+    AccessionNumberSeriesAdminForm,
+    AccessionRowIdentificationForm,
+    AccessionMediaUploadForm,
+    AccessionRowSpecimenForm,
+    AccessionRowUpdateForm,
+    AccessionReferenceMergeSelectionForm,
+    AccessionReferenceForm,
+    AddAccessionRowForm,
+    DrawerRegisterForm,
+    FieldSlipForm,
+    FieldSlipMergeForm,
+    LocalityForm,
+    ManualQCImportForm,
+    ManualImportSummary,
+    MediaUploadForm,
+    NatureOfSpecimenForm,
+    PlaceForm,
+    PreparationApprovalForm,
+    PreparationForm,
+    PreparationMediaUploadForm,
+    ReferenceForm,
+    ReferenceWidget,
+    ScanUploadForm,
+    SpecimenCompositeForm,
+    SpecimenListRowCandidateFormSet,
+    StorageForm,
+    ensure_manual_qc_permission,
+    SpecimenListUploadForm,
+)
 
 from cms.models import (
     Accession,
@@ -90,6 +128,7 @@ from cms.models import (
     Taxon,
     Locality,
     Place,
+    PlaceType,
     PlaceRelation,
     PreparationStatus,
     InventoryStatus,
@@ -101,6 +140,9 @@ from cms.models import (
     MediaQCLog,
     MediaQCComment,
     LLMUsageRecord,
+    SpecimenListPDF,
+    SpecimenListPage,
+    SpecimenListRowCandidate,
 )
 from django.shortcuts import render
 from .models import Media
@@ -110,15 +152,22 @@ from plotly.io import to_html
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 from django.utils import timezone
+from .models import Accession
+from django.db.models import Count
 
 
 
-from cms.merge import MERGE_REGISTRY, MergeMixin
+
+from cms.merge import MERGE_REGISTRY, MergeMixin, merge_records
+from cms.merge.services import (
+    build_accession_reference_field_selection_form,
+    merge_accession_reference_candidates,
+)
 from cms.merge.fuzzy import score_candidates
 from cms.resources import FieldSlipResource
-from .utils import build_history_entries
+from .utils import build_accession_identification_maps, build_history_entries
 from cms.utils import generate_accessions_from_series
-from cms.upload_processing import process_file
+from cms.upload_processing import process_file, queue_specimen_list_processing
 from cms.ocr_processing import process_pending_scans, describe_accession_conflicts
 from cms.qc import (
     build_preview_accession,
@@ -127,11 +176,32 @@ from cms.qc import (
     interpreted_value as qc_interpreted_value,
 )
 from cms import scanning_utils
+from cms.services.review_locks import (
+    SPECIMEN_LIST_LOCK_TTL_SECONDS,
+    acquire_review_lock,
+    lock_is_expired,
+    release_review_lock,
+)
+from cms.permissions import can_approve_specimen_list_page, can_override_review_lock
+from cms.services.review_approval import approve_page, approve_row
 from formtools.wizard.views import SessionWizardView
 
 _ident_payload_has_meaningful_data = qc_ident_payload_has_meaningful_data
 _interpreted_value = qc_interpreted_value
 
+def is_collection_manager(user):
+    if not getattr(user, "is_authenticated", False):
+        return False
+    return user.is_superuser or user.groups.filter(name="Collection Managers").exists()
+
+
+class CollectionManagerAccessMixin(UserPassesTestMixin):
+    def test_func(self):
+        return is_collection_manager(self.request.user) or self.request.user.is_superuser
+
+
+@login_required
+@user_passes_test(is_collection_manager)
 def media_report_view(request):
     # Fetch OCR status data
     data = Media.objects.values('ocr_status', 'created_on')
@@ -235,6 +305,57 @@ def media_report_view(request):
     }
     return render(request, 'reports/media_report.html', context)
 
+#accession distribution report
+@login_required
+@user_passes_test(is_collection_manager)
+def accession_distribution_report(request):
+    """
+    Generates a report showing the distribution of accessions per locality.
+    """
+    # Query grouped counts per locality (specimen_prefix)
+    accession_data = (
+        Accession.objects
+        .values('specimen_prefix__name')
+        .annotate(total_accessions=Count('specimen_no', distinct=True))
+        .order_by('specimen_prefix__name')
+    )
+
+    if not accession_data:
+        return render(request, 'reports/accession_distribution.html', {
+            'message': 'No accession data available yet.'
+        })
+
+    df = pd.DataFrame.from_records(accession_data)
+    df.rename(columns={'specimen_prefix__name': 'Locality', 'total_accessions': 'Accessions'}, inplace=True)
+
+    # --- Locality-based chart ---
+    fig_locality = px.bar(
+        df,
+        x='Locality',
+        y='Accessions',
+        text='Accessions',
+        title='Accessions per Locality',
+        color='Locality',
+        color_discrete_sequence=px.colors.qualitative.Set3
+    )
+    fig_locality.update_traces(textposition='outside')
+    fig_locality.update_layout(
+        xaxis_title='Locality',
+        yaxis_title='Number of Accessions',
+        xaxis_tickangle=-30,
+        showlegend=False,
+        plot_bgcolor='#ffffff',
+        paper_bgcolor='#ffffff'
+    )
+
+    chart_locality = to_html(fig_locality, full_html=False, include_plotlyjs='cdn')
+
+    context = {
+        'chart_locality': chart_locality,
+        'locality_table': df.to_dict(orient='records'),
+    }
+
+    return render(request, 'reports/accession_distribution.html', context)
 
 
 
@@ -242,7 +363,9 @@ def media_report_view(request):
 
 
 
-class FieldSlipAutocomplete(autocomplete.Select2QuerySetView):
+class FieldSlipAutocomplete(LoginRequiredMixin, autocomplete.Select2QuerySetView):
+    raise_exception = True
+
     def get_queryset(self):
         qs = FieldSlip.objects.all()
         if self.q:
@@ -300,7 +423,7 @@ class MergeCandidateAdminView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         context["merge_models"] = self._get_merge_models()
         context["search_url"] = (
-            reverse("merge_candidate_search")
+            reverse("merge:merge_candidate_search")
             if getattr(settings, "MERGE_TOOL_FEATURE", False)
             else ""
         )
@@ -571,6 +694,10 @@ class MergeCandidateAPIView(View):
         if payload:
             results = payload.get("results", [])
             preview_fields = payload.get("preview_fields", [])
+        try:
+            merge_tool_url = reverse("merge:merge_candidates")
+        except Exception:  # pragma: no cover - defensive when namespace absent
+            merge_tool_url = ""
         return {
             "error": error,
             "payload": payload,
@@ -581,7 +708,7 @@ class MergeCandidateAPIView(View):
             "model_meta": meta,
             "model_label": payload["model"] if payload else None,
             "query_params": self._build_query_params(request),
-            "merge_tool_url": reverse("merge_candidates"),
+            "merge_tool_url": merge_tool_url,
         }
 
     def _build_query_params(self, request) -> str:
@@ -745,13 +872,6 @@ class PreparationAccessMixin(UserPassesTestMixin):
             user.groups.filter(name__in=["Curators", "Collection Managers"]).exists()
         )
 
-# Helper function to check if user can manage collection content
-def is_collection_manager(user):
-    if not getattr(user, "is_authenticated", False):
-        return False
-    return user.is_superuser or user.groups.filter(name="Collection Managers").exists()
-
-
 def is_intern(user):
     if not getattr(user, "is_authenticated", False):
         return False
@@ -780,14 +900,14 @@ def prefetch_accession_related(qs):
     """Prefetch accession row data needed for taxon and element summaries."""
     accession_row_prefetch = Prefetch(
         'accessionrow_set',
-        queryset=AccessionRow.objects.prefetch_related(
+        queryset=AccessionRow.objects.select_related('storage').prefetch_related(
             Prefetch(
                 'natureofspecimen_set',
                 queryset=NatureOfSpecimen.objects.select_related('element')
             ),
             Prefetch(
                 'identification_set',
-                queryset=Identification.objects.all().order_by('-date_identified', '-id')
+                queryset=Identification.objects.select_related('taxon_record').order_by('-date_identified', '-id')
             ),
         )
     )
@@ -812,7 +932,7 @@ def attach_accession_summaries(accessions):
 
         for row in accession.accessionrow_set.all():
             for identification in row.identification_set.all():
-                taxon = (identification.taxon or "").strip()
+                taxon = (identification.preferred_taxon_name or "").strip()
                 if taxon:
                     taxa.add(taxon)
             for specimen in row.natureofspecimen_set.all():
@@ -840,6 +960,186 @@ def add_fieldslip_to_accession(request, pk):
 
     messages.error(request, "Error adding FieldSlip.")
     return redirect("accession_detail", pk=accession.pk)
+
+
+class AccessionFieldSlipMergeView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = "cms.can_merge"
+    raise_exception = True
+    http_method_names = ["post"]
+
+    def get_accession(self, pk: int) -> Accession:
+        return get_object_or_404(
+            Accession.objects.prefetch_related("fieldslip_links__fieldslip"), pk=pk
+        )
+
+    def handle_no_permission(self):
+        if self.raise_exception:
+            return super().handle_no_permission()
+        return redirect("login")
+
+    def post(self, request, pk: int, *args, **kwargs):
+        accession = self.get_accession(pk)
+        form = FieldSlipMergeForm(request.POST, accession=accession)
+
+        if not form.is_valid():
+            for field, errors in form.errors.items():
+                for error in errors:
+                    label = form.fields.get(field).label if field in form.fields else field
+                    messages.error(
+                        request,
+                        _("%(field)s: %(error)s") % {"field": label, "error": error},
+                    )
+            return redirect("accession_detail", pk=accession.pk)
+
+        if not getattr(settings, "MERGE_TOOL_FEATURE", False):
+            messages.error(
+                request,
+                _("Field slip merging requires the merge tool to be enabled."),
+            )
+            return redirect("accession_detail", pk=accession.pk)
+
+        if not request.user.is_staff:
+            return HttpResponseForbidden()
+
+        source = form.cleaned_data["source"]
+        target = form.cleaned_data["target"]
+
+        cancel_url = reverse("accession_detail", args=[accession.pk])
+        selection_url = reverse("merge:merge_field_selection")
+        candidates = [str(target.pk), str(source.pk)]
+        query = urlencode(
+            {
+                "model": FieldSlip._meta.label,
+                "target": target.pk,
+                "candidates": ",".join(candidates),
+                "cancel": cancel_url,
+            }
+        )
+
+        messages.info(
+            request,
+            _("Select the preferred values to complete the merge."),
+        )
+        return redirect(f"{selection_url}?{query}")
+
+
+class AccessionReferenceMergeView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = "cms.can_merge"
+    raise_exception = True
+    http_method_names = ["post"]
+    template_name = "cms/accession_reference_merge.html"
+
+    def get_accession(self, accession_id: int) -> Accession:
+        return get_object_or_404(
+            Accession.objects.prefetch_related(
+                Prefetch(
+                    "accessionreference_set",
+                    queryset=AccessionReference.objects.select_related("reference"),
+                )
+            ),
+            pk=accession_id,
+        )
+
+    def handle_no_permission(self):
+        if self.raise_exception:
+            return super().handle_no_permission()
+        return redirect("login")
+
+    def _detail_url(self, accession: Accession) -> str:
+        return reverse("accession_detail", args=[accession.pk])
+
+    def post(self, request, accession_id: int, *args, **kwargs):
+        accession = self.get_accession(accession_id)
+        detail_url = f"{self._detail_url(accession)}#accession-reference-merge"
+
+        if not getattr(settings, "MERGE_TOOL_FEATURE", False):
+            messages.error(
+                request,
+                _("Accession reference merging requires the merge tool to be enabled."),
+            )
+            return redirect(detail_url)
+
+        if not request.user.is_staff:
+            return HttpResponseForbidden()
+
+        selection_form = AccessionReferenceMergeSelectionForm(
+            accession=accession, data=request.POST
+        )
+        if not selection_form.is_valid():
+            for field, errors in selection_form.errors.items():
+                label = selection_form.fields.get(field).label if field in selection_form.fields else field
+                for error in errors:
+                    messages.error(
+                        request,
+                        _("%(field)s: %(error)s") % {"field": label, "error": error},
+                    )
+            return redirect(f"{self._detail_url(accession)}?merge_refs=open#accession-reference-merge")
+
+        selected_ids = selection_form.cleaned_data["selected_ids"]
+        target_id = selection_form.cleaned_data["target"]
+        stage = (request.POST.get("stage") or "prepare").lower()
+
+        try:
+            field_selection_form = build_accession_reference_field_selection_form(
+                candidate_ids=selected_ids,
+                target_id=target_id,
+                data=request.POST if stage == "confirm" else None,
+            )
+        except ValidationError as exc:
+            for message in exc.messages:
+                messages.error(request, message)
+            return redirect(detail_url)
+
+        selected_candidates = list(
+            accession.accessionreference_set.filter(pk__in=selected_ids).select_related("reference")
+        )
+        selected_candidates.sort(key=lambda ref: selected_ids.index(str(ref.pk)))
+
+        if stage != "confirm" or not field_selection_form.is_valid():
+            status = 400 if stage == "confirm" else 200
+            return render(
+                request,
+                self.template_name,
+                {
+                    "accession": accession,
+                    "selected_ids": selected_ids,
+                    "selected_candidates": selected_candidates,
+                    "target_id": str(target_id),
+                    "field_selection_form": field_selection_form,
+                    "cancel_url": detail_url,
+                },
+                status=status,
+            )
+
+        target = next((ref for ref in selected_candidates if str(ref.pk) == str(target_id)), None)
+        sources = [ref for ref in selected_candidates if str(ref.pk) != str(target_id)]
+
+        if target is None or not sources:
+            messages.error(
+                request,
+                _("Select a valid target and at least one source reference to merge."),
+            )
+            return redirect(detail_url)
+
+        with transaction.atomic():
+            merge_results = merge_accession_reference_candidates(
+                target=target,
+                sources=sources,
+                form=field_selection_form,
+                user=request.user,
+            )
+
+        messages.success(
+            request,
+            ngettext(
+                "Merged %(count)d reference into %(target)s.",
+                "Merged %(count)d references into %(target)s.",
+                len(merge_results),
+            )
+            % {"count": len(merge_results), "target": target},
+        )
+        return redirect(self._detail_url(accession))
+
 
 def create_fieldslip_for_accession(request, pk):
     """ Opens a modal for FieldSlip creation and links it to an Accession """
@@ -902,6 +1202,7 @@ def dashboard(request):
     """Landing page that adapts content based on user roles."""
     user = request.user
     context = {}
+    has_active_series = False
     role_context_added = False
 
     if user.groups.filter(name="Preparators").exists():
@@ -943,9 +1244,10 @@ def dashboard(request):
         role_context_added = True
 
     if user.groups.filter(name="Collection Managers").exists():
-        has_active_series = AccessionNumberSeries.objects.filter(
-            user=user, is_active=True
-        ).exists()
+        # The Collection Management actions in ``templates/cms/dashboard.html``
+        # ("Create single accession" / "Generate batch") rely on this flag to
+        # reflect whether the user has an active accession number series.
+        has_active_series = AccessionNumberSeries.objects.active_for_user(user).exists()
         unassigned_accessions = (
             Accession.objects.filter(accessioned_by=user)
             .annotate(row_count=Count("accessionrow"))
@@ -971,12 +1273,13 @@ def dashboard(request):
         context.update(
             {
                 "is_collection_manager": True,
-                "has_active_series": has_active_series,
                 "unassigned_accessions": unassigned_accessions,
                 "latest_accessions": latest_accessions,
             }
         )
         role_context_added = True
+
+    context["has_active_series"] = has_active_series
 
     is_expert_user = is_qc_expert(user)
     if is_expert_user:
@@ -1261,12 +1564,26 @@ class MediaQCHistoryView(LoginRequiredMixin, UserPassesTestMixin, ListView):
         if media_uuid:
             queryset = queryset.filter(media__uuid=media_uuid)
             self.filter_media = Media.objects.filter(uuid=media_uuid).first()
+        change_type = self.request.GET.get("change_type", "")
+        self.active_change_type = ""
+        valid_change_types = {value for value, _ in MediaQCLog.ChangeType.choices}
+        if change_type in valid_change_types:
+            queryset = queryset.filter(change_type=change_type)
+            self.active_change_type = change_type
         return queryset
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["filter_media"] = self.filter_media
-        context["page_title"] = "Media QC History"
+        context["page_title"] = _("Media QC history")
+        context["active_media"] = self.request.GET.get("media", "")
+        context["active_change_type"] = getattr(self, "active_change_type", "")
+        context["change_type_choices"] = [
+            {"value": "", "label": _("All changes")}
+        ] + [
+            {"value": value, "label": label}
+            for value, label in MediaQCLog.ChangeType.choices
+        ]
         return context
 
 
@@ -1299,50 +1616,6 @@ def fieldslip_edit(request, pk):
     else:
         form = FieldSlipForm(instance=fieldslip)
     return render(request, 'cms/fieldslip_form.html', {'form': form})
-
-@staff_member_required
-def generate_accession_batch(request):
-    form = AccessionBatchForm(request.POST or None)
-    series_remaining = None
-    series_range = None
-
-    if request.method == "POST" and form.is_valid():
-        user = form.cleaned_data['user']
-        try:
-            # Get user's active accession number series
-            series = AccessionNumberSeries.objects.get(user=user, is_active=True)
-            series_remaining = series.end_at - series.current_number + 1
-            series_range = f"from {series.current_number} to {series.end_at}"
-
-            # Try to generate accessions
-            try:
-                accessions = generate_accessions_from_series(
-                    series_user=user,
-                    count=form.cleaned_data['count'],
-                    collection=form.cleaned_data['collection'],
-                    specimen_prefix=form.cleaned_data['specimen_prefix'],
-                    creator_user=request.user
-                )
-                messages.success(
-                    request,
-                    f"Successfully created {len(accessions)} accessions for {user}."
-                )
-                return redirect("accession_list")
-
-            except ValueError as ve:
-                form.add_error('count', f"{ve} (Available range: {series_range})")
-
-        except AccessionNumberSeries.DoesNotExist:
-            form.add_error('user', "No active accession number series found for this user.")
-
-    return render(request, "cms/accession_batch_form.html", {
-        "form": form,
-        "series_remaining": series_remaining,
-        "series_range": series_range,
-        "title": "Accession Numbers",
-        "method": "post",
-        "action": request.path,
-    })
 
 def reference_create(request):
     if request.method == 'POST':
@@ -1427,11 +1700,52 @@ class FieldSlipDetailView(DetailView):
     template_name = 'cms/fieldslip_detail.html'
     context_object_name = 'fieldslip'
 
+    def get_queryset(self):
+        accession_link_prefetch = Prefetch(
+            "accession_links",
+            queryset=AccessionFieldSlip.objects.select_related("accession"),
+        )
+
+        accession_prefetch = Prefetch(
+            "accession_links__accession",
+            queryset=prefetch_accession_related(Accession.objects.all()),
+        )
+
+        return (
+            super()
+            .get_queryset()
+            .prefetch_related(accession_link_prefetch, accession_prefetch)
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        user = self.request.user
+        can_view_unpublished = user.is_authenticated and (
+            user.is_superuser
+            or user.groups.filter(name__in=["Collection Managers", "Curators"]).exists()
+        )
+
+        accessions = Accession.objects.filter(fieldslip_links__fieldslip=self.object)
+
+        if not can_view_unpublished:
+            accessions = accessions.filter(is_published=True)
+
+        accessions = prefetch_accession_related(accessions)
+        attach_accession_summaries(accessions)
+
+        context["accessions"] = accessions
+        context["can_view_unpublished_accessions"] = can_view_unpublished
+        context["show_accession_staff_columns"] = can_view_unpublished
+
+        return context
+
 class FieldSlipListView(LoginRequiredMixin, UserPassesTestMixin, FilterView):
     model = FieldSlip
     template_name = 'cms/fieldslip_list.html'
     context_object_name = 'fieldslips'
     paginate_by = 10
+    filterset_class = FieldSlipFilter
 
     def test_func(self):
         user = self.request.user
@@ -1443,56 +1757,93 @@ class AccessionDetailView(DetailView):
     context_object_name = 'accession'
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        qs = super().get_queryset().select_related(
+            'collection',
+            'specimen_prefix',
+            'accessioned_by',
+        )
         user = self.request.user
         if user.is_authenticated and (
             user.is_superuser or
             user.groups.filter(name__in=["Collection Managers", "Curators"]).exists()
         ):
-            return qs
-        return qs.filter(is_published=True)
+            filtered = qs
+        else:
+            filtered = qs.filter(is_published=True)
+
+        return prefetch_accession_related(filtered).prefetch_related(
+            Prefetch(
+                'fieldslip_links',
+                queryset=AccessionFieldSlip.objects.select_related('fieldslip'),
+            ),
+            Prefetch(
+                'specimen_geologies',
+                queryset=SpecimenGeology.objects.select_related(
+                    'earliest_geological_context',
+                    'latest_geological_context',
+                ),
+            ),
+            Prefetch(
+                'comments',
+                queryset=Comment.objects.select_related('subject').order_by('-created_on'),
+            ),
+            Prefetch(
+                'accessionreference_set',
+                queryset=AccessionReference.objects.select_related('reference'),
+            ),
+        )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["related_fieldslips"] = self.object.fieldslip_links.all()
-        context['references'] = AccessionReference.objects.filter(accession=self.object).select_related('reference')
-        context['geologies'] = SpecimenGeology.objects.filter(accession=self.object)
-        context['comments'] = Comment.objects.filter(specimen_no=self.object)
-        accession_rows = AccessionRow.objects.filter(accession=self.object).prefetch_related(
-            Prefetch(
-                'natureofspecimen_set',
-                queryset=NatureOfSpecimen.objects.select_related('element'),
-            )
-        )
+        accession = self.object
+        related_fieldslips = list(accession.fieldslip_links.all())
+        references = list(accession.accessionreference_set.all())
+        geologies = list(accession.specimen_geologies.all())
+        comments = list(accession.comments.all())
+        accession_rows = list(accession.accessionrow_set.all())
+
+        (
+            first_identifications,
+            identification_counts,
+            taxonomy_map,
+        ) = build_accession_identification_maps(accession_rows)
+
+        context["related_fieldslips"] = related_fieldslips
+        context['references'] = references
+        context['geologies'] = geologies
+        context['comments'] = comments
         # Form for adding existing FieldSlips
         context["add_fieldslip_form"] = AccessionFieldSlipForm()
-
-        # Store first identification and identification count per accession row
-        first_identifications = {}
-        identification_counts = {}
-        taxonomy_dict = {}
-
-        for accession_row in accession_rows:
-            # Get all identifications for this accession row (already sorted)
-            row_identifications = Identification.objects.filter(accession_row=accession_row).order_by('-date_identified')
-
-            # Store the first identification if available
-            first_identification = row_identifications.first()
-            if first_identification:
-                first_identifications[accession_row.id] = first_identification
-                identification_counts[accession_row.id] = row_identifications.count()
-
-                # Retrieve taxonomy based on taxon_name
-                taxon_name = first_identification.taxon
-                if taxon_name:
-                    taxonomy_dict[first_identification.id] = Taxon.objects.filter(taxon_name__iexact=taxon_name).first()
 
         # Pass filtered data to template
         context['accession_rows'] = accession_rows
         context['first_identifications'] = first_identifications  # First identifications per accession row
         context['identification_counts'] = identification_counts  # Number of identifications per accession row
-        context['taxonomy'] = taxonomy_dict  # Maps first identifications to Taxon objects
-        
+        context['taxonomy'] = taxonomy_map  # Maps first identifications to Taxon objects
+        context['taxonomy_map'] = taxonomy_map
+
+        can_edit_accession_rows = self.request.user.is_authenticated and (
+            self.request.user.is_superuser or is_collection_manager(self.request.user)
+        )
+        context['can_edit_accession_rows'] = can_edit_accession_rows
+        context['specimen_table_empty_colspan'] = 11 if can_edit_accession_rows else 10
+
+        if self.request.user.has_perm("cms.can_merge") and len(related_fieldslips) >= 2:
+            context["merge_fieldslip_form"] = FieldSlipMergeForm(accession=accession)
+
+        if self.request.user.has_perm("cms.can_merge") and len(references) >= 2:
+            initial_selection = [str(ref.pk) for ref in references[:2]]
+            context["reference_merge_form"] = AccessionReferenceMergeSelectionForm(
+                accession=accession,
+                initial={
+                    "selected_ids": initial_selection,
+                    "target": initial_selection[0] if initial_selection else None,
+                },
+            )
+            context["reference_merge_open"] = (
+                self.request.GET.get("merge_refs") == "open"
+            )
+
         return context
 
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -1535,16 +1886,271 @@ class AccessionRowDetailView(DetailView):
     template_name = 'cms/accession_row_detail.html'
     context_object_name = 'accessionrow'
 
+    def get_queryset(self):
+        qs = (
+            super()
+            .get_queryset()
+            .select_related(
+                "accession",
+                "accession__collection",
+                "accession__specimen_prefix",
+                "storage",
+            )
+            .prefetch_related(
+                Prefetch(
+                    "natureofspecimen_set",
+                    queryset=NatureOfSpecimen.objects.select_related("element").order_by("id"),
+                ),
+                Prefetch(
+                    "identification_set",
+                    queryset=Identification.objects.select_related("taxon_record").order_by(
+                        "-date_identified",
+                        "-created_on",
+                    ),
+                ),
+            )
+        )
+
+        user = self.request.user
+        if user.is_authenticated and (
+            user.is_superuser
+            or user.groups.filter(name__in=["Collection Managers", "Curators"]).exists()
+        ):
+            return qs
+
+        return qs.filter(accession__is_published=True)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['natureofspecimens'] = NatureOfSpecimen.objects.filter(accession_row=self.object)
-        context['identifications'] = Identification.objects.filter(accession_row=self.object)
+        context['natureofspecimens'] = list(self.object.natureofspecimen_set.all())
+        # Order identifications by date_identified DESC (nulls last), then created_on DESC
+        context['identifications'] = list(self.object.identification_set.all())
         context['can_edit'] = (
             self.request.user.is_superuser or is_collection_manager(self.request.user)
         )
         context['can_manage'] = context['can_edit']
         context['show_inventory_status'] = not is_public_user(self.request.user)
+        element_merge_rows = [
+            nos for nos in context["natureofspecimens"] if getattr(nos, "element", None)
+        ]
+        unique_elements = []
+        seen = set()
+        for specimen in element_merge_rows:
+            element = specimen.element
+            key = str(element.pk)
+            if key in seen:
+                continue
+            seen.add(key)
+            unique_elements.append(element)
+        unique_elements.sort(key=lambda el: (el.name or "", el.pk))
+        can_merge_elements = (
+            self.request.user.has_perm("cms.can_merge")
+            and getattr(settings, "MERGE_TOOL_FEATURE", False)
+            and len(element_merge_rows) >= 2
+        )
+        context["element_merge_candidates"] = element_merge_rows if can_merge_elements else []
+        context["element_merge_unique_elements"] = unique_elements if can_merge_elements else []
+        context["element_merge_open"] = self.request.GET.get("merge_elements") == "open"
         return context
+
+
+class NatureOfSpecimenDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
+    model = NatureOfSpecimen
+    template_name = "cms/element_confirm_delete.html"
+    context_object_name = "specimen"
+
+    def test_func(self):
+        user = self.request.user
+        return user.is_superuser or is_collection_manager(user)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["accession_row"] = self.object.accession_row
+        return context
+
+    def delete(self, request, *args, **kwargs):
+        response = super().delete(request, *args, **kwargs)
+        messages.success(
+            request,
+            _("Element deleted successfully."),
+        )
+        return response
+
+    def get_success_url(self):
+        return reverse("accessionrow_detail", kwargs={"pk": self.object.accession_row_id})
+
+
+class BaseAccessionRowPrintView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
+    """Render a print-friendly card for a single accession row."""
+
+    model = AccessionRow
+    template_name = "cms/accession_row_print.html"
+    context_object_name = "accessionrow"
+    card_variant = "big"
+
+    def _user_can_edit(self) -> bool:
+        user = self.request.user
+        return user.is_superuser or is_collection_manager(user)
+
+    def test_func(self):
+        return self._user_can_edit()
+
+    def get_queryset(self):
+        return (
+            super()
+            .get_queryset()
+            .select_related(
+                "accession",
+                "accession__collection",
+                "accession__specimen_prefix",
+                "storage",
+            )
+            .prefetch_related(
+                Prefetch(
+                    "natureofspecimen_set",
+                    queryset=NatureOfSpecimen.objects.select_related("element").order_by("id"),
+                ),
+                Prefetch(
+                    "accession__fieldslip_links",
+                    queryset=AccessionFieldSlip.objects.select_related("fieldslip").order_by(
+                        "fieldslip__field_number"
+                    ),
+                ),
+                Prefetch(
+                    "identification_set",
+                    queryset=Identification.objects.select_related("taxon_record").order_by(
+                        "-date_identified",
+                        "-created_on",
+                    ),
+                ),
+                Prefetch(
+                    "accession__accessionreference_set",
+                    queryset=(
+                        AccessionReference.objects.select_related("reference")
+                        .filter(reference__isnull=False)
+                        .order_by("reference__citation")
+                    ),
+                ),
+                Prefetch(
+                    "accession__specimen_prefix__places",
+                    queryset=Place.objects.select_related("related_place").order_by("name"),
+                ),
+            )
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        accession = self.object.accession
+
+        (
+            first_identifications,
+            _identification_counts,
+            taxonomy_map,
+        ) = build_accession_identification_maps([self.object])
+
+        latest_identification = first_identifications.get(self.object.id)
+        taxon_record = latest_identification.taxon_record if latest_identification else None
+        resolved_taxon = None
+        if latest_identification is not None:
+            resolved_taxon = taxonomy_map.get(latest_identification.id)
+        if resolved_taxon is None:
+            resolved_taxon = taxon_record
+
+        taxonomy_values = {
+            "family": getattr(resolved_taxon, "family", "") if resolved_taxon else "",
+            "subfamily": getattr(resolved_taxon, "subfamily", "") if resolved_taxon else "",
+            "tribe": getattr(resolved_taxon, "tribe", "") if resolved_taxon else "",
+            "genus": getattr(resolved_taxon, "genus", "") if resolved_taxon else "",
+            "species": getattr(resolved_taxon, "species", "") if resolved_taxon else "",
+        }
+
+        has_taxonomy_values = any(
+            bool(value and str(value).strip()) for value in taxonomy_values.values()
+        )
+
+        nature_of_specimens = self.object.natureofspecimen_set.all()
+        specimen_rows = [
+            {
+                "element": specimen.element.name if specimen.element else specimen.verbatim_element,
+                "side": specimen.side,
+                "portion": specimen.portion,
+                "condition": specimen.condition,
+                "fragments": specimen.fragments,
+            }
+            for specimen in nature_of_specimens
+        ]
+
+        locality = accession.specimen_prefix if accession else None
+        site = (
+            next((place for place in locality.places.all() if place.place_type == PlaceType.SITE), None)
+            if locality is not None
+            else None
+        )
+
+        accession_references = (
+            accession.accessionreference_set.all()
+            if accession
+            else AccessionReference.objects.none()
+        )
+        reference_entries = [
+            {
+                "reference": accession_reference.reference,
+                "page": accession_reference.page,
+                "citation": accession_reference.reference.citation,
+            }
+            for accession_reference in accession_references
+        ]
+
+        qr_target_url = self.request.build_absolute_uri(
+            self.object.get_absolute_url()
+        )
+
+        context.update(
+            {
+                "can_edit": self._user_can_edit(),
+                "latest_identification": latest_identification,
+                "taxonomy_values": taxonomy_values,
+                "has_taxonomy_values": has_taxonomy_values,
+                "taxonomy_fallback_value": (
+                    latest_identification.preferred_taxon_name.strip()
+                    if latest_identification
+                    and latest_identification.preferred_taxon_name
+                    and latest_identification.preferred_taxon_name.strip()
+                    else ""
+                ),
+                "identification_qualifier": (
+                    latest_identification.identification_qualifier.strip()
+                    if latest_identification
+                    and latest_identification.identification_qualifier
+                    and latest_identification.identification_qualifier.strip()
+                    else ""
+                ),
+                "specimen_rows": specimen_rows,
+                "locality": locality,
+                "site": site,
+                "reference_entries": reference_entries,
+                "card_variant": self.card_variant,
+                "is_small_card": self.card_variant == "small",
+                "qr_target_url": qr_target_url,
+            }
+        )
+
+        return context
+
+
+class AccessionRowPrintView(BaseAccessionRowPrintView):
+    """Render the big card printable view for an accession row."""
+
+    card_variant = "big"
+    template_name = "cms/accession_row_print.html"
+
+
+class AccessionRowPrintSmallView(BaseAccessionRowPrintView):
+    """Render the small card printable view for an accession row."""
+
+    card_variant = "small"
+    template_name = "cms/accession_row_print_small.html"
 
 
 class AccessionRowUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
@@ -1559,10 +2165,25 @@ class AccessionRowUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView
     def get_success_url(self):
         return self.object.get_absolute_url()
 
-class AccessionWizard(SessionWizardView):
+class AccessionWizard(LoginRequiredMixin, CollectionManagerAccessMixin, SessionWizardView):
     file_storage = FileSystemStorage(location=settings.MEDIA_ROOT)
     form_list = [AccessionNumberSelectForm, AccessionForm, SpecimenCompositeForm]
     template_name = 'cms/accession_wizard.html'
+
+
+    def dispatch(self, request, *args, **kwargs):
+        self.active_series = (
+            AccessionNumberSeries.objects.active_for_user(request.user).first()
+        )
+
+        if not self.active_series:
+            messages.error(
+                request,
+                _("You need an active accession number series to create accessions."),
+            )
+            return redirect("dashboard")
+
+        return super().dispatch(request, *args, **kwargs)
 
 
     def get_form_kwargs(self, step=None):
@@ -1570,7 +2191,9 @@ class AccessionWizard(SessionWizardView):
         if step == '0' or step == 0:
             user = self.request.user
             try:
-                series = AccessionNumberSeries.objects.get(user=user, is_active=True)
+                series = self.active_series
+                if series is None:
+                    raise AccessionNumberSeries.DoesNotExist
                 used = set(
                     Accession.objects.filter(
                         accessioned_by=user,
@@ -1620,7 +2243,14 @@ class AccessionWizard(SessionWizardView):
         """
         Restore initial values for fields from storage if available.
         """
+        current_step = step or self.steps.current
         form = super().get_form(step, data, files)
+        if str(current_step) == "1" and "specimen_no" in form.fields:
+            specimen_field = form.fields["specimen_no"]
+            specimen_field.disabled = True
+            specimen_field.widget.attrs["readonly"] = "readonly"
+            specimen_field.widget.attrs["aria-readonly"] = "true"
+
         if step and data is None:
             initial = self.get_form_initial(step)
             if initial:
@@ -1669,7 +2299,7 @@ class AccessionWizard(SessionWizardView):
 
             Identification.objects.create(
                 accession_row=row,
-                taxon=specimen_form.cleaned_data['taxon'],
+                taxon_verbatim=specimen_form.cleaned_data['taxon'],
                 identified_by=specimen_form.cleaned_data['identified_by'],
             )
 
@@ -2216,10 +2846,25 @@ class MediaQCFormManager:
                 if reference_id
                 else None
             )
+            taxon_record_id = (ident_data.get("taxon_record") or {}).get(
+                "interpreted"
+            )
+            taxon_record_obj = (
+                Taxon.objects.filter(pk=taxon_record_id).first()
+                if taxon_record_id
+                else None
+            )
+            taxon_verbatim = (
+                ident_data.get("taxon_verbatim")
+                or ident_data.get("taxon")
+                or {}
+            ).get("interpreted")
+
             self.ident_initial.append(
                 {
                     "row_id": row_id,
-                    "taxon": (ident_data.get("taxon") or {}).get("interpreted"),
+                    "taxon_verbatim": taxon_verbatim,
+                    "taxon_record": taxon_record_obj.pk if taxon_record_obj else None,
                     "identification_qualifier": (
                         ident_data.get("identification_qualifier") or {}
                     ).get("interpreted"),
@@ -2730,7 +3375,20 @@ class MediaQCFormManager:
                     self.ident_payload_map.get(row_id, {})
                 )
                 _set_interpreted(
-                    original_ident, "taxon", ident_cleaned.get("taxon")
+                    original_ident,
+                    "taxon_verbatim",
+                    ident_cleaned.get("taxon_verbatim"),
+                )
+                _set_interpreted(
+                    original_ident,
+                    "taxon",
+                    ident_cleaned.get("taxon_verbatim"),
+                )
+                taxon_record_obj = ident_cleaned.get("taxon_record")
+                _set_interpreted(
+                    original_ident,
+                    "taxon_record",
+                    taxon_record_obj.pk if taxon_record_obj else None,
                 )
                 _set_interpreted(
                     original_ident,
@@ -3520,7 +4178,53 @@ class LocalityListView(FilterView):
     context_object_name = 'localities'
     paginate_by = 10
     filterset_class = LocalityFilter
+    ordering = ("name",)
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        return queryset.annotate(
+            accession_count=Count("accession", distinct=True)
+        ).order_by("name")
+
+
+class LocalityPrintView(TemplateView):
+    template_name = "cms/locality_print.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        localities = (
+            Locality.objects.all()
+            .order_by("name")
+            .annotate(accession_count=Count("accession", distinct=True))
+        )
+
+        locality_entries = [
+            {
+                "name": locality.name,
+                "abbreviation": locality.abbreviation,
+                "ages": "/".join(
+                    str(label) for label in locality.get_geological_times_display()
+                ),
+            }
+            for locality in localities
+        ]
+
+        rows = []
+        for index in range(0, len(locality_entries), 2):
+            left_entry = locality_entries[index]
+            right_entry = (
+                locality_entries[index + 1]
+                if index + 1 < len(locality_entries)
+                else None
+            )
+            rows.append((left_entry, right_entry))
+
+        context["locality_rows"] = rows
+        context["geological_time_legend"] = [
+            {"code": code, "label": str(label)}
+            for code, label in Locality.GeologicalTime.choices
+        ]
+        return context
 
 
 class LocalityDetailView(DetailView):
@@ -3532,12 +4236,12 @@ class LocalityDetailView(DetailView):
         context = super().get_context_data(**kwargs)
         user = self.request.user
         accessions = self.object.accession_set.all()
-        if not (
-            user.is_authenticated and (
-                user.is_superuser or
-                user.groups.filter(name__in=["Collection Managers", "Curators"]).exists()
-            )
-        ):
+        can_view_restricted = user.is_authenticated and (
+            user.is_superuser
+            or user.groups.filter(name__in=["Collection Managers", "Curators"]).exists()
+        )
+
+        if not can_view_restricted:
             accessions = accessions.filter(is_published=True)
 
         accessions = prefetch_accession_related(accessions)
@@ -3551,6 +4255,7 @@ class LocalityDetailView(DetailView):
         context['accessions'] = accessions
         context['page_obj'] = accessions
         context['is_paginated'] = accessions.paginator.num_pages > 1
+        context['show_accession_staff_columns'] = can_view_restricted
 
         return context
 
@@ -3846,6 +4551,690 @@ def upload_scan(request):
     }
 
     return render(request, 'admin/upload_scan.html', context)
+
+
+class SpecimenListUploadView(LoginRequiredMixin, PermissionRequiredMixin, FormView):
+    template_name = "cms/specimen_list_upload.html"
+    form_class = SpecimenListUploadForm
+    permission_required = "cms.add_specimenlistpdf"
+    success_url = reverse_lazy("specimen_list_upload")
+
+    def form_valid(self, form):
+        source_label = form.cleaned_data["source_label"]
+        files = form.cleaned_data["files"]
+        created: list[SpecimenListPDF] = []
+
+        with transaction.atomic():
+            for uploaded in files:
+                pdf = SpecimenListPDF.objects.create(
+                    source_label=source_label,
+                    original_filename=uploaded.name,
+                    stored_file=uploaded,
+                    uploaded_by=self.request.user,
+                )
+                created.append(pdf)
+                transaction.on_commit(
+                    lambda pdf_id=pdf.id: queue_specimen_list_processing(pdf_id)
+                )
+
+        count = len(created)
+        if count:
+            messages.success(
+                self.request,
+                ngettext(
+                    "Queued %(count)d specimen list PDF for processing.",
+                    "Queued %(count)d specimen list PDFs for processing.",
+                    count,
+                )
+                % {"count": count},
+            )
+        return redirect(self.get_success_url())
+
+
+class SpecimenListQueueView(LoginRequiredMixin, PermissionRequiredMixin, FilterView):
+    template_name = "cms/specimen_list_queue.html"
+    filterset_class = SpecimenListPageFilter
+    paginate_by = 25
+    permission_required = "cms.review_specimenlistpage"
+
+    def dispatch(self, request, *args, **kwargs):
+        if not getattr(settings, "FEATURE_REVIEW_UI_ENABLED", True):
+            raise Http404("Specimen list review UI is disabled.")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_queryset(self):
+        return (
+            SpecimenListPage.objects.select_related("pdf", "assigned_reviewer")
+            .filter(page_type=SpecimenListPage.PageType.SPECIMEN_LIST_DETAILS)
+            .order_by("pipeline_status", "pdf_id", "page_number")
+        )
+
+
+class SpecimenListOCRQueueView(LoginRequiredMixin, PermissionRequiredMixin, FilterView):
+    template_name = "cms/specimen_list_ocr_queue.html"
+    filterset_class = SpecimenListPageFilter
+    paginate_by = 25
+    permission_required = "cms.review_specimenlistpage"
+
+    def dispatch(self, request, *args, **kwargs):
+        if not getattr(settings, "FEATURE_REVIEW_UI_ENABLED", True):
+            raise Http404("Specimen list review UI is disabled.")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_queryset(self):
+        return (
+            SpecimenListPage.objects.select_related("pdf", "assigned_reviewer")
+            .exclude(review_status=SpecimenListPage.ReviewStatus.APPROVED)
+            .order_by("pipeline_status", "pdf_id", "page_number")
+        )
+
+
+class SpecimenListRowCandidateForm(forms.Form):
+    row_id = forms.IntegerField(widget=forms.HiddenInput)
+    status = forms.ChoiceField(
+        choices=SpecimenListRowCandidate.ReviewStatus.choices,
+        label=_("Row status"),
+        widget=forms.Select(attrs={"class": "w3-select"}),
+    )
+    data = forms.JSONField(
+        required=False,
+        label=_("Row data JSON"),
+        widget=forms.Textarea(attrs={"class": "w3-input", "rows": 4}),
+    )
+
+
+class SpecimenListRowReviewView(LoginRequiredMixin, PermissionRequiredMixin, FilterView):
+    template_name = "cms/specimen_list_row_review.html"
+    filterset_class = SpecimenListRowCandidateFilter
+    paginate_by = 25
+    permission_required = "cms.review_specimenlistrowcandidate"
+
+    def get_queryset(self):
+        return (
+            SpecimenListRowCandidate.objects.select_related("page", "page__pdf", "page__assigned_reviewer")
+            .order_by("page_id", "row_index")
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["row_status_choices"] = SpecimenListRowCandidate.ReviewStatus.choices
+        return context
+
+    def post(self, request, *args, **kwargs):
+        form = SpecimenListRowCandidateForm(request.POST)
+        if not form.is_valid():
+            messages.error(request, _("Please correct the row review form errors."))
+            return redirect(".")
+
+        row_id = form.cleaned_data["row_id"]
+        action = request.POST.get("action", "")
+        with transaction.atomic():
+            row = (
+                SpecimenListRowCandidate.objects.select_for_update()
+                .select_related("page", "page__pdf")
+                .get(pk=row_id)
+            )
+            update_fields: list[str] = []
+
+            if action == "approve":
+                if not can_approve_specimen_list_page(request.user):
+                    raise PermissionDenied
+            elif action == "reject":
+                row.status = SpecimenListRowCandidate.ReviewStatus.REJECTED
+                update_fields.append("status")
+            else:
+                row.status = form.cleaned_data["status"]
+                update_fields.append("status")
+
+            data = form.cleaned_data.get("data")
+            if data is not None:
+                row.data = data
+                update_fields.append("data")
+
+            if update_fields:
+                row.save(update_fields=update_fields + ["updated_at"])
+
+            if action == "approve":
+                approve_row(row=row, reviewer=request.user)
+
+        messages.success(request, _("Row candidate updated."))
+        return redirect(".")
+
+
+class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = "cms.change_specimenlistpage"
+
+    def dispatch(self, request, *args, **kwargs):
+        if not getattr(settings, "FEATURE_REVIEW_UI_ENABLED", True):
+            raise Http404("Specimen list review UI is disabled.")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request, pk):
+        page = self._get_page(request, pk)
+        read_only = request.GET.get("mode") == "view" or page.pipeline_status == SpecimenListPage.PipelineStatus.APPROVED
+        if page.review_status == SpecimenListPage.ReviewStatus.APPROVED and not read_only:
+            messages.info(request, _("This page has already been approved."))
+            return redirect("specimen_list_queue")
+        if page.page_type in {
+            SpecimenListPage.PageType.SPECIMEN_LIST_DETAILS,
+            SpecimenListPage.PageType.SPECIMEN_LIST_RELATIONS,
+        }:
+            if not read_only:
+                page = self._claim_page(request, pk)
+        context = self._build_context(request, page, read_only=read_only)
+        return render(request, self._get_template_name(page), context)
+
+    def post(self, request, pk):
+        page = self._get_page(request, pk)
+        read_only = request.GET.get("mode") == "view" or page.pipeline_status == SpecimenListPage.PipelineStatus.APPROVED
+        if read_only:
+            messages.info(request, _("Viewing mode: edits are disabled."))
+            target_url = page.get_absolute_url()
+            return redirect(f"{target_url}?mode=view")
+        if page.review_status == SpecimenListPage.ReviewStatus.APPROVED:
+            messages.info(request, _("This page has already been approved."))
+            return redirect("specimen_list_queue")
+        if page.page_type not in {
+            SpecimenListPage.PageType.SPECIMEN_LIST_DETAILS,
+            SpecimenListPage.PageType.SPECIMEN_LIST_RELATIONS,
+        }:
+            context = self._build_context(request, page)
+            return render(request, self._get_template_name(page), context)
+        action = request.POST.get("action")
+        if action in {"approve", "reject", "release", "not_specimen_list"}:
+            if action == "approve":
+                low_confidence_only = request.GET.get("low_confidence") in {"1", "true", "yes", "on"}
+                confidence_threshold = Decimal(
+                    str(getattr(settings, "SPECIMEN_LIST_LOW_CONFIDENCE_THRESHOLD", "0.7"))
+                )
+                column_order = self._build_column_order(page, low_confidence_only, confidence_threshold)
+                formset = self._build_row_formset(
+                    request,
+                    page,
+                    column_order,
+                    low_confidence_only,
+                    confidence_threshold,
+                )
+                if formset.is_valid():
+                    self._save_row_formset(page, formset, column_order)
+                else:
+                    messages.error(request, _("Please correct the row review form errors."))
+                    context = self._build_context(request, page, formset=formset)
+                    return render(request, self._get_template_name(page), context)
+            try:
+                page = self._update_review_status(request, pk, action)
+            except ValidationError as exc:
+                messages.error(request, " ".join(str(message) for message in exc.messages))
+                context = self._build_context(request, page)
+                return render(request, self._get_template_name(page), context)
+
+            if action == "approve":
+                page.refresh_from_db()
+                if page.review_status != SpecimenListPage.ReviewStatus.APPROVED:
+                    row_errors: list[str] = []
+                    for row in page.row_candidates.all().order_by("row_index"):
+                        import_result = (row.data or {}).get("_import_result")
+                        if not isinstance(import_result, dict):
+                            continue
+                        errors = import_result.get("errors")
+                        if not isinstance(errors, list) or not errors:
+                            continue
+                        error_text = ", ".join(str(err) for err in errors)
+                        row_errors.append(
+                            _("Row %(index)s: %(errors)s")
+                            % {"index": row.row_index + 1, "errors": error_text}
+                        )
+
+                    if row_errors:
+                        messages.error(request, " ".join(row_errors))
+                    else:
+                        messages.error(
+                            request,
+                            _("Page approval did not complete. Please review row data and try again."),
+                        )
+                    context = self._build_context(request, page)
+                    return render(request, self._get_template_name(page), context)
+            return redirect("specimen_list_queue")
+        else:
+            low_confidence_only = request.GET.get("low_confidence") in {"1", "true", "yes", "on"}
+            confidence_threshold = Decimal(
+                str(getattr(settings, "SPECIMEN_LIST_LOW_CONFIDENCE_THRESHOLD", "0.7"))
+            )
+            column_order = self._build_column_order(page, low_confidence_only, confidence_threshold)
+            formset = self._build_row_formset(
+                request,
+                page,
+                column_order,
+                low_confidence_only,
+                confidence_threshold,
+            )
+            if formset.is_valid():
+                self._save_row_formset(page, formset, column_order)
+                messages.success(request, _("Row updates saved."))
+            else:
+                messages.error(request, _("Please correct the row review form errors."))
+                context = self._build_context(request, page, formset=formset)
+                return render(request, self._get_template_name(page), context)
+        context = self._build_context(request, page)
+        return render(request, self._get_template_name(page), context)
+
+    def _get_template_name(self, page: SpecimenListPage) -> str:
+        if page.page_type in {
+            SpecimenListPage.PageType.SPECIMEN_LIST_DETAILS,
+            SpecimenListPage.PageType.SPECIMEN_LIST_RELATIONS,
+        }:
+            return "cms/page_review.html"
+        return "cms/specimen_list_page_detail.html"
+
+    def _get_page(self, request, pk: int) -> SpecimenListPage:
+        return SpecimenListPage.objects.select_related("pdf", "assigned_reviewer").get(pk=pk)
+
+    def _claim_page(self, request, pk: int) -> SpecimenListPage:
+        return acquire_review_lock(
+            page_id=pk,
+            reviewer=request.user,
+            allow_override=can_override_review_lock(request.user),
+        )
+
+    def _update_review_status(
+        self, request, pk: int, action: str | None
+    ) -> SpecimenListPage:
+        with transaction.atomic():
+            page = (
+                SpecimenListPage.objects.select_for_update()
+                .select_related("pdf", "assigned_reviewer")
+                .get(pk=pk)
+            )
+            if page.assigned_reviewer and page.assigned_reviewer != request.user:
+                if not lock_is_expired(page.locked_at):
+                    return page
+
+            now_time = timezone.now()
+            if action == "release":
+                return release_review_lock(
+                    page_id=pk,
+                    reviewer=request.user,
+                    allow_override=can_override_review_lock(request.user),
+                )
+            elif action == "approve":
+                if not can_approve_specimen_list_page(request.user):
+                    raise PermissionDenied
+                approve_page(page=page, reviewer=request.user)
+                page.refresh_from_db()
+            elif action == "reject":
+                page.pipeline_status = SpecimenListPage.PipelineStatus.REJECTED
+                page.review_status = SpecimenListPage.ReviewStatus.REJECTED
+                page.reviewed_at = now_time
+                page.locked_at = None
+                page.save(
+                    update_fields=[
+                        "pipeline_status",
+                        "review_status",
+                        "reviewed_at",
+                        "locked_at",
+                    ]
+                )
+            elif action == "not_specimen_list":
+                page.page_type = SpecimenListPage.PageType.OTHER
+                page.pipeline_status = SpecimenListPage.PipelineStatus.REJECTED
+                page.review_status = SpecimenListPage.ReviewStatus.REJECTED
+                page.reviewed_at = now_time
+                page.locked_at = None
+                page.save(
+                    update_fields=[
+                        "page_type",
+                        "pipeline_status",
+                        "review_status",
+                        "reviewed_at",
+                        "locked_at",
+                    ]
+                )
+            return page
+
+    def _build_context(
+        self,
+        request,
+        page: SpecimenListPage,
+        *,
+        formset: forms.BaseFormSet | None = None,
+        read_only: bool = False,
+    ) -> dict[str, Any]:
+        lock_expired = lock_is_expired(page.locked_at)
+        low_confidence_only = request.GET.get("low_confidence") in {"1", "true", "yes", "on"}
+        confidence_threshold = Decimal(
+            str(getattr(settings, "SPECIMEN_LIST_LOW_CONFIDENCE_THRESHOLD", "0.7"))
+        )
+        is_specimen_list = page.page_type in {
+            SpecimenListPage.PageType.SPECIMEN_LIST_DETAILS,
+            SpecimenListPage.PageType.SPECIMEN_LIST_RELATIONS,
+        }
+        column_order = self._build_column_order(page, low_confidence_only, confidence_threshold)
+        if formset is None:
+            formset = self._build_row_formset(request, page, column_order, low_confidence_only, confidence_threshold)
+        low_confidence_ids = set(
+            str(row.id)
+            for row in SpecimenListRowCandidate.objects.filter(page=page)
+            .exclude(confidence__isnull=True)
+            .filter(confidence__lt=confidence_threshold)
+        )
+        column_label_pairs = [
+            ("red_dot", _("Red Dot")),
+            ("green_dot", _("Green Dot")),
+            ("accession_number", _("Accession Number")),
+            ("field_number", _("Field Number")),
+            ("taxon", _("Taxon")),
+            ("element", _("Element")),
+            ("element_raw", _("Element (raw OCR)")),
+            ("element_corrected", _("Element (corrected)")),
+            ("tooth_marking_detections", _("Tooth-marking detections")),
+            ("locality", _("Locality")),
+            ("review_comment", _("Review comment")),
+            ("row_index", _("Row")),
+        ]
+        return {
+            "page": page,
+            "formset": formset,
+            "lock_expired": lock_expired,
+            "lock_ttl_seconds": SPECIMEN_LIST_LOCK_TTL_SECONDS,
+            "can_take_over": lock_expired,
+            "is_specimen_list": is_specimen_list,
+            "low_confidence_only": low_confidence_only,
+            "confidence_threshold": confidence_threshold,
+            "column_order": column_order,
+            "column_label_pairs": column_label_pairs,
+            "column_table_colspan": len(column_label_pairs) + 1,
+            "low_confidence_ids": low_confidence_ids,
+            "read_only": read_only,
+        }
+
+    def _build_row_formset(
+        self,
+        request,
+        page: SpecimenListPage,
+        column_order: list[str],
+        low_confidence_only: bool,
+        confidence_threshold: Decimal,
+    ) -> forms.BaseFormSet:
+        queryset = SpecimenListRowCandidate.objects.filter(page=page).order_by("row_index")
+        if low_confidence_only:
+            queryset = queryset.filter(confidence__lt=confidence_threshold)
+
+        form_class = self._build_row_form_class(column_order)
+        RowFormSet = forms.formset_factory(form_class, extra=1, can_delete=True)
+
+        if request.method == "POST":
+            return RowFormSet(request.POST, prefix="rows")
+
+        initial = []
+        for row in queryset:
+            row_data = row.data or {}
+            row_initial = {
+                "row_id": row.id,
+                "status": row.status,
+                "row_index": row.row_index + 1,
+                "red_dot": self._coerce_boolean(row_data.get("red_dot")),
+                "green_dot": self._coerce_boolean(row_data.get("green_dot")),
+            }
+            for column in column_order:
+                value = row_data.get(column, "")
+                if column == "tooth_marking_detections" and value not in (None, ""):
+                    value = json.dumps(value, ensure_ascii=False)
+                row_initial[column] = value
+            extra_data = {
+                key: value
+                for key, value in row_data.items()
+                if key not in column_order and not str(key).startswith("_")
+                and key not in {"red_dot", "green_dot", "review_comment"}
+            }
+            if extra_data:
+                row_initial["data_json"] = json.dumps(extra_data, ensure_ascii=False)
+            row_initial["review_comment"] = row_data.get("review_comment", "")
+            initial.append(row_initial)
+        return RowFormSet(initial=initial, prefix="rows")
+
+    def _build_row_form_class(self, column_order: list[str]) -> type[forms.Form]:
+        status_choices = SpecimenListRowCandidate.ReviewStatus.choices
+        fields: dict[str, forms.Field] = {
+            "row_id": forms.IntegerField(required=False, widget=forms.HiddenInput),
+            "red_dot": forms.BooleanField(
+                required=False,
+                label=_("Red Dot"),
+                widget=forms.CheckboxInput(attrs={"class": "w3-check"}),
+            ),
+            "green_dot": forms.BooleanField(
+                required=False,
+                label=_("Green Dot"),
+                widget=forms.CheckboxInput(attrs={"class": "w3-check"}),
+            ),
+            "accession_number": forms.CharField(
+                required=False,
+                label=_("Accession Number"),
+                widget=forms.TextInput(attrs={"class": "w3-input"}),
+            ),
+            "field_number": forms.CharField(
+                required=False,
+                label=_("Field Number"),
+                widget=forms.TextInput(attrs={"class": "w3-input"}),
+            ),
+            "taxon": forms.CharField(
+                required=False,
+                label=_("Taxon"),
+                widget=forms.TextInput(attrs={"class": "w3-input"}),
+            ),
+            "element": forms.CharField(
+                required=False,
+                label=_("Element"),
+                widget=forms.TextInput(attrs={"class": "w3-input"}),
+            ),
+            "element_raw": forms.CharField(
+                required=False,
+                label=_("Element (raw OCR)"),
+                widget=forms.TextInput(
+                    attrs={
+                        "class": "w3-input review-narrow",
+                        "readonly": "readonly",
+                        "aria-readonly": "true",
+                    }
+                ),
+            ),
+            "element_corrected": forms.CharField(
+                required=False,
+                label=_("Element (corrected)"),
+                widget=forms.TextInput(
+                    attrs={
+                        "class": "w3-input review-narrow",
+                        "readonly": "readonly",
+                        "aria-readonly": "true",
+                    }
+                ),
+            ),
+            "tooth_marking_detections": forms.CharField(
+                required=False,
+                label=_("Tooth-marking detections"),
+                widget=forms.Textarea(
+                    attrs={
+                        "class": "w3-input review-narrow",
+                        "rows": 2,
+                        "readonly": "readonly",
+                        "aria-readonly": "true",
+                    }
+                ),
+            ),
+            "locality": forms.CharField(
+                required=False,
+                label=_("Locality"),
+                widget=forms.TextInput(attrs={"class": "w3-input"}),
+            ),
+            "data_json": forms.JSONField(
+                required=False,
+                label=_("Data Json"),
+                widget=forms.Textarea(
+                    attrs={
+                        "class": "w3-input review-narrow",
+                        "rows": 3,
+                        "readonly": "readonly",
+                        "aria-readonly": "true",
+                    }
+                ),
+            ),
+            "review_comment": forms.CharField(
+                required=False,
+                label=_("Review comment"),
+                widget=forms.Textarea(attrs={"class": "w3-input", "rows": 2}),
+            ),
+            "row_index": forms.CharField(
+                required=False,
+                label=_("Row"),
+                widget=forms.TextInput(
+                    attrs={
+                        "class": "w3-input review-narrow",
+                        "readonly": "readonly",
+                        "aria-readonly": "true",
+                    }
+                ),
+            ),
+            "status": forms.ChoiceField(
+                choices=status_choices,
+                required=False,
+                label=_("Row status"),
+                widget=forms.HiddenInput(),
+            ),
+        }
+        ordered_names = [
+            "red_dot",
+            "green_dot",
+            "accession_number",
+            "field_number",
+            "taxon",
+            "element",
+            "element_raw",
+            "element_corrected",
+            "tooth_marking_detections",
+            "locality",
+            "review_comment",
+            "row_index",
+        ]
+        class SpecimenListRowForm(forms.Form):
+            pass
+
+        SpecimenListRowForm.base_fields = fields
+
+        def _init(self, *args, **kwargs):
+            super(SpecimenListRowForm, self).__init__(*args, **kwargs)
+            self.ordered_fields = [(name, self[name]) for name in ordered_names]
+
+        SpecimenListRowForm.__init__ = _init
+        return SpecimenListRowForm
+
+    def _save_row_formset(
+        self,
+        page: SpecimenListPage,
+        formset: forms.BaseFormSet,
+        column_order: list[str],
+    ) -> None:
+        with transaction.atomic():
+            row_map = {
+                row.id: row
+                for row in SpecimenListRowCandidate.objects.filter(page=page)
+            }
+
+            next_index = (
+                SpecimenListRowCandidate.objects.filter(page=page)
+                .order_by("-row_index")
+                .values_list("row_index", flat=True)
+                .first()
+            )
+            next_index = (next_index + 1) if next_index is not None else 0
+
+            for form in formset:
+                if not form.cleaned_data:
+                    continue
+                row_id = form.cleaned_data.get("row_id")
+                if form.cleaned_data.get("DELETE"):
+                    if row_id:
+                        row = row_map.get(row_id)
+                        if row:
+                            row.delete()
+                    continue
+
+                data = {}
+                has_content = False
+                for column in column_order:
+                    value = form.cleaned_data.get(column)
+                    if column == "tooth_marking_detections":
+                        value = row.data.get("tooth_marking_detections") if row_id and row_id in row_map else None
+                    if column in {"element_raw", "element_corrected"}:
+                        value = row.data.get(column) if row_id and row_id in row_map else None
+                    if value not in (None, ""):
+                        has_content = True
+                        data[column] = value
+                    else:
+                        data[column] = None
+
+                data["red_dot"] = bool(form.cleaned_data.get("red_dot"))
+                data["green_dot"] = bool(form.cleaned_data.get("green_dot"))
+                data["review_comment"] = form.cleaned_data.get("review_comment") or ""
+
+                data_json_payload = form.cleaned_data.get("data_json")
+                if isinstance(data_json_payload, dict):
+                    data.update(data_json_payload)
+
+                if row_id:
+                    row = row_map.get(row_id)
+                    if not row:
+                        continue
+                    existing_data = dict(row.data or {})
+                    if "_original_data" not in existing_data:
+                        existing_data["_original_data"] = {
+                            key: value
+                            for key, value in existing_data.items()
+                            if not str(key).startswith("_")
+                        }
+                    existing_data.update(data)
+                    row.data = existing_data
+                    row.status = form.cleaned_data.get("status") or row.status
+                    row.save(update_fields=["data", "status", "updated_at"])
+                    continue
+
+                if not has_content:
+                    continue
+                status = (
+                    form.cleaned_data.get("status")
+                    or SpecimenListRowCandidate.ReviewStatus.EDITED
+                )
+                SpecimenListRowCandidate.objects.create(
+                    page=page,
+                    row_index=next_index,
+                    data=data,
+                    status=status,
+                )
+                next_index += 1
+
+    def _build_column_order(
+        self,
+        page: SpecimenListPage,
+        low_confidence_only: bool,
+        confidence_threshold: Decimal,
+    ) -> list[str]:
+        return [
+            "accession_number",
+            "field_number",
+            "taxon",
+            "element",
+            "element_raw",
+            "element_corrected",
+            "tooth_marking_detections",
+            "locality",
+            "review_comment",
+        ]
+
+    @staticmethod
+    def _coerce_boolean(value: object) -> bool:
+        if value in (True, False):
+            return bool(value)
+        if value is None:
+            return False
+        return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _count_pending_scans() -> int:
@@ -4161,8 +5550,24 @@ def add_reference_to_accession(request, accession_id):
 
     else:
         form = AccessionReferenceForm()
-
+    
     return render(request, 'cms/add_accession_reference.html', {'form': form, 'accession': accession})
+
+
+class AccessionReferenceUpdateView(LoginRequiredMixin, CollectionManagerAccessMixin, UpdateView):
+    model = AccessionReference
+    form_class = AccessionReferenceForm
+    template_name = "cms/edit_accession_reference.html"
+    raise_exception = True
+
+    def get_success_url(self):
+        return reverse("accession_detail", args=[self.object.accession_id])
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.setdefault("accession", self.object.accession)
+        context.setdefault("page_title", _("Edit accession reference"))
+        return context
 
 @login_required
 @user_passes_test(is_collection_manager)
@@ -4209,6 +5614,48 @@ def add_specimen_to_accession_row(request, accession_row_id):
         form = AccessionRowSpecimenForm()
 
     return render(request, 'cms/add_accession_row_specimen.html', {'form': form, 'accession_row': accession_row})
+
+@login_required
+@user_passes_test(is_collection_manager)
+def edit_specimen_element(request, element_id):
+    """Edit an existing specimen element (NatureOfSpecimen)."""
+    element = get_object_or_404(NatureOfSpecimen, id=element_id)
+    accession_row = element.accession_row
+    
+    if request.method == 'POST':
+        form = AccessionRowSpecimenForm(request.POST, instance=element)
+        if form.is_valid():
+            form.save()
+            return redirect('accessionrow_detail', pk=accession_row.id)
+    else:
+        form = AccessionRowSpecimenForm(instance=element)
+    
+    return render(request, 'cms/edit_accession_row_specimen.html', {
+        'form': form, 
+        'accession_row': accession_row,
+        'element': element
+    })
+
+@login_required
+@user_passes_test(is_collection_manager)
+def edit_identification(request, identification_id):
+    """Edit an existing Identification record."""
+    identification = get_object_or_404(Identification, id=identification_id)
+    accession_row = identification.accession_row
+
+    if request.method == 'POST':
+        form = AccessionRowIdentificationForm(request.POST, instance=identification)
+        if form.is_valid():
+            form.save()
+            return redirect('accessionrow_detail', pk=accession_row.id)
+    else:
+        form = AccessionRowIdentificationForm(instance=identification)
+    
+    return render(request, 'cms/edit_accession_row_identification.html', {
+        'form': form, 
+        'accession_row': accession_row,
+        'identification': identification
+    })
 
 @login_required
 @user_passes_test(is_collection_manager)
@@ -4580,10 +6027,144 @@ def inventory_log_unexpected(request):
     UnexpectedSpecimen.objects.create(identifier=identifier)
     return JsonResponse({"success": True})
 
+class HistoryTabContextMixin:
+    """Provide change history context and tab metadata when permitted."""
 
-class CollectionManagerAccessMixin(UserPassesTestMixin):
-    def test_func(self):
+    detail_tab_template: str = ""
+    history_tab_template: str = ""
+    tabs_context_key: str = "tabs"
+    detail_tab_id: str = "details"
+    history_tab_id: str = "history"
+    detail_tab_label: str = _("Details")
+    history_tab_label: str = _("Change log")
+    detail_tab_icon: str = "fa-circle-info"
+    history_tab_icon: str = "fa-clock-rotate-left"
+
+    def can_view_history(self) -> bool:
         return is_collection_manager(self.request.user) or self.request.user.is_superuser
+
+    def get_history_entries(self):
+        if not self.can_view_history():
+            return []
+        return build_history_entries(self.object)
+
+    def get_detail_tab_definition(self):
+        return {
+            "id": self.detail_tab_id,
+            "slug": getattr(self, "detail_tab_slug", None) or self.detail_tab_id,
+            "label": self.detail_tab_label or _("Details"),
+            "icon": self.detail_tab_icon,
+            "template": self.detail_tab_template,
+            "active": True,
+        }
+
+    def get_history_tab_definition(self):
+        if not self.can_view_history():
+            return None
+        return {
+            "id": self.history_tab_id,
+            "slug": getattr(self, "history_tab_slug", None) or self.history_tab_id,
+            "label": self.history_tab_label,
+            "icon": self.history_tab_icon,
+            "template": self.history_tab_template,
+        }
+
+    def get_tab_definitions(self):
+        tabs = [self.get_detail_tab_definition()]
+        history_tab = self.get_history_tab_definition()
+        if history_tab:
+            tabs.append(history_tab)
+        return tabs
+
+    def add_history_tab_context(self, context):
+        context["history_entries"] = self.get_history_entries()
+        context[self.tabs_context_key] = self.get_tab_definitions()
+        return context
+
+
+class GenerateAccessionBatchView(LoginRequiredMixin, CollectionManagerAccessMixin, FormView):
+    template_name = "cms/accession_batch_form.html"
+    form_class = AccessionNumberSeriesAdminForm
+    success_url = reverse_lazy("accession-wizard")
+
+    def dispatch(self, request, *args, **kwargs):
+        has_active_series = AccessionNumberSeries.objects.active_for_user(
+            request.user
+        ).exists()
+
+        if has_active_series and not request.user.is_superuser:
+            messages.error(
+                request,
+                _("You already have an active accession number series."),
+            )
+            return redirect("dashboard")
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs.setdefault("initial", {})
+        if not self.request.user.is_superuser:
+            kwargs["initial"]["user"] = self.request.user
+        kwargs["request_user"] = self.request.user
+        return kwargs
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+
+        user_field = form.fields.get("user")
+        if user_field:
+            if self.request.user.is_superuser:
+                user_field.queryset = User.objects.order_by("username")
+            else:
+                user_field.queryset = User.objects.filter(pk=self.request.user.pk)
+                user_field.initial = self.request.user
+                if not user_field.widget.is_hidden:
+                    user_field.widget = forms.HiddenInput(attrs=user_field.widget.attrs)
+
+        count_field = form.fields.get("count")
+        if count_field:
+            count_field.max_value = 100
+
+        return form
+
+    def form_valid(self, form):
+        count = form.cleaned_data.get("count")
+        if count and count > 100:
+            form.add_error(
+                "count",
+                _("You can generate up to 100 accession numbers at a time."),
+            )
+            return self.form_invalid(form)
+
+        target_user = form.cleaned_data.get("user") or self.request.user
+        form.instance.user = target_user
+        form.instance.is_active = True
+
+        self.object = form.save()
+        messages.success(
+            self.request,
+            _("Accession number series created successfully."),
+        )
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        if (
+            self.request.user.is_superuser
+            and getattr(self, "object", None)
+            and self.object.user != self.request.user
+        ):
+            return reverse("dashboard")
+        return super().get_success_url()
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.setdefault("series_remaining", None)
+        context.setdefault("series_range", None)
+        context.setdefault("title", _("Accession Numbers"))
+        context.setdefault("method", "post")
+        context.setdefault("action", self.request.path)
+        return context
 
 
 class DrawerRegisterAccessMixin(CollectionManagerAccessMixin):
@@ -4613,10 +6194,18 @@ class StorageListView(LoginRequiredMixin, CollectionManagerAccessMixin, FilterVi
         return context
 
 
-class StorageDetailView(LoginRequiredMixin, CollectionManagerAccessMixin, DetailView):
+class StorageDetailView(
+    LoginRequiredMixin, CollectionManagerAccessMixin, HistoryTabContextMixin, DetailView
+):
     model = Storage
     template_name = "cms/storage_detail.html"
     context_object_name = "storage"
+    tabs_context_key = "storage_tabs"
+    detail_tab_template = "cms/tabs/storage_details.html"
+    history_tab_template = "cms/tabs/storage_history.html"
+    detail_tab_id = "storage-details"
+    history_tab_id = "storage-history"
+    detail_tab_label = _("Details")
 
     def get_queryset(self):
         accession_rows = AccessionRow.objects.select_related(
@@ -4649,7 +6238,7 @@ class StorageDetailView(LoginRequiredMixin, CollectionManagerAccessMixin, Detail
         context["specimens"] = page_obj.object_list
         context["specimen_count"] = paginator.count
         context["children"] = getattr(self.object, "child_storages", [])
-        context["history_entries"] = build_history_entries(self.object)
+        context = self.add_history_tab_context(context)
         return context
 
 
@@ -4693,16 +6282,53 @@ class DrawerRegisterReorderView(LoginRequiredMixin, DrawerRegisterAccessMixin, V
         return JsonResponse({"status": "ok"})
 
 
-class DrawerRegisterDetailView(LoginRequiredMixin, DrawerRegisterAccessMixin, DetailView):
+class DrawerRegisterDetailView(
+    LoginRequiredMixin, DrawerRegisterAccessMixin, HistoryTabContextMixin, DetailView
+):
     model = DrawerRegister
     template_name = "cms/drawerregister_detail.html"
+    tabs_context_key = "drawer_tabs"
+    detail_tab_template = "cms/tabs/drawerregister_details.html"
+    history_tab_template = "cms/tabs/drawerregister_history.html"
+    detail_tab_id = "drawer-details"
+    history_tab_id = "drawer-history"
+    detail_tab_label = _("Details")
+
+    def get_queryset(self):
+        user_model = get_user_model()
+        return (
+            super()
+            .get_queryset()
+            .prefetch_related(
+                Prefetch(
+                    "localities",
+                    queryset=Locality.objects.order_by("name", "pk"),
+                ),
+                Prefetch(
+                    "taxa",
+                    queryset=Taxon.objects.order_by("taxon_name", "pk"),
+                ),
+                Prefetch(
+                    "scanning_users",
+                    queryset=user_model.objects.order_by(
+                        "last_name", "first_name", "pk"
+                    ),
+                ),
+                Prefetch(
+                    "scans",
+                    queryset=Scanning.objects.select_related("user").order_by(
+                        "-start_time", "pk"
+                    ),
+                ),
+            )
+        )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["can_edit"] = (
             is_collection_manager(self.request.user) or self.request.user.is_superuser
         )
-        context["history_entries"] = build_history_entries(self.object)
+        context = self.add_history_tab_context(context)
         return context
 
 
@@ -4718,6 +6344,83 @@ class DrawerRegisterUpdateView(LoginRequiredMixin, DrawerRegisterAccessMixin, Up
     form_class = DrawerRegisterForm
     template_name = "cms/drawerregister_form.html"
     success_url = reverse_lazy("drawerregister_list")
+
+
+class ManualQCImportView(LoginRequiredMixin, PermissionRequiredMixin, FormView):
+    template_name = "cms/manual_import_form.html"
+    form_class = ManualQCImportForm
+    permission_required = "cms.can_import_manual_qc"
+    raise_exception = True
+    success_url = reverse_lazy("manual_qc_import")
+
+    error_session_key = "cms_manual_qc_error_report"
+
+    def dispatch(self, request, *args, **kwargs):
+        ensure_manual_qc_permission()
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
+        if request.GET.get("download") == "errors":
+            return self._download_error_report()
+        return super().get(request, *args, **kwargs)
+
+    def form_valid(self, form: ManualQCImportForm):  # type: ignore[override]
+        result = form.execute_import(self.request.user)
+        self._store_error_report(result)
+
+        if result.success_count:
+            messages.success(
+                self.request,
+                _("Imported %(success)d manual QC rows.")
+                % {"success": result.success_count},
+            )
+
+        if result.error_count:
+            messages.warning(
+                self.request,
+                _(
+                    "%(error)d rows could not be imported. Download the error report for details."
+                )
+                % {"error": result.error_count},
+            )
+
+        context = self.get_context_data(
+            form=self.get_form_class()(),
+            result=result,
+        )
+        return self.render_to_response(context)
+
+    def form_invalid(self, form):
+        self._clear_error_report()
+        return super().form_invalid(form)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.setdefault("result", None)
+        return context
+
+    def _store_error_report(self, result: ManualImportSummary) -> None:
+        if result.error_count:
+            self.request.session[self.error_session_key] = result.build_error_report()
+            self.request.session.modified = True
+        else:
+            self._clear_error_report()
+
+    def _clear_error_report(self) -> None:
+        if self.error_session_key in self.request.session:
+            del self.request.session[self.error_session_key]
+            self.request.session.modified = True
+
+    def _download_error_report(self) -> HttpResponse:
+        report = self.request.session.get(self.error_session_key)
+        if not report:
+            raise Http404("No manual QC error report available.")
+
+        response = HttpResponse(report, content_type="text/csv")
+        response["Content-Disposition"] = (
+            'attachment; filename="manual-qc-import-errors.csv"'
+        )
+        return response
 
 
 @login_required

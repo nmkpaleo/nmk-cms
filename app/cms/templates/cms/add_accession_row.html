@@ -1,9 +1,18 @@
 {% extends "base_generic.html" %}
+{% load i18n %}
 
-{% block title %}Add Accession Specimen{% endblock %}
+{% block title %}{% trans "Add Accession Specimen" %}{% endblock %}
 
 {% block content %}
-    {% include "includes/base_form.html" with form=form submit_label="Save" method="post" action=request.path title="Specimen to Accession: " access=accession %}
-    
-    <a href="{% url 'accession_detail' accession.id %}">Back to Accession</a>
+  {% trans "Save specimen" as save_specimen_label %}
+  {% trans "Specimen to accession:" as specimen_to_accession_label %}
+  <main class="w3-container w3-margin-top w3-margin-bottom" role="main">
+    {% include "includes/base_form.html" with form=form submit_label=save_specimen_label submit_icon="fa-feather" method="post" action=request.path title=specimen_to_accession_label access=accession heading_id="accession-specimen-form" %}
+    <div class="w3-margin-top">
+      <a href="{% url 'accession_detail' accession.id %}" class="w3-button w3-white w3-border w3-round-large w3-hover-light-grey">
+        <i class="fa-solid fa-arrow-left-long" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "Back to accession" %}</span>
+      </a>
+    </div>
+  </main>
 {% endblock %}

@@ -4,62 +4,7 @@
     {% trans "Signup" %}
 {% endblock head_title %}
 {% block content %}
-
-<div class="Login_page">
-
-    <div class="Login_box">
-
-   <!--  {% element h1 %}
-        {% trans "Sign Up" %}
-    {% endelement %}-->
-
-    <div class="login-header">
-        <h1 class="login-h1">Sign Up</h1>
-        <!--<p class="login-profile"><i class="fa-solid fa-user"></i></p>-->
-    </div>
-   
-    {% if not SOCIALACCOUNT_ONLY %}
-        {% url 'account_signup' as action_url %}
-        {% element form form=form method="post" action=action_url tags="entrance,signup" %}
-            {% slot body %}
-                {% csrf_token %}
-                {% element fields form=form unlabeled=True %}
-                {% endelement %}
-                {{ redirect_field }}
-            {% endslot %}
-            {% slot actions %}
-                {% element button tags="prominent,signup" type="submit" %}
-                    {% trans "Sign Up" %}
-                {% endelement %}
-            {% endslot %}
-        {% endelement %}
-    {% endif %}
-    {% if PASSKEY_SIGNUP_ENABLED %}
-        {% element hr %}
-        {% endelement %}
-        {% element button href=signup_by_passkey_url tags="prominent,signup,outline,primary" %}
-            {% trans "Sign up using a passkey" %}
-        {% endelement %}
-    {% endif %}
-    {% if SOCIALACCOUNT_ENABLED %}
-        {% include "socialaccount/snippets/login.html" with page_layout="entrance" %}
-    {% endif %}
-
-
-     
-    {% setvar link %}
-        <a href="{{ login_url }}">
-        {% endsetvar %}
-        {% setvar end_link %}
-        </a>
-    {% endsetvar %}
-    {% element p %}
-    <span class="signup-text"> {% blocktranslate %}Already have an account? {{ link }}Sign In{{ end_link }}.{% endblocktranslate %}</span>
-    {% endelement %}
-
-  </div>
-    
-    
-</div>
-
+    {% with auth_layout_title=_("Sign Up") auth_layout_subtitle=_("Join the NMK community to access collections and services.") auth_layout_body_template="account/snippets/_signup_form.html" %}
+        {% include "account/_auth_layout.html" %}
+    {% endwith %}
 {% endblock content %}

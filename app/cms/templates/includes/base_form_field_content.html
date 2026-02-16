@@ -1,0 +1,56 @@
+{% load i18n form_helpers %}
+<div
+  class="w3-margin-bottom w3-padding-small w3-round-large {% if field.errors %}w3-border w3-border-red{% else %}w3-border w3-border-light-grey{% endif %}"
+  data-field-name="{{ field.name }}"
+>
+  {% if field.field.widget.input_type == 'checkbox' %}
+    <label class="w3-text-dark-gray w3-medium w3-block">
+      {% if describedby %}
+        {% render_field_widget field describedby=describedby invalid=field.errors %}
+      {% else %}
+        {% render_field_widget field invalid=field.errors %}
+      {% endif %}
+      <span class="w3-margin-left">{{ field.label }}</span>
+      {% if field.field.required %}
+        <span class="w3-text-red" aria-hidden="true">*</span>
+        <span class="w3-hide">{% trans "Required field" %}</span>
+      {% endif %}
+    </label>
+  {% else %}
+    <label class="w3-text-dark-gray w3-medium" for="{{ field.id_for_label }}">
+      {{ field.label }}
+      {% if field.field.required %}
+        <span class="w3-text-red" aria-hidden="true">*</span>
+        <span class="w3-hide">{% trans "Required field" %}</span>
+      {% endif %}
+    </label>
+    <div class="w3-margin-top">
+      {% if describedby %}
+        {% render_field_widget field describedby=describedby invalid=field.errors %}
+      {% else %}
+        {% render_field_widget field invalid=field.errors %}
+      {% endif %}
+    </div>
+  {% endif %}
+
+  {% if field.name == 'user' and series_remaining %}
+    <div class="w3-padding-small w3-pale-yellow w3-round-large w3-margin-top">
+      <strong>{{ series_remaining }}</strong> {% trans "accession numbers available." %}
+      {% if series_range %}
+        <br />{{ series_range }}
+      {% endif %}
+    </div>
+  {% endif %}
+
+  {% if field.help_text %}
+    <p id="{{ field.id_for_label }}-help" class="w3-small w3-text-gray w3-margin-top">{{ field.help_text }}</p>
+  {% endif %}
+
+  {% if field.errors %}
+    <ul id="{{ field.id_for_label }}-errors" class="w3-small w3-text-red w3-margin-top" role="alert">
+      {% for error in field.errors %}
+        <li>{{ error }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+</div>

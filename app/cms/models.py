@@ -1,4 +1,5 @@
 from decimal import Decimal, InvalidOperation
+import warnings
 
 from crum import get_current_user
 from django.db import models
@@ -6,17 +7,23 @@ from django.db.models.functions import TruncDate
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.urls import reverse
 from django.utils import timezone
 from django_userforeignkey.models.fields import UserForeignKey
-from django.db.models import Count, Sum, UniqueConstraint
+from django.db.models import Count, Index, Sum, UniqueConstraint
 from django.contrib.auth.models import User
 from simple_history.models import HistoricalRecords
 import os # For file handling in media class
 from django.core.exceptions import ValidationError
 import string # For generating specimen number
+from typing import Any, Dict, Optional
 import uuid
+from django.utils.translation import gettext_lazy as _
 User = get_user_model()
+
+
+MANUAL_QC_SOURCE = "manual_qc"
 
 from .merge import MergeMixin, MergeStrategy
 from .notifications import notify_media_qc_transition
@@ -101,6 +108,104 @@ class BaseModel(models.Model):
         super().delete(*args, **kwargs)
 
 
+def _resolve_user_organisation(user: User | None) -> Optional["Organisation"]:
+    """Return the organisation for a user when a membership exists."""
+
+    if user is None:
+        return None
+
+    membership = getattr(user, "organisation_membership", None)
+    if membership is None:
+        return None
+
+    return membership.organisation
+
+
+class AccessionNumberSeriesQuerySet(models.QuerySet):
+    """Query helpers for organisation-aware accession number series lookups."""
+
+    def for_user(self, user: User):
+        organisation = _resolve_user_organisation(user)
+        queryset = self.filter(user=user)
+        if organisation is not None:
+            queryset = queryset.filter(organisation=organisation)
+        return queryset
+
+    def active_for_user(self, user: User):
+        return self.for_user(user).filter(is_active=True)
+
+
+class AccessionNumberSeriesManager(models.Manager.from_queryset(AccessionNumberSeriesQuerySet)):
+    def get_queryset(self):
+        return super().get_queryset().select_related("organisation", "user")
+
+
+class Organisation(BaseModel):
+    """Organisation grouping users and accession number series ownership."""
+
+    name = models.CharField(
+        max_length=255,
+        unique=True,
+        help_text=_("Display name for the organisation."),
+    )
+    code = models.SlugField(
+        max_length=50,
+        unique=True,
+        help_text=_("Short code used to identify the organisation."),
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text=_("Whether the organisation can be assigned to users and series."),
+    )
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ["name"]
+        verbose_name = _("Organisation")
+        verbose_name_plural = _("Organisations")
+
+    def clean(self):
+        # Allow system-level creation where no request user is available (e.g. migrations).
+        user = get_current_user()
+        if not user or isinstance(user, AnonymousUser):
+            return None
+        return super().clean()
+
+    def __str__(self):
+        return self.name
+
+
+class UserOrganisation(BaseModel):
+    """One-to-one mapping connecting a user to an organisation."""
+
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name="organisation_membership",
+        help_text=_("User assigned to an organisation."),
+    )
+    organisation = models.ForeignKey(
+        Organisation,
+        on_delete=models.PROTECT,
+        related_name="memberships",
+        help_text=_("Organisation the user belongs to."),
+    )
+    history = HistoricalRecords()
+
+    class Meta:
+        verbose_name = _("User organisation")
+        verbose_name_plural = _("User organisations")
+
+    def clean(self):
+        user = get_current_user()
+        if not user or isinstance(user, AnonymousUser):
+            return None
+        return super().clean()
+
+    def __str__(self):
+        return f"{self.user} → {self.organisation}"
+
+
 class MergeLog(BaseModel):
     """Audit trail capturing the outcome of merge operations."""
 
@@ -173,14 +278,26 @@ class MergeLog(BaseModel):
 
 # Locality Model
 class Locality(BaseModel):
+    class GeologicalTime(models.TextChoices):
+        MIOCENE = "M", _("Miocene")
+        PLIOCENE = "Pi", _("Pliocene")
+        PLEISTOCENE = "Pe", _("Pleistocene")
+        HOLOCENE = "H", _("Holocene")
+
     abbreviation = models.CharField(
         max_length=2,
         unique=True,
         help_text="Enter the Abbreviation of the Locality",
     )
     name = models.CharField(max_length=50, help_text="The name of the Locality.")
+    geological_times = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=_("Selected geological time abbreviations for this locality."),
+        verbose_name=_("Geological time"),
+    )
     history = HistoricalRecords()
-    
+
     class Meta:
         ordering = ["name"]
 
@@ -193,6 +310,53 @@ class Locality(BaseModel):
     class Meta:
         verbose_name = "Locality"
         verbose_name_plural = "Localities"
+
+    def clean(self):
+        super().clean()
+        times = self.geological_times or []
+        if not isinstance(times, list):
+            raise ValidationError(
+                {"geological_times": _("Geological times must be a list of values.")}
+            )
+
+        invalid = [value for value in times if value not in self.GeologicalTime.values]
+        if invalid:
+            raise ValidationError(
+                {
+                    "geological_times": _(
+                        "Invalid geological time selection: %(invalid)s"
+                    )
+                    % {"invalid": ", ".join(invalid)}
+                }
+            )
+
+        # Ensure stored list does not contain duplicates while preserving order.
+        seen: set[str] = set()
+        deduped: list[str] = []
+        for value in times:
+            if value in seen:
+                continue
+            seen.add(value)
+            deduped.append(value)
+        self.geological_times = deduped
+
+    def get_geological_times_display(self) -> list[str]:
+        display_labels: list[str] = []
+        for value in self.geological_times:
+            try:
+                display_labels.append(self.GeologicalTime(value).label)
+            except ValueError:
+                display_labels.append(value)
+        return display_labels
+
+    def geological_times_label_display(self) -> str:
+        return "/".join(str(label) for label in self.get_geological_times_display())
+
+    geological_times_label_display.short_description = _("Geological time(s)")
+    geological_times_label_display.admin_order_field = "geological_times"
+
+    def geological_times_abbreviation_display(self) -> str:
+        return "/".join(self.geological_times)
 
 
 class Place(BaseModel):
@@ -361,6 +525,31 @@ class Accession(BaseModel):
     )
     history = HistoricalRecords()
 
+    @property
+    def manual_import_media(self):
+        """Return the first related media item originating from a manual QC import."""
+
+        prefetched = getattr(self, "_prefetched_objects_cache", {}).get("media")
+        if prefetched is not None:
+            for media in prefetched:
+                if getattr(media, "is_manual_import", False):
+                    return media
+
+        for media in self.media.all():
+            if getattr(media, "is_manual_import", False):
+                return media
+        return None
+
+    def get_manual_import_metadata(self) -> Optional[Dict[str, Any]]:
+        media = self.manual_import_media
+        if media is None:
+            return None
+        return media.get_manual_import_metadata()
+
+    @property
+    def is_manual_import(self) -> bool:
+        return self.get_manual_import_metadata() is not None
+
     def save(self, *args, **kwargs):
         """
         Auto-updates `is_published` based on related references.
@@ -383,9 +572,24 @@ class Accession(BaseModel):
         ordering = ["collection", "specimen_prefix", "specimen_no"]
         verbose_name = "Accession"
         verbose_name_plural = "Accessions"
-        unique_together = ('specimen_no', 'specimen_prefix', 'instance_number')
+        constraints = [
+            models.UniqueConstraint(
+                fields=["specimen_no", "specimen_prefix", "instance_number"],
+                name="unique_accession_specimen_instance",
+            )
+        ]
 
 class AccessionNumberSeries(BaseModel):
+    objects = AccessionNumberSeriesManager()
+
+    organisation = models.ForeignKey(
+        Organisation,
+        on_delete=models.PROTECT,
+        related_name="accession_number_series",
+        null=True,
+        blank=True,
+        help_text="Organisation associated with this accession number range.",
+    )
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -408,51 +612,42 @@ class AccessionNumberSeries(BaseModel):
     history = HistoricalRecords()
 
     class Meta:
-        ordering = ['user', 'start_from']
+        ordering = ["organisation", "user", "start_from"]
 
     def clean(self):
         if not hasattr(self, "user") or self.user is None:
             return  # Let the form validator complain that user is required
 
+        if self.organisation is None:
+            resolved_organisation = _resolve_user_organisation(self.user)
+            if resolved_organisation:
+                self.organisation = resolved_organisation
+        if self.organisation is None:
+            raise ValidationError(
+                _("An organisation is required for an accession number series."),
+            )
+
         if self.start_from is None or self.end_at is None:
             return
 
-        if self.start_from >= self.end_at:
-            raise ValidationError("Start number must be less than end number.")
+        if self.start_from > self.end_at:
+            raise ValidationError(_("Start number cannot exceed end number."))
         
-        # Determine if this is TBI or shared user series
-        is_tbi = self.user.username.strip().lower() == "tbi"
-
-        # Build appropriate queryset to check overlaps
-        if is_tbi:
-            # Only check overlap among TBI's series
-            conflicting_series = AccessionNumberSeries.objects.exclude(pk=self.pk).filter(
-                user__username__iexact="tbi",
+        conflicting_series = (
+            AccessionNumberSeries.objects.exclude(pk=self.pk)
+            .filter(
+                organisation=self.organisation,
                 start_from__lte=self.end_at,
                 end_at__gte=self.start_from,
             )
-        else:
-            # Shared users (everyone except TBI)
-            conflicting_series = AccessionNumberSeries.objects.exclude(pk=self.pk).exclude(
-                user__username__iexact="tbi"
-            ).filter(
-                start_from__lte=self.end_at,
-                end_at__gte=self.start_from,
-            )
+        )
 
         if conflicting_series.exists():
             raise ValidationError(
                 "This accession number range overlaps with another range in the same series pool."
             )
 
-        # Only allow one active series per user
-        if self.is_active:
-            active_existing = AccessionNumberSeries.objects.exclude(pk=self.pk).filter(
-                user=self.user,
-                is_active=True
-            )
-            if active_existing.exists():
-                raise ValidationError("This user already has an active accession number series.")
+        allow_multiple_active = getattr(self, "_allow_multiple_active", False)
 
     def save(self, *args, **kwargs):
         self.full_clean()
@@ -536,9 +731,15 @@ class Comment(BaseModel):
 # FieldSlip Model
 class FieldSlip(MergeMixin, BaseModel):
     merge_fields = {
-        "field_number": MergeStrategy.PREFER_NON_NULL,
-        "verbatim_taxon": MergeStrategy.PREFER_NON_NULL,
-        "verbatim_element": MergeStrategy.PREFER_NON_NULL,
+        "field_number": MergeStrategy.FIELD_SELECTION,
+        "verbatim_taxon": MergeStrategy.FIELD_SELECTION,
+        "verbatim_element": MergeStrategy.FIELD_SELECTION,
+    }
+    relation_strategies = {
+        "accession_links": {
+            "action": "reassign",
+            "deduplicate": True,
+        }
     }
     field_number = models.CharField(max_length=100, null=False, blank=False, help_text="Field number assigned to the specimen.")
     discoverer = models.CharField(max_length=255, null=True, blank=True, help_text="Person who discovered the specimen.")
@@ -555,6 +756,7 @@ class FieldSlip(MergeMixin, BaseModel):
     verbatim_SRS = models.CharField(max_length=255, null=True, blank=True, help_text="Spatial reference system used in the field.")
     verbatim_coordinate_system = models.CharField(max_length=255, null=True, blank=True, help_text="Coordinate system used in the field (WGS84 etc.).")
     verbatim_elevation = models.CharField(max_length=255, null=True, blank=True, help_text="Elevation as recorded.")
+    comment = models.TextField(null=True, blank=True, help_text="Additional notes from review.")
 
     history = HistoricalRecords()
 
@@ -573,7 +775,7 @@ class FieldSlip(MergeMixin, BaseModel):
 # Storage Model
 class Storage(MergeMixin, BaseModel):
     merge_fields = {
-        "area": MergeStrategy.PREFER_NON_NULL,
+        "area": MergeStrategy.FIELD_SELECTION,
     }
     area = models.CharField(
         max_length=255,
@@ -605,8 +807,8 @@ class Storage(MergeMixin, BaseModel):
 # Reference Model
 class Reference(MergeMixin, BaseModel):
     merge_fields = {
-        "title": MergeStrategy.PREFER_NON_NULL,
-        "citation": MergeStrategy.CONCAT_TEXT,
+        "title": MergeStrategy.FIELD_SELECTION,
+        "citation": MergeStrategy.FIELD_SELECTION,
     }
     title = models.CharField(
         max_length=255,
@@ -701,16 +903,26 @@ class AccessionFieldSlip(BaseModel):
     history = HistoricalRecords()
 
     class Meta:
-        unique_together = ("accession", "fieldslip")  # Ensures no duplicate relations
         ordering = ["accession", "fieldslip"]
         verbose_name = "Accession-FieldSlip Link"
         verbose_name_plural = "Accession-FieldSlip Links"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["accession", "fieldslip"],
+                name="unique_accession_fieldslip",
+            )
+        ]
 
     def __str__(self):
         return f"{self.accession} ↔ {self.fieldslip}"
 
 # AccessionReference Model
-class AccessionReference(BaseModel):
+class AccessionReference(MergeMixin, BaseModel):
+    merge_fields = {
+        "reference": MergeStrategy.FIELD_SELECTION,
+        "page": MergeStrategy.FIELD_SELECTION,
+    }
+
     accession = models.ForeignKey(
         Accession,
         on_delete=models.CASCADE,
@@ -852,7 +1064,7 @@ class UnexpectedSpecimen(BaseModel):
         return self.identifier
 
 # NatureOfSpecimen Model
-class NatureOfSpecimen(BaseModel):
+class NatureOfSpecimen(MergeMixin, BaseModel):
     accession_row = models.ForeignKey(
         AccessionRow,
         on_delete=models.CASCADE,
@@ -879,7 +1091,18 @@ class NatureOfSpecimen(BaseModel):
         max_length=255,
         blank=True,
         null=True,
-        help_text="Element description as originally recorded.",
+        help_text="Element description used for QC and persistence.",
+    )
+    verbatim_element_raw = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Original extracted element text before tooth-marking correction.",
+    )
+    tooth_marking_detections = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="Tooth-marking detection metadata (token, notation, confidence, bbox, replacement_applied).",
     )
     portion = models.CharField(
         max_length=255,
@@ -893,6 +1116,17 @@ class NatureOfSpecimen(BaseModel):
     )
     history = HistoricalRecords()
 
+    merge_fields = {
+        "element": MergeStrategy.FIELD_SELECTION,
+        "side": MergeStrategy.FIELD_SELECTION,
+        "condition": MergeStrategy.FIELD_SELECTION,
+        "verbatim_element": MergeStrategy.FIELD_SELECTION,
+        "verbatim_element_raw": MergeStrategy.FIELD_SELECTION,
+        "tooth_marking_detections": MergeStrategy.FIELD_SELECTION,
+        "portion": MergeStrategy.FIELD_SELECTION,
+        "fragments": MergeStrategy.FIELD_SELECTION,
+    }
+
     def get_absolute_url(self):
         return reverse('natureofspecimen-detail', args=[str(self.id)])
 
@@ -905,7 +1139,25 @@ class NatureOfSpecimen(BaseModel):
 
 
 # Element Model
-class Element(BaseModel):
+class Element(MergeMixin, BaseModel):
+    """Hierarchical anatomical element tracked with audit history.
+
+    Merge preparation notes:
+    - Parent links cascade on delete, so merge flows should reparent children before
+      removing any source records.
+    - No uniqueness constraints on name or parent; duplicates may need FIELD_SELECTION
+      and deduplication strategies during merge.
+    """
+
+    merge_fields = {
+        "name": MergeStrategy.FIELD_SELECTION,
+        "parent_element": MergeStrategy.FIELD_SELECTION,
+    }
+
+    relation_strategies = {
+        "children": {"action": "reassign", "deduplicate": True},
+        "natureofspecimen_set": {"action": "reassign", "deduplicate": True},
+    }
     parent_element = models.ForeignKey(
         'self',
         on_delete=models.CASCADE,
@@ -922,15 +1174,14 @@ class Element(BaseModel):
     )
     history = HistoricalRecords()
 
-    class Meta:
-        ordering = ['parent_element__name', 'name']
-
     def get_absolute_url(self):
         return reverse('element-detail', args=[str(self.id)])
 
     class Meta:
         verbose_name = "Element"
         verbose_name_plural = "Elements"
+        permissions = [("can_merge", "Can merge element records")]
+        ordering = ['parent_element__name', 'name']
 
     def __str__(self):
         return self.name
@@ -979,11 +1230,27 @@ class Identification(BaseModel):
         blank=True,
         help_text="Person who made the identification.",
     )
+    taxon_verbatim = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text=_(
+            "Lowest level of taxonomy provided for the identification; matched to the controlled taxonomy when possible."
+        ),
+    )
     taxon = models.CharField(
         max_length=255,
         blank=True,
         null=True,
         help_text="Determined taxon name.",
+    )
+    taxon_record = models.ForeignKey(
+        "Taxon",
+        on_delete=models.PROTECT,
+        related_name="identifications",
+        null=True,
+        blank=True,
+        help_text=_("Linked taxon from the controlled taxonomy."),
     )
     reference = models.ForeignKey(
         Reference,
@@ -1024,23 +1291,171 @@ class Identification(BaseModel):
         verbose_name_plural = "Identifications"
 
     def __str__(self):
+        display_name = self.preferred_taxon_name or ""
+        if display_name:
+            return f"Identification for AccessionRow {self.accession_row} ({display_name})"
         return f"Identification for AccessionRow {self.accession_row}"
+
+    def clean(self):
+        super().clean()
+        self._sync_taxon_fields()
+        if not self.taxon_verbatim:
+            raise ValidationError(
+                {"taxon_verbatim": _("Provide the lowest taxon for this identification.")}
+            )
+        if self.taxon_record and self.taxon_record.status != TaxonStatus.ACCEPTED:
+            raise ValidationError(
+                {"taxon_record": _("Identifications must reference an accepted taxon.")}
+            )
+
+    def save(self, *args, **kwargs):
+        self._sync_taxon_fields()
+        super().save(*args, **kwargs)
+
+    def _sync_taxon_fields(self) -> None:
+        """Keep legacy and unified taxon fields consistent and auto-link controlled records."""
+
+        original_taxon = self.taxon
+        original_taxon_record_id = self.taxon_record_id
+        original_verbatim = self.taxon_verbatim
+
+        if self.taxon_verbatim:
+            self.taxon_verbatim = self.taxon_verbatim.strip()
+
+        if self.taxon_verbatim and self.taxon != self.taxon_verbatim:
+            # Keep legacy column populated for backwards compatibility while it exists.
+            self.taxon = self.taxon_verbatim
+
+        matched_taxon = self._match_controlled_taxon(self.taxon_verbatim)
+        self.taxon_record = matched_taxon
+
+        if (
+            original_taxon != self.taxon
+            or original_taxon_record_id != self.taxon_record_id
+            or original_verbatim != self.taxon_verbatim
+        ):
+            self._change_reason = _("Taxonomy synchronized with unified taxon fields.")
+
+    @property
+    def preferred_taxon_name(self) -> Optional[str]:
+        """Return the controlled taxon name if available, otherwise verbatim text."""
+
+        if self.taxon_record:
+            return self.taxon_record.taxon_name
+        return self.taxon or self.taxon_verbatim
+
+    @property
+    def has_controlled_taxon(self) -> bool:
+        return bool(self.taxon_record_id)
+
+    def deprecated_taxon_usage(self) -> str:
+        warnings.warn(
+            "Identification.taxon is deprecated; use taxon_verbatim for free-text values.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.taxon_verbatim or self.taxon or ""
+
+    def _match_controlled_taxon(self, taxon_name: Optional[str]) -> Optional["Taxon"]:
+        """Return a unique accepted, active Taxon that matches the provided name."""
+
+        if not taxon_name:
+            return None
+
+        matches = list(
+            Taxon.objects.filter(
+                taxon_name__iexact=taxon_name,
+                status=TaxonStatus.ACCEPTED,
+                is_active=True,
+            )[:2]
+        )
+
+        if len(matches) == 1:
+            return matches[0]
+
+        return None
 
 
 # Taxon Model
 
-TAXON_RANK_CHOICES = [
-    ('kingdom', 'Kingdom'),
-    ('phylum', 'Phylum'),
-    ('class', 'Class'),
-    ('order', 'Order'),
-    ('family', 'Family'),
-    ('genus', 'Genus'),
-    ('species', 'Species'),
-    ('subspecies', 'Subspecies'),
-]
+class TaxonExternalSource(models.TextChoices):
+    NOW = "NOW", _("NOW")
+    PBDB = "PBDB", _("PBDB")
+    LEGACY = "LEGACY", _("Legacy")
+
+
+class TaxonStatus(models.TextChoices):
+    ACCEPTED = "accepted", _("Accepted")
+    SYNONYM = "synonym", _("Synonym")
+    INVALID = "invalid", _("Invalid")
+
+
+class TaxonRank(models.TextChoices):
+    KINGDOM = "kingdom", _("Kingdom")
+    PHYLUM = "phylum", _("Phylum")
+    CLASS = "class", _("Class")
+    ORDER = "order", _("Order")
+    SUPERFAMILY = "superfamily", _("Superfamily")
+    FAMILY = "family", _("Family")
+    SUBFAMILY = "subfamily", _("Subfamily")
+    TRIBE = "tribe", _("Tribe")
+    GENUS = "genus", _("Genus")
+    SPECIES = "species", _("Species")
+    SUBSPECIES = "subspecies", _("Subspecies")
+
+
+TAXON_RANK_CHOICES = TaxonRank.choices
 
 class Taxon(BaseModel):
+    external_source = models.CharField(
+        max_length=16,
+        choices=TaxonExternalSource.choices,
+        default=TaxonExternalSource.LEGACY,
+        help_text=_("External source that provided this taxon."),
+    )
+    external_id = models.CharField(
+        max_length=191,
+        blank=True,
+        null=True,
+        help_text=_("Stable identifier supplied by the external source."),
+    )
+    author_year = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text=_("Authorship information associated with the name."),
+    )
+    status = models.CharField(
+        max_length=16,
+        choices=TaxonStatus.choices,
+        default=TaxonStatus.ACCEPTED,
+        help_text=_("Curation status for the taxon record."),
+    )
+    accepted_taxon = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="synonyms",
+        limit_choices_to={"status": TaxonStatus.ACCEPTED},
+        help_text=_("Accepted taxon referenced when this record is a synonym."),
+    )
+    parent = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="children",
+        help_text=_("Immediate parent in the taxonomic hierarchy, when available."),
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text=_("Indicates whether the taxon should be treated as active."),
+    )
+    source_version = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text=_("Version or commit identifier for the external source."),
+    )
     taxon_rank = models.CharField(
         max_length=50,
         choices=TAXON_RANK_CHOICES,
@@ -1114,14 +1529,39 @@ class Taxon(BaseModel):
     history = HistoricalRecords()
 
     class Meta:
-        ordering = ['class_name', 'order', 'family', 'genus', 'species']
-        verbose_name = 'Taxon'
-        verbose_name_plural = 'Taxa'
+        ordering = ["class_name", "order", "family", "genus", "species"]
+        verbose_name = "Taxon"
+        verbose_name_plural = "Taxa"
         constraints = [
             models.UniqueConstraint(
-                fields=['taxon_rank', 'taxon_name', 'scientific_name_authorship'],
-                name='unique_taxon_rank_name_authorship'
-            )
+                fields=["taxon_rank", "taxon_name", "scientific_name_authorship"],
+                name="unique_taxon_rank_name_authorship",
+            ),
+            models.UniqueConstraint(
+                fields=["external_source", "external_id"],
+                name="unique_taxon_external_source_id",
+                condition=(
+                    models.Q(external_source__isnull=False, external_id__isnull=False)
+                    & ~models.Q(external_id="")
+                ),
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(status=TaxonStatus.ACCEPTED, accepted_taxon__isnull=True)
+                    | models.Q(status=TaxonStatus.SYNONYM, accepted_taxon__isnull=False)
+                    | models.Q(status=TaxonStatus.INVALID)
+                ),
+                name="taxon_status_consistency",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["external_source", "external_id"], name="taxon_external_idx"),
+            models.Index(fields=["status"], name="taxon_status_idx"),
+            models.Index(fields=["taxon_rank"], name="taxon_rank_idx"),
+            models.Index(fields=["is_active"], name="taxon_active_idx"),
+        ]
+        permissions = [
+            ("can_sync", "Can sync external taxonomy data"),
         ]
 
     def clean(self):
@@ -1130,6 +1570,19 @@ class Taxon(BaseModel):
             raise ValidationError("Genus and species must have a family.")
         if not self.genus and self.species:
             raise ValidationError("Species must have a genus.")
+        if self.status == TaxonStatus.ACCEPTED and self.accepted_taxon_id:
+            raise ValidationError({"accepted_taxon": _("Accepted taxa cannot reference another accepted taxon.")})
+        if self.status == TaxonStatus.SYNONYM:
+            if not self.accepted_taxon_id:
+                raise ValidationError({"accepted_taxon": _("Synonym records must reference an accepted taxon.")})
+            if self.accepted_taxon_id == self.pk:
+                raise ValidationError({"accepted_taxon": _("A taxon cannot be a synonym of itself.")})
+            if self.accepted_taxon and self.accepted_taxon.status != TaxonStatus.ACCEPTED:
+                raise ValidationError({"accepted_taxon": _("Synonyms must reference an accepted taxon.")})
+        if self.status != TaxonStatus.SYNONYM and self.accepted_taxon_id:
+            raise ValidationError({"accepted_taxon": _("Only synonym records may reference an accepted taxon.")})
+        if self.parent_id is not None and self.parent_id == self.pk:
+            raise ValidationError({"parent": _("A taxon cannot be its own parent.")})
 
     def get_absolute_url(self):
         return reverse('taxon-detail', args=[str(self.id)])
@@ -1140,6 +1593,80 @@ class Taxon(BaseModel):
                 return f"{self.genus} {self.species} {self.infraspecific_epithet}"
             return f"{self.genus} {self.species}"
         return self.taxon_name
+
+    @property
+    def is_synonym(self) -> bool:
+        return self.status == TaxonStatus.SYNONYM
+
+    @property
+    def is_accepted(self) -> bool:
+        return self.status == TaxonStatus.ACCEPTED
+
+
+class TaxonomyImport(BaseModel):
+    class Source(models.TextChoices):
+        NOW = "NOW", _("NOW")
+
+    source = models.CharField(
+        max_length=16,
+        choices=Source.choices,
+        default=Source.NOW,
+        help_text=_("External taxonomy source for this import."),
+    )
+    started_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text=_("Timestamp when the import process started."),
+    )
+    finished_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=_("Timestamp when the import process finished."),
+    )
+    source_version = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text=_("Identifier or commit hash describing the imported data."),
+    )
+    counts = models.JSONField(
+        default=dict,
+        help_text=_("Summary counts for created, updated, deactivated, and related metrics."),
+    )
+    report_json = models.JSONField(
+        default=dict,
+        help_text=_("Detailed diff or issue information captured during the import."),
+    )
+    ok = models.BooleanField(
+        default=False,
+        help_text=_("Indicates whether the import completed successfully."),
+    )
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ["-started_at"]
+        verbose_name = _("Taxonomy Import")
+        verbose_name_plural = _("Taxonomy Imports")
+
+    def __str__(self) -> str:
+        label = self.get_source_display()
+        if self.source_version:
+            return f"{label} import {self.source_version}"
+        return f"{label} import"
+
+    def mark_finished(
+        self,
+        *,
+        ok: Optional[bool] = None,
+        counts: Optional[Dict[str, Any]] = None,
+        report: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        if ok is not None:
+            self.ok = ok
+        if counts is not None:
+            self.counts = counts
+        if report is not None:
+            self.report_json = report
+        self.finished_at = timezone.now()
+        self.save(update_fields=["ok", "counts", "report_json", "finished_at", "modified_on", "modified_by"])
 
 
 class Media(BaseModel):
@@ -1209,7 +1736,7 @@ class Media(BaseModel):
         help_text="File format of the media (supported formats: 'jpg', 'jpeg', 'png', 'gif', 'bmp')"
     )
     media_location = models.ImageField(
-        upload_to='media/',
+        upload_to="uploads/",
         help_text="Uploaded media file.",
     )
     license = models.CharField(max_length=30, choices=LICENSE_CHOICES
@@ -1267,6 +1794,36 @@ class Media(BaseModel):
     )
     history = HistoricalRecords()
 
+    MANUAL_IMPORT_SOURCE = MANUAL_QC_SOURCE
+
+    def get_manual_import_metadata(self) -> Optional[Dict[str, Any]]:
+        """Return manual import metadata embedded in the OCR payload, if any."""
+
+        data = self.ocr_data if isinstance(self.ocr_data, dict) else None
+        if not data:
+            return None
+        metadata = data.get("_manual_import")
+        if not isinstance(metadata, dict):
+            return None
+        source = metadata.get("source")
+        if source and source != self.MANUAL_IMPORT_SOURCE:
+            return None
+        return metadata
+
+    @property
+    def is_manual_import(self) -> bool:
+        return self.get_manual_import_metadata() is not None
+
+    def manual_import_display(self) -> Optional[str]:
+        metadata = self.get_manual_import_metadata()
+        if not metadata:
+            return None
+        row_id = metadata.get("row_id")
+        created_by = metadata.get("created_by")
+        if row_id and created_by:
+            return f"{row_id} — {created_by}"
+        return row_id or created_by
+
     def save(self, *args, **kwargs):
         user_override_set = hasattr(self, "_force_qc_user")
         if user_override_set:
@@ -1297,12 +1854,14 @@ class Media(BaseModel):
                 self.QCStatus.APPROVED,
                 self.QCStatus.REJECTED,
             }:
-                self.intern_checked_on = timestamp
-                if user:
+                if not self.intern_checked_on:
+                    self.intern_checked_on = timestamp
+                if user and not getattr(self, "intern_checked_by_id", None):
                     self.intern_checked_by = user
             if self.qc_status in {self.QCStatus.APPROVED, self.QCStatus.REJECTED}:
-                self.expert_checked_on = timestamp
-                if user:
+                if not self.expert_checked_on:
+                    self.expert_checked_on = timestamp
+                if user and not getattr(self, "expert_checked_by_id", None):
                     self.expert_checked_by = user
 
         super().save(*args, **kwargs)
@@ -1979,9 +2538,14 @@ class PreparationMedia(BaseModel):
     history = HistoricalRecords()
 
     class Meta:
-        unique_together = ("preparation", "media")
         verbose_name = "Preparation Media"
         verbose_name_plural = "Preparation Media"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["preparation", "media"],
+                name="unique_preparation_media",
+            )
+        ]
 
     def __str__(self):
         return f"{self.preparation} - {self.get_context_display()}"
@@ -2064,3 +2628,327 @@ class Scanning(BaseModel):
 
     def __str__(self):
         return f"{self.drawer.code} - {self.user} ({self.start_time})"
+
+
+def specimen_list_pdf_upload_to(instance: "SpecimenListPDF", filename: str) -> str:
+    extension = os.path.splitext(filename)[1] or ".pdf"
+    return f"uploads/specimen_lists/original/{uuid.uuid4()}{extension}"
+
+
+def specimen_list_page_upload_to(instance: "SpecimenListPage", filename: str) -> str:
+    extension = os.path.splitext(filename)[1] or ".png"
+    page_number = instance.page_number or 0
+    pdf_id = instance.pdf_id or "unassigned"
+    return (
+        "uploads/specimen_lists/pages/"
+        f"{pdf_id}/page_{page_number:03d}_{uuid.uuid4()}{extension}"
+    )
+
+
+class SpecimenListPDF(BaseModel):
+    class Status(models.TextChoices):
+        UPLOADED = "uploaded", _("Uploaded")
+        SPLIT = "split", _("Split")
+        PROCESSING = "processing", _("Processing")
+        DONE = "done", _("Done")
+        ERROR = "error", _("Error")
+
+    source_label = models.CharField(
+        max_length=255,
+        db_index=True,
+        help_text=_("Normalized source label for the upload batch."),
+    )
+    original_filename = models.CharField(
+        max_length=255,
+        help_text=_("Original filename provided at upload time."),
+    )
+    stored_file = models.FileField(
+        upload_to=specimen_list_pdf_upload_to,
+        help_text=_("Stored PDF file using UUID naming."),
+    )
+    sha256 = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text=_("SHA256 checksum for duplicate detection."),
+    )
+    page_count = models.PositiveIntegerField(
+        default=0,
+        help_text=_("Total number of pages extracted from the PDF."),
+    )
+    uploaded_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="specimen_list_pdfs",
+        help_text=_("User who uploaded the PDF."),
+    )
+    uploaded_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text=_("Timestamp when the PDF was uploaded."),
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.UPLOADED,
+        help_text=_("Current processing status for the PDF."),
+    )
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ["-uploaded_at"]
+        verbose_name = _("Specimen list PDF")
+        verbose_name_plural = _("Specimen list PDFs")
+
+    def clean(self):
+        user = get_current_user()
+        if not user or isinstance(user, AnonymousUser):
+            return None
+        return super().clean()
+
+    def __str__(self):
+        return f"{self.source_label} ({self.original_filename})"
+
+    def can_requeue(self) -> bool:
+        return self.status == self.Status.ERROR
+
+    def can_split(self) -> bool:
+        return self.status in {self.Status.UPLOADED, self.Status.ERROR}
+
+
+class SpecimenListPage(BaseModel):
+    class ClassificationStatus(models.TextChoices):
+        PENDING = "pending", _("Pending")
+        CLASSIFIED = "classified", _("Classified")
+        FAILED = "failed", _("Failed")
+
+    class ReviewStatus(models.TextChoices):
+        PENDING = "pending", _("Pending")
+        IN_REVIEW = "in_review", _("In review")
+        APPROVED = "approved", _("Approved")
+        REJECTED = "rejected", _("Rejected")
+
+    class PageType(models.TextChoices):
+        UNKNOWN = "unknown", _("Unknown")
+        SPECIMEN_LIST_DETAILS = "specimen_list_details", _("Specimen list (accession details)")
+        SPECIMEN_LIST_RELATIONS = "specimen_list_relations", _("Specimen list (accession/field relations)")
+        FREE_TEXT = "free_text", _("Free text")
+        TYPED_TEXT = "typed_text", _("Typed text")
+        OTHER = "other", _("Other")
+
+    class PipelineStatus(models.TextChoices):
+        PENDING = "pending", _("Pending")
+        CLASSIFIED = "classified", _("Classified")
+        OCR_DONE = "ocr_done", _("OCR done")
+        EXTRACTED = "extracted", _("Extracted")
+        IN_REVIEW = "in_review", _("In review")
+        APPROVED = "approved", _("Approved")
+        REJECTED = "rejected", _("Rejected")
+
+    pdf = models.ForeignKey(
+        SpecimenListPDF,
+        on_delete=models.CASCADE,
+        related_name="pages",
+        help_text=_("Parent specimen list PDF."),
+    )
+    page_number = models.PositiveIntegerField(
+        help_text=_("Page number within the PDF (1-based)."),
+    )
+    image_file = models.FileField(
+        upload_to=specimen_list_page_upload_to,
+        null=True,
+        blank=True,
+        help_text=_("Stored page image using UUID naming."),
+    )
+    page_type = models.CharField(
+        max_length=30,
+        choices=PageType.choices,
+        default=PageType.UNKNOWN,
+        help_text=_("Classified page type."),
+    )
+    classification_status = models.CharField(
+        max_length=20,
+        choices=ClassificationStatus.choices,
+        default=ClassificationStatus.PENDING,
+        help_text=_("Status of page classification."),
+    )
+    classification_confidence = models.DecimalField(
+        max_digits=4,
+        decimal_places=3,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0.0")), MaxValueValidator(Decimal("1.0"))],
+        help_text=_("Classification confidence score between 0 and 1."),
+    )
+    classification_notes = models.TextField(
+        blank=True,
+        help_text=_("Notes from the classification response."),
+    )
+    pipeline_status = models.CharField(
+        max_length=20,
+        choices=PipelineStatus.choices,
+        default=PipelineStatus.PENDING,
+        help_text=_("Processing status within the ingestion pipeline."),
+    )
+    review_status = models.CharField(
+        max_length=20,
+        choices=ReviewStatus.choices,
+        default=ReviewStatus.PENDING,
+        help_text=_("Status of the human review workflow."),
+    )
+    assigned_reviewer = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="specimen_list_pages",
+        help_text=_("Reviewer currently assigned to this page."),
+    )
+    locked_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=_("Timestamp when the page was locked for review."),
+    )
+    reviewed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=_("Timestamp when the page was reviewed."),
+    )
+    approved_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=_("Timestamp when the page was approved."),
+    )
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ["pdf", "page_number"]
+        verbose_name = _("Specimen list page")
+        verbose_name_plural = _("Specimen list pages")
+        constraints = [
+            UniqueConstraint(fields=["pdf", "page_number"], name="uniq_specimen_page"),
+        ]
+        indexes = [
+            Index(fields=["pipeline_status"]),
+            Index(fields=["review_status"]),
+            Index(fields=["page_type"]),
+        ]
+
+    def clean(self):
+        user = get_current_user()
+        if not user or isinstance(user, AnonymousUser):
+            return None
+        return super().clean()
+
+    def reset_classification(self, *, reset_page_type: bool = True) -> None:
+        self.classification_status = self.ClassificationStatus.PENDING
+        self.classification_confidence = None
+        self.classification_notes = ""
+        if reset_page_type:
+            self.page_type = self.PageType.UNKNOWN
+        self.pipeline_status = self.PipelineStatus.PENDING
+
+    def __str__(self):
+        return f"{self.pdf} - {self.page_number}"
+
+
+class SpecimenListPageOCR(models.Model):
+    page = models.ForeignKey(
+        SpecimenListPage,
+        on_delete=models.CASCADE,
+        related_name="ocr_entries",
+        help_text=_("Specimen list page associated with this OCR result."),
+    )
+    raw_text = models.TextField(
+        blank=True,
+        help_text=_("Raw OCR text extracted from the page image."),
+    )
+    bounding_boxes = models.JSONField(
+        null=True,
+        blank=True,
+        help_text=_("OCR bounding box data captured from the OCR engine."),
+    )
+    ocr_engine = models.CharField(
+        max_length=100,
+        default="chatgpt-vision",
+        help_text=_("OCR engine identifier used to extract the text."),
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text=_("Timestamp when the OCR result was created."),
+    )
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = _("Specimen list page OCR")
+        verbose_name_plural = _("Specimen list page OCR entries")
+        indexes = [
+            Index(fields=["ocr_engine"]),
+            Index(fields=["created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"OCR for {self.page_id} @ {self.created_at:%Y-%m-%d}"
+
+
+class SpecimenListRowCandidate(models.Model):
+    class ReviewStatus(models.TextChoices):
+        UNREVIEWED = "unreviewed", _("Unreviewed")
+        EDITED = "edited", _("Edited")
+        APPROVED = "approved", _("Approved")
+        REJECTED = "rejected", _("Rejected")
+
+    page = models.ForeignKey(
+        SpecimenListPage,
+        on_delete=models.CASCADE,
+        related_name="row_candidates",
+        help_text=_("Specimen list page associated with this row candidate."),
+    )
+    row_index = models.PositiveIntegerField(
+        help_text=_("Row order within the page (0-based)."),
+    )
+    data = models.JSONField(
+        help_text=_("Extracted row data as JSON, including extra column keys."),
+    )
+    confidence = models.DecimalField(
+        max_digits=4,
+        decimal_places=3,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0.0")), MaxValueValidator(Decimal("1.0"))],
+        help_text=_("Confidence score for the extracted row between 0 and 1."),
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=ReviewStatus.choices,
+        default=ReviewStatus.UNREVIEWED,
+        help_text=_("Review status for the row candidate."),
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text=_("Timestamp when the row candidate was created."),
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        help_text=_("Timestamp when the row candidate was last updated."),
+    )
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ["page", "row_index"]
+        verbose_name = _("Specimen list row candidate")
+        verbose_name_plural = _("Specimen list row candidates")
+        permissions = [
+            ("review_specimenlistrowcandidate", _("Can review specimen list row candidates")),
+        ]
+        constraints = [
+            UniqueConstraint(fields=["page", "row_index"], name="uniq_specimen_row_candidate"),
+        ]
+        indexes = [
+            Index(fields=["status"]),
+            Index(fields=["page", "status"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"Row {self.row_index} candidate for page {self.page_id}"

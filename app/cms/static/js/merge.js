@@ -17,8 +17,12 @@
     source: root.querySelector('[data-merge-display="source"]'),
     target: root.querySelector('[data-merge-display="target"]')
   };
+  const idsInput = root.querySelector('[data-merge-selected-ids]');
+  const sourceList = root.querySelector('[data-merge-source-list]');
+  const emptySources = root.querySelector('[data-merge-empty-sources]');
   const clearButtons = root.querySelectorAll('[data-merge-clear]');
   const resetButton = root.querySelector('[data-merge-reset]');
+  const labelLookup = new Map();
   const resultTemplate = document.getElementById('merge-result-template');
   const compareTemplate = document.getElementById('merge-compare-template');
 
@@ -138,7 +142,123 @@
     populateList(targetList, targetPreview);
   };
 
+  const normalizeList = (values) => {
+    const seen = new Set();
+    const normalized = [];
+    values.forEach((value) => {
+      const trimmed = (value || '').toString().trim();
+      if (!trimmed || seen.has(trimmed)) {
+        return;
+      }
+      seen.add(trimmed);
+      normalized.push(trimmed);
+    });
+    return normalized;
+  };
+
+  const getState = () => {
+    const targetId = (selectionInputs.target ? selectionInputs.target.value : '') || '';
+    const selectedIds = normalizeList((idsInput ? idsInput.value : '').split(','));
+    let sources = selectedIds.filter((id) => id !== targetId);
+
+    const primarySource = (selectionInputs.source ? selectionInputs.source.value : '') || '';
+    if (primarySource && primarySource !== targetId) {
+      sources = [primarySource, ...sources.filter((id) => id !== primarySource)];
+    }
+
+    return { targetId, sources };
+  };
+
+  const renderSources = (sources) => {
+    if (!sourceList) {
+      return;
+    }
+    const primaryLabel = sourceList.dataset.primaryLabel || 'Primary';
+    const removeLabel = sourceList.dataset.removeLabel || 'Remove';
+    sourceList.innerHTML = '';
+    if (!sources.length) {
+      if (emptySources) {
+        emptySources.removeAttribute('hidden');
+        sourceList.appendChild(emptySources);
+      }
+      return;
+    }
+
+    if (emptySources) {
+      emptySources.setAttribute('hidden', 'hidden');
+    }
+
+    sources.forEach((id, index) => {
+      const listItem = document.createElement('li');
+      listItem.className = 'w3-padding-small w3-border-bottom';
+      const label = document.createElement('span');
+      const labelText = labelLookup.get(id) || '';
+      label.textContent = labelText ? `${labelText} (ID ${id})` : `ID ${id}`;
+      listItem.appendChild(label);
+      if (index === 0) {
+        const badge = document.createElement('span');
+        badge.className = 'w3-tag w3-round w3-blue w3-margin-left';
+        badge.textContent = primaryLabel;
+        listItem.appendChild(badge);
+      }
+      const removeButton = document.createElement('button');
+      removeButton.type = 'button';
+      removeButton.className = 'w3-button w3-small w3-light-grey w3-round w3-margin-left';
+      removeButton.dataset.mergeRemoveSource = id;
+      removeButton.innerHTML = `<span class="fa fa-times" aria-hidden="true"></span> <span class="w3-margin-left">${removeLabel}</span>`;
+      listItem.appendChild(removeButton);
+      sourceList.appendChild(listItem);
+    });
+  };
+
+  const handleSourceRemoval = (id) => {
+    const state = getState();
+    state.sources = state.sources.filter((value) => value !== id);
+    if (idsInput) {
+      idsInput.value = normalizeList([state.targetId, ...state.sources.filter((value) => value !== state.targetId)]).join(',');
+    }
+    if (selectionInputs.source && selectionInputs.source.value === id) {
+      delete selectionInputs.source.dataset.preview;
+      delete selectionInputs.source.dataset.label;
+    }
+    updateDisplays(state);
+  };
+
+  const updateDisplays = (state) => {
+    const primarySource = state.sources[0] || '';
+    if (selectionInputs.source) {
+      selectionInputs.source.value = primarySource;
+    }
+    if (selectionDisplays.source) {
+      const sourceLabel = selectionInputs.source ? selectionInputs.source.dataset.label || '' : '';
+      selectionDisplays.source.textContent = primarySource
+        ? `${primarySource}${sourceLabel ? ` – ${sourceLabel}` : ''}`
+        : '';
+    }
+    if (selectionInputs.target && selectionDisplays.target) {
+      const targetLabel = selectionInputs.target.dataset.label || '';
+      selectionDisplays.target.textContent = selectionInputs.target.value
+        ? `${selectionInputs.target.value}${targetLabel ? ` – ${targetLabel}` : ''}`
+        : '';
+    }
+    renderSources(state.sources);
+    renderComparison();
+  };
+
   const clearSelections = (role) => {
+    if (role === 'sources') {
+      if (idsInput) {
+        idsInput.value = selectionInputs.target ? selectionInputs.target.value : '';
+      }
+      if (selectionInputs.source) {
+        selectionInputs.source.value = '';
+        delete selectionInputs.source.dataset.preview;
+        delete selectionInputs.source.dataset.label;
+      }
+      updateDisplays({ targetId: selectionInputs.target ? selectionInputs.target.value : '', sources: [] });
+      return;
+    }
+
     const roles = role ? [role] : ['source', 'target'];
     roles.forEach((currentRole) => {
       const input = selectionInputs[currentRole];
@@ -153,7 +273,10 @@
         display.textContent = '';
       }
     });
-    renderComparison();
+    if (idsInput && (!role || role === 'source')) {
+      idsInput.value = selectionInputs.target ? selectionInputs.target.value : '';
+    }
+    updateDisplays({ targetId: selectionInputs.target ? selectionInputs.target.value : '', sources: [] });
   };
 
   const renderResult = (result) => {
@@ -202,20 +325,45 @@
     container.querySelectorAll('[data-merge-select]').forEach((button) => {
       button.addEventListener('click', () => {
         const role = button.dataset.mergeSelect;
-        const input = selectionInputs[role];
-        const display = selectionDisplays[role];
-        if (!input) {
-          return;
+        const state = getState();
+        const candidateId = (candidate.pk || '').toString();
+
+        if (candidateId) {
+          labelLookup.set(candidateId, candidate.label || '');
         }
-        input.value = candidate.pk ?? '';
-        input.dataset.preview = JSON.stringify(preview);
-        input.dataset.label = candidate.label || '';
-        input.dispatchEvent(new Event('change', { bubbles: true }));
-        if (display) {
+
+        if (role === 'target') {
+          const previousTarget = state.targetId;
+          state.targetId = candidateId;
+          state.sources = state.sources.filter((id) => id !== candidateId);
+          if (previousTarget && previousTarget !== candidateId) {
+            state.sources = [previousTarget, ...state.sources.filter((id) => id !== previousTarget)];
+          }
+          if (selectionInputs.target) {
+            selectionInputs.target.value = candidateId;
+            selectionInputs.target.dataset.preview = JSON.stringify(preview);
+            selectionInputs.target.dataset.label = candidate.label || '';
+          }
+        } else {
+          state.sources = [candidateId, ...state.sources.filter((id) => id !== candidateId && id !== state.targetId)];
+          if (selectionInputs.source) {
+            selectionInputs.source.value = state.sources[0] || '';
+            selectionInputs.source.dataset.preview = JSON.stringify(preview);
+            selectionInputs.source.dataset.label = candidate.label || '';
+          }
+        }
+
+        const allIds = normalizeList([state.targetId, ...state.sources.filter((id) => id !== state.targetId)]);
+        if (idsInput) {
+          idsInput.value = allIds.join(',');
+        }
+
+        if (selectionDisplays[role]) {
           const scoreLabel = result.score !== undefined ? ` (score ${Math.round(result.score)})` : '';
-          display.textContent = `${candidate.pk ?? ''} – ${candidate.label || ''}${scoreLabel}`;
+          selectionDisplays[role].textContent = `${candidateId} – ${candidate.label || ''}${scoreLabel}`;
         }
-        renderComparison();
+
+        updateDisplays(state);
       });
     });
 
@@ -289,6 +437,17 @@
     });
   }
 
+  if (sourceList) {
+    sourceList.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-merge-remove-source]');
+      if (!button) {
+        return;
+      }
+      event.preventDefault();
+      handleSourceRemoval(button.dataset.mergeRemoveSource || '');
+    });
+  }
+
   clearButtons.forEach((button) => {
     button.addEventListener('click', () => {
       const role = button.dataset.mergeClear;
@@ -304,4 +463,6 @@
       clearError();
     });
   }
+
+  updateDisplays(getState());
 })();

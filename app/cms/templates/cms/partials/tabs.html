@@ -1,0 +1,92 @@
+{% load i18n %}
+<section class="w3-margin-top" aria-labelledby="{{ tabs_heading_id|default:'tabs-heading' }}">
+  <header class="w3-padding-16 w3-white w3-round-large w3-border-bottom">
+    <h2 id="{{ tabs_heading_id|default:'tabs-heading' }}" class="w3-margin-0">
+      {% if heading_icon %}
+        <i class="fa-solid {{ heading_icon }}" aria-hidden="true"></i>
+      {% endif %}
+      <span class="w3-margin-left">{{ heading_label|default:_('Details') }}</span>
+    </h2>
+  </header>
+
+  <div class="w3-bar w3-light-grey w3-round-large w3-margin-top" role="tablist" aria-label="{{ tablist_label|default:_('Content tabs') }}">
+    {% for tab in tabs %}
+      {% with tab_id=tab.slug|default:tab.id|default:'tab' %}
+        {% with is_active=tab.active|default:forloop.first %}
+          <button
+            id="{{ tab_id }}-tab"
+            class="w3-bar-item w3-button w3-hover-none w3-hover-text-blue w3-hover-border-blue w3-border-blue{% if is_active %} w3-text-blue w3-border-bottom w3-border-blue{% endif %}"
+            role="tab"
+            aria-selected="{{ is_active|yesno:'true,false' }}"
+            aria-controls="{{ tab_id }}-panel"
+            data-tab-target="{{ tab_id }}-panel"
+            type="button"
+          >
+            {% if tab.icon %}
+              <i class="fa-solid {{ tab.icon }}" aria-hidden="true"></i>
+            {% endif %}
+            <span class="w3-margin-left">{{ tab.label }}</span>
+          </button>
+        {% endwith %}
+      {% endwith %}
+    {% endfor %}
+  </div>
+
+  <div class="w3-white w3-card w3-round-large w3-margin-top w3-padding">
+    {% for tab in tabs %}
+      {% with tab_id=tab.slug|default:tab.id|default:'tab' %}
+        {% with is_active=tab.active|default:forloop.first %}
+          <article
+            id="{{ tab_id }}-panel"
+            role="tabpanel"
+            aria-labelledby="{{ tab_id }}-tab"
+            class="{% if not is_active %}w3-hide{% endif %}"
+            tabindex="-1"
+          >
+            {% if tab.description %}
+              <p class="w3-text-gray">{{ tab.description }}</p>
+            {% endif %}
+            <div>
+              {% if tab.template %}
+                {% include tab.template with tab=tab %}
+              {% elif tab.content %}
+                {{ tab.content|safe }}
+              {% endif %}
+            </div>
+          </article>
+        {% endwith %}
+      {% endwith %}
+    {% endfor %}
+  </div>
+</section>
+
+<script>
+  (function () {
+    const tabButtons = Array.from(document.querySelectorAll('[data-tab-target]'));
+    if (!tabButtons.length) return;
+
+    tabButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        const targetId = button.getAttribute('data-tab-target');
+        const tabsContainer = button.closest('[role="tablist"]').parentElement;
+        const panels = tabsContainer.querySelectorAll('[role="tabpanel"]');
+
+        tabsContainer.querySelectorAll('[role="tab"]').forEach((tab) => {
+          tab.setAttribute('aria-selected', 'false');
+          tab.classList.remove('w3-text-blue', 'w3-border-bottom');
+        });
+
+        panels.forEach((panel) => panel.classList.add('w3-hide'));
+
+        button.setAttribute('aria-selected', 'true');
+        button.classList.add('w3-text-blue', 'w3-border-bottom');
+
+        const activePanel = tabsContainer.querySelector('#' + targetId);
+        if (activePanel) {
+          activePanel.classList.remove('w3-hide');
+          activePanel.focus({ preventScroll: true });
+        }
+      });
+    });
+  })();
+</script>

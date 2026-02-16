@@ -1,0 +1,93 @@
+{% load i18n %}
+{% with entries=entries|default:None %}
+  {% if entries %}
+    {% with table_id=table_id|default:'history-table' %}
+      <div class="w3-responsive">
+        <table id="{{ table_id }}" class="w3-table-all w3-hoverable w3-small"{% if caption %} aria-describedby="{{ table_id }}-caption"{% endif %}>
+          {% if caption %}
+            <caption id="{{ table_id }}-caption" class="w3-text-grey w3-left-align">{{ caption }}</caption>
+          {% endif %}
+          <thead>
+            <tr>
+              <th scope="col"><abbr title="{% trans "Date and time" %}">{% trans "Date/time" %}</abbr></th>
+              <th scope="col">{% trans "Action" %}</th>
+              <th scope="col">{% trans "Comment" %}</th>
+              <th scope="col">{% trans "Changed by" %}</th>
+              <th scope="col">{% trans "Changes" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for entry in entries %}
+              {% with log=entry.log changes=entry.changes %}
+                <tr>
+                  <td data-label="{% trans "Date/time" %}">
+                    <time datetime="{{ log.history_date|date:'c' }}">{{ log.history_date|date:"Y-m-d H:i" }}</time>
+                  </td>
+                  <td data-label="{% trans "Action" %}">
+                    {% blocktrans asvar created_label %}Created{% endblocktrans %}
+                    {% blocktrans asvar deleted_label %}Deleted{% endblocktrans %}
+                    {% blocktrans asvar updated_label %}Updated{% endblocktrans %}
+                    {% with history_type=log.history_type %}
+                      {% if history_type == '+' %}
+                        {% with icon="fa-circle-plus" tag_class="w3-pale-green" label=created_label %}
+                          <span class="w3-tag w3-round {{ tag_class }}">
+                            <i class="fa-solid {{ icon }}" aria-hidden="true"></i>
+                            <span class="w3-margin-left">{{ label }}</span>
+                          </span>
+                        {% endwith %}
+                      {% elif history_type == '-' %}
+                        {% with icon="fa-circle-minus" tag_class="w3-pale-red" label=deleted_label %}
+                          <span class="w3-tag w3-round {{ tag_class }}">
+                            <i class="fa-solid {{ icon }}" aria-hidden="true"></i>
+                            <span class="w3-margin-left">{{ label }}</span>
+                          </span>
+                        {% endwith %}
+                      {% else %}
+                        {% with icon="fa-pen-to-square" tag_class="w3-light-grey" label=updated_label %}
+                          <span class="w3-tag w3-round {{ tag_class }}">
+                            <i class="fa-solid {{ icon }}" aria-hidden="true"></i>
+                            <span class="w3-margin-left">{{ label }}</span>
+                          </span>
+                        {% endwith %}
+                      {% endif %}
+                    {% endwith %}
+                  </td>
+                  <td data-label="{% trans "Comment" %}">
+                    {% if log.history_change_reason %}
+                      <p class="w3-margin-0">{{ log.history_change_reason }}</p>
+                    {% else %}
+                      <span class="w3-text-grey">{% trans "No comment provided" %}</span>
+                    {% endif %}
+                  </td>
+                  <td data-label="{% trans "Changed by" %}">
+                    {% if log.history_user %}
+                      {{ log.history_user }}
+                    {% else %}
+                      <span class="w3-text-grey">{% trans "System or unknown" %}</span>
+                    {% endif %}
+                  </td>
+                  <td data-label="{% trans "Changes" %}">
+                    {% if changes %}
+                      <ul class="w3-ul w3-border-0 w3-small w3-margin-0">
+                        {% for change in changes %}
+                          <li>
+                            <i class="fa-solid fa-arrow-right-long" aria-hidden="true"></i>
+                            <span class="w3-margin-left"><strong>{{ change.field }}:</strong> {{ change.old|default:"—" }} &rarr; {{ change.new|default:"—" }}</span>
+                          </li>
+                        {% endfor %}
+                      </ul>
+                    {% else %}
+                      <span class="w3-text-grey">{% trans "Initial version" %}</span>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endwith %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endwith %}
+  {% elif empty_message %}
+    <p class="w3-text-grey">{{ empty_message }}</p>
+  {% endif %}
+{% endwith %}

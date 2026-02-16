@@ -29,7 +29,7 @@ References appear for every visitor and the list view is unrestricted. The “Ne
 
 ## Field Slips
 
-Field Slips are a specialist tool: the sidebar entry only appears for superusers and collection managers, and the list view enforces the same requirement. Those roles can create and edit slips using the dedicated forms surfaced in the list and detail templates. Curators, preparators, interns, and the public do not see the navigation item and cannot reach the list because of the access check.
+Field Slips are a specialist tool: the sidebar entry only appears for superusers and collection managers, and the list view enforces the same requirement. Those roles can create and edit slips using the dedicated forms surfaced in the list and detail templates. When viewing an individual slip they also see a "Related accessions" table that reuses the basic accession list, including unpublished entries so collection managers and superusers can jump straight into follow-up work. Curators, preparators, interns, and the public do not see the navigation item and cannot reach the list because of the access check.
 
 ## Preparations
 

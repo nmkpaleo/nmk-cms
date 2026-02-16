@@ -1,0 +1,25 @@
+{% extends "admin/change_list.html" %}
+{% load i18n %}
+
+{% block content %}
+  <section
+    class="w3-panel w3-pale-blue w3-leftbar w3-border-blue w3-round-large"
+    aria-label="{% trans "Organisation scope" %}"
+  >
+    <header class="w3-margin-bottom">
+      <h2 class="w3-large">
+        <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "Organisation scope" %}</span>
+      </h2>
+    </header>
+    <p class="w3-text-black">
+      {% if request.user.organisation_membership.organisation %}
+        {% blocktrans with org=request.user.organisation_membership.organisation %}You are viewing accession number series for {{ org }}. Only series in this organisation can be managed here.{% endblocktrans %}
+      {% else %}
+        {% trans "You do not belong to an organisation. Assign one in the admin before creating new accession number series." %}
+      {% endif %}
+    </p>
+  </section>
+
+  {{ block.super }}
+{% endblock %}

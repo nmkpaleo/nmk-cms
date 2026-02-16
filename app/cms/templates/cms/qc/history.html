@@ -1,18 +1,117 @@
 {% extends "base_generic.html" %}
+{% load i18n custom_filters %}
 
-{% block title %}Media QC History{% endblock %}
+{% block title %}{% trans "Media QC history" %}{% endblock %}
 
 {% block content %}
-  <div class="w3-container">
-    <h2 class="w3-margin-top">Media QC History</h2>
-    {% if filter_media %}
-      <p class="w3-text-grey">Showing activity for <strong>{{ filter_media.file_name|default:filter_media.uuid }}</strong>. <a href="{% url 'media_qc_history' %}">Show all history</a></p>
-    {% else %}
-      <p class="w3-text-grey">Review the audit trail of QC status changes, OCR updates, and discussion across all media.</p>
-    {% endif %}
-
-    <div class="w3-card w3-white w3-padding">
-      {% include "cms/qc/partials/history_list.html" with logs=qc_logs show_empty=True %}
+<main class="w3-container w3-margin-top" role="main">
+  <header class="w3-padding-16 w3-border-bottom w3-white w3-round-large" aria-labelledby="media-qc-history-heading">
+    <div class="w3-row">
+      <div class="w3-col s12 m9">
+        <h1 id="media-qc-history-heading" class="w3-margin-0">
+          <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+          <span class="w3-margin-left">{% trans "Media QC history" %}</span>
+        </h1>
+        {% if filter_media %}
+          <p class="w3-text-grey w3-margin-top">
+            {% blocktrans trimmed with media_label=filter_media.file_name|default:filter_media.uuid %}
+              Showing activity for <strong>{{ media_label }}</strong>.
+            {% endblocktrans %}
+          </p>
+          <p class="w3-small w3-text-grey w3-margin-top">
+            <a href="{% url 'media_qc_history' %}" class="w3-text-indigo">
+              <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
+              <span class="w3-margin-left">{% trans "Show all history" %}</span>
+            </a>
+          </p>
+        {% else %}
+          <p class="w3-text-grey w3-margin-top">
+            {% trans "Review the audit trail of QC status changes, OCR updates, and discussion across all media." %}
+          </p>
+        {% endif %}
+      </div>
     </div>
-  </div>
+  </header>
+
+  <section class="w3-margin-top" aria-labelledby="media-qc-history-filters">
+    <div class="w3-card w3-white w3-padding">
+      <h2 id="media-qc-history-filters" class="w3-margin-top">
+        <i class="fa-solid fa-filter" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "Filter history" %}</span>
+      </h2>
+      <form method="get" class="w3-row-padding w3-margin-top w3-small" role="search">
+        <div class="w3-col s12 m6">
+          <label class="w3-text-grey" for="media-filter">{% trans "Media UUID or filename" %}</label>
+          <input id="media-filter" class="w3-input w3-border w3-round" type="search" name="media" value="{{ active_media }}" placeholder="{% trans 'Search by media UUID' %}">
+        </div>
+        <div class="w3-col s12 m4">
+          <label class="w3-text-grey" for="change-type-filter">{% trans "Change type" %}</label>
+          <select id="change-type-filter" name="change_type" class="w3-select w3-border w3-round">
+            {% for choice in change_type_choices %}
+              <option value="{{ choice.value }}"{% if choice.value == active_change_type %} selected{% endif %}>{{ choice.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="w3-col s12 m2 w3-margin-top">
+          <button type="submit" class="w3-button w3-blue w3-round w3-margin-top w3-block">
+            <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+            <span class="w3-margin-left">{% trans "Apply" %}</span>
+          </button>
+        </div>
+      </form>
+      {% if active_media or active_change_type %}
+        <p class="w3-small w3-text-grey w3-margin-top">
+          <a href="{% url 'media_qc_history' %}" class="w3-text-indigo">
+            <i class="fa-solid fa-circle-xmark" aria-hidden="true"></i>
+            <span class="w3-margin-left">{% trans "Clear filters" %}</span>
+          </a>
+        </p>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="w3-margin-top" aria-labelledby="media-qc-history-table-heading">
+    <header class="w3-padding-16">
+      <h2 id="media-qc-history-table-heading" class="w3-margin-0">
+        <i class="fa-solid fa-list" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "History entries" %}</span>
+      </h2>
+    </header>
+    {% trans "Media quality control change history" as media_history_caption %}
+    {% trans "No QC history is available yet." as media_history_empty %}
+    {% include "cms/history_media_qc_table.html" with logs=qc_logs table_id="media-qc-history-table" caption=media_history_caption empty_message=media_history_empty %}
+  </section>
+
+  {% if is_paginated %}
+    <nav class="w3-margin-top" aria-label="{% trans 'Media QC history pagination' %}">
+      <div class="w3-bar w3-border w3-round-large w3-white w3-card">
+        {% if page_obj.has_previous %}
+          <a href="?{% querystring_replace page=page_obj.previous_page_number %}" class="w3-bar-item w3-button" aria-label="{% trans 'Previous page' %}">
+            <i class="fa-solid fa-angles-left" aria-hidden="true"></i>
+            <span class="w3-hide-small">{% trans "Previous" %}</span>
+          </a>
+        {% else %}
+          <span class="w3-bar-item w3-button w3-disabled">
+            <i class="fa-solid fa-angles-left" aria-hidden="true"></i>
+            <span class="w3-hide-small">{% trans "Previous" %}</span>
+          </span>
+        {% endif %}
+
+        <span class="w3-bar-item">{% blocktrans %}Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}{% endblocktrans %}</span>
+
+        {% if page_obj.has_next %}
+          <a href="?{% querystring_replace page=page_obj.next_page_number %}" class="w3-bar-item w3-button" aria-label="{% trans 'Next page' %}">
+            <span class="w3-hide-small">{% trans "Next" %}</span>
+            <i class="fa-solid fa-angles-right" aria-hidden="true"></i>
+          </a>
+        {% else %}
+          <span class="w3-bar-item w3-button w3-disabled">
+            <span class="w3-hide-small">{% trans "Next" %}</span>
+            <i class="fa-solid fa-angles-right" aria-hidden="true"></i>
+          </span>
+        {% endif %}
+      </div>
+    </nav>
+  {% endif %}
+</main>
 {% endblock %}

@@ -1,0 +1,101 @@
+{% extends "base_generic.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Confirm element merge" %}{% endblock %}
+
+{% block content %}
+<main class="w3-container w3-margin-top" aria-labelledby="element-merge-confirm-heading">
+  <header class="w3-margin-bottom">
+    <h1 id="element-merge-confirm-heading" class="w3-xxlarge">
+      <i class="fa fa-diagram-project" aria-hidden="true"></i>
+      <span class="w3-margin-left">{% trans "Review selections" %}</span>
+    </h1>
+    <p class="w3-text-grey">{% trans "Confirm the target and sources, then choose the value to keep for each mergeable field." %}</p>
+  </header>
+
+  <section class="w3-card w3-padding" aria-labelledby="element-merge-summary">
+    <header class="w3-margin-bottom">
+      <h2 id="element-merge-summary" class="w3-large">
+        <i class="fa fa-list" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "Selection summary" %}</span>
+      </h2>
+    </header>
+    <div class="w3-row-padding w3-small">
+      <div class="w3-col s12 m6">
+        <p class="w3-margin-0"><strong>{% trans "Target" %}:</strong> {{ target }}</p>
+      </div>
+      <div class="w3-col s12 m6">
+        <p class="w3-margin-0"><strong>{% trans "Sources" %}:</strong> {{ sources|join:", " }}</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="w3-card w3-padding w3-margin-top" aria-label="{% trans 'Element field selection form' %}">
+    <form method="post" action="{{ action_url|default:'' }}" class="w3-padding-16" novalidate>
+      {% csrf_token %}
+      {% if model_label %}
+        <input type="hidden" name="model" value="{{ model_label }}" />
+      {% endif %}
+      {% if target_id %}
+        <input type="hidden" name="target" value="{{ target_id }}" />
+      {% endif %}
+      {% if candidate_ids %}
+        <input type="hidden" name="candidates" value="{{ candidate_ids }}" />
+      {% endif %}
+      {% if cancel_url %}
+        <input type="hidden" name="cancel" value="{{ cancel_url }}" />
+      {% endif %}
+
+      <div class="w3-row-padding w3-margin-bottom">
+        <div class="w3-col l6 m6 s12">
+          <h2 class="w3-large w3-margin-top">{% trans "Candidates" %}</h2>
+          <p class="w3-text-grey w3-small">
+            {% blocktrans count candidate_count=form.candidates|length %}
+              {{ candidate_count }} record selected for merging.
+            {% plural %}
+              {{ candidate_count }} records selected for merging.
+            {% endblocktrans %}
+          </p>
+          <ul class="w3-ul w3-small" aria-live="polite">
+            {% for candidate in form.candidates %}
+              <li class="w3-padding-small">
+                {% if candidate.role %}
+                  {% if candidate.role == 'target' %}
+                    <span class="w3-tag w3-round w3-blue w3-margin-right">{{ candidate.role|title }}</span>
+                  {% else %}
+                    <span class="w3-tag w3-round w3-green w3-margin-right">{{ candidate.role|title }}</span>
+                  {% endif %}
+                {% endif %}
+                <strong>{{ candidate.label }}</strong>
+                <span class="w3-text-grey">(#{{ candidate.key }})</span>
+              </li>
+            {% empty %}
+              <li class="w3-padding-small w3-text-grey">{% trans "No candidates supplied." %}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        <div class="w3-col l6 m6 s12">
+          <div class="w3-panel w3-pale-blue w3-border w3-border-blue">
+            <p class="w3-small" id="element-field-selection-help">{% trans "Select one value per field. The chosen values will be applied to the target record when the merge runs." %}</p>
+          </div>
+        </div>
+      </div>
+
+      {% include "merge/includes/field_selection_table.html" with help_element_id="element-field-selection-help" %}
+
+      <footer class="w3-margin-top">
+        <button class="w3-button w3-blue w3-margin-right" type="submit">
+          <span class="fa fa-check" aria-hidden="true"></span>
+          <span class="w3-margin-left">{% trans "Apply selections" %}</span>
+        </button>
+        {% if cancel_url %}
+          <a class="w3-button w3-light-grey" href="{{ cancel_url }}">
+            <span class="fa fa-arrow-left" aria-hidden="true"></span>
+            <span class="w3-margin-left">{% trans "Back" %}</span>
+          </a>
+        {% endif %}
+      </footer>
+    </form>
+  </section>
+</main>
+{% endblock %}

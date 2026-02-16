@@ -1,78 +1,94 @@
 {% extends "base_generic.html" %}
-{% load user_tags %}
+{% load i18n user_tags %}
 
-{% block title %}Locality {{ locality.abbreviation }}{% endblock %}
+{% block title %}{% blocktrans %}Locality {{ locality.abbreviation }}{% endblocktrans %}{% endblock %}
 
 {% block content %}
-    
+<main class="w3-container w3-margin-top" role="main">
+  <header class="w3-row w3-padding-16 w3-border-bottom w3-white w3-round-large" aria-labelledby="locality-details-heading">
+    <div class="w3-col s12 m8">
+      <h1 id="locality-details-heading" class="w3-margin-0">
+        {% blocktrans with abbreviation=locality.abbreviation %}Locality {{ abbreviation }}{% endblocktrans %}
+      </h1>
+      <p class="w3-text-gray">{{ locality.name }}</p>
+    </div>
+    {% if user.is_superuser or user|has_group:"Collection Managers" %}
+      <div class="w3-col s12 m4 w3-right-align w3-margin-top">
+        <a href="{% url 'locality_edit' locality.pk %}" class="w3-button w3-blue w3-round" aria-label="{% trans 'Edit locality' %}">
+          <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+          <span class="w3-hide-small w3-margin-left">{% trans "Edit Locality" %}</span>
+        </a>
+      </div>
+    {% endif %}
+  </header>
 
-        <div class="template-detail-container">
-            <div class="template-detail-header">
-                <h2 class="template-detail-h2">Locality Detail</h2>
-                {% if user.is_superuser or user|has_group:"Collection Managers" %}
-                <a href="{% url 'locality_edit' locality.pk %}" class="edit-icon">
-                    Edit Form ✏️
-                </a>
-                {% endif %}
+  <section class="w3-margin-top" aria-labelledby="locality-metadata-heading">
+    <div class="w3-row-padding">
+      <article class="w3-col s12 m6 l4">
+        <div class="w3-card w3-round w3-white w3-padding">
+          <h2 id="locality-metadata-heading" class="w3-margin-top">{% trans "Locality overview" %}</h2>
+          <dl class="w3-margin-top">
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Abbreviation" %}</dt>
+              <dd class="w3-margin-0">{{ locality.abbreviation }}</dd>
             </div>
-            <div class="grid-container">
-                <!-- Field Number Card -->
-                <div class="card">
-                    <p><strong>Abbreviation: </strong> <br> {{ locality.abbreviation }}</p>
-                    <p><strong>Name:</strong> <br> {{ locality.name }} </p>
-                </div>
-
-                <div class="cards">
-                    <table class="w3-table-all w3-hoverable">
-                        <caption class="w3-large"><strong>Accession details</strong></caption>
-                        <thead>
-                            <tr>
-                                <th>Collection</th>
-                                <th>Specimen Prefix</th>
-                                <th>Specimen Number</th>
-                                <th>Taxon</th>
-                                <th>Element</th>
-                                {% if user.is_superuser or user|has_group:"Collection Managers" %}
-                                <th>Accessioned by</th>
-                                {% endif %}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for accession in accessions %}
-                            <tr>
-                                <td>{{ accession.collection.abbreviation }}</td>
-                                <td>{{ accession.specimen_prefix.abbreviation }}</td>
-                                <td><a href="{% url 'accession_detail' accession.pk %}">{{ accession.specimen_no }}</a></td>
-                                <td>
-                                    {% if accession.taxa_list %}
-                                        {{ accession.taxa_list|join:", " }}
-                                    {% else %}
-                                        &mdash;
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if accession.element_list %}
-                                        {{ accession.element_list|join:", " }}
-                                    {% else %}
-                                        &mdash;
-                                    {% endif %}
-                                </td>
-                                {% if user.is_superuser or user|has_group:"Collection Managers" %}
-                                <td>{{ accession.accessioned_by }}</td>
-                                {% endif %}
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="{% if user.is_superuser or user|has_group:"Collection Managers" %}6{% else %}5{% endif %}" class="w3-center">No accessions found.</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Name" %}</dt>
+              <dd class="w3-margin-0">{{ locality.name }}</dd>
             </div>
+            {% if locality.geological_times %}
+              <div class="w3-margin-bottom">
+                <dt class="w3-text-gray">{% trans "Geological time" %}</dt>
+                <dd class="w3-margin-0">
+                  <span title="{{ locality.geological_times_abbreviation_display }}">
+                    {{ locality.geological_times_label_display }}
+                  </span>
+                </dd>
+              </div>
+            {% endif %}
+            {% if locality.description %}
+              <div class="w3-margin-bottom">
+                <dt class="w3-text-gray">{% trans "Description" %}</dt>
+                <dd class="w3-margin-0">{{ locality.description }}</dd>
+              </div>
+            {% endif %}
+            {% if locality.comment %}
+              <div class="w3-margin-bottom">
+                <dt class="w3-text-gray">{% trans "Comment" %}</dt>
+                <dd class="w3-margin-0">{{ locality.comment }}</dd>
+              </div>
+            {% endif %}
+          </dl>
         </div>
+      </article>
 
+      {% with places=locality.place_set.all %}
+        {% if places|length %}
+        <article class="w3-col s12 m6 l4">
+          <div class="w3-card w3-round w3-white w3-padding" aria-labelledby="locality-places-heading">
+            <h2 id="locality-places-heading" class="w3-margin-top">{% trans "Places within this locality" %}</h2>
+            <ul class="w3-ul w3-margin-top">
+              {% for place in places %}
+                <li><a href="{% url 'place_detail' place.pk %}">{{ place.name }}</a></li>
+              {% empty %}
+                <li class="w3-text-gray">{% trans "No places recorded." %}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        </article>
+        {% endif %}
+      {% endwith %}
+    </div>
+  </section>
+
+  {% if user.is_authenticated %}
+    {% blocktrans asvar associated_accessions_title %}Associated accessions{% endblocktrans %}
+  {% else %}
+    {% blocktrans asvar associated_accessions_title %}Associated published accessions{% endblocktrans %}
+  {% endif %}
+  {% blocktrans asvar associated_accessions_empty %}No accessions found.{% endblocktrans %}
+  {% include "cms/partials/accession_basic_list.html" with accessions=accessions section_id="locality-accessions" section_title=associated_accessions_title empty_message=associated_accessions_empty show_staff_columns=show_accession_staff_columns %}
+</main>
 {% endblock %}
 
 

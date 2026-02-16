@@ -5,21 +5,35 @@ services:
     restart: unless-stopped
     ports:
       - 8000:8000
-    command: sh -c ./scripts/entrypoint.prod.sh
+    command: ["sh", "-c", "./scripts/entrypoint.prod.sh"]
     volumes:
       - static:/vol/web
     env_file:
       - ./.env
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings
+      - GUNICORN_BIND=${GUNICORN_BIND:-0.0.0.0:8000}
+      - GUNICORN_WORKERS=${GUNICORN_WORKERS:-3}
+      - GUNICORN_TIMEOUT=${GUNICORN_TIMEOUT:-90}
+      - GUNICORN_MAX_REQUESTS=${GUNICORN_MAX_REQUESTS:-1000}
+      - GUNICORN_MAX_REQUESTS_JITTER=${GUNICORN_MAX_REQUESTS_JITTER:-50}
+    depends_on:
+      - db
+      - redis
 
   redis:
     image: redis:7.2.4-alpine
+    restart: unless-stopped
     expose:
       - "6379"
     container_name: nmk-cms-redis
   db:
     image: mariadb
+    restart: unless-stopped
+    expose:
+      - "3306"
     ports:
-      - 3306
+      - "127.0.0.1:3306:3306"
     environment:
       - MYSQL_DATABASE=${DB_NAME}
       - MYSQL_USER=${DB_USER}
@@ -29,6 +43,7 @@ services:
       - "--character-set-server=utf8mb4"
     volumes:
       - db:/var/lib/mysql
+
   nginx:
     build: ./nginx
     restart: unless-stopped
@@ -42,8 +57,9 @@ services:
     environment:
       - APP_DOMAIN=${APP_DOMAIN}
       - PMA_DOMAIN=${PMA_DOMAIN}
-      - SCAN_UPLOAD_MAX_BYTES=${SCAN_UPLOAD_MAX_BYTES:-5242880}
-      - SCAN_UPLOAD_BATCH_MAX_BYTES=${SCAN_UPLOAD_BATCH_MAX_BYTES:-0}
+      - NGINX_CLIENT_MAX_BODY_SIZE=${NGINX_CLIENT_MAX_BODY_SIZE:-5m}
+      - SCAN_UPLOAD_MAX_BYTES=${SCAN_UPLOAD_MAX_BYTES}
+      - SCAN_UPLOAD_BATCH_MAX_BYTES=${SCAN_UPLOAD_BATCH_MAX_BYTES}
       - SCAN_UPLOAD_TIMEOUT_SECONDS=${SCAN_UPLOAD_TIMEOUT_SECONDS:-60}
     labels:
       - "com.centurylinklabs.watchtower.enable=false"
@@ -76,7 +92,8 @@ services:
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    command: --interval 30
+    command: --interval 300
 
 volumes:
-  static: null
+  static:
+  db:

@@ -1,116 +1,166 @@
 {% extends "admin/change_form.html" %}
 {% load i18n static %}
 
+{% block extrastyle %}
+  {{ block.super }}
+  <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+{% endblock %}
+
 {% block content %}
 {% if not merge_tool_enabled %}
-<div class="merge-admin">
-  <div class="merge-admin__intro">
+<div class="w3-content w3-padding-32">
+  <div class="w3-panel w3-pale-red w3-leftbar w3-border-red w3-round">
     <p class="errornote">{% trans "The merge interface is currently disabled by configuration." %}</p>
   </div>
 </div>
 {% else %}
-<div class="merge-admin" data-merge-admin data-search-url="{{ search_url }}" data-model-label="{{ model_label }}">
-  <h1 class="merge-admin__title">{{ title }}</h1>
+<div class="w3-content w3-padding-32 w3-animate-opacity" data-merge-admin data-search-url="{{ search_url }}" data-model-label="{{ model_label }}">
+  <h1 class="w3-xxlarge w3-margin-bottom">{{ title }}</h1>
 
-  <div class="merge-admin__intro">
-    <p>{% trans "Use this tool to review and merge duplicate records. Select a source and target, choose strategies for each field, then confirm the merge." %}</p>
+  <div class="w3-panel w3-pale-blue w3-leftbar w3-border-blue w3-round w3-margin-bottom">
+    <p class="w3-margin-0">{% trans "Use this tool to review and merge duplicate records. Select a source and target, choose strategies for each field, then confirm the merge." %}</p>
   </div>
 
-  <section class="merge-admin__selection">
-    <h2>{% trans "Current selection" %}</h2>
-    <div class="merge-admin__selection-grid">
-      <div class="merge-admin__selection-column">
-        <h3>{% trans "Target" %}</h3>
-        {% if target_summary %}
-          <p class="merge-admin__selection-label" data-merge-summary="target">{{ target_summary.label }} <span class="merge-admin__badge">ID {{ target_summary.pk }}</span></p>
-          {% if target_summary.preview %}
-            <ul class="merge-admin__preview">
-              {% for row in target_summary.preview %}
-                <li><strong>{{ row.field }}:</strong> {{ row.value }}</li>
-              {% endfor %}
-            </ul>
+  <div class="w3-panel w3-pale-green w3-leftbar w3-border-green w3-round w3-margin-bottom" role="note">
+    <p class="w3-margin-0">
+      <span class="fa fa-link" aria-hidden="true"></span>
+      <span class="w3-margin-left">{% trans "When both records reference the same accession, the merge will keep a single shared link and report how many duplicates were skipped." %}</span>
+    </p>
+  </div>
+
+  {% if field_selection_help %}
+  <div class="w3-panel w3-pale-yellow w3-leftbar w3-border-amber w3-round w3-margin-bottom" role="note">
+    <p class="w3-margin-0">
+      <span class="fa fa-sliders-h" aria-hidden="true"></span>
+      <span class="w3-margin-left">{{ field_selection_help }}</span>
+      {% if field_selection_url %}
+        <a class="w3-margin-left" href="{{ field_selection_url }}">{% trans "Open field selection merge" %}</a>
+      {% endif %}
+    </p>
+  </div>
+  {% endif %}
+
+  <section class="w3-margin-bottom">
+    <h2 class="w3-large w3-margin-bottom">{% trans "Current selection" %}</h2>
+    <div class="w3-row-padding">
+      <div class="w3-col l4 m12 w3-margin-bottom">
+        <div class="w3-card w3-white w3-round-large w3-padding-large w3-margin-bottom" aria-label="{% trans 'Target record' %}">
+          <h3 class="w3-margin-top">{% trans "Target" %}</h3>
+          {% if target_summary %}
+            <p data-merge-summary="target">
+              <span class="w3-large">{{ target_summary.label }}</span>
+              <span class="w3-tag w3-round w3-light-grey w3-margin-left">ID {{ target_summary.pk }}</span>
+            </p>
+            {% if target_summary.preview %}
+              <ul class="w3-ul w3-small">
+                {% for row in target_summary.preview %}
+                  <li><strong>{{ row.field }}:</strong> {{ row.value }}</li>
+                {% endfor %}
+              </ul>
+            {% endif %}
+          {% else %}
+            <p class="w3-text-grey" data-merge-summary="target">{% trans "No target selected." %}</p>
           {% endif %}
-        {% else %}
-          <p class="merge-admin__empty" data-merge-summary="target">{% trans "No target selected." %}</p>
-        {% endif %}
+        </div>
       </div>
-      <div class="merge-admin__selection-column">
-        <h3>{% trans "Source" %}</h3>
-        {% if source_summary %}
-          <p class="merge-admin__selection-label" data-merge-summary="source">{{ source_summary.label }} <span class="merge-admin__badge">ID {{ source_summary.pk }}</span></p>
-          {% if source_summary.preview %}
-            <ul class="merge-admin__preview">
-              {% for row in source_summary.preview %}
-                <li><strong>{{ row.field }}:</strong> {{ row.value }}</li>
-              {% endfor %}
-            </ul>
-          {% endif %}
-        {% else %}
-          <p class="merge-admin__empty" data-merge-summary="source">{% trans "No source selected." %}</p>
-        {% endif %}
+      <div class="w3-col l8 m12 w3-margin-bottom">
+        <div class="w3-card w3-white w3-round-large w3-padding-large w3-margin-bottom" aria-label="{% trans 'Source records' %}">
+          <header class="w3-margin-bottom">
+            <h3 class="w3-margin-top">{% trans "Sources" %}</h3>
+            <p class="w3-text-grey w3-small">{% trans "Merge will process sources in order. The first source is shown in the field comparison table." %}</p>
+          </header>
+          <ul class="w3-ul w3-small" data-merge-source-list data-primary-label="{% trans 'Primary' %}" data-remove-label="{% trans 'Remove' %}">
+            {% for item in source_objects %}
+              <li class="w3-padding-small w3-border-bottom" data-merge-source-row data-merge-object-id="{{ item.pk }}" data-merge-object-label="{{ item.label }}">
+                <div class="w3-row">
+                  <div class="w3-col s9">
+                    <strong>{{ item.label }}</strong>
+                    <span class="w3-tag w3-round w3-light-grey w3-margin-left">ID {{ item.pk }}</span>
+                    {% if forloop.first %}
+                      <span class="w3-tag w3-round w3-blue w3-margin-left">{% trans "Primary" %}</span>
+                    {% endif %}
+                  </div>
+                  <div class="w3-col s3 w3-right-align">
+                    <button type="button" class="w3-button w3-small w3-light-grey w3-round" data-merge-remove-source="{{ item.pk }}">
+                      <span class="fa fa-times" aria-hidden="true"></span>
+                      <span class="w3-margin-left">{% trans "Remove" %}</span>
+                    </button>
+                  </div>
+                </div>
+              </li>
+            {% endfor %}
+          </ul>
+          <p class="w3-text-grey" data-merge-empty-sources {% if source_objects %}hidden{% endif %}>{% trans "No sources selected." %}</p>
+        </div>
       </div>
     </div>
+    <p class="w3-small w3-text-grey" data-merge-live role="status" aria-live="polite"></p>
   </section>
 
   {% if selected_objects %}
-  <section class="merge-admin__selection">
-    <h2>{% trans "Selected from list" %}</h2>
-    <div class="merge-admin__cards">
+  <section class="w3-margin-bottom">
+    <h2 class="w3-large w3-margin-bottom">{% trans "Selected from list" %}</h2>
+    <div class="w3-row-padding">
       {% for item in selected_objects %}
-      <article class="merge-admin__card">
-        <header>
-          <h3>{{ item.label }}</h3>
-          <p class="merge-admin__badge">ID {{ item.pk }}</p>
-        </header>
-        {% if item.preview %}
-        <ul class="merge-admin__preview">
-          {% for row in item.preview %}
-          <li><strong>{{ row.field }}:</strong> {{ row.value }}</li>
-          {% endfor %}
-        </ul>
-        {% endif %}
-        <div class="merge-admin__card-actions">
-          <button type="button" class="button" data-merge-set-role="target" data-merge-object-id="{{ item.pk }}">{% trans "Use as target" %}</button>
-          <button type="button" class="button" data-merge-set-role="source" data-merge-object-id="{{ item.pk }}">{% trans "Use as source" %}</button>
-        </div>
-      </article>
+      <div class="w3-col l4 m6 w3-margin-bottom">
+        <article class="w3-card w3-white w3-round-large w3-padding-large">
+          <header class="w3-margin-bottom">
+            <h3>{{ item.label }}</h3>
+            <p class="w3-tag w3-round w3-light-grey">ID {{ item.pk }}</p>
+          </header>
+          {% if item.preview %}
+          <ul class="w3-ul w3-small">
+            {% for row in item.preview %}
+            <li><strong>{{ row.field }}:</strong> {{ row.value }}</li>
+            {% endfor %}
+          </ul>
+          {% endif %}
+          <div class="w3-margin-top">
+            <button type="button" class="button w3-button w3-round w3-blue w3-margin-right" data-merge-set-role="target" data-merge-object-id="{{ item.pk }}">{% trans "Use as target" %}</button>
+            <button type="button" class="button w3-button w3-round w3-border" data-merge-set-role="source" data-merge-object-id="{{ item.pk }}">{% trans "Add as source" %}</button>
+          </div>
+        </article>
+      </div>
       {% endfor %}
     </div>
   </section>
   {% endif %}
 
-  <section class="merge-admin__search">
-    <h2>{% trans "Search for candidates" %}</h2>
-    <form class="merge-admin__search-form" data-merge-search-form>
-      <div class="merge-admin__field">
-        <label for="merge-search-query">{% trans "Search term" %}</label>
-        <input type="search" id="merge-search-query" name="query" placeholder="{% trans 'e.g. specimen number or title' %}" required>
-      </div>
-      <div class="merge-admin__field">
-        <label for="merge-search-threshold">{% trans "Match threshold" %}</label>
-        <input type="number" id="merge-search-threshold" name="threshold" min="0" max="100" step="1" value="75">
-      </div>
-      <div class="merge-admin__actions">
-        <button type="submit" class="button button-primary">{% trans "Search" %}</button>
+  <section class="w3-margin-bottom">
+    <h2 class="w3-large w3-margin-bottom">{% trans "Search for candidates" %}</h2>
+    <form class="w3-card w3-white w3-round-large w3-padding-large w3-margin-bottom" data-merge-search-form>
+      <div class="w3-row-padding">
+        <div class="w3-col m6 w3-margin-bottom">
+          <label class="w3-text-grey" for="merge-search-query">{% trans "Search term" %}</label>
+          <input class="w3-input w3-border w3-round-large" type="search" id="merge-search-query" name="query" placeholder="{% trans 'e.g. specimen number or title' %}" required>
+        </div>
+        <div class="w3-col m3 w3-margin-bottom">
+          <label class="w3-text-grey" for="merge-search-threshold">{% trans "Match threshold" %}</label>
+          <input class="w3-input w3-border w3-round-large" type="number" id="merge-search-threshold" name="threshold" min="0" max="100" step="1" value="75">
+        </div>
+        <div class="w3-col m3 w3-margin-bottom">
+          <button type="submit" class="button button-primary w3-button w3-blue w3-round-large w3-margin-top">{% trans "Search" %}</button>
+        </div>
       </div>
     </form>
-    <div class="merge-admin__results" data-merge-results></div>
+    <div class="w3-row-padding" data-merge-results></div>
   </section>
 
-  <form method="post" novalidate class="merge-admin__form">
+  <form method="post" novalidate class="w3-card w3-white w3-round-large w3-padding-large">
     {% csrf_token %}
     {{ form.selected_ids }}
     {{ form.source }}
     {{ form.target }}
 
     {% if form.non_field_errors %}
-      <div class="merge-admin__errors">{{ form.non_field_errors }}</div>
+      <div class="w3-panel w3-pale-red w3-leftbar w3-border-red w3-round w3-margin-bottom">{{ form.non_field_errors }}</div>
     {% endif %}
 
-    <div class="merge-admin__table-wrapper">
-      <table class="merge-admin__table">
+    <div class="w3-responsive w3-margin-bottom">
+      <table class="w3-table-all w3-striped w3-bordered">
         <thead>
-          <tr>
+          <tr class="w3-light-grey">
             <th>{% trans "Field" %}</th>
             <th>{% trans "Source value" %}</th>
             <th>{% trans "Target value" %}</th>
@@ -122,22 +172,22 @@
         {% for row in field_rows %}
           <tr>
             <th scope="row">{{ row.label }}</th>
-            <td class="merge-admin__value">{{ row.source }}</td>
-            <td class="merge-admin__value">{{ row.target }}</td>
+            <td class="w3-small w3-monospace">{{ row.source }}</td>
+            <td class="w3-small w3-monospace">{{ row.target }}</td>
             <td>
-              <div class="merge-admin__field-control" data-merge-strategy-container>
+              <div class="w3-margin-bottom" data-merge-strategy-container>
                 {{ row.strategy }}
               </div>
               {% if row.strategy.errors %}
-                <div class="merge-admin__field-error">{{ row.strategy.errors }}</div>
+                <div class="w3-text-red w3-small">{{ row.strategy.errors }}</div>
               {% endif %}
             </td>
             <td>
-              <div class="merge-admin__field-control" data-merge-manual-field="{{ row.name }}" hidden>
+              <div class="w3-margin-bottom" data-merge-manual-field="{{ row.name }}" hidden>
                 {{ row.manual }}
               </div>
               {% if row.manual.errors %}
-                <div class="merge-admin__field-error">{{ row.manual.errors }}</div>
+                <div class="w3-text-red w3-small">{{ row.manual.errors }}</div>
               {% endif %}
             </td>
           </tr>
@@ -146,9 +196,9 @@
       </table>
     </div>
 
-    <div class="submit-row">
-      <button type="submit" class="button button-primary">{% trans "Merge records" %}</button>
-      <a href="{{ changelist_url }}" class="button cancel-link">{% trans "Cancel" %}</a>
+    <div class="submit-row w3-margin-top">
+      <button type="submit" class="button button-primary w3-button w3-blue w3-round-large">{% trans "Merge records" %}</button>
+      <a href="{{ changelist_url }}" class="button cancel-link w3-button w3-border w3-round-large">{% trans "Cancel" %}</a>
     </div>
   </form>
 </div>

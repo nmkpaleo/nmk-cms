@@ -1,0 +1,262 @@
+{% extends "base_generic.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Merge elements" %}{% endblock %}
+
+{% block content %}
+<main class="w3-container w3-margin-top" aria-labelledby="element-merge-heading">
+  <header class="w3-margin-bottom">
+    <h1 id="element-merge-heading" class="w3-xxlarge">
+      <i class="fa fa-layer-group" aria-hidden="true"></i>
+      <span class="w3-margin-left">{% trans "Merge elements" %}</span>
+    </h1>
+    <p class="w3-text-grey">{% trans "Select a target element and one or more sources. Use filters to narrow results before continuing to field selection." %}</p>
+  </header>
+
+  <section class="w3-card w3-padding" aria-labelledby="element-merge-filters">
+    <header class="w3-margin-bottom">
+      <h2 id="element-merge-filters" class="w3-large">
+        <i class="fa fa-filter" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "Filter elements" %}</span>
+      </h2>
+    </header>
+    <form method="get" role="search" aria-label="{% trans 'Element filters' %}" class="w3-container w3-padding-16">
+      <div class="w3-row-padding">
+        {% for field in filter.form %}
+          <div class="w3-col s12 m6 l4 w3-margin-bottom">
+            <label class="w3-text-grey" for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}
+              <p class="w3-small w3-text-grey">{{ field.help_text }}</p>
+            {% endif %}
+            {% if field.errors %}
+              <p class="w3-tiny w3-text-red">{{ field.errors|join:", " }}</p>
+            {% endif %}
+          </div>
+        {% empty %}
+          <p class="w3-text-grey">{% trans "No filters available." %}</p>
+        {% endfor %}
+      </div>
+      <div class="w3-margin-top">
+        <button type="submit" class="w3-button w3-blue w3-round w3-margin-right">
+          <i class="fa fa-check" aria-hidden="true"></i>
+          <span class="w3-margin-left">{% trans "Apply filters" %}</span>
+        </button>
+        <a href="{{ request.path }}" class="w3-button w3-light-grey w3-round">
+          <i class="fa fa-rotate-left" aria-hidden="true"></i>
+          <span class="w3-margin-left">{% trans "Clear" %}</span>
+        </a>
+      </div>
+    </form>
+  </section>
+
+  <section class="w3-margin-top" aria-labelledby="element-merge-selection">
+    <header class="w3-margin-bottom">
+      <h2 id="element-merge-selection" class="w3-large">
+        <i class="fa fa-list-check" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "Select candidates" %}</span>
+      </h2>
+      <p class="w3-small w3-text-grey">{% trans "Choose one target and one or more sources to merge." %}</p>
+    </header>
+
+    <form method="post" action="{{ confirm_url|default:request.get_full_path }}" class="w3-card w3-padding" aria-describedby="element-merge-selection">
+      {% csrf_token %}
+      {% if cancel_url %}
+        <input type="hidden" name="cancel" value="{{ cancel_url }}" />
+      {% endif %}
+      <input type="hidden" name="candidates" id="id_candidates" />
+
+      {% with current_page=page_obj %}
+        {% if current_page %}
+          {% with elements=current_page.object_list %}
+            <div class="w3-responsive">
+              <table class="w3-table-all w3-hoverable" role="grid" aria-label="{% trans 'Element selection table' %}">
+                <thead>
+                  <tr>
+                    <th scope="col">{% trans "Target" %}</th>
+                    <th scope="col">{% trans "Source" %}</th>
+                    <th scope="col">{% trans "Element" %}</th>
+                    <th scope="col">{% trans "Parent" %}</th>
+                    <th scope="col">{% trans "Children" %}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for element in elements %}
+                    <tr>
+                      <td>
+                        <label class="w3-small" for="id_target_{{ element.pk }}">
+                          <input
+                            class="w3-radio"
+                            type="radio"
+                            name="target"
+                            id="id_target_{{ element.pk }}"
+                            value="{{ element.pk }}"
+                            aria-label="{% blocktrans with name=element %}Select {{ name }} as target{% endblocktrans %}"
+                            required
+                          />
+                          <span class="w3-margin-left">{% trans "Target" %}</span>
+                        </label>
+                      </td>
+                      <td>
+                        <label class="w3-small" for="id_source_{{ element.pk }}">
+                          <input
+                            class="w3-check"
+                            type="checkbox"
+                            data-source-checkbox
+                            name="source_ids"
+                            id="id_source_{{ element.pk }}"
+                            value="{{ element.pk }}"
+                            aria-label="{% blocktrans with name=element %}Merge {{ name }} as source{% endblocktrans %}"
+                          />
+                          <span class="w3-margin-left">{% trans "Source" %}</span>
+                        </label>
+                      </td>
+                      <td>{{ element.name|default:"—" }}</td>
+                      <td>
+                        {% if element.parent_element %}
+                          {{ element.parent_element.name|default:"—" }}
+                        {% else %}
+                          <span class="w3-text-grey">{% trans "None" %}</span>
+                        {% endif %}
+                      </td>
+                      <td>{{ element.children.count }}</td>
+                    </tr>
+                  {% empty %}
+                    <tr>
+                      <td colspan="5" class="w3-center w3-text-grey">{% trans "No elements found." %}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+
+            {% if current_page.paginator.num_pages > 1 %}
+              <nav class="w3-margin-top" aria-label="{% trans 'Element pagination' %}">
+                <ul class="w3-pagination w3-border w3-round">
+                  {% if current_page.has_previous %}
+                    <li><a class="w3-button" href="?page={{ current_page.previous_page_number }}">{% trans "Previous" %}</a></li>
+                  {% else %}
+                    <li class="w3-disabled"><span class="w3-button">{% trans "Previous" %}</span></li>
+                  {% endif %}
+                  <li class="w3-button w3-light-grey">{% blocktrans %}Page {{ current_page.number }} of {{ current_page.paginator.num_pages }}{% endblocktrans %}</li>
+                  {% if current_page.has_next %}
+                    <li><a class="w3-button" href="?page={{ current_page.next_page_number }}">{% trans "Next" %}</a></li>
+                  {% else %}
+                    <li class="w3-disabled"><span class="w3-button">{% trans "Next" %}</span></li>
+                  {% endif %}
+                </ul>
+              </nav>
+            {% endif %}
+          {% endwith %}
+        {% else %}
+          {% with elements=elements|default:object_list %}
+            <div class="w3-responsive">
+              <table class="w3-table-all w3-hoverable" role="grid" aria-label="{% trans 'Element selection table' %}">
+                <thead>
+                <tr>
+                  <th scope="col">{% trans "Target" %}</th>
+                  <th scope="col">{% trans "Source" %}</th>
+                  <th scope="col">{% trans "Element" %}</th>
+                  <th scope="col">{% trans "Parent" %}</th>
+                  <th scope="col">{% trans "Children" %}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for element in elements %}
+                  <tr>
+                    <td>
+                      <label class="w3-small" for="id_target_{{ element.pk }}">
+                        <input
+                          class="w3-radio"
+                          type="radio"
+                          name="target"
+                          id="id_target_{{ element.pk }}"
+                          value="{{ element.pk }}"
+                          aria-label="{% blocktrans with name=element %}Select {{ name }} as target{% endblocktrans %}"
+                          required
+                        />
+                        <span class="w3-margin-left">{% trans "Target" %}</span>
+                      </label>
+                    </td>
+                    <td>
+                      <label class="w3-small" for="id_source_{{ element.pk }}">
+                        <input
+                          class="w3-check"
+                          type="checkbox"
+                          data-source-checkbox
+                          name="source_ids"
+                          id="id_source_{{ element.pk }}"
+                          value="{{ element.pk }}"
+                          aria-label="{% blocktrans with name=element %}Merge {{ name }} as source{% endblocktrans %}"
+                        />
+                        <span class="w3-margin-left">{% trans "Source" %}</span>
+                      </label>
+                    </td>
+                    <td>{{ element.name|default:"—" }}</td>
+                    <td>
+                      {% if element.parent_element %}
+                        {{ element.parent_element.name|default:"—" }}
+                      {% else %}
+                        <span class="w3-text-grey">{% trans "None" %}</span>
+                      {% endif %}
+                    </td>
+                    <td>{{ element.children.count }}</td>
+                  </tr>
+                {% empty %}
+                  <tr>
+                    <td colspan="5" class="w3-center w3-text-grey">{% trans "No elements found." %}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          {% endwith %}
+        {% endif %}
+      {% endwith %}
+
+      <footer class="w3-margin-top">
+        <button class="w3-button w3-blue w3-round w3-margin-right" type="submit">
+          <i class="fa fa-arrow-right" aria-hidden="true"></i>
+          <span class="w3-margin-left">{% trans "Continue" %}</span>
+        </button>
+        {% if cancel_url %}
+          <a class="w3-button w3-light-grey w3-round" href="{{ cancel_url }}">
+            <i class="fa fa-arrow-left" aria-hidden="true"></i>
+            <span class="w3-margin-left">{% trans "Cancel" %}</span>
+          </a>
+        {% endif %}
+      </footer>
+    </form>
+  </section>
+</main>
+{% endblock %}
+
+{% block script %}
+<script>
+  (function() {
+    const form = document.querySelector('form[action="{{ confirm_url|default:request.get_full_path }}"]');
+    if (!form) return;
+    form.addEventListener('submit', function(event) {
+      const target = form.querySelector('input[name="target"]:checked');
+      const candidateField = document.getElementById('id_candidates');
+      const sources = Array.from(form.querySelectorAll('[data-source-checkbox]:checked'))
+        .map(input => input.value)
+        .filter(value => value !== (target ? target.value : ''));
+      if (!target || sources.length === 0) {
+        event.preventDefault();
+        const status = document.getElementById('element-merge-status');
+        if (status) {
+          status.hidden = false;
+          status.textContent = target ? '{% trans "Select at least one source to merge." %}' : '{% trans "Select a target and at least one source." %}';
+        }
+        return;
+      }
+      if (candidateField) {
+        candidateField.value = [target.value].concat(sources).join(',');
+      }
+    });
+  })();
+</script>
+<div id="element-merge-status" class="w3-margin-top w3-text-red" role="status" aria-live="polite" hidden></div>
+{% endblock %}

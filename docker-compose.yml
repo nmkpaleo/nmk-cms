@@ -8,6 +8,8 @@ services:
       - ./app:/src/app
     env_file:
       - ./.env
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings
     depends_on:
       - db
       - redis

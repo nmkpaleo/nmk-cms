@@ -24,6 +24,8 @@ from cms.models import (
     Accession,
     AccessionNumberSeries,
     AccessionRow,
+    Organisation,
+    UserOrganisation,
     Storage,
     InventoryStatus,
     Collection,
@@ -499,6 +501,14 @@ class GenerateAccessionsFromSeriesTests(TestCase):
             username="creator", password="pass"
         )
 
+        self.nmk_org, _ = Organisation.objects.get_or_create(
+            code="nmk", defaults={"name": "NMK"}
+        )
+        UserOrganisation.objects.create(
+            user=self.series_user, organisation=self.nmk_org
+        )
+        UserOrganisation.objects.create(user=self.creator, organisation=self.nmk_org)
+
         # Patch get_current_user used in BaseModel to bypass authentication
         self.patcher = patch("cms.models.get_current_user", return_value=self.creator)
         self.patcher.start()
@@ -559,6 +569,19 @@ class AccessionNumberSeriesAdminFormTests(TestCase):
         self.tbi_user = User.objects.create_user(username="TBI", password="pass")
         self.shared_user = User.objects.create_user(username="shared", password="pass")
         self.other_shared_user = User.objects.create_user(username="shared2", password="pass")
+
+        self.tbi_org, _ = Organisation.objects.get_or_create(
+            code="tbi", defaults={"name": "TBI"}
+        )
+        self.nmk_org, _ = Organisation.objects.get_or_create(
+            code="nmk", defaults={"name": "NMK"}
+        )
+
+        UserOrganisation.objects.create(user=self.tbi_user, organisation=self.tbi_org)
+        UserOrganisation.objects.create(user=self.shared_user, organisation=self.nmk_org)
+        UserOrganisation.objects.create(
+            user=self.other_shared_user, organisation=self.nmk_org
+        )
 
     def test_form_exposes_widget_metadata_for_client_side(self):
         form = AccessionNumberSeriesAdminForm()
@@ -859,6 +882,14 @@ class DashboardViewCollectionManagerTests(TestCase):
             username="cm2", password="pass"
         )
 
+        self.nmk_org, _ = Organisation.objects.get_or_create(
+            code="nmk", defaults={"name": "NMK"}
+        )
+        UserOrganisation.objects.create(user=self.manager, organisation=self.nmk_org)
+        UserOrganisation.objects.create(
+            user=self.other_manager, organisation=self.nmk_org
+        )
+
         self.group = Group.objects.create(name="Collection Managers")
         self.group.user_set.add(self.manager, self.other_manager)
 
@@ -952,6 +983,33 @@ class DashboardViewCollectionManagerTests(TestCase):
         response = self.client.get(reverse("dashboard"))
         self.assertFalse(response.context["has_active_series"])
 
+    def test_generate_batch_button_disabled_when_series_active(self):
+        response = self.client.get(reverse("dashboard"))
+
+        self.assertContains(response, "Generate batch")
+        self.assertContains(response, 'aria-disabled="true"')
+        self.assertNotContains(response, reverse("accession-generate-batch"))
+
+    def test_generate_batch_button_enabled_without_active_series(self):
+        AccessionNumberSeries.objects.filter(user=self.manager).update(is_active=False)
+
+        response = self.client.get(reverse("dashboard"))
+
+        self.assertContains(response, 'href="{}"'.format(reverse("accession-generate-batch")))
+        self.assertContains(response, 'aria-disabled="false"')
+
+    def test_generate_batch_button_enabled_for_admin(self):
+        User = get_user_model()
+        admin = User.objects.create_superuser(username="admin", password="pass")
+
+        self.client.logout()
+        self.client.login(username="admin", password="pass")
+
+        response = self.client.get(reverse("dashboard"))
+
+        self.assertContains(response, 'href="{}"'.format(reverse("accession-generate-batch")))
+        self.assertContains(response, 'aria-disabled="false"')
+
 
 class DashboardViewPreparatorTests(TestCase):
     def setUp(self):
@@ -1001,6 +1059,11 @@ class DashboardViewMultipleRolesTests(TestCase):
         User = get_user_model()
 
         self.user = User.objects.create_user(username="multi", password="pass")
+
+        self.nmk_org, _ = Organisation.objects.get_or_create(
+            code="nmk", defaults={"name": "NMK"}
+        )
+        UserOrganisation.objects.create(user=self.user, organisation=self.nmk_org)
 
         self.prep_group = Group.objects.create(name="Preparators")
         self.cm_group = Group.objects.create(name="Collection Managers")
@@ -1153,6 +1216,64 @@ class DrawerRegisterTests(TestCase):
         drawer.taxa.add(family_taxon)
         form = DrawerRegisterForm(instance=drawer)
         self.assertEqual(set(form.fields["taxa"].queryset), {order_taxon, family_taxon})
+
+
+class DrawerRegisterViewTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.superuser = User.objects.create_superuser(
+            username="admin",
+            email="admin@example.com",
+            password="pass",
+        )
+        self.client.force_login(self.superuser)
+
+    def _create_taxon(self, *, name: str, rank: str = "Order") -> Taxon:
+        return Taxon.objects.create(
+            taxon_rank=rank,
+            taxon_name=name,
+            kingdom="Animalia",
+            phylum="Chordata",
+            class_name="Mammalia",
+            order=name if rank == "Order" else "Primates",
+            family="Hominidae",
+            genus="Homo",
+            species="sapiens",
+        )
+
+    def test_detail_view_lists_related_localities_and_taxa(self):
+        locality = Locality.objects.create(abbreviation="L1", name="Locality One")
+        taxon = self._create_taxon(name="Primates", rank="Order")
+        drawer = DrawerRegister.objects.create(
+            code="DR1",
+            description="Drawer detail",
+            estimated_documents=1,
+        )
+        drawer.localities.add(locality)
+        drawer.taxa.add(taxon)
+
+        response = self.client.get(reverse("drawerregister_detail", args=[drawer.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, locality.name)
+        self.assertContains(response, taxon.taxon_name)
+
+    def test_edit_view_renders_with_preselected_non_order_taxa(self):
+        order_taxon = self._create_taxon(name="Primates", rank="Order")
+        family_taxon = self._create_taxon(name="Hominidae", rank="Family")
+        drawer = DrawerRegister.objects.create(
+            code="DR2",
+            description="Drawer edit",
+            estimated_documents=2,
+        )
+        drawer.taxa.add(family_taxon)
+
+        response = self.client.get(reverse("drawerregister_edit", args=[drawer.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        taxa_field = response.context["form"].fields["taxa"].queryset
+        self.assertIn(order_taxon, taxa_field)
+        self.assertIn(family_taxon, taxa_field)
 
     def test_filter_taxa_field_limited_to_orders(self):
         order_taxon = Taxon.objects.create(
@@ -1327,6 +1448,49 @@ class DrawerRegisterTests(TestCase):
         self.assertQuerysetEqual(
             drawer.scanning_users.order_by("id"), [user1, user2], transform=lambda x: x
         )
+
+    def test_export_uses_taxon_name_for_taxa(self):
+        with patch("cms.models.Taxon.clean", return_value=None):
+            taxon1 = Taxon.objects.create(
+                taxon_rank="Order",
+                taxon_name="Order1",
+                kingdom="k",
+                phylum="p",
+                class_name="c",
+                order="Order1",
+                family="",
+                genus="",
+                species="",
+            )
+            taxon2 = Taxon.objects.create(
+                taxon_rank="Order",
+                taxon_name="Order2",
+                kingdom="k",
+                phylum="p",
+                class_name="c",
+                order="Order2",
+                family="",
+                genus="",
+                species="",
+            )
+
+        drawer = DrawerRegister.objects.create(
+            code="TAXA-EXPORT",
+            description="Drawer",
+            estimated_documents=1,
+        )
+        drawer.taxa.set([taxon1, taxon2])
+
+        resource = DrawerRegisterResource()
+        dataset = resource.export(DrawerRegister.objects.filter(pk=drawer.pk))
+
+        self.assertEqual(len(dataset), 1)
+        exported_row = dataset.dict[0]
+        exported_taxa = [
+            value.strip() for value in exported_row["taxa"].split(";") if value.strip()
+        ]
+
+        self.assertEqual(set(exported_taxa), {taxon1.taxon_name, taxon2.taxon_name})
 
 
 class ScanningTests(TestCase):

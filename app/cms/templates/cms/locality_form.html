@@ -1,9 +1,24 @@
 {% extends "base_generic.html" %}
+{% load i18n %}
 
-{% block title %}{% if form.instance.pk %}Edit Locality{% else %}New Locality{% endif %}{% endblock %}
+{% block title %}
+  {% if form.instance.pk %}
+    {% trans "Edit Locality" %}
+  {% else %}
+    {% trans "New Locality" %}
+  {% endif %}
+{% endblock %}
 
 {% block content %}
-    {% include "includes/base_form.html" with form=form submit_label="Save" method="post" action=request.path title="Locality" %}
-    
-    <a href="{% url 'locality_list' %}">Back to Localities</a>
+  {% trans "Save locality" as save_locality_label %}
+  {% trans "Locality" as locality_label %}
+  <main class="w3-container w3-margin-top w3-margin-bottom" role="main">
+    {% include "includes/base_form.html" with form=form submit_label=save_locality_label submit_icon="fa-location-dot" method="post" action=request.path title=locality_label heading_id="locality-form" %}
+    <div class="w3-margin-top">
+      <a href="{% url 'locality_list' %}" class="w3-button w3-white w3-border w3-round-large w3-hover-light-grey">
+        <i class="fa-solid fa-arrow-left-long" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "Back to localities" %}</span>
+      </a>
+    </div>
+  </main>
 {% endblock %}

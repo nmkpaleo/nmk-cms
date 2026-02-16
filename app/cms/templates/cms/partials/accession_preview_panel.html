@@ -1,310 +1,626 @@
-{% load custom_filters user_tags %}
-<div class="grid-containerr">
-  <div class="cards">
-    <table>
-      <caption><b><u>Accession</u></b></caption>
-      <tbody>
-        <tr>
-          <th>ACC No.:</th>
-          <td>{{ accession }}</td>
-        </tr>
-        <tr>
-          <th>Locality:</th>
-          <td>{{ accession.specimen_prefix }}</td>
-        </tr>
-        <tr>
-          <th>Type specimen:</th>
-          <td>{{ accession.type_status }}</td>
-        </tr>
-        {% if not preview_mode %}
-          {% if user.is_superuser or user|has_group:"Collection Managers" %}
-        <tr>
-          <th>Accessioned by:</th>
-          <td>{{ accession.accessioned_by }}</td>
-        </tr>
+{% load i18n custom_filters user_tags %}
+
+<section class="w3-margin-top" aria-labelledby="accession-summary-heading">
+  <div class="w3-row-padding accession-upper-grid">
+    <article class="w3-col s12 l5">
+      <div class="w3-card w3-round w3-white w3-padding">
+        <h2 id="accession-summary-heading" class="w3-margin-top">{% trans "Accession overview" %}</h2>
+        <dl class="w3-margin-top">
+          <div class="w3-margin-bottom">
+            <dt class="w3-text-gray">{% trans "Accession number" %}</dt>
+            <dd class="w3-margin-0">{{ accession }}</dd>
+          </div>
+          <div class="w3-margin-bottom">
+            <dt class="w3-text-gray">{% trans "Locality" %}</dt>
+            <dd class="w3-margin-0">{{ accession.specimen_prefix }}</dd>
+          </div>
+          <div class="w3-margin-bottom">
+            <dt class="w3-text-gray">{% trans "Type specimen" %}</dt>
+            <dd class="w3-margin-0">{{ accession.type_status|default:"—" }}</dd>
+          </div>
+          {% if not preview_mode %}
+            {% if user.is_superuser or user|has_group:"Collection Managers" %}
+              <div class="w3-margin-bottom">
+                <dt class="w3-text-gray">{% trans "Accessioned by" %}</dt>
+                <dd class="w3-margin-0">{{ accession.accessioned_by|default:"—" }}</dd>
+              </div>
+            {% endif %}
+          {% endif %}
+          <div class="w3-margin-bottom">
+            <dt class="w3-text-gray">{% trans "General comment" %}</dt>
+            <dd class="w3-margin-0">{{ accession.comment|default:"—" }}</dd>
+          </div>
+        </dl>
+      </div>
+    </article>
+
+    <div class="w3-col s12 l7" aria-labelledby="accession-specimens-heading">
+      <section class="w3-margin-bottom" aria-labelledby="accession-specimens-heading">
+        <header class="w3-row w3-padding-16">
+          <div class="w3-col s12 m6">
+            <h2 id="accession-specimens-heading" class="w3-margin-0">
+              <i class="fa-solid fa-vial" aria-hidden="true"></i>
+              <span class="w3-margin-left">{% trans "Specimen details" %}</span>
+            </h2>
+          </div>
+          {% if not preview_mode and user.is_authenticated %}
+            {% if user|has_group:"Collection Managers" %}
+              <div class="w3-col s12 m6 w3-right-align">
+                <a href="{% url 'accession_add_row' accession.id %}" class="w3-button w3-green w3-round">
+                  <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                  <span class="w3-hide-small w3-margin-left">{% trans "Add specimen" %}</span>
+                </a>
+              </div>
+            {% endif %}
+          {% endif %}
+        </header>
+        <div class="w3-responsive">
+          <table class="w3-table-all w3-hoverable w3-small">
+            <thead>
+              <tr>
+                <th scope="col">{% trans "Specimen" %}</th>
+                {% if can_edit_accession_rows %}
+                  <th scope="col">{% trans "Storage" %}</th>
+                {% endif %}
+                <th scope="col">{% trans "Element" %}</th>
+                <th scope="col">{% trans "Side" %}</th>
+                <th scope="col">{% trans "Description" %}</th>
+                <th scope="col">{% trans "Taxon" %}</th>
+                <th scope="col">{% trans "Family" %}</th>
+                <th scope="col">{% trans "Subfamily" %}</th>
+                <th scope="col">{% trans "Tribe" %}</th>
+                <th scope="col">{% trans "Genus" %}</th>
+                <th scope="col">{% trans "Species" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% with taxonomy_source=taxonomy_map|default:taxonomy %}
+                {% for accessionrow in accession_rows %}
+                  {% with specimens=accessionrow.natureofspecimen_set.all %}
+                    <tr>
+                      <td>
+                        {% if preview_mode %}
+                          {{ accessionrow.specimen_suffix }}
+                        {% else %}
+                          <a href="{% url 'accessionrow_detail' accessionrow.pk %}">{{ accessionrow.specimen_suffix }}</a>
+                        {% endif %}
+                      </td>
+                      {% if can_edit_accession_rows %}
+                        <td>{{ accessionrow.storage|default:"—" }}</td>
+                      {% endif %}
+                      <td>
+                        {% if specimens %}
+                          {% for specimen in specimens %}
+                            {{ specimen.element|default:"—" }}{% if not forloop.last %}<br>{% endif %}
+                          {% endfor %}
+                        {% else %}
+                          &mdash;
+                        {% endif %}
+                      </td>
+                      <td>
+                        {% if specimens %}
+                          {% for specimen in specimens %}
+                            {{ specimen.side|default:"—" }}{% if not forloop.last %}<br>{% endif %}
+                          {% endfor %}
+                        {% else %}
+                          &mdash;
+                        {% endif %}
+                      </td>
+                      <td>
+                        {% if specimens %}
+                          {% for specimen in specimens %}
+                            {{ specimen.verbatim_element|default:"—" }}{% if not forloop.last %}<br>{% endif %}
+                          {% endfor %}
+                        {% else %}
+                          &mdash;
+                        {% endif %}
+                      </td>
+                      {% with first_identifications|get_item:accessionrow.id as first_identification %}
+                        {% with identification_counts|get_item:accessionrow.id as identification_count %}
+                          {% if first_identification %}
+                            {% with taxonomy_source|get_item:first_identification.id as matched_taxon %}
+                              <td>
+                                {{ first_identification.taxon|default:"—" }}
+                                {% if identification_count|default:0 > 1 %}
+                                  <span class="w3-text-blue" title="{% trans "This specimen has previous identifications" %}">(*)</span>
+                                {% endif %}
+                              </td>
+                              <td>{{ matched_taxon.family|default:"—" }}</td>
+                              <td>{{ matched_taxon.subfamily|default:"—" }}</td>
+                              <td>{{ matched_taxon.tribe|default:"—" }}</td>
+                              <td>{{ matched_taxon.genus|default:"—" }}</td>
+                              <td>{{ matched_taxon.species|default:"—" }}</td>
+                            {% endwith %}
+                          {% else %}
+                            <td>{% trans "No taxon identified" %}</td>
+                            <td>—</td>
+                            <td>—</td>
+                            <td>—</td>
+                            <td>—</td>
+                            <td>—</td>
+                          {% endif %}
+                        {% endwith %}
+                      {% endwith %}
+                    </tr>
+                  {% endwith %}
+                {% empty %}
+                  <tr>
+                    <td colspan="{{ specimen_table_empty_colspan|default:10 }}" class="w3-center">{% trans "No specimen rows recorded." %}</td>
+                  </tr>
+                {% endfor %}
+              {% endwith %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {% if preview_mode %}
+        <section class="w3-margin-bottom" aria-labelledby="accession-fieldslips-heading">
+          <header class="w3-padding-16">
+            <h2 id="accession-fieldslips-heading" class="w3-margin-0">
+              <i class="fa-solid fa-map-location-dot" aria-hidden="true"></i>
+              <span class="w3-margin-left">{% trans "Field slips" %}</span>
+            </h2>
+          </header>
+          <div class="w3-responsive">
+            <table class="w3-table-all w3-hoverable w3-small">
+              <thead>
+                <tr>
+                  <th scope="col">{% trans "Field number" %}</th>
+                  <th scope="col">{% trans "Verbatim locality" %}</th>
+                  <th scope="col">{% trans "Verbatim taxon" %}</th>
+                  <th scope="col">{% trans "Verbatim element" %}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% if fieldslips %}
+                  {% for slip in fieldslips %}
+                    <tr>
+                      <td>{{ slip.field_number|default:"—" }}</td>
+                      <td>{{ slip.verbatim_locality|default:"—" }}</td>
+                      <td>{{ slip.verbatim_taxon|default:"—" }}</td>
+                      <td>{{ slip.verbatim_element|default:"—" }}</td>
+                    </tr>
+                    {% if slip.horizon_formation or slip.horizon_member or slip.horizon_bed or slip.horizon_chronostratigraphy or slip.verbatim_latitude or slip.verbatim_longitude or slip.verbatim_elevation or slip.aerial_photo %}
+                      <tr>
+                        <td colspan="4">
+                          <ul class="w3-ul w3-small w3-border-0 w3-margin-0">
+                            {% if slip.horizon_formation or slip.horizon_member or slip.horizon_bed or slip.horizon_chronostratigraphy %}
+                              <li>
+                                <strong>{% trans "Verbatim horizon" %}:</strong>
+                                {{ slip.horizon_formation }}{% if slip.horizon_member %}, {{ slip.horizon_member }}{% endif %}{% if slip.horizon_bed %}, {{ slip.horizon_bed }}{% endif %}{% if slip.horizon_chronostratigraphy %}, {{ slip.horizon_chronostratigraphy }}{% endif %}
+                              </li>
+                            {% endif %}
+                            {% if slip.verbatim_latitude or slip.verbatim_longitude or slip.verbatim_elevation %}
+                              <li>
+                                <strong>{% trans "Coordinates" %}:</strong>
+                                {% if slip.verbatim_latitude %}{% trans "Lat" %} {{ slip.verbatim_latitude }}{% endif %}
+                                {% if slip.verbatim_longitude %}{% if slip.verbatim_latitude %}, {% endif %}{% trans "Lon" %} {{ slip.verbatim_longitude }}{% endif %}
+                                {% if slip.verbatim_elevation %}{% if slip.verbatim_latitude or slip.verbatim_longitude %}, {% endif %}{% trans "Elev" %} {{ slip.verbatim_elevation }}{% endif %}
+                              </li>
+                            {% endif %}
+                            {% if slip.aerial_photo %}
+                              <li>
+                                <strong>{% trans "Aerial photo" %}:</strong> {{ slip.aerial_photo }}
+                              </li>
+                            {% endif %}
+                          </ul>
+                        </td>
+                      </tr>
+                    {% endif %}
+                  {% endfor %}
+                {% else %}
+                  <tr>
+                    <td colspan="4" class="w3-center">{% trans "No field slips linked to this accession." %}</td>
+                  </tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      {% elif user.is_superuser or user|has_group:"Collection Managers" %}
+        <section class="w3-margin-bottom" aria-labelledby="accession-fieldslip-links-heading">
+          <header class="w3-row w3-padding-16">
+            <div class="w3-col s12">
+              <h2 id="accession-fieldslip-links-heading" class="w3-margin-0">
+                <i class="fa-solid fa-link" aria-hidden="true"></i>
+                <span class="w3-margin-left">{% trans "Related field slips" %}</span>
+              </h2>
+            </div>
+          </header>
+          <div class="w3-card w3-round w3-white w3-padding">
+            <div class="w3-responsive">
+              <table class="w3-table-all w3-hoverable w3-small">
+                <thead>
+                  <tr>
+                    <th scope="col">{% trans "Field number" %}</th>
+                    <th scope="col">{% trans "Verbatim taxon" %}</th>
+                    <th scope="col">{% trans "Verbatim element" %}</th>
+                    <th scope="col">{% trans "Verbatim locality" %}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for relation in related_fieldslips %}
+                    <tr>
+                      <td><a href="{% url 'fieldslip_detail' relation.fieldslip.pk %}">{{ relation.fieldslip.field_number }}</a></td>
+                      <td>{{ relation.fieldslip.verbatim_taxon|default:"—" }}</td>
+                      <td>{{ relation.fieldslip.verbatim_element|default:"—" }}</td>
+                      <td>{{ relation.fieldslip.verbatim_locality|default:"—" }}</td>
+                    </tr>
+                  {% empty %}
+                    <tr>
+                      <td colspan="4" class="w3-center">{% trans "No field slips linked." %}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+
+            <div id="accession-fieldslip-actions" class="w3-row-padding w3-margin-top">
+              <div class="w3-col s12 m6">
+                <h3 class="w3-margin-top">{% trans "Link existing field slip" %}</h3>
+                {{ add_fieldslip_form.media }}
+                <form method="post" action="{% url 'accession_add_fieldslip' accession.pk %}" class="w3-margin-top">
+                  {% csrf_token %}
+                  <div class="w3-margin-bottom">
+                    {{ add_fieldslip_form }}
+                  </div>
+                  <button type="submit" class="w3-button w3-blue w3-round">
+                    <i class="fa-solid fa-link" aria-hidden="true"></i>
+                    <span class="w3-margin-left">{% trans "Link field slip" %}</span>
+                  </button>
+                </form>
+              </div>
+              <div class="w3-col s12 m6">
+                <h3 class="w3-margin-top">{% trans "Create and link new field slip" %}</h3>
+                <button type="button" onclick="openFieldSlipModal()" class="w3-button w3-green w3-round" aria-haspopup="dialog" aria-controls="fieldSlipModal">
+                  <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                  <span class="w3-margin-left">{% trans "Add new field slip" %}</span>
+                </button>
+              </div>
+            </div>
+
+            {% if merge_fieldslip_form and related_fieldslips|length >= 2 %}
+              <div class="w3-margin-top" aria-labelledby="accession-fieldslip-merge-heading">
+                <h3 id="accession-fieldslip-merge-heading" class="w3-margin-top">
+                  <i class="fa-solid fa-object-group" aria-hidden="true"></i>
+                  <span class="w3-margin-left">{% trans "Merge field slips" %}</span>
+                </h3>
+                <p class="w3-text-gray">{% trans "Combine duplicate field slips linked to this accession by selecting a target and a source." %}</p>
+                <form method="post" action="{% url 'accession_merge_fieldslips' accession.pk %}" class="w3-margin-top" aria-describedby="accession-fieldslip-merge-heading">
+                  {% csrf_token %}
+                  <div class="w3-row-padding">
+                    <div class="w3-col s12 m6">
+                      <label class="w3-text-gray" for="{{ merge_fieldslip_form.target.id_for_label }}">
+                        {{ merge_fieldslip_form.target.label }}
+                      </label>
+                      {{ merge_fieldslip_form.target }}
+                      {% if merge_fieldslip_form.target.errors %}
+                        <ul class="w3-text-red w3-small w3-margin-top" role="alert">
+                          {% for error in merge_fieldslip_form.target.errors %}
+                            <li>{{ error }}</li>
+                          {% endfor %}
+                        </ul>
+                      {% endif %}
+                    </div>
+                    <div class="w3-col s12 m6">
+                      <label class="w3-text-gray" for="{{ merge_fieldslip_form.source.id_for_label }}">
+                        {{ merge_fieldslip_form.source.label }}
+                      </label>
+                      {{ merge_fieldslip_form.source }}
+                      {% if merge_fieldslip_form.source.errors %}
+                        <ul class="w3-text-red w3-small w3-margin-top" role="alert">
+                          {% for error in merge_fieldslip_form.source.errors %}
+                            <li>{{ error }}</li>
+                          {% endfor %}
+                        </ul>
+                      {% endif %}
+                    </div>
+                  </div>
+                  <div class="w3-margin-top">
+                    <button type="submit" class="w3-button w3-blue w3-round">
+                      <i class="fa-solid fa-right-left" aria-hidden="true"></i>
+                      <span class="w3-margin-left">{% trans "Merge selected field slips" %}</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            {% endif %}
+          </div>
+        </section>
+      {% endif %}
+
+      <section class="w3-margin-bottom" aria-labelledby="accession-horizon-heading">
+        <div class="w3-card w3-round w3-white w3-padding">
+          <div class="w3-row">
+            <div class="w3-col s12 m6">
+              <h2 id="accession-horizon-heading" class="w3-margin-0">{% trans "Horizon" %}</h2>
+            </div>
+            {% if not preview_mode and user.is_authenticated %}
+              {% if user|has_group:"Collection Managers" %}
+                <div class="w3-col s12 m6 w3-right-align w3-margin-top">
+                  <a href="{% url 'accession_add_geology' accession.id %}" class="w3-button w3-green w3-round">
+                    <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+                    <span class="w3-hide-small w3-margin-left">{% trans "Add horizon" %}</span>
+                  </a>
+                </div>
+              {% endif %}
+            {% endif %}
+          </div>
+          <div class="w3-responsive w3-margin-top">
+            <table class="w3-table-all w3-hoverable w3-small">
+              <thead>
+                <tr>
+                  <th scope="col">{% trans "Upper" %}</th>
+                  <th scope="col">{% trans "Lower" %}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for geology in geologies %}
+                  <tr>
+                    <td>{{ geology.earliest_geological_context|default:"—" }}</td>
+                    <td>{{ geology.latest_geological_context|default:"—" }}</td>
+                  </tr>
+                {% empty %}
+                  <tr>
+                    <td colspan="2" class="w3-center">{% trans "No horizon data recorded." %}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="w3-margin-top accession-lower-area">
+    <section class="w3-margin-bottom" aria-labelledby="accession-references-heading">
+      <header class="w3-row w3-padding-16">
+        <div class="w3-col s12 m6">
+          <h2 id="accession-references-heading" class="w3-margin-0">
+            <i class="fa-solid fa-book" aria-hidden="true"></i>
+            <span class="w3-margin-left">{% trans "References" %}</span>
+          </h2>
+        </div>
+        {% if not preview_mode and user.is_authenticated %}
+          {% if user|has_group:"Collection Managers" %}
+            <div class="w3-col s12 m6 w3-right-align">
+              <div class="w3-bar w3-margin-top-small" role="group" aria-label="{% trans 'Reference actions' %}">
+                <a href="{% url 'accession_add_reference' accession.id %}" class="w3-button w3-green w3-round w3-bar-item">
+                  <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                  <span class="w3-hide-small w3-margin-left">{% trans "Add reference" %}</span>
+                </a>
+                {% if reference_merge_form %}
+                  <button
+                    type="button"
+                    id="accession-reference-merge-toggle"
+                    class="w3-button w3-amber w3-round w3-bar-item"
+                    aria-expanded="{{ reference_merge_open|yesno:'true,false' }}"
+                    aria-controls="accession-reference-merge-panel"
+                    aria-label="{% trans 'Toggle merge references panel' %}"
+                  >
+                    <i class="fa-solid fa-object-group" aria-hidden="true"></i>
+                    <span class="w3-hide-small w3-margin-left">{% trans "Merge references" %}</span>
+                  </button>
+                {% endif %}
+              </div>
+            </div>
           {% endif %}
         {% endif %}
-        <tr>
-          <th>General comment:</th>
-          <td>{{ accession.comment }}</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-  <div class="cards">
-    {% if not preview_mode and user.is_authenticated and user|has_group:"Collection Managers" %}
-      <a href="{% url 'accession_add_geology' accession.id %}">➕ Add Horizon</a>
-    {% endif %}
-    <table>
-      <caption><b><u>Horizon</u></b></caption>
-      <thead>
-        <tr>
-          <th>Upper</th>
-          <th>Lower</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for geology in geologies %}
-          <tr>
-            <td>{{ geology.earliest_geological_context }}</td>
-            <td>{{ geology.latest_geological_context }}</td>
-          </tr>
-        {% empty %}
-          <tr>
-            <td colspan="2">No horizon data recorded.</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+      </header>
 
-    <hr class="accession_hr">
+      {% if reference_merge_form %}
+        <div id="accession-reference-merge" class="w3-margin-top">
+          <div
+            id="accession-reference-merge-panel"
+            class="w3-card w3-round w3-white w3-padding {% if not reference_merge_open %}w3-hide{% endif %}"
+            data-default-open="{{ reference_merge_open|yesno:'true,false' }}"
+            role="region"
+            aria-hidden="{{ reference_merge_open|yesno:'false,true' }}"
+            aria-labelledby="accession-reference-merge-heading"
+          >
+            <div class="w3-row w3-padding-small">
+              <div class="w3-col s12 m8">
+                <h3 id="accession-reference-merge-heading" class="w3-margin-top">
+                  <i class="fa-solid fa-object-group" aria-hidden="true"></i>
+                  <span class="w3-margin-left">{% trans "Merge accession references" %}</span>
+                </h3>
+                <p class="w3-text-gray">
+                  {% trans "Select duplicate references linked to this accession, choose a target record, and review field selections in the next step." %}
+                </p>
+              </div>
+              <div class="w3-col s12 m4 w3-right-align">
+                <a href="#accession-reference-merge" class="w3-button w3-light-grey w3-round">
+                  <i class="fa-solid fa-circle-question" aria-hidden="true"></i>
+                  <span class="w3-hide-small w3-margin-left">{% trans "Need help?" %}</span>
+                </a>
+              </div>
+            </div>
+            <form
+              method="post"
+              action="{% url 'accession_merge_references' accession.pk %}"
+              class="w3-margin-top"
+              aria-describedby="accession-reference-merge-heading"
+            >
+              {% csrf_token %}
+              <input type="hidden" name="stage" value="prepare" />
+              <div class="w3-row-padding">
+                <div class="w3-col s12 m7">
+                  <fieldset class="w3-padding-small w3-border w3-round" aria-describedby="accession-reference-selection-hint">
+                    <legend class="w3-small w3-text-grey">{% trans "References to merge" %}</legend>
+                    <p id="accession-reference-selection-hint" class="w3-small w3-text-gray">
+                      {% trans "Pick at least two references linked to this accession." %}
+                    </p>
+                    {% for checkbox in reference_merge_form.selected_ids %}
+                      <label class="w3-block w3-padding-small w3-hover-light-grey">
+                        {{ checkbox.tag }}
+                        <span class="w3-margin-left">{{ checkbox.choice_label }}</span>
+                      </label>
+                    {% empty %}
+                      <p class="w3-text-gray">{% trans "No references available to merge." %}</p>
+                    {% endfor %}
+                    {% if reference_merge_form.selected_ids.errors %}
+                      <ul class="w3-text-red w3-small w3-margin-top" role="alert">
+                        {% for error in reference_merge_form.selected_ids.errors %}
+                          <li>{{ error }}</li>
+                        {% endfor %}
+                      </ul>
+                    {% endif %}
+                  </fieldset>
+                </div>
+              <div class="w3-col s12 m5">
+                <fieldset class="w3-padding-small w3-border w3-round">
+                  <legend class="w3-small w3-text-grey">{% trans "Target reference" %}</legend>
+                  <p class="w3-small w3-text-gray">{% trans "Pick the record you want to keep after merging." %}</p>
+                  {% for radio in reference_merge_form.target %}
+                    <label class="w3-block w3-padding-small w3-hover-light-grey">
+                      {{ radio.tag }}
+                      <span class="w3-margin-left">{{ radio.choice_label }}</span>
+                    </label>
+                  {% empty %}
+                    <p class="w3-text-gray">{% trans "No references available to select." %}</p>
+                    {% endfor %}
+                    {% if reference_merge_form.target.errors %}
+                      <ul class="w3-text-red w3-small w3-margin-top" role="alert">
+                        {% for error in reference_merge_form.target.errors %}
+                          <li>{{ error }}</li>
+                        {% endfor %}
+                      </ul>
+                    {% endif %}
+                  </fieldset>
+                </div>
+              </div>
+              <div class="w3-margin-top">
+                <button type="submit" class="w3-button w3-blue w3-round">
+                  <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+                  <span class="w3-margin-left">{% trans "Review selected references" %}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      {% endif %}
 
-    {% if not preview_mode and user.is_authenticated and user|has_group:"Collection Managers" %}
-      <a href="{% url 'accession_add_row' accession.id %}">➕ Add Specimen</a>
-    {% endif %}
-    <table>
-      <caption><em>Specimen details</em></caption>
-      <thead>
-        <tr>
-          <th>Specimen</th>
-          <th>Storage</th>
-          <th>Element</th>
-          <th>Side</th>
-          <th>Description</th>
-          <th>Taxon</th>
-          <th>Family</th>
-          <th>Subfamily</th>
-          <th>Tribe</th>
-          <th>Genus</th>
-          <th>Species</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for accessionrow in accession_rows %}
-          {% with specimens=accessionrow.natureofspecimen_set.all %}
-          <tr>
-            <td>
-              {% if preview_mode %}
-                {{ accessionrow.specimen_suffix }}
-              {% else %}
-                <a href="{% url 'accessionrow_detail' accessionrow.pk %}">{{ accessionrow.specimen_suffix }}</a>
-              {% endif %}
-            </td>
-            <td>{{ accessionrow.storage }}</td>
-            <td>
-              {% if specimens %}
-                {% for specimen in specimens %}
-                  {{ specimen.element|default:"—" }}{% if not forloop.last %}<br>{% endif %}
-                {% endfor %}
-              {% else %}
-                &mdash;
-              {% endif %}
-            </td>
-            <td>
-              {% if specimens %}
-                {% for specimen in specimens %}
-                  {{ specimen.side|default:"—" }}{% if not forloop.last %}<br>{% endif %}
-                {% endfor %}
-              {% else %}
-                &mdash;
-              {% endif %}
-            </td>
-            <td>
-              {% if specimens %}
-                {% for specimen in specimens %}
-                  {{ specimen.verbatim_element|default:"—" }}{% if not forloop.last %}<br>{% endif %}
-                {% endfor %}
-              {% else %}
-                &mdash;
-              {% endif %}
-            </td>
-            {% with first_identifications|get_item:accessionrow.id as first_identification %}
-              {% if first_identification %}
-                {% with taxonomy|get_item:first_identification.id as matched_taxon %}
+      {% if references %}
+        <div class="w3-responsive">
+          <table class="w3-table-all w3-hoverable w3-small">
+            <thead>
+              <tr>
+                <th scope="col">{% trans "Year" %}</th>
+                <th scope="col">{% trans "First author" %}</th>
+                <th scope="col">{% trans "Title" %}</th>
+                <th scope="col">{% trans "Page(s)" %}</th>
+                {% if user|has_group:"Collection Managers" %}
+                  <th scope="col" class="w3-center">{% trans "Actions" %}</th>
+                {% endif %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for ref in references %}
+                <tr>
+                  <td>{{ ref.reference.year|default:"—" }}</td>
+                  <td>{{ ref.reference.first_author|default:"—" }}</td>
                   <td>
-                    {{ first_identification.taxon }}
-                    {% if identification_counts|get_item:accessionrow.id > 1 %}
-                      <span title="This specimen has previous identifications">(*)</span>
+                    {% if ref.reference %}
+                      <a href="{{ ref.reference.get_absolute_url }}">{{ ref.reference.title|default:"—" }}</a>
+                    {% else %}
+                      —
                     {% endif %}
                   </td>
-                  <td>{{ matched_taxon.family|default:"-" }}</td>
-                  <td>{{ matched_taxon.subfamily|default:"-" }}</td>
-                  <td>{{ matched_taxon.tribe|default:"-" }}</td>
-                  <td>{{ matched_taxon.genus|default:"-" }}</td>
-                  <td>{{ matched_taxon.species|default:"-" }}</td>
-                {% endwith %}
-              {% else %}
-                <td>No Taxon identified</td>
-                <td>-</td>
-                <td>-</td>
-                <td>-</td>
-                <td>-</td>
-                <td>-</td>
-              {% endif %}
-            {% endwith %}
-          </tr>
-          {% endwith %}
-        {% empty %}
-          <tr>
-            <td colspan="11">No specimen rows recorded.</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-
-    <hr class="accession_hr">
-
-    {% if not preview_mode and user.is_authenticated and user|has_group:"Collection Managers" %}
-      <a href="{% url 'accession_add_reference' accession.id %}">➕ Add Reference</a>
-    {% endif %}
-    {% if references %}
-      <table>
-        <caption>References</caption>
-        <thead>
-          <tr>
-            <th>Year</th>
-            <th>First author</th>
-            <th>Title</th>
-            <th>Page(s)</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for ref in references %}
-            <tr>
-              <td>{{ ref.reference.year }}</td>
-              <td>{{ ref.reference.first_author }}</td>
-              <td>{{ ref.reference.title }}</td>
-              <td>{{ ref.page }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-        <tfoot>
-          <tr>
-            <td colspan="3">{{ references|length }} References</td>
-          </tr>
-        </tfoot>
-      </table>
-    {% else %}
-      <p>No References found for this accession.</p>
-    {% endif %}
-
-    <hr class="accession_hr">
-
-    {% if preview_mode %}
-      <style>
-        .fieldslip-meta-grid {
-          display: grid;
-          gap: 0.25rem 0.5rem;
-          grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-        }
-        .fieldslip-meta-grid strong {
-          font-weight: 600;
-        }
-      </style>
-      <table>
-        <caption><b><u>Field Slips</u></b></caption>
-        <thead>
-          <tr>
-            <th>Field Number</th>
-            <th>Verbatim Locality</th>
-            <th>Verbatim Taxon</th>
-            <th>Verbatim Element</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% if fieldslips %}
-            {% for slip in fieldslips %}
+                  <td>{{ ref.page|default:"—" }}</td>
+                  {% if user|has_group:"Collection Managers" %}
+                    <td class="w3-center">
+                      {% if ref.pk %}
+                        <a
+                          href="{% url 'accessionreference_edit' ref.pk %}"
+                          class="w3-button w3-blue w3-round w3-small"
+                          aria-label="{% blocktrans with title=ref.reference.title|default:_('reference') %}Edit reference {{ title }}{% endblocktrans %}"
+                        >
+                          <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+                          <span class="w3-hide-small w3-margin-left">{% trans "Edit" %}</span>
+                        </a>
+                      {% else %}
+                        <span class="w3-text-gray">{% trans "Unavailable" %}</span>
+                      {% endif %}
+                    </td>
+                  {% endif %}
+                </tr>
+              {% endfor %}
+            </tbody>
+            <tfoot>
               <tr>
-                <td>{{ slip.field_number|default:"—" }}</td>
-                <td>{{ slip.verbatim_locality|default:"—" }}</td>
-                <td>{{ slip.verbatim_taxon|default:"—" }}</td>
-                <td>{{ slip.verbatim_element|default:"—" }}</td>
+                <td colspan="{% if user|has_group:"Collection Managers" %}5{% else %}4{% endif %}" class="w3-text-gray">{{ references|length }} {% trans "reference entries" %}</td>
               </tr>
-              {% if slip.horizon_formation or slip.horizon_member or slip.horizon_bed or slip.horizon_chronostratigraphy or slip.verbatim_latitude or slip.verbatim_longitude or slip.verbatim_elevation or slip.aerial_photo %}
+            </tfoot>
+          </table>
+        </div>
+      {% else %}
+        <p class="w3-text-gray">{% trans "No references linked to this accession." %}</p>
+      {% endif %}
+    </section>
+
+    <section class="w3-margin-bottom" aria-labelledby="accession-media-heading">
+      <header class="w3-row w3-padding-16">
+        <div class="w3-col s12 m6">
+          <h2 id="accession-media-heading" class="w3-margin-0">
+            <i class="fa-solid fa-photo-film" aria-hidden="true"></i>
+            <span class="w3-margin-left">{% trans "Media" %}</span>
+          </h2>
+        </div>
+        {% if not preview_mode and user.is_authenticated %}
+          {% if user|has_group:"Collection Managers" %}
+            <div class="w3-col s12 m6 w3-right-align">
+              <a href="{% url 'accession_upload_media' accession.id %}" class="w3-button w3-green w3-round">
+                <i class="fa-solid fa-upload" aria-hidden="true"></i>
+                <span class="w3-hide-small w3-margin-left">{% trans "Upload media" %}</span>
+              </a>
+            </div>
+          {% endif %}
+        {% endif %}
+      </header>
+      <div class="w3-responsive">
+        <table class="w3-table-all w3-hoverable w3-small">
+          <thead>
+            <tr>
+              <th scope="col">{% trans "File name" %}</th>
+              <th scope="col">{% trans "Type" %}</th>
+              <th scope="col">{% trans "License" %}</th>
+              <th scope="col">{% trans "Preview" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% with media_items=accession.media.all %}
+              {% if media_items|length %}
+                {% for media in media_items %}
+                  <tr>
+                    <td>{{ media.file_name|default:"—" }}</td>
+                    <td>{{ media.type|default:"—" }}</td>
+                    <td>{{ media.get_license_display|default:"—" }}</td>
+                    <td>
+                      {% if media.media_location %}
+                        {% if media.type == "photo" %}
+                          <a href="{{ media.media_location.url }}" target="_blank" rel="noopener" class="media-preview-trigger" data-media-preview="{{ media.media_location.url }}" data-media-alt="{{ media.file_name }}">
+                            <img src="{{ media.media_location.url }}" alt="{{ media.file_name }}" class="w3-image" style="max-height:80px; max-width:120px; object-fit:contain;" />
+                          </a>
+                        {% else %}
+                          <a href="{{ media.media_location.url }}" target="_blank" rel="noopener">{% trans "View file" %}</a>
+                        {% endif %}
+                      {% else %}
+                        <span class="w3-text-gray">{% trans "Not available" %}</span>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              {% else %}
                 <tr>
-                  <td colspan="4">
-                    <small class="fieldslip-meta-grid">
-                      {% if slip.horizon_formation or slip.horizon_member or slip.horizon_bed or slip.horizon_chronostratigraphy %}
-                        <div>
-                          <strong>Verbatim horizon:</strong>
-                          <span>
-                            {% if slip.horizon_formation %}{{ slip.horizon_formation }}{% endif %}
-                            {% if slip.horizon_member %}{% if slip.horizon_formation %}, {% endif %}{{ slip.horizon_member }}{% endif %}
-                            {% if slip.horizon_bed %}{% if slip.horizon_formation or slip.horizon_member %}, {% endif %}{{ slip.horizon_bed }}{% endif %}
-                            {% if slip.horizon_chronostratigraphy %}{% if slip.horizon_formation or slip.horizon_member or slip.horizon_bed %}, {% endif %}{{ slip.horizon_chronostratigraphy }}{% endif %}
-                          </span>
-                        </div>
-                      {% endif %}
-                      {% if slip.verbatim_latitude or slip.verbatim_longitude or slip.verbatim_elevation %}
-                        <div>
-                          <strong>Coordinates:</strong>
-                          <span>
-                            {% if slip.verbatim_latitude %}Lat {{ slip.verbatim_latitude }}{% endif %}
-                            {% if slip.verbatim_longitude %}{% if slip.verbatim_latitude %}, {% endif %}Lon {{ slip.verbatim_longitude }}{% endif %}
-                            {% if slip.verbatim_elevation %}{% if slip.verbatim_latitude or slip.verbatim_longitude %}, {% endif %}Elev {{ slip.verbatim_elevation }}{% endif %}
-                          </span>
-                        </div>
-                      {% endif %}
-                      {% if slip.aerial_photo %}
-                        <div>
-                          <strong>Aerial photo:</strong> {{ slip.aerial_photo }}
-                        </div>
-                      {% endif %}
-                    </small>
-                  </td>
+                  <td colspan="4" class="w3-center">{% trans "There are no media files available for this accession." %}</td>
                 </tr>
               {% endif %}
-            {% endfor %}
-          {% else %}
-            <tr>
-              <td colspan="4">No Field Slips linked to this accession.</td>
-            </tr>
-          {% endif %}
-        </tbody>
-      </table>
-
-      <hr class="accession_hr">
-    {% endif %}
-
-    {% if not preview_mode and user.is_authenticated and user|has_group:"Collection Managers" %}
-      <a href="{% url 'accession_upload_media' accession.id %}">➕ Upload Media</a>
-    {% endif %}
-    <table>
-      <caption><em>Media</em></caption>
-      <thead>
-        <tr>
-          <th>File Name</th>
-          <th>Type</th>
-          <th>License</th>
-          <th>Media</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% if accession.media.all %}
-          {% for media in accession.media.all %}
-            <tr>
-              <td>{{ media.file_name }}</td>
-              <td>{{ media.type }}</td>
-              <td>{{ media.get_license_display }}</td>
-              <td>
-                {% if media.media_location %}
-                  <a href="{{ media.media_location.url }}" target="_blank">
-                    {% if media.type == "photo" %}
-                      <img src="{{ media.media_location.url }}" alt="{{ media.file_name }}" height="100">
-                    {% else %}
-                      View File
-                    {% endif %}
-                  </a>
-                {% endif %}
-              </td>
-            </tr>
-          {% endfor %}
-        {% else %}
-          <tr>
-            <td colspan="4">There are no media files available for this accession.</td>
-          </tr>
-        {% endif %}
-      </tbody>
-    </table>
+            {% endwith %}
+          </tbody>
+        </table>
+      </div>
+    </section>
   </div>
-</div>
+</section>

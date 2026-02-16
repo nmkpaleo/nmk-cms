@@ -1,0 +1,97 @@
+{% load i18n %}
+<section class="w3-card w3-white w3-padding" aria-labelledby="taxonomy-card-title">
+  <header class="w3-margin-bottom">
+    <h2 id="taxonomy-card-title" class="w3-large w3-margin-0">
+      <i class="fa-solid fa-leaf w3-text-green" aria-hidden="true"></i>
+      <span class="w3-margin-left">{% trans "Taxonomy details" %}</span>
+    </h2>
+    <p class="w3-small w3-text-grey w3-margin-0">
+      {% trans "Controlled taxonomy links are detected automatically when the taxon matches the reference taxonomy; otherwise the free-text taxon is stored without a linked record." %}
+    </p>
+  </header>
+  <div class="w3-responsive">
+    <table class="w3-table w3-striped w3-small" aria-describedby="taxonomy-card-title">
+      <tbody>
+        <tr>
+          <th scope="row">{% trans "Preferred taxon" %}</th>
+          <td>{{ preferred_name|default:_("Not provided") }}</td>
+        </tr>
+        <tr>
+          <th scope="row">{% trans "Verbatim taxon" %}</th>
+          <td>{{ verbatim_name|default:_("Not provided") }}</td>
+        </tr>
+        {% if taxon_record %}
+          <tr>
+            <th scope="row">{% trans "Rank" %}</th>
+            <td>{{ taxon_record.get_taxon_rank_display }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Kingdom" %}</th>
+            <td>{{ taxon_record.kingdom }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Phylum" %}</th>
+            <td>{{ taxon_record.phylum }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Class" %}</th>
+            <td>{{ taxon_record.class_name }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Order" %}</th>
+            <td>{{ taxon_record.order }}</td>
+          </tr>
+          {% if taxon_record.superfamily %}
+            <tr>
+              <th scope="row">{% trans "Superfamily" %}</th>
+              <td>{{ taxon_record.superfamily }}</td>
+            </tr>
+          {% endif %}
+          <tr>
+            <th scope="row">{% trans "Family" %}</th>
+            <td>{{ taxon_record.family }}</td>
+          </tr>
+          {% if taxon_record.subfamily %}
+            <tr>
+              <th scope="row">{% trans "Subfamily" %}</th>
+              <td>{{ taxon_record.subfamily }}</td>
+            </tr>
+          {% endif %}
+          {% if taxon_record.tribe %}
+            <tr>
+              <th scope="row">{% trans "Tribe" %}</th>
+              <td>{{ taxon_record.tribe }}</td>
+            </tr>
+          {% endif %}
+          <tr>
+            <th scope="row">{% trans "Genus" %}</th>
+            <td>{{ taxon_record.genus }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Species" %}</th>
+            <td>{{ taxon_record.species }}</td>
+          </tr>
+          {% if taxon_record.infraspecific_epithet %}
+            <tr>
+              <th scope="row">{% trans "Infraspecific epithet" %}</th>
+              <td>{{ taxon_record.infraspecific_epithet }}</td>
+            </tr>
+          {% endif %}
+          {% if taxon_record.scientific_name_authorship %}
+            <tr>
+              <th scope="row">{% trans "Authorship" %}</th>
+              <td>{{ taxon_record.scientific_name_authorship }}</td>
+            </tr>
+          {% endif %}
+        {% else %}
+          <tr>
+            <td colspan="2" class="w3-text-grey">
+              <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+              <span class="w3-margin-left">{% trans "Derived lineage will appear after selecting a controlled taxon." %}</span>
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</section>

@@ -57,7 +57,7 @@ class MergeCandidateAPITests(TransactionTestCase):
         self.partial = self.Model.objects.create(name="Alpha Gamma", city="Nakuru")
         self.low = self.Model.objects.create(name="Delta Epsilon", city="Mombasa")
         self.model_label = f"{self.Model._meta.app_label}.{self.Model._meta.model_name}"
-        self.url = reverse("merge_candidate_search")
+        self.url = reverse("merge:merge_candidate_search")
 
     def test_requires_staff_permissions(self):
         params = {"model_label": self.model_label, "query": "Alpha", "fields": "name"}

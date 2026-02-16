@@ -1,242 +1,414 @@
 {% extends "base_generic.html" %}
-{% load user_tags %}
+{% load i18n user_tags %}
 
-{% block title %}Dashboard{% endblock %}
+{% block title %}{% trans "Dashboard" %}{% endblock %}
 
 {% block content %}
-  {% if is_preparator %}
-    <h2>My Preparations</h2>
-    {% if my_preparations %}
-      <table class="w3-table w3-striped">
-        <thead>
-          <tr>
-            <th>Specimen</th>
-            <th>Status</th>
-            <th>Started On</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for prep in my_preparations %}
-            <tr>
-              <td>{{ prep.accession_row }}</td>
-              <td>{{ prep.status }}</td>
-              <td>{{ prep.started_on }}</td>
-              <td>
-                <a href="{% url 'preparation_detail' prep.id %}" class="w3-button w3-small w3-blue">View</a>
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% else %}
-      <p>No active preparations assigned.</p>
-    {% endif %}
+  <main class="w3-container w3-margin-top w3-margin-bottom" role="main">
+    <header class="w3-margin-bottom">
+      <h1 class="w3-xxlarge">
+        <i class="fa-solid fa-gauge" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "Workspace overview" %}</span>
+      </h1>
+      <p class="w3-text-gray">{% trans "Cards below summarise the items that need your attention based on your assigned roles." %}</p>
+    </header>
 
-    <h2>Priority Tasks</h2>
-    {% if priority_tasks %}
-      <ul>
-        {% for task in priority_tasks %}
-          <li>
-            <a href="{% url 'preparation_detail' task.id %}">{{ task.accession_row }}</a>
-            - started on {{ task.started_on }}
-          </li>
-        {% endfor %}
-      </ul>
-    {% else %}
-      <p>No priority tasks.</p>
-    {% endif %}
-
-    <a href="{% url 'preparation_create' %}" class="w3-button w3-green">Create Preparation Record</a>
-  {% endif %}
-
-  {% if is_curator %}
-    <h2>Completed Preparations</h2>
-    {% if completed_preparations %}
-      <table class="w3-table w3-striped">
-        <thead>
-          <tr>
-            <th>Specimen</th>
-            <th>Completed On</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for prep in completed_preparations %}
-            <tr>
-              <td>{{ prep.accession_row }}</td>
-              <td>{{ prep.completed_on }}</td>
-              <td>
-                <a href="{% url 'preparation_detail' prep.id %}" class="w3-button w3-small w3-blue">View</a>
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% else %}
-      <p>No completed preparations awaiting review.</p>
-    {% endif %}
-
-    <a href="{% url 'preparation_create' %}" class="w3-button w3-green">Create Preparation Record</a>
-  {% endif %}
-
-  {% if is_collection_manager %}
-    {% if has_active_series %}
-      <h2>Generate Accession Numbers</h2>
-      <a href="{% url 'accession-wizard' %}" class="w3-button w3-green">Create Single Accession</a>
-      <a href="{% url 'accession_generate_batch' %}" class="w3-button w3-green">Generate Batch</a>
-    {% endif %}
-
-    <div class="w3-row-padding">
-      <div class="w3-col s12 m6 l4 w3-margin-bottom">
-        <h2>Unassigned Accessions</h2>
-        {% if unassigned_accessions %}
-          <div class="w3-responsive">
-            <table class="w3-table w3-striped">
-              <thead>
-                <tr>
-                  <th>Accession</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for acc in unassigned_accessions %}
+    {% if is_preparator %}
+      <section class="w3-section w3-animate-opacity">
+        <article class="w3-card-4 w3-white w3-round-large w3-padding-large">
+          <header class="w3-margin-bottom">
+            <h2 class="w3-xlarge">
+              <i class="fa-solid fa-vials" aria-hidden="true"></i>
+              <span class="w3-margin-left">{% trans "My active preparations" %}</span>
+            </h2>
+          </header>
+          {% if my_preparations %}
+            <div class="w3-responsive">
+              <table class="w3-table-all w3-small" aria-label="{% trans "Active preparations" %}">
+                <thead>
                   <tr>
-                    <td>{{ acc }}</td>
-                    <td>
-                      <a href="{% url 'accession_detail' acc.id %}" class="w3-button w3-small w3-blue">View</a>
-                    </td>
+                    <th scope="col">{% trans "Specimen" %}</th>
+                    <th scope="col">{% trans "Status" %}</th>
+                    <th scope="col">{% trans "Started on" %}</th>
+                    <th scope="col">{% trans "Actions" %}</th>
                   </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        {% else %}
-          <p>No unassigned accessions.</p>
-        {% endif %}
-      </div>
+                </thead>
+                <tbody>
+                  {% for prep in my_preparations %}
+                    <tr>
+                      <td>{{ prep.accession_row }}</td>
+                      <td>{{ prep.get_status_display }}</td>
+                      <td>{{ prep.started_on|date:"Y-m-d" }}</td>
+                      <td>
+                        <a href="{% url 'preparation_detail' prep.id %}" class="w3-button w3-small w3-blue w3-round-large">
+                          <i class="fa-solid fa-eye" aria-hidden="true"></i>
+                          <span class="w3-margin-left">{% trans "View" %}</span>
+                        </a>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <p class="w3-text-gray">{% trans "No active preparations assigned." %}</p>
+          {% endif %}
 
-      <div class="w3-col s12 m6 l4 w3-margin-bottom">
-        <h2>My Latest Accessions</h2>
-        {% if latest_accessions %}
-          <div class="w3-responsive">
-            <table class="w3-table w3-striped">
-              <thead>
-                <tr>
-                  <th>Accession</th>
-                  <th>Last Activity</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for acc in latest_accessions %}
+          <div class="w3-margin-top">
+            <h3 class="w3-large">
+              <i class="fa-solid fa-fire" aria-hidden="true"></i>
+              <span class="w3-margin-left">{% trans "Priority tasks" %}</span>
+            </h3>
+            {% if priority_tasks %}
+              <ul class="w3-ul w3-border w3-round-large w3-small">
+                {% for task in priority_tasks %}
+                  <li>
+                    <a href="{% url 'preparation_detail' task.id %}">{{ task.accession_row }}</a>
+                    <span class="w3-text-gray">— {% blocktrans with started=task.started_on|date:"Y-m-d" %}started {{ started }}{% endblocktrans %}</span>
+                  </li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <p class="w3-text-gray">{% trans "No priority tasks pending." %}</p>
+            {% endif %}
+          </div>
+
+          <div class="w3-margin-top">
+            <a href="{% url 'preparation_create' %}" class="w3-button w3-green w3-round-large">
+              <i class="fa-solid fa-circle-plus" aria-hidden="true"></i>
+              <span class="w3-margin-left">{% trans "Create preparation record" %}</span>
+            </a>
+          </div>
+        </article>
+      </section>
+    {% endif %}
+
+    {% if is_curator %}
+      <section class="w3-section w3-animate-opacity">
+        <article class="w3-card-4 w3-white w3-round-large w3-padding-large">
+          <header class="w3-margin-bottom">
+            <h2 class="w3-xlarge">
+              <i class="fa-solid fa-clipboard-list" aria-hidden="true"></i>
+              <span class="w3-margin-left">{% trans "Completed preparations awaiting review" %}</span>
+            </h2>
+          </header>
+          {% if completed_preparations %}
+            <div class="w3-responsive">
+              <table class="w3-table-all w3-small" aria-label="{% trans "Completed preparations" %}">
+                <thead>
                   <tr>
-                    <td>{{ acc }}</td>
-                    <td>{{ acc.last_activity }}</td>
-                    <td>
-                      <a href="{% url 'accession_detail' acc.id %}" class="w3-button w3-small w3-blue">View</a>
-                    </td>
+                    <th scope="col">{% trans "Specimen" %}</th>
+                    <th scope="col">{% trans "Completed on" %}</th>
+                    <th scope="col">{% trans "Actions" %}</th>
                   </tr>
-                {% endfor %}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {% for prep in completed_preparations %}
+                    <tr>
+                      <td>{{ prep.accession_row }}</td>
+                      <td>{{ prep.completed_on|date:"Y-m-d" }}</td>
+                      <td>
+                        <a href="{% url 'preparation_detail' prep.id %}" class="w3-button w3-small w3-blue w3-round-large">
+                          <i class="fa-solid fa-eye" aria-hidden="true"></i>
+                          <span class="w3-margin-left">{% trans "Review" %}</span>
+                        </a>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <p class="w3-text-gray">{% trans "No completed preparations awaiting review." %}</p>
+          {% endif %}
+          <div class="w3-margin-top">
+            <a href="{% url 'preparation_create' %}" class="w3-button w3-green w3-round-large">
+              <i class="fa-solid fa-circle-plus" aria-hidden="true"></i>
+              <span class="w3-margin-left">{% trans "Create preparation record" %}</span>
+            </a>
           </div>
-        {% else %}
-          <p>No recent accessions.</p>
-        {% endif %}
-      </div>
+        </article>
+      </section>
+    {% endif %}
 
-      <div class="w3-col s12 m6 l4 w3-margin-bottom">
-        {% include "cms/qc/dashboard_queue.html" %}
-      </div>
-    </div>
-  {% endif %}
+    {% if user.is_superuser or is_collection_manager %}
+      <section class="w3-section w3-animate-opacity">
+        <article class="w3-card-4 w3-white w3-round-large w3-padding-large">
+          <header class="w3-margin-bottom">
+            <h2 class="w3-xlarge">
+              <i class="fa-solid fa-warehouse" aria-hidden="true"></i>
+              <span class="w3-margin-left">{% trans "Collection management" %}</span>
+            </h2>
+          </header>
+          <div class="w3-margin-bottom w3-bar w3-small">
+            {% if is_collection_manager and not has_active_series %}
+              <a
+                class="w3-bar-item w3-button w3-blue w3-round-large w3-disabled"
+                aria-disabled="true"
+                tabindex="-1"
+                title="{% trans "No active accession number series" %}"
+              >
+                <i class="fa-solid fa-circle-plus" aria-hidden="true"></i>
+                <span class="w3-margin-left">{% trans "Create single accession" %}</span>
+              </a>
+            {% else %}
+              <a
+                href="{% url 'accession-wizard' %}"
+                class="w3-bar-item w3-button w3-blue w3-round-large"
+                aria-disabled="false"
+              >
+                <i class="fa-solid fa-circle-plus" aria-hidden="true"></i>
+                <span class="w3-margin-left">{% trans "Create single accession" %}</span>
+              </a>
+            {% endif %}
+            {% if is_collection_manager and has_active_series %}
+              <a
+                class="w3-bar-item w3-button w3-blue w3-round-large w3-disabled"
+                aria-disabled="true"
+                tabindex="-1"
+              >
+                <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+                <span class="w3-margin-left">{% trans "Generate batch" %}</span>
+              </a>
+            {% else %}
+              <a
+                href="{% url 'accession-generate-batch' %}"
+                class="w3-bar-item w3-button w3-blue w3-round-large"
+                aria-disabled="false"
+              >
+                <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+                <span class="w3-margin-left">{% trans "Generate batch" %}</span>
+              </a>
+            {% endif %}
+          </div>
+          {% if is_collection_manager and has_active_series %}
+            <p class="w3-text-gray">{% trans "You currently have an active accession number series. Complete it before generating a new batch." %}</p>
+          {% elif is_collection_manager %}
+            <p class="w3-text-gray">{% trans "You do not currently have an active accession number series." %}</p>
+          {% endif %}
 
+          {% if is_collection_manager %}
+            <div class="w3-row-padding">
+              <div class="w3-col s12 m6 l4 w3-margin-bottom">
+                <h3 class="w3-large">
+                  <i class="fa-solid fa-person-circle-question" aria-hidden="true"></i>
+                  <span class="w3-margin-left">{% trans "Unassigned accessions" %}</span>
+                </h3>
+                {% if unassigned_accessions %}
+                  <div class="w3-responsive">
+                    <table class="w3-table-all w3-small" aria-label="{% trans "Unassigned accessions" %}">
+                      <thead>
+                        <tr>
+                          <th scope="col">{% trans "Accession" %}</th>
+                          <th scope="col">{% trans "Actions" %}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {% for acc in unassigned_accessions %}
+                          <tr>
+                            <td>{{ acc }}</td>
+                            <td>
+                              <a href="{% url 'accession_detail' acc.id %}" class="w3-button w3-small w3-blue w3-round-large">
+                                <i class="fa-solid fa-eye" aria-hidden="true"></i>
+                                <span class="w3-margin-left">{% trans "View" %}</span>
+                              </a>
+                            </td>
+                          </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
+                {% else %}
+                  <p class="w3-text-gray">{% trans "No unassigned accessions." %}</p>
+                {% endif %}
+              </div>
+
+              <div class="w3-col s12 m6 l4 w3-margin-bottom">
+                <h3 class="w3-large">
+                  <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+                  <span class="w3-margin-left">{% trans "My latest accessions" %}</span>
+                </h3>
+                {% if latest_accessions %}
+                  <div class="w3-responsive">
+                    <table class="w3-table-all w3-small" aria-label="{% trans "Latest accessions" %}">
+                      <thead>
+                        <tr>
+                          <th scope="col">{% trans "Accession" %}</th>
+                          <th scope="col">{% trans "Last activity" %}</th>
+                          <th scope="col">{% trans "Actions" %}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {% for acc in latest_accessions %}
+                          <tr>
+                            <td>{{ acc }}</td>
+                            <td>{{ acc.last_activity|date:"Y-m-d H:i" }}</td>
+                            <td>
+                              <a href="{% url 'accession_detail' acc.id %}" class="w3-button w3-small w3-blue w3-round-large">
+                                <i class="fa-solid fa-eye" aria-hidden="true"></i>
+                                <span class="w3-margin-left">{% trans "View" %}</span>
+                              </a>
+                            </td>
+                          </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
+                {% else %}
+                  <p class="w3-text-gray">{% trans "No recent accessions." %}</p>
+                {% endif %}
+              </div>
+
+              <div class="w3-col s12 m12 l4 w3-margin-bottom">
+                <h3 class="w3-large">
+                  <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                  <span class="w3-margin-left">{% trans "Quality control queues" %}</span>
+                </h3>
+                <div class="w3-margin-top">
+                  {% include "cms/qc/dashboard_queue.html" %}
+                </div>
+              </div>
+            </div>
+          {% endif %}
+        </article>
+      </section>
+    {% endif %}
+
+    {% if is_intern and not is_collection_manager %}
+      <section class="w3-section w3-animate-opacity">
+        <article class="w3-card-4 w3-white w3-round-large w3-padding-large">
+          <header class="w3-margin-bottom">
+            <h2 class="w3-xlarge">
+              <i class="fa-solid fa-database" aria-hidden="true"></i>
+              <span class="w3-margin-left">{% trans "Intern queue" %}</span>
+            </h2>
+          </header>
+          <div class="w3-margin-bottom">
+            {% include "cms/qc/dashboard_queue.html" %}
+          </div>
+        </article>
+      </section>
+    {% endif %}
+
+    {% if is_intern %}
+      <section class="w3-section w3-animate-opacity">
+        <article class="w3-card-4 w3-white w3-round-large w3-padding-large" aria-labelledby="intern-drawers-heading">
+          <header class="w3-margin-bottom">
+            <h2 id="intern-drawers-heading" class="w3-xlarge">
+              <i class="fa-solid fa-box-open" aria-hidden="true"></i>
+              <span class="w3-margin-left">{% trans "My drawers" %}</span>
+            </h2>
+          </header>
+          {% if my_drawers %}
+            <div class="w3-responsive">
+              <table class="w3-table-all w3-small" aria-label="{% trans "Assigned drawers" %}">
+                <thead>
+                  <tr>
+                    <th scope="col">{% trans "Drawer" %}</th>
+                    <th scope="col">{% trans "Description" %}</th>
+                    <th scope="col">{% trans "Start time" %}</th>
+                    <th scope="col">{% trans "Elapsed" %}</th>
+                    <th scope="col">{% trans "Actions" %}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for drawer in my_drawers %}
+                    <tr>
+                      <td>
+                        {% if user.is_superuser or user|has_group:"Collection Managers" %}
+                          <a href="{% url 'drawerregister_detail' drawer.id %}">{{ drawer.code }}</a>
+                        {% else %}
+                          {{ drawer.code }}
+                        {% endif %}
+                      </td>
+                      <td>{{ drawer.description|default:"-" }}</td>
+                      <td>
+                        {% if drawer.active_scan_start %}
+                          {{ drawer.active_scan_start|date:"Y-m-d H:i:s" }}
+                        {% else %}
+                          —
+                        {% endif %}
+                      </td>
+                      <td>
+                        {% if drawer.active_scan_start %}
+                          <span class="scan-timer" data-start="{{ drawer.active_scan_start|date:'c' }}">00:00:00</span>
+                        {% else %}
+                          —
+                        {% endif %}
+                      </td>
+                      <td>
+                        <form method="post" action="{% url 'drawer_start_scan' drawer.id %}" class="w3-display-inline" style="display:inline;">
+                          {% csrf_token %}
+                          <button type="submit" class="w3-button w3-small w3-green w3-round-large" {% if drawer.active_scan_id %}disabled{% endif %}>
+                            <i class="fa-solid fa-play" aria-hidden="true"></i>
+                            <span class="w3-margin-left">{% trans "Start" %}</span>
+                          </button>
+                        </form>
+                        <form method="post" action="{% url 'drawer_stop_scan' drawer.id %}" class="w3-display-inline" style="display:inline;">
+                          {% csrf_token %}
+                          <button type="submit" class="w3-button w3-small w3-red w3-round-large" {% if not drawer.active_scan_id %}disabled{% endif %}>
+                            <i class="fa-solid fa-stop" aria-hidden="true"></i>
+                            <span class="w3-margin-left">{% trans "Stop" %}</span>
+                          </button>
+                        </form>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <p class="w3-text-gray">{% trans "No assigned drawer registers." %}</p>
+          {% endif %}
+        </article>
+      </section>
+    {% endif %}
+
+    {% if is_expert and not is_collection_manager and not is_intern %}
+      <section class="w3-section w3-animate-opacity">
+        <article class="w3-card-4 w3-white w3-round-large w3-padding-large">
+          <header class="w3-margin-bottom">
+            <h2 class="w3-xlarge">
+              <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+              <span class="w3-margin-left">{% trans "Quality control queues" %}</span>
+            </h2>
+          </header>
+          {% include "cms/qc/dashboard_queue.html" %}
+        </article>
+      </section>
+    {% endif %}
+
+    {% if no_role %}
+      <section class="w3-section w3-animate-opacity">
+        <article class="w3-panel w3-pale-blue w3-leftbar w3-border-blue w3-round-large">
+          <p class="w3-large">{% trans "Dashboard content for your role is not available yet." %}</p>
+        </article>
+      </section>
+    {% endif %}
+  </main>
+{% endblock %}
+
+{% block extra_scripts %}
+  {{ block.super }}
   {% if is_intern %}
-    <div class="w3-row-padding">
-      <div class="w3-half">
-        <h2>My Drawers</h2>
-        {% if my_drawers %}
-          <div class="w3-responsive">
-            <table class="w3-table w3-striped">
-              <thead>
-                <tr>
-                  <th>Drawer</th>
-                  <th>Description</th>
-                  <th>Start time</th>
-                  <th>Elapsed</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for drawer in my_drawers %}
-                  <tr>
-                    {% if user.is_superuser or user|has_group:"Collection Managers" %}
-                      <td><a href="{% url 'drawerregister_detail' drawer.id %}">{{ drawer.code }}</a></td>
-                    {% else %}
-                      <td>{{ drawer.code }}</td>
-                    {% endif %}
-                    <td>{{ drawer.description }}</td>
-                    <td>
-                      {% if drawer.active_scan_start %}
-                        {{ drawer.active_scan_start|date:"Y-m-d H:i:s" }}
-                      {% else %}
-                        -
-                      {% endif %}
-                    </td>
-                    <td>
-                      {% if drawer.active_scan_start %}
-                        <span class="scan-timer" data-start="{{ drawer.active_scan_start|date:'c' }}">00:00:00</span>
-                      {% else %}
-                        -
-                      {% endif %}
-                    </td>
-                    <td>
-                      <form method="post" action="{% url 'drawer_start_scan' drawer.id %}" style="display:inline;">
-                        {% csrf_token %}
-                        <button type="submit" class="w3-button w3-small w3-green" {% if drawer.active_scan_id %}disabled{% endif %}>Start scanning task</button>
-                      </form>
-                      <form method="post" action="{% url 'drawer_stop_scan' drawer.id %}" style="display:inline;">
-                        {% csrf_token %}
-                        <button type="submit" class="w3-button w3-small w3-red" {% if not drawer.active_scan_id %}disabled{% endif %}>Stop scanning task</button>
-                      </form>
-                    </td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-          <script>
-            function updateTimers() {
-              document.querySelectorAll('.scan-timer').forEach(function(timer) {
-                var start = new Date(timer.dataset.start);
-                var diff = Math.floor((Date.now() - start.getTime()) / 1000);
-                var h = String(Math.floor(diff / 3600)).padStart(2, '0');
-                var m = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
-                var s = String(diff % 60).padStart(2, '0');
-                timer.textContent = h + ':' + m + ':' + s;
-              });
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        function updateTimers() {
+          document.querySelectorAll('.scan-timer').forEach(function (timer) {
+            var start = new Date(timer.dataset.start);
+            if (Number.isNaN(start.getTime())) {
+              return;
             }
-            updateTimers();
-            setInterval(updateTimers, 1000);
-          </script>
-        {% else %}
-          <p>No assigned drawer registers.</p>
-        {% endif %}
-      </div>
-      <div class="w3-half">
-        {% include "cms/qc/dashboard_queue.html" %}
-      </div>
-    </div>
-  {% elif is_expert and not is_collection_manager %}
-    <div class="w3-row-padding">
-      <div class="w3-col s12">
-        {% include "cms/qc/dashboard_queue.html" %}
-      </div>
-    </div>
-  {% endif %}
-
-  {% if no_role %}
-    <p>Dashboard content for your role is not available yet.</p>
+            var diff = Math.floor((Date.now() - start.getTime()) / 1000);
+            var hours = String(Math.floor(diff / 3600)).padStart(2, '0');
+            var minutes = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
+            var seconds = String(diff % 60).padStart(2, '0');
+            timer.textContent = hours + ':' + minutes + ':' + seconds;
+          });
+        }
+        updateTimers();
+        setInterval(updateTimers, 1000);
+      });
+    </script>
   {% endif %}
 {% endblock %}

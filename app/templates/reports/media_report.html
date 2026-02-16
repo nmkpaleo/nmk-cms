@@ -4,34 +4,30 @@
 {% block title %}Media OCR Report{% endblock %}
 
 {% block content %}
-<link rel="stylesheet" href="{% static 'css/reports.css' %}">
+<div class="w3-content w3-padding-32 w3-animate-opacity">
+  <h2 class="w3-center w3-margin-bottom">OCR Processing Summary</h2>
 
-<div class="container mt-4 mb-5">
+  {% if summary %}
+  <div class="w3-card w3-white w3-round-large w3-padding-large w3-margin-bottom w3-center">
+    <h5><strong>Total Media Files:</strong> {{ summary.total }}</h5>
+    <h5><strong>Completed OCR:</strong> {{ summary.completed }}</h5>
+    <h5><strong>Completion Rate:</strong> {{ summary.completion_rate }}%</h5>
+  </div>
+  {% endif %}
 
-    <h2 class="text-center mb-4">OCR Processing Summary</h2>
-
-    {% if summary %}
-    <div class="summary">
-        <h5><strong>Total Media Files:</strong> {{ summary.total }}</h5>
-        <h5><strong>Completed OCR:</strong> {{ summary.completed }}</h5>
-        <h5><strong>Completion Rate:</strong> {{ summary.completion_rate }}%</h5>
-    </div>
+  <div class="w3-card w3-white w3-round-large w3-padding-large w3-margin-bottom">
+    {% if chart_html %}
+      {{ chart_html|safe }}
+    {% else %}
+      <p class="w3-center w3-text-grey">{{ message|default:"No media data available for reporting yet." }}</p>
     {% endif %}
+  </div>
 
-    <div class="chart-container">
-        {% if chart_html %}
-            {{ chart_html|safe }}
-        {% else %}
-            <p class="message">{{ message|default:"No media data available for reporting yet." }}</p>
-        {% endif %}
-    </div>
-
-    {% if daily_chart_html %}
-    <div class="chart-container">
-        {{ daily_chart_html|safe }}
-    </div>
-    {% endif %}
-
+  {% if daily_chart_html %}
+  <div class="w3-card w3-white w3-round-large w3-padding-large w3-margin-bottom">
+    {{ daily_chart_html|safe }}
+  </div>
+  {% endif %}
 </div>
 {% endblock %}
 
