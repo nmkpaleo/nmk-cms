@@ -7,6 +7,7 @@ import os
 from typing import Any
 
 from crum import set_current_user
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
@@ -373,6 +374,30 @@ def _build_nature_of_specimen(accession_row: AccessionRow, row_data: dict[str, A
     )
 
 
+def _apply_side_portion_inference(row_data: dict[str, Any]) -> dict[str, Any]:
+    """Populate missing side/portion values from element text when enabled."""
+    if not getattr(settings, "SPECIMEN_LIST_ENABLE_SIDE_PORTION_INFERENCE", True):
+        return row_data
+
+    has_side = _clean_text(row_data.get("side")) is not None
+    has_portion = _clean_text(row_data.get("portion")) is not None
+    if has_side and has_portion:
+        return row_data
+
+    source_text = (
+        row_data.get("element_corrected")
+        or row_data.get("element")
+        or row_data.get("verbatim_element")
+        or row_data.get("element_raw")
+    )
+    inferred_side, inferred_portion = infer_nature_side_portion_from_element_text(source_text)
+
+    if not has_side and inferred_side is not None:
+        row_data["side"] = inferred_side
+    if not has_portion and inferred_portion is not None:
+        row_data["portion"] = inferred_portion
+    return row_data
+
 
 def _apply_tooth_marking_to_row_data(
     row: SpecimenListRowCandidate,
@@ -540,6 +565,7 @@ def approve_row(*, row: SpecimenListRowCandidate, reviewer) -> ApprovalResult:
         return result
 
     row_data = _apply_tooth_marking_to_row_data(row, row_data)
+    row_data = _apply_side_portion_inference(row_data)
     _store_row_draft(row, row_data)
 
     set_current_user(reviewer)
