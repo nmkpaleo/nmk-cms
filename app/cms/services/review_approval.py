@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 import os
 from typing import Any
@@ -32,6 +33,56 @@ from cms.tooth_markings.integration import apply_tooth_marking_correction
 
 
 QUALIFIER_TOKENS = {"cf.", "cf", "aff.", "aff", "sp.", "sp", "nr.", "nr"}
+
+_SIDE_TOKEN_MAP = {
+    "l": "left",
+    "lt": "left",
+    "left": "left",
+    "r": "right",
+    "rt": "right",
+    "right": "right",
+}
+
+_PORTION_TOKEN_MAP = {
+    "dist": "distal",
+    "distal": "distal",
+    "prox": "proximal",
+    "proximal": "proximal",
+}
+
+_SIDE_TOKEN_PATTERN = re.compile(r"\b(?:l|lt|left|r|rt|right)\b", re.IGNORECASE)
+_PORTION_TOKEN_PATTERN = re.compile(r"\b(?:dist|distal|prox|proximal)\b", re.IGNORECASE)
+
+
+def _first_unambiguous_match(text: str, pattern: re.Pattern[str], token_map: dict[str, str]) -> str | None:
+    """Return one canonical value when all matches resolve identically."""
+    matches = [
+        token_map[match.group(0).lower().rstrip(".")]
+        for match in pattern.finditer(text)
+    ]
+    if not matches:
+        return None
+    unique_values = set(matches)
+    if len(unique_values) != 1:
+        return None
+    return matches[0]
+
+
+def infer_nature_side_portion_from_element_text(element_text: str | None) -> tuple[str | None, str | None]:
+    """Infer canonical side/portion values from element text token variants.
+
+    Canonical outputs align with existing NatureOfSpecimen usage:
+    - side: ``left`` / ``right``
+    - portion: ``distal`` / ``proximal``
+
+    Returns ``None`` for ambiguous or absent matches.
+    """
+    cleaned = _clean_text(element_text)
+    if not cleaned:
+        return None, None
+    side = _first_unambiguous_match(cleaned, _SIDE_TOKEN_PATTERN, _SIDE_TOKEN_MAP)
+    portion = _first_unambiguous_match(cleaned, _PORTION_TOKEN_PATTERN, _PORTION_TOKEN_MAP)
+    return side, portion
 
 
 def _split_taxon_and_qualifier(value: str | None) -> tuple[str | None, str | None]:
