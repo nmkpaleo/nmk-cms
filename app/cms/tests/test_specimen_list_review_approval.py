@@ -3,11 +3,14 @@ import uuid
 
 import pytest
 from crum import set_current_user
+from django.contrib.admin.sites import AdminSite
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import RequestFactory, TestCase
 from django.test import override_settings
 
-from app.cms.models import (
+from cms.admin import NatureOfSpecimenAdmin
+from cms.models import (
     Accession,
     AccessionFieldSlip,
     AccessionRow,
@@ -22,7 +25,7 @@ from app.cms.models import (
     SpecimenListPDF,
     SpecimenListRowCandidate,
 )
-from app.cms.services.review_approval import approve_page, approve_row
+from cms.services.review_approval import approve_page, approve_row
 
 pytestmark = pytest.mark.django_db
 
@@ -187,3 +190,45 @@ def test_approve_row_creates_nature_of_specimen_with_verbatim_element():
     assert nature.side == "left"
     assert nature.portion == "proximal"
     assert nature.condition == "fragment"
+
+
+class NatureOfSpecimenAdminCompatibilityTests(TestCase):
+    def test_admin_changelist_renders_inferred_values_and_history(self):
+        reviewer = _build_reviewer()
+        _ensure_collection_and_locality(reviewer)
+        pdf = _build_pdf()
+        page = SpecimenListPage.objects.create(pdf=pdf, page_number=1)
+        specimen_no = uuid.uuid4().int % 1000000
+        row = SpecimenListRowCandidate.objects.create(
+            page=page,
+            row_index=0,
+            data={
+                "accession_number": f"KNM-ER {specimen_no}",
+                "taxon": "Homo",
+                "element": "Lt clavicle prox",
+                "condition": "fragment",
+            },
+        )
+
+        approve_row(row=row, reviewer=reviewer)
+
+        nature = NatureOfSpecimen.objects.get(accession_row__accession__specimen_no=specimen_no)
+        self.assertEqual(nature.side, "left")
+        self.assertEqual(nature.portion, "proximal")
+
+        history_entry = nature.history.latest()
+        self.assertEqual(history_entry.side, "left")
+        self.assertEqual(history_entry.portion, "proximal")
+
+        staff = get_user_model().objects.create_superuser(
+            username=f"admin-{uuid.uuid4().hex}",
+            email="admin@example.com",
+            password="pass",
+        )
+        request = RequestFactory().get("/admin/cms/natureofspecimen/")
+        request.user = staff
+        model_admin = NatureOfSpecimenAdmin(NatureOfSpecimen, AdminSite())
+
+        response = model_admin.changelist_view(request)
+        response.render()
+        self.assertEqual(response.status_code, 200)
