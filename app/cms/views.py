@@ -5150,11 +5150,10 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
                 if not form.cleaned_data:
                     continue
                 row_id = form.cleaned_data.get("row_id")
+                row = row_map.get(row_id) if row_id else None
                 if form.cleaned_data.get("DELETE"):
-                    if row_id:
-                        row = row_map.get(row_id)
-                        if row:
-                            row.delete()
+                    if row:
+                        row.delete()
                     continue
 
                 data = {}
@@ -5162,9 +5161,9 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
                 for column in column_order:
                     value = form.cleaned_data.get(column)
                     if column == "tooth_marking_detections":
-                        value = row.data.get("tooth_marking_detections") if row_id and row_id in row_map else None
+                        value = row.data.get("tooth_marking_detections") if row else None
                     if column in {"element_raw", "element_corrected"}:
-                        value = row.data.get(column) if row_id and row_id in row_map else None
+                        value = row.data.get(column) if row else None
                     if value not in (None, ""):
                         has_content = True
                         data[column] = value
@@ -5180,7 +5179,6 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
                     data.update(data_json_payload)
 
                 if row_id:
-                    row = row_map.get(row_id)
                     if not row:
                         continue
                     existing_data = dict(row.data or {})
