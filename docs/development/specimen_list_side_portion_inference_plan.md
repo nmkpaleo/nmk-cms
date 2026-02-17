@@ -44,6 +44,38 @@
 - Run lint/type checks configured in repo.
 - Run docs lint/build steps used by CI; skip MkDocs-specific steps per project policy.
 
+### T4 implementation runbook (CI, rollout, rollback)
+
+**CI gate checklist (required before merge)**
+- `pytest --maxfail=1`
+- `pytest --cov=app/cms --cov-report=term-missing` (target: **>= 90%** coverage for touched modules)
+- `python app/manage.py makemigrations --check`
+- `python app/manage.py migrate --check`
+- Run project docs checks used in CI; if any step invokes MkDocs, skip that step and record the skip reason in the PR because docs are plain Markdown in this repository.
+
+**Runtime toggle and defaults**
+- Setting: `SPECIMEN_LIST_ENABLE_SIDE_PORTION_INFERENCE`
+- Recommended defaults:
+  - staging: `True`
+  - production initial rollout: `True`
+  - emergency rollback: set to `False` and redeploy/reload config
+
+**Rollback procedure (no schema rollback required)**
+1. Set `SPECIMEN_LIST_ENABLE_SIDE_PORTION_INFERENCE=False` in runtime environment.
+2. Reload app processes (Gunicorn/container restart) to pick up the setting.
+3. Re-approve a known sample row and confirm Side/Portion are no longer auto-filled when blank.
+4. Keep existing records unchanged; perform targeted audit query on recent approvals if needed.
+
+**Staging verification script (representative token coverage)**
+Run these examples in staging to confirm expected behavior:
+- `Lt femur Dist` -> `side=left`, `portion=distal`
+- `Rt humerus Prox` -> `side=right`, `portion=proximal`
+- `Left tibia` -> `side=left`, `portion=None`
+- `Prox radius` -> `side=None`, `portion=proximal`
+- `Lt Rt ulna` -> `side=None` (ambiguous), `portion=None`
+
+Record outputs in release notes/PR comments before production promotion.
+
 ## 3️⃣ Tasks (JSON)
 [
   {
