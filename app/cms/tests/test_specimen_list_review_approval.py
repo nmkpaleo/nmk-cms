@@ -25,7 +25,11 @@ from cms.models import (
     SpecimenListPDF,
     SpecimenListRowCandidate,
 )
-from cms.services.review_approval import approve_page, approve_row
+from cms.services.review_approval import (
+    approve_page,
+    approve_row,
+    infer_nature_side_portion_from_element_text,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -232,3 +236,185 @@ class NatureOfSpecimenAdminCompatibilityTests(TestCase):
         response = model_admin.changelist_view(request)
         response.render()
         self.assertEqual(response.status_code, 200)
+
+
+class InferNatureSidePortionTests:
+    """Unit tests for side/portion inference from element text tokens."""
+
+    @pytest.mark.parametrize(
+        "element_text,expected_side,expected_portion",
+        [
+            # Single side tokens (various cases and abbreviations)
+            ("Lt femur", "left", None),
+            ("lt femur", "left", None),
+            ("LT femur", "left", None),
+            ("L femur", "left", None),
+            ("Left femur", "left", None),
+            ("left femur", "left", None),
+            ("Rt humerus", "right", None),
+            ("rt humerus", "right", None),
+            ("RT humerus", "right", None),
+            ("R humerus", "right", None),
+            ("Right humerus", "right", None),
+            ("right humerus", "right", None),
+            # Single portion tokens
+            ("femur Dist", None, "distal"),
+            ("femur dist", None, "distal"),
+            ("femur DIST", None, "distal"),
+            ("femur Distal", None, "distal"),
+            ("femur distal", None, "distal"),
+            ("femur Prox", None, "proximal"),
+            ("femur prox", None, "proximal"),
+            ("femur PROX", None, "proximal"),
+            ("femur Proximal", None, "proximal"),
+            ("femur proximal", None, "proximal"),
+            # Combined side and portion
+            ("Lt femur Dist", "left", "distal"),
+            ("Rt humerus Prox", "right", "proximal"),
+            ("Left tibia Distal", "left", "distal"),
+            ("Right ulna Proximal", "right", "proximal"),
+            # Tokens with periods
+            ("Lt. femur", "left", None),
+            ("Rt. femur Dist.", "right", "distal"),
+            # Multiple same tokens (should still work)
+            ("Lt Lt femur", "left", None),
+            ("femur Dist Dist", None, "distal"),
+            # No tokens
+            ("femur", None, None),
+            ("humerus", None, None),
+            ("", None, None),
+            (None, None, None),
+            # Ambiguous cases (conflicting tokens)
+            ("Lt Rt femur", None, None),
+            ("Rt Lt femur", None, None),
+            ("femur Dist Prox", None, None),
+            ("femur Prox Dist", None, None),
+            ("Lt Rt femur Dist Prox", None, None),
+            # Edge cases with extra whitespace
+            ("  Lt   femur  ", "left", None),
+            ("  femur  Dist  ", None, "distal"),
+        ],
+    )
+    def test_infer_side_portion_from_tokens(
+        self, element_text, expected_side, expected_portion
+    ):
+        """Test inference of side/portion from element text tokens."""
+        side, portion = infer_nature_side_portion_from_element_text(element_text)
+        assert side == expected_side, f"Expected side={expected_side}, got {side}"
+        assert portion == expected_portion, f"Expected portion={expected_portion}, got {portion}"
+
+    def test_inference_returns_canonical_lowercase(self):
+        """Verify canonical output values match NatureOfSpecimen usage."""
+        # Test that all side variants map to lowercase canonical forms
+        test_cases = [
+            ("Lt femur", "left"),
+            ("LT femur", "left"),
+            ("L femur", "left"),
+            ("Left femur", "left"),
+            ("Rt femur", "right"),
+            ("RT femur", "right"),
+            ("R femur", "right"),
+            ("Right femur", "right"),
+        ]
+        for element_text, expected_side in test_cases:
+            side, _ = infer_nature_side_portion_from_element_text(element_text)
+            assert side == expected_side
+            assert side.islower() if side else True
+
+        # Test that all portion variants map to lowercase canonical forms
+        test_cases = [
+            ("femur Dist", "distal"),
+            ("femur DIST", "distal"),
+            ("femur Distal", "distal"),
+            ("femur Prox", "proximal"),
+            ("femur PROX", "proximal"),
+            ("femur Proximal", "proximal"),
+        ]
+        for element_text, expected_portion in test_cases:
+            _, portion = infer_nature_side_portion_from_element_text(element_text)
+            assert portion == expected_portion
+            assert portion.islower() if portion else True
+
+
+def test_side_portion_inference_disabled_by_feature_flag():
+    """Verify inference can be disabled via settings flag."""
+    reviewer = _build_reviewer()
+    _ensure_collection_and_locality(reviewer)
+    pdf = _build_pdf()
+    page = SpecimenListPage.objects.create(pdf=pdf, page_number=1)
+    specimen_no = uuid.uuid4().int % 1000000
+    row = SpecimenListRowCandidate.objects.create(
+        page=page,
+        row_index=0,
+        data={
+            "accession_number": f"KNM-ER {specimen_no}",
+            "taxon": "Homo",
+            "element": "Lt femur Dist",
+            "condition": "fragment",
+        },
+    )
+
+    # Disable inference via settings
+    with override_settings(SPECIMEN_LIST_ENABLE_SIDE_PORTION_INFERENCE=False):
+        approve_row(row=row, reviewer=reviewer)
+
+    nature = NatureOfSpecimen.objects.get(accession_row__accession__specimen_no=specimen_no)
+    # When disabled, side and portion should not be inferred
+    assert nature.side is None
+    assert nature.portion is None
+
+
+def test_side_portion_inference_does_not_overwrite_explicit_values():
+    """Verify inference never overwrites manually-provided side/portion values."""
+    reviewer = _build_reviewer()
+    _ensure_collection_and_locality(reviewer)
+    pdf = _build_pdf()
+    page = SpecimenListPage.objects.create(pdf=pdf, page_number=1)
+    specimen_no = uuid.uuid4().int % 1000000
+    row = SpecimenListRowCandidate.objects.create(
+        page=page,
+        row_index=0,
+        data={
+            "accession_number": f"KNM-ER {specimen_no}",
+            "taxon": "Homo",
+            # Element says "Lt femur Dist" but explicit values say otherwise
+            "element": "Lt femur Dist",
+            "side": "right",  # Explicit value contradicts element
+            "portion": "proximal",  # Explicit value contradicts element
+            "condition": "fragment",
+        },
+    )
+
+    approve_row(row=row, reviewer=reviewer)
+
+    nature = NatureOfSpecimen.objects.get(accession_row__accession__specimen_no=specimen_no)
+    # Explicit values should be preserved, not overwritten by inference
+    assert nature.side == "right"
+    assert nature.portion == "proximal"
+
+
+def test_side_portion_inference_from_element_corrected():
+    """Verify inference uses element_corrected when available."""
+    reviewer = _build_reviewer()
+    _ensure_collection_and_locality(reviewer)
+    pdf = _build_pdf()
+    page = SpecimenListPage.objects.create(pdf=pdf, page_number=1)
+    specimen_no = uuid.uuid4().int % 1000000
+    row = SpecimenListRowCandidate.objects.create(
+        page=page,
+        row_index=0,
+        data={
+            "accession_number": f"KNM-ER {specimen_no}",
+            "taxon": "Homo",
+            "element": "femur",  # Original has no side/portion
+            "element_corrected": "Rt femur Prox",  # Corrected version has them
+            "condition": "fragment",
+        },
+    )
+
+    approve_row(row=row, reviewer=reviewer)
+
+    nature = NatureOfSpecimen.objects.get(accession_row__accession__specimen_no=specimen_no)
+    # Should use element_corrected for inference
+    assert nature.side == "right"
+    assert nature.portion == "proximal"
