@@ -1511,6 +1511,7 @@ class NatureOfSpecimenAdmin(HistoricalImportExportAdmin):
         'condition',
     )
     readonly_fields = ('tooth_marking_detections_pretty',)
+    list_filter = ('side', 'portion', 'condition')
     ordering = ('accession_row', 'element')
 
     @staticmethod
