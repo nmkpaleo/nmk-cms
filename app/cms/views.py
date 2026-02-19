@@ -1699,6 +1699,14 @@ def place_edit(request, pk):
     return render(request, 'cms/place_form.html', {'form': form})
 
 
+def _with_fieldslip_sedimentary_related(queryset):
+    return queryset.prefetch_related(
+        "sedimentary_features",
+        "fossil_groups",
+        "preservation_states",
+        "recommended_methods",
+    ).select_related("matrix_grain_size")
+
 class FieldSlipDetailView(DetailView):
     model = FieldSlip
     template_name = 'cms/fieldslip_detail.html'
@@ -1715,11 +1723,8 @@ class FieldSlipDetailView(DetailView):
             queryset=prefetch_accession_related(Accession.objects.all()),
         )
 
-        return (
-            super()
-            .get_queryset()
-            .prefetch_related(accession_link_prefetch, accession_prefetch)
-        )
+        queryset = _with_fieldslip_sedimentary_related(super().get_queryset())
+        return queryset.prefetch_related(accession_link_prefetch, accession_prefetch)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1752,12 +1757,7 @@ class FieldSlipListView(LoginRequiredMixin, UserPassesTestMixin, FilterView):
     filterset_class = FieldSlipFilter
 
     def get_queryset(self):
-        return super().get_queryset().prefetch_related(
-            "sedimentary_features",
-            "fossil_groups",
-            "preservation_states",
-            "recommended_methods",
-        ).select_related("matrix_grain_size")
+        return _with_fieldslip_sedimentary_related(super().get_queryset())
 
     def test_func(self):
         user = self.request.user
