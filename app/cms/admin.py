@@ -64,6 +64,11 @@ from .models import (
     MergeLog,
     Organisation,
     UserOrganisation,
+    SedimentaryFeature,
+    FossilGroup,
+    PreservationState,
+    CollectionMethod,
+    GrainSize,
     SpecimenListPDF,
     SpecimenListPage,
     SpecimenListPageOCR,
@@ -1070,10 +1075,37 @@ class ElementAdmin(MergeAdminActionMixin, MergeAdminMixin, HistoricalImportExpor
 # FieldSlip Model
 class FieldSlipAdmin(MergeAdminActionMixin, MergeAdminMixin, HistoricalImportExportAdmin):
     resource_class = FieldSlipResource
-    list_display = ('field_number', 'discoverer', 'collector', 'collection_date', 'verbatim_locality', 'verbatim_taxon', 'verbatim_element')
+    list_display = ('field_number', 'discoverer', 'collector', 'collection_date', 'verbatim_locality', 'verbatim_taxon', 'verbatim_element', 'collection_position', 'matrix_association', 'surface_exposure', 'matrix_grain_size')
     search_fields = ('field_number', 'discoverer', 'collector', 'verbatim_locality')
     list_filter = ('verbatim_locality',)
     ordering = ('verbatim_locality', 'field_number')
+    filter_horizontal = ('sedimentary_features', 'fossil_groups', 'preservation_states', 'recommended_methods')
+
+
+class SedimentaryFeatureAdmin(admin.ModelAdmin):
+    list_display = ("name", "code", "category")
+    search_fields = ("name", "code", "description")
+    list_filter = ("category",)
+
+
+class FossilGroupAdmin(admin.ModelAdmin):
+    list_display = ("name",)
+    search_fields = ("name",)
+
+
+class PreservationStateAdmin(admin.ModelAdmin):
+    list_display = ("name",)
+    search_fields = ("name",)
+
+
+class CollectionMethodAdmin(admin.ModelAdmin):
+    list_display = ("name",)
+    search_fields = ("name",)
+
+
+class GrainSizeAdmin(admin.ModelAdmin):
+    list_display = ("name",)
+    search_fields = ("name",)
 
 #  GeologicalContext
 class GeologicalContextAdmin(HistoricalImportExportAdmin):
@@ -1737,6 +1769,11 @@ admin.site.register(Collection, CollectionAdmin)
 admin.site.register(Comment, CommentAdmin)
 admin.site.register(Element, ElementAdmin)
 admin.site.register(FieldSlip, FieldSlipAdmin)
+admin.site.register(SedimentaryFeature, SedimentaryFeatureAdmin)
+admin.site.register(FossilGroup, FossilGroupAdmin)
+admin.site.register(PreservationState, PreservationStateAdmin)
+admin.site.register(CollectionMethod, CollectionMethodAdmin)
+admin.site.register(GrainSize, GrainSizeAdmin)
 admin.site.register(Identification, IdentificationAdmin)
 admin.site.register(Locality, LocalityAdmin)
 admin.site.register(Place, PlaceAdmin)
