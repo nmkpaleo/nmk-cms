@@ -801,6 +801,17 @@ class GrainSize(models.Model):
 
 # FieldSlip Model
 class FieldSlip(MergeMixin, BaseModel):
+    SEDIMENTARY_FIELD_CONTRACT = (
+        ("sedimentary_features", _("Sedimentary features")),
+        ("fossil_groups", _("Associated fossil groups")),
+        ("preservation_states", _("Preservation states")),
+        ("recommended_methods", _("Recommended collection methods")),
+        ("collection_position", _("Collection position")),
+        ("matrix_association", _("Matrix association")),
+        ("surface_exposure", _("Surface exposure")),
+        ("matrix_grain_size", _("Matrix grain size")),
+    )
+
     merge_fields = {
         "field_number": MergeStrategy.FIELD_SELECTION,
         "verbatim_taxon": MergeStrategy.FIELD_SELECTION,

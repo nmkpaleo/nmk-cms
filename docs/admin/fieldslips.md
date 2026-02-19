@@ -1,5 +1,24 @@
 # FieldSlip admin and merge auditing
 
+
+## Sedimentary data contract for field slips
+
+Field slip sedimentary data is standardized across detail, edit, and filtering workflows. The canonical fields are:
+
+- Sedimentary features
+- Associated fossil groups
+- Preservation states
+- Recommended collection methods
+- Collection position
+- Matrix association
+- Surface exposure
+- Matrix grain size
+
+Operational placement expectations:
+
+- On detail pages, keep the sedimentary section before the Related accessions section to preserve a clear data-entry and review flow.
+- On list pages, expose these fields as search criteria only; do not add them to the Field Slips results table columns.
+
 The FieldSlip model participates in the same merge engine used across the CMS. Staff users with the **can_merge** permission can merge duplicates either in the admin or from an accession detail page. Both paths share merge logging, relation reconciliation, and history capture so administrators can audit and roll back changes.
 
 ## Permissions and entry points
