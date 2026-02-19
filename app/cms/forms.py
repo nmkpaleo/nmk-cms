@@ -924,6 +924,27 @@ class AccessionReferenceForm2(BaseW3ModelForm):
         }
 
 
+_FIELD_SLIP_BASE_FIELDS = (
+    "field_number",
+    "discoverer",
+    "collector",
+    "collection_date",
+    "verbatim_locality",
+    "verbatim_taxon",
+    "verbatim_element",
+    "verbatim_horizon",
+    "aerial_photo",
+    "verbatim_latitude",
+    "verbatim_longitude",
+    "verbatim_SRS",
+    "verbatim_coordinate_system",
+    "verbatim_elevation",
+)
+_FIELD_SLIP_SEDIMENTARY_FIELDS = tuple(
+    field_name for field_name, _ in FieldSlip.SEDIMENTARY_FIELD_CONTRACT
+)
+
+
 class FieldSlipForm(BaseW3ModelForm):
     collection_date = forms.DateField(
         widget=forms.DateInput(attrs={"type": "date"}),
@@ -932,22 +953,7 @@ class FieldSlipForm(BaseW3ModelForm):
 
     class Meta:
         model = FieldSlip
-        fields = [
-            "field_number",
-            "discoverer",
-            "collector",
-            "collection_date",
-            "verbatim_locality",
-            "verbatim_taxon",
-            "verbatim_element",
-            "verbatim_horizon",
-            "aerial_photo",
-            "verbatim_latitude",
-            "verbatim_longitude",
-            "verbatim_SRS",
-            "verbatim_coordinate_system",
-            "verbatim_elevation",
-        ]
+        fields = [*_FIELD_SLIP_BASE_FIELDS, *_FIELD_SLIP_SEDIMENTARY_FIELDS]
 
 
 class ReferenceForm(BaseW3ModelForm):

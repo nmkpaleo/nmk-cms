@@ -1596,6 +1596,8 @@ def index(request):
 def base_generic(request):
     return render(request, 'base_generic.html')
 
+@login_required
+@user_passes_test(is_collection_manager)
 def fieldslip_create(request):
     if request.method == 'POST':
         form = FieldSlipForm(request.POST, request.FILES)
@@ -1606,6 +1608,8 @@ def fieldslip_create(request):
         form = FieldSlipForm()
     return render(request, 'cms/fieldslip_form.html', {'form': form})
 
+@login_required
+@user_passes_test(is_collection_manager)
 def fieldslip_edit(request, pk):
     fieldslip = get_object_or_404(FieldSlip, pk=pk)
     if request.method == 'POST':
