@@ -1751,6 +1751,14 @@ class FieldSlipListView(LoginRequiredMixin, UserPassesTestMixin, FilterView):
     paginate_by = 10
     filterset_class = FieldSlipFilter
 
+    def get_queryset(self):
+        return super().get_queryset().prefetch_related(
+            "sedimentary_features",
+            "fossil_groups",
+            "preservation_states",
+            "recommended_methods",
+        ).select_related("matrix_grain_size")
+
     def test_func(self):
         user = self.request.user
         return user.is_superuser or user.groups.filter(name="Collection Managers").exists()
