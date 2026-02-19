@@ -120,6 +120,102 @@
     </div>
   </section>
 
+
+  <section class="w3-margin-top" aria-labelledby="fieldslip-sedimentary-heading">
+    <div class="w3-card w3-round w3-white w3-padding">
+      <header class="w3-margin-bottom">
+        <h2 id="fieldslip-sedimentary-heading" class="w3-margin-top">
+          <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+          <span class="w3-margin-left">{% trans "Sedimentary context" %}</span>
+        </h2>
+      </header>
+
+      <div class="w3-row-padding">
+        <article class="w3-col s12 m6 l3" aria-labelledby="fieldslip-sedimentary-features-heading">
+          <h3 id="fieldslip-sedimentary-features-heading" class="w3-medium w3-text-gray">{% trans "Sedimentary features" %}</h3>
+          {% if fieldslip.sedimentary_features.all %}
+            <ul class="w3-ul w3-small">
+              {% for feature in fieldslip.sedimentary_features.all %}
+                <li>{{ feature.name }}</li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="w3-text-gray">{% trans "No sedimentary features recorded." %}</p>
+          {% endif %}
+        </article>
+
+        <article class="w3-col s12 m6 l3" aria-labelledby="fieldslip-fossil-groups-heading">
+          <h3 id="fieldslip-fossil-groups-heading" class="w3-medium w3-text-gray">{% trans "Associated fossil groups" %}</h3>
+          {% if fieldslip.fossil_groups.all %}
+            <ul class="w3-ul w3-small">
+              {% for group in fieldslip.fossil_groups.all %}
+                <li>{{ group.name }}</li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="w3-text-gray">{% trans "No fossil groups recorded." %}</p>
+          {% endif %}
+        </article>
+
+        <article class="w3-col s12 m6 l3" aria-labelledby="fieldslip-preservation-states-heading">
+          <h3 id="fieldslip-preservation-states-heading" class="w3-medium w3-text-gray">{% trans "Preservation states" %}</h3>
+          {% if fieldslip.preservation_states.all %}
+            <ul class="w3-ul w3-small">
+              {% for state in fieldslip.preservation_states.all %}
+                <li>{{ state.name }}</li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="w3-text-gray">{% trans "No preservation states recorded." %}</p>
+          {% endif %}
+        </article>
+
+        <article class="w3-col s12 m6 l3" aria-labelledby="fieldslip-recommended-methods-heading">
+          <h3 id="fieldslip-recommended-methods-heading" class="w3-medium w3-text-gray">{% trans "Recommended collection methods" %}</h3>
+          {% if fieldslip.recommended_methods.all %}
+            <ul class="w3-ul w3-small">
+              {% for method in fieldslip.recommended_methods.all %}
+                <li>{{ method.name }}</li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="w3-text-gray">{% trans "No recommended methods recorded." %}</p>
+          {% endif %}
+        </article>
+      </div>
+
+      <div class="w3-row-padding w3-margin-top">
+        <article class="w3-col s12 m4" aria-labelledby="fieldslip-collection-position-heading">
+          <h3 id="fieldslip-collection-position-heading" class="w3-medium w3-text-gray">{% trans "Collection position" %}</h3>
+          <p>{{ fieldslip.get_collection_position_display|default:"—" }}</p>
+        </article>
+
+        <article class="w3-col s12 m4" aria-labelledby="fieldslip-matrix-association-heading">
+          <h3 id="fieldslip-matrix-association-heading" class="w3-medium w3-text-gray">{% trans "Matrix association" %}</h3>
+          <p>{{ fieldslip.get_matrix_association_display|default:"—" }}</p>
+        </article>
+
+        <article class="w3-col s12 m4" aria-labelledby="fieldslip-surface-exposure-heading">
+          <h3 id="fieldslip-surface-exposure-heading" class="w3-medium w3-text-gray">{% trans "Surface exposure" %}</h3>
+          {% if fieldslip.surface_exposure is None %}
+            <p>—</p>
+          {% elif fieldslip.surface_exposure %}
+            <p>{% trans "Yes" %}</p>
+          {% else %}
+            <p>{% trans "No" %}</p>
+          {% endif %}
+        </article>
+      </div>
+
+      <div class="w3-row-padding">
+        <article class="w3-col s12" aria-labelledby="fieldslip-matrix-grain-size-heading">
+          <h3 id="fieldslip-matrix-grain-size-heading" class="w3-medium w3-text-gray">{% trans "Matrix grain size" %}</h3>
+          <p>{{ fieldslip.matrix_grain_size.name|default:"—" }}</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
   {% blocktrans asvar related_accessions_title %}Related accessions{% endblocktrans %}
   {% blocktrans asvar related_accessions_empty %}No related accessions recorded for this field slip.{% endblocktrans %}
   {% include "cms/partials/accession_basic_list.html" with accessions=accessions section_id="fieldslip-related-accessions" section_icon="fa-diagram-project" section_title=related_accessions_title empty_message=related_accessions_empty show_staff_columns=show_accession_staff_columns %}
