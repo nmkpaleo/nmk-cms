@@ -21,6 +21,27 @@ Operational placement expectations:
 
 The FieldSlip model participates in the same merge engine used across the CMS. Staff users with the **can_merge** permission can merge duplicates either in the admin or from an accession detail page. Both paths share merge logging, relation reconciliation, and history capture so administrators can audit and roll back changes.
 
+## Sedimentary edit and filter operations
+
+### Access expectations
+
+- Field slip create/edit views continue to follow collection-manager access rules.
+- Field slip list visibility and filtering remain restricted to collection managers and superusers.
+
+### Admin verification checklist
+
+When validating a release that includes sedimentary updates:
+
+1. Open an existing field slip and update one or more sedimentary fields.
+2. Confirm the detail page shows the sedimentary block before **Related accessions**.
+3. Open the field slip list and apply sedimentary filters, including at least one multi-select filter.
+4. Verify results are deduplicated (no repeated rows for the same field slip) and that table columns are unchanged.
+
+### Audit notes
+
+- Field-level edits are captured by django-simple-history snapshots for FieldSlip records.
+- Filtering does not mutate data and is intended for search and review workflows only.
+
 ## Permissions and entry points
 
 - **Admin merge tool**: Available from the FieldSlip changelist when `MergeAdminMixin` is registered. Select duplicates, choose **Merge selected records**, and complete the compare screen.
