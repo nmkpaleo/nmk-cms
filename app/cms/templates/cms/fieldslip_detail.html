@@ -20,11 +20,18 @@
     </div>
   </header>
 
-  <section class="w3-margin-top" aria-labelledby="fieldslip-overview-heading">
-    <div class="w3-row-padding">
-      <article class="w3-col s12 m6 l3">
-        <div class="w3-card w3-round w3-white w3-padding">
-          <h2 id="fieldslip-overview-heading" class="w3-margin-top">{% trans "Overview" %}</h2>
+  <section class="w3-margin-top" aria-labelledby="fieldslip-primary-context-heading">
+    <div class="w3-card w3-round w3-white w3-padding">
+      <header class="w3-margin-bottom">
+        <h2 id="fieldslip-primary-context-heading" class="w3-margin-top">
+          <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+          <span class="w3-margin-left">{% trans "Primary context" %}</span>
+        </h2>
+      </header>
+
+      <div class="w3-row-padding">
+        <article class="w3-col s12 m6 l3" aria-labelledby="fieldslip-overview-heading">
+          <h3 id="fieldslip-overview-heading" class="w3-medium w3-text-gray">{% trans "Overview" %}</h3>
           <dl class="w3-margin-top">
             <div class="w3-margin-bottom">
               <dt class="w3-text-gray">{% trans "Field number" %}</dt>
@@ -51,12 +58,10 @@
               <dd class="w3-margin-0">{{ fieldslip.comment|default:"—" }}</dd>
             </div>
           </dl>
-        </div>
-      </article>
+        </article>
 
-      <article class="w3-col s12 m6 l3">
-        <div class="w3-card w3-round w3-white w3-padding" aria-labelledby="fieldslip-taxonomy-heading">
-          <h2 id="fieldslip-taxonomy-heading" class="w3-margin-top">{% trans "Taxonomic notes" %}</h2>
+        <article class="w3-col s12 m6 l3" aria-labelledby="fieldslip-taxonomy-heading">
+          <h3 id="fieldslip-taxonomy-heading" class="w3-medium w3-text-gray">{% trans "Taxonomic notes" %}</h3>
           <dl class="w3-margin-top">
             <div class="w3-margin-bottom">
               <dt class="w3-text-gray">{% trans "Verbatim taxon" %}</dt>
@@ -75,12 +80,10 @@
               <dd class="w3-margin-0">{{ fieldslip.verbatim_SRS|default:"—" }}</dd>
             </div>
           </dl>
-        </div>
-      </article>
+        </article>
 
-      <article class="w3-col s12 m6 l3">
-        <div class="w3-card w3-round w3-white w3-padding" aria-labelledby="fieldslip-location-heading">
-          <h2 id="fieldslip-location-heading" class="w3-margin-top">{% trans "Location" %}</h2>
+        <article class="w3-col s12 m6 l3" aria-labelledby="fieldslip-location-heading">
+          <h3 id="fieldslip-location-heading" class="w3-medium w3-text-gray">{% trans "Location" %}</h3>
           <dl class="w3-margin-top">
             <div class="w3-margin-bottom">
               <dt class="w3-text-gray">{% trans "Verbatim latitude" %}</dt>
@@ -99,12 +102,10 @@
               <dd class="w3-margin-0">{{ fieldslip.verbatim_coordinate_system|default:"—" }}</dd>
             </div>
           </dl>
-        </div>
-      </article>
+        </article>
 
-      <article class="w3-col s12 m6 l3">
-        <div class="w3-card w3-round w3-white w3-padding" aria-labelledby="fieldslip-media-heading">
-          <h2 id="fieldslip-media-heading" class="w3-margin-top">{% trans "Aerial photo" %}</h2>
+        <article class="w3-col s12 m6 l3" aria-labelledby="fieldslip-media-heading">
+          <h3 id="fieldslip-media-heading" class="w3-medium w3-text-gray">{% trans "Aerial photo" %}</h3>
           <div class="w3-margin-top">
             {% if fieldslip.aerial_photo %}
               <p class="w3-tag w3-light-blue w3-round w3-text-black w3-padding-small">
@@ -115,8 +116,8 @@
               <p class="w3-text-gray">{% trans "No aerial photo information provided." %}</p>
             {% endif %}
           </div>
-        </div>
-      </article>
+        </article>
+      </div>
     </div>
   </section>
 
