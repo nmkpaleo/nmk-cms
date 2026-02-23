@@ -1,5 +1,47 @@
 # Field slip management
 
+## Sedimentary fields and page placement
+
+Field slip detail and edit workflows use the same sedimentary data contract:
+
+- Sedimentary features
+- Associated fossil groups
+- Preservation states
+- Recommended collection methods
+- Collection position
+- Matrix association
+- Surface exposure
+- Matrix grain size
+
+For readability, the **Field slip detail** page displays this group in a dedicated sedimentary section before the **Related accessions** section.
+
+In list views, these values are intended for filtering and search criteria. They are not intended to add extra columns to the field slip table.
+
+## Editing and filtering sedimentary data
+
+Collection managers and superusers can now maintain sedimentary data directly on the Field Slip create/edit form.
+
+### What can be edited
+
+- Sedimentary features
+- Associated fossil groups
+- Preservation states
+- Recommended collection methods
+- Collection position
+- Matrix association
+- Surface exposure
+- Matrix grain size
+
+### Where this appears
+
+- **Field slip detail page:** sedimentary context appears in its own grouped section before **Related accessions**.
+- **Field slip list page:** sedimentary values are exposed as filters in the search panel.
+- **Field slip list table:** remains unchanged; sedimentary values are not shown as new columns.
+
+### Filtering behavior
+
+You can combine sedimentary filters with existing field slip filters (collector, date, locality, taxon, and horizon) to narrow records. Multi-select sedimentary filters return each matching field slip once, even when multiple related values match.
+
 ## Merging field slips from an accession
 
 Staff users with the **can_merge** permission on field slips can now merge duplicates directly from an accession detail page. This flow keeps you on the accession and automatically refreshes the linked slips after the merge finishes.

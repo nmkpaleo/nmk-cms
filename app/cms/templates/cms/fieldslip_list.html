@@ -64,6 +64,42 @@
                 </div>
             </div>
 
+            <fieldset class="w3-row-padding w3-margin-top w3-padding w3-border w3-round-large" aria-labelledby="fieldslip-sedimentary-filter-heading">
+                <legend id="fieldslip-sedimentary-filter-heading" class="w3-text-grey">{% trans "Sedimentary filters" %}</legend>
+                <div class="w3-col s12 m6 l3 w3-margin-bottom">
+                    <label class="w3-text-grey" for="{{ filter.form.sedimentary_features.id_for_label }}">{% trans "Sedimentary features" %}</label>
+                    {{ filter.form.sedimentary_features }}
+                </div>
+                <div class="w3-col s12 m6 l3 w3-margin-bottom">
+                    <label class="w3-text-grey" for="{{ filter.form.fossil_groups.id_for_label }}">{% trans "Associated fossil groups" %}</label>
+                    {{ filter.form.fossil_groups }}
+                </div>
+                <div class="w3-col s12 m6 l3 w3-margin-bottom">
+                    <label class="w3-text-grey" for="{{ filter.form.preservation_states.id_for_label }}">{% trans "Preservation states" %}</label>
+                    {{ filter.form.preservation_states }}
+                </div>
+                <div class="w3-col s12 m6 l3 w3-margin-bottom">
+                    <label class="w3-text-grey" for="{{ filter.form.recommended_methods.id_for_label }}">{% trans "Recommended collection methods" %}</label>
+                    {{ filter.form.recommended_methods }}
+                </div>
+                <div class="w3-col s12 m6 l3 w3-margin-bottom">
+                    <label class="w3-text-grey" for="{{ filter.form.collection_position.id_for_label }}">{% trans "Collection position" %}</label>
+                    {{ filter.form.collection_position }}
+                </div>
+                <div class="w3-col s12 m6 l3 w3-margin-bottom">
+                    <label class="w3-text-grey" for="{{ filter.form.matrix_association.id_for_label }}">{% trans "Matrix association" %}</label>
+                    {{ filter.form.matrix_association }}
+                </div>
+                <div class="w3-col s12 m6 l3 w3-margin-bottom">
+                    <label class="w3-text-grey" for="{{ filter.form.surface_exposure.id_for_label }}">{% trans "Surface exposure" %}</label>
+                    {{ filter.form.surface_exposure }}
+                </div>
+                <div class="w3-col s12 m6 l3 w3-margin-bottom">
+                    <label class="w3-text-grey" for="{{ filter.form.matrix_grain_size.id_for_label }}">{% trans "Matrix grain size" %}</label>
+                    {{ filter.form.matrix_grain_size }}
+                </div>
+            </fieldset>
+
             <div class="w3-margin-top">
                 <button type="submit" class="w3-button w3-blue w3-round w3-margin-right">
                     <i class="fa-solid fa-check"></i>

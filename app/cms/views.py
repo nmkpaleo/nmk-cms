@@ -1596,6 +1596,8 @@ def index(request):
 def base_generic(request):
     return render(request, 'base_generic.html')
 
+@login_required
+@user_passes_test(is_collection_manager)
 def fieldslip_create(request):
     if request.method == 'POST':
         form = FieldSlipForm(request.POST, request.FILES)
@@ -1606,6 +1608,8 @@ def fieldslip_create(request):
         form = FieldSlipForm()
     return render(request, 'cms/fieldslip_form.html', {'form': form})
 
+@login_required
+@user_passes_test(is_collection_manager)
 def fieldslip_edit(request, pk):
     fieldslip = get_object_or_404(FieldSlip, pk=pk)
     if request.method == 'POST':
@@ -1695,6 +1699,15 @@ def place_edit(request, pk):
     return render(request, 'cms/place_form.html', {'form': form})
 
 
+def _with_fieldslip_sedimentary_related(queryset):
+    return queryset.prefetch_related(
+        "sedimentary_features",
+        "fossil_groups",
+        "preservation_states",
+        "recommended_methods",
+    ).select_related("matrix_grain_size")
+
+
 class FieldSlipDetailView(DetailView):
     model = FieldSlip
     template_name = 'cms/fieldslip_detail.html'
@@ -1711,11 +1724,8 @@ class FieldSlipDetailView(DetailView):
             queryset=prefetch_accession_related(Accession.objects.all()),
         )
 
-        return (
-            super()
-            .get_queryset()
-            .prefetch_related(accession_link_prefetch, accession_prefetch)
-        )
+        queryset = _with_fieldslip_sedimentary_related(super().get_queryset())
+        return queryset.prefetch_related(accession_link_prefetch, accession_prefetch)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1746,6 +1756,9 @@ class FieldSlipListView(LoginRequiredMixin, UserPassesTestMixin, FilterView):
     context_object_name = 'fieldslips'
     paginate_by = 10
     filterset_class = FieldSlipFilter
+
+    def get_queryset(self):
+        return _with_fieldslip_sedimentary_related(super().get_queryset())
 
     def test_func(self):
         user = self.request.user

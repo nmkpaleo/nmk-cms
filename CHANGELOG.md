@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Add FieldSlip sedimentary editing and filtering support across detail, edit, and list workflows, including grouped sedimentary detail layout, deduplicated M2M list filtering, queryset loading optimizations, and regression coverage for ordering/save/filter paths (FS-SED-001 to FS-SED-007).
 - Add CI/rollout/rollback runbook details for Side/Portion inference, including coverage+migration gates, runtime toggle guidance, and staging token verification matrix.
 - Validate inferred specimen Side/Portion compatibility across Nature Of Specimen admin rendering, history auditing, and specimen-list queue filter flows.
 - Preserve active GET filters in shared list pagination links so next/previous navigation keeps filtered result sets on pages like Accessions and Localities, with updated user/admin/development rollout and rollback guidance.

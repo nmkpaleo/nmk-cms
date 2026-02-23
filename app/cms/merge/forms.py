@@ -171,7 +171,10 @@ class FieldSelectionForm(forms.Form):
                 payload["selected_from"] = candidate.role
             else:
                 payload["selected_from"] = candidate.role or "source"
-                payload["value"] = field.value_from_object(candidate.instance)
+                if isinstance(field, models.ForeignKey):
+                    payload["value"] = getattr(candidate.instance, field.name, None)
+                else:
+                    payload["value"] = field.value_from_object(candidate.instance)
 
             strategy_map["fields"][field_name] = payload
 

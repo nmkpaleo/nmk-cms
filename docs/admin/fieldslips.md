@@ -1,6 +1,46 @@
 # FieldSlip admin and merge auditing
 
+
+## Sedimentary data contract for field slips
+
+Field slip sedimentary data is standardized across detail, edit, and filtering workflows. The canonical fields are:
+
+- Sedimentary features
+- Associated fossil groups
+- Preservation states
+- Recommended collection methods
+- Collection position
+- Matrix association
+- Surface exposure
+- Matrix grain size
+
+Operational placement expectations:
+
+- On detail pages, keep the sedimentary section before the Related accessions section to preserve a clear data-entry and review flow.
+- On list pages, expose these fields as search criteria only; do not add them to the Field Slips results table columns.
+
 The FieldSlip model participates in the same merge engine used across the CMS. Staff users with the **can_merge** permission can merge duplicates either in the admin or from an accession detail page. Both paths share merge logging, relation reconciliation, and history capture so administrators can audit and roll back changes.
+
+## Sedimentary edit and filter operations
+
+### Access expectations
+
+- Field slip create/edit views continue to follow collection-manager access rules.
+- Field slip list visibility and filtering remain restricted to collection managers and superusers.
+
+### Admin verification checklist
+
+When validating a release that includes sedimentary updates:
+
+1. Open an existing field slip and update one or more sedimentary fields.
+2. Confirm the detail page shows the sedimentary block before **Related accessions**.
+3. Open the field slip list and apply sedimentary filters, including at least one multi-select filter.
+4. Verify results are deduplicated (no repeated rows for the same field slip) and that table columns are unchanged.
+
+### Audit notes
+
+- Field-level edits are captured by django-simple-history snapshots for FieldSlip records.
+- Filtering does not mutate data and is intended for search and review workflows only.
 
 ## Permissions and entry points
 
