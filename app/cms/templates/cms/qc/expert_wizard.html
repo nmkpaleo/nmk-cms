@@ -1,4 +1,5 @@
 {% extends "cms/qc/wizard_base.html" %}
+{% load i18n %}
 
 {% block wizard_title %}Expert Media QC{% endblock %}
 {% block wizard_heading %}Expert QC for {{ media.file_name|default:media.pk }}{% endblock %}
@@ -118,19 +119,19 @@
                   {% endif %}
                 </div>
                 <div class="qc-conflict-subsection">
-                  <h5>Field slips</h5>
+                  <h5>{% trans "Field slips" %}</h5>
                   {% if conflict.proposed.field_slips %}
                     {% for slip in conflict.proposed.field_slips %}
                       <label class="qc-choice qc-choice--stacked">
                         <input type="checkbox" name="add_field_slip__{{ conflict.html_key }}__{{ slip.index }}" {% if slip.index in conflict.selected_field_slips %}checked{% endif %}>
-                        Link field slip {{ slip.field_number|default:'—' }}
+                        {% blocktrans with field_number=slip.field_number|default:'—' %}Link field slip {{ field_number }}{% endblocktrans %}
                         {% if slip.verbatim_locality or slip.verbatim_taxon %}
                           <span class="qc-inline-note">{{ slip.verbatim_locality|default:'—' }} — {{ slip.verbatim_taxon|default:'—' }}</span>
                         {% endif %}
                       </label>
                     {% endfor %}
                   {% else %}
-                    <p class="qc-inline-note">No new field slips were detected.</p>
+                    <p class="qc-inline-note">{% trans "No new field slips were detected." %}</p>
                   {% endif %}
                 </div>
               </div>

@@ -4300,9 +4300,13 @@ class MediaInternQCWizardTests(TestCase):
             "fieldslip-0-slip_id": "field-slip-0",
             "fieldslip-0-order": "0",
             "fieldslip-0-field_number": "FS-2",
+            "fieldslip-0-verbatim_event_date": "1968-04-03",
+            "fieldslip-0-collector": "Leakey",
+            "fieldslip-0-discoverer": "Kamoya",
             "fieldslip-0-verbatim_locality": "Loc2",
             "fieldslip-0-verbatim_taxon": "Pan",
             "fieldslip-0-verbatim_element": "Tooth",
+            "fieldslip-0-fragments": "7",
             "fieldslip-0-horizon_formation": "NewForm",
             "fieldslip-0-horizon_member": "NewMember",
             "fieldslip-0-horizon_bed": "NewBed",
@@ -4311,6 +4315,15 @@ class MediaInternQCWizardTests(TestCase):
             "fieldslip-0-verbatim_latitude": "Lat2",
             "fieldslip-0-verbatim_longitude": "Lon2",
             "fieldslip-0-verbatim_elevation": "200",
+            "fieldslip-0-sedimentary_features": "ROOT/BUR, X-BEDS",
+            "fieldslip-0-rock_type": "MOLLUSCS WHOLE, BROKEN",
+            "fieldslip-0-recommended_methods": "SIEVING",
+            "fieldslip-0-provenance": "SURFACE WITH MATRIX",
+            "fieldslip-0-matrix_grain_size": "SAND",
+            "fieldslip-0-collection_position": "ex_situ",
+            "fieldslip-0-matrix_association": "attached",
+            "fieldslip-0-surface_exposure": "on",
+            "fieldslip-0-comment": "Updated by intern",
         }
 
     def test_non_intern_forbidden(self):
@@ -4333,6 +4346,7 @@ class MediaInternQCWizardTests(TestCase):
         fieldslip_forms = response.context["fieldslip_formset"].forms
         self.assertEqual(len(fieldslip_forms), 1)
         self.assertEqual(fieldslip_forms[0]["field_number"].value(), "FS-1")
+        self.assertEqual(fieldslip_forms[0]["surface_exposure"].value(), False)
 
     def test_context_includes_recent_history(self):
         log = MediaQCLog.objects.create(
@@ -4381,6 +4395,22 @@ class MediaInternQCWizardTests(TestCase):
         self.assertEqual(references[0]["page"]["interpreted"], "120-135")
         field_slips = accession_payload["field_slips"]
         self.assertEqual(field_slips[0]["field_number"]["interpreted"], "FS-2")
+        self.assertEqual(field_slips[0]["verbatimEventDate"]["interpreted"], "1968-04-03")
+        self.assertEqual(field_slips[0]["collector"]["interpreted"], "Leakey")
+        self.assertEqual(field_slips[0]["discoverer"]["interpreted"], "Kamoya")
+        self.assertEqual(field_slips[0]["fragments"]["interpreted"], 7)
+        self.assertEqual(field_slips[0]["collection_position"]["interpreted"], "ex_situ")
+        self.assertEqual(field_slips[0]["matrix_association"]["interpreted"], "attached")
+        self.assertEqual(field_slips[0]["surface_exposure"]["interpreted"], True)
+        self.assertEqual(field_slips[0]["comment"]["interpreted"], "Updated by intern")
+        self.assertEqual(
+            field_slips[0]["checkboxes"]["sedimentary_features"],
+            ["ROOT/BUR", "X-BEDS"],
+        )
+        self.assertEqual(
+            field_slips[0]["checkboxes"]["recommended_methods"],
+            ["SIEVING"],
+        )
         self.assertEqual(
             field_slips[0]["verbatim_horizon"]["formation"]["interpreted"],
             "NewForm",

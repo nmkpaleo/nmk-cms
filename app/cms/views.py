@@ -168,7 +168,11 @@ from cms.resources import FieldSlipResource
 from .utils import build_accession_identification_maps, build_history_entries
 from cms.utils import generate_accessions_from_series
 from cms.upload_processing import process_file, queue_specimen_list_processing
-from cms.ocr_processing import process_pending_scans, describe_accession_conflicts
+from cms.ocr_processing import (
+    process_pending_scans,
+    describe_accession_conflicts,
+    normalize_fragments_value,
+)
 from cms.qc import (
     build_preview_accession,
     diff_media_payload,
@@ -2581,30 +2585,54 @@ class AccessionReferenceQCForm(forms.Form):
 class FieldSlipQCForm(forms.Form):
     slip_id = forms.CharField(widget=forms.HiddenInput())
     order = forms.IntegerField(widget=forms.HiddenInput())
-    field_number = forms.CharField(label="Field number", required=False, max_length=255)
+    field_number = forms.CharField(label=_("Field number"), required=False, max_length=255)
+    verbatim_event_date = forms.CharField(label=_("Verbatim event date"), required=False, max_length=255)
+    collector = forms.CharField(label=_("Collector"), required=False, max_length=255)
+    discoverer = forms.CharField(label=_("Discoverer / finder"), required=False, max_length=255)
     verbatim_locality = forms.CharField(
-        label="Verbatim locality",
+        label=_("Verbatim locality"),
         required=False,
         widget=forms.Textarea(attrs={"rows": 2}),
     )
     verbatim_taxon = forms.CharField(
-        label="Verbatim taxon",
+        label=_("Verbatim taxon"),
         required=False,
         widget=forms.Textarea(attrs={"rows": 2}),
     )
     verbatim_element = forms.CharField(
-        label="Verbatim element",
+        label=_("Verbatim element"),
         required=False,
         widget=forms.Textarea(attrs={"rows": 2}),
     )
-    horizon_formation = forms.CharField(label="Formation", required=False, max_length=255)
-    horizon_member = forms.CharField(label="Member", required=False, max_length=255)
-    horizon_bed = forms.CharField(label="Bed or horizon", required=False, max_length=255)
-    horizon_chronostratigraphy = forms.CharField(label="Chronostratigraphy", required=False, max_length=255)
-    aerial_photo = forms.CharField(label="Aerial photo", required=False, max_length=255)
-    verbatim_latitude = forms.CharField(label="Verbatim latitude", required=False, max_length=255)
-    verbatim_longitude = forms.CharField(label="Verbatim longitude", required=False, max_length=255)
-    verbatim_elevation = forms.CharField(label="Verbatim elevation", required=False, max_length=255)
+    fragments = forms.CharField(label=_("Fragments"), required=False, max_length=64)
+    horizon_formation = forms.CharField(label=_("Formation"), required=False, max_length=255)
+    horizon_member = forms.CharField(label=_("Member"), required=False, max_length=255)
+    horizon_bed = forms.CharField(label=_("Bed or horizon"), required=False, max_length=255)
+    horizon_chronostratigraphy = forms.CharField(label=_("Chronostratigraphy"), required=False, max_length=255)
+    aerial_photo = forms.CharField(label=_("Aerial photo"), required=False, max_length=255)
+    verbatim_latitude = forms.CharField(label=_("Verbatim latitude"), required=False, max_length=255)
+    verbatim_longitude = forms.CharField(label=_("Verbatim longitude"), required=False, max_length=255)
+    verbatim_elevation = forms.CharField(label=_("Verbatim elevation"), required=False, max_length=255)
+    sedimentary_features = forms.CharField(label=_("Sedimentary features"), required=False, max_length=255)
+    rock_type = forms.CharField(label=_("Rock type selections"), required=False, max_length=255)
+    recommended_methods = forms.CharField(label=_("Recommended methods"), required=False, max_length=255)
+    provenance = forms.CharField(label=_("Provenance selections"), required=False, max_length=255)
+    matrix_grain_size = forms.CharField(label=_("Matrix grain size"), required=False, max_length=255)
+    collection_position = forms.CharField(label=_("Collection position"), required=False, max_length=255)
+    matrix_association = forms.CharField(label=_("Matrix association"), required=False, max_length=255)
+    surface_exposure = forms.BooleanField(label=_("Surface exposure"), required=False)
+    comment = forms.CharField(label=_("Comment"), required=False, widget=forms.Textarea(attrs={"rows": 2}))
+
+
+def _split_csv_tokens(raw_value: object) -> list[str]:
+    if raw_value in (None, ""):
+        return []
+    tokens: list[str] = []
+    for token in str(raw_value).split(","):
+        cleaned = token.strip()
+        if cleaned and cleaned not in tokens:
+            tokens.append(cleaned)
+    return tokens
 
 
 ReferenceQCFormSet = formset_factory(
@@ -2953,12 +2981,25 @@ class MediaQCFormManager:
             slip_id = field_slip_payload.get("_field_slip_id") or f"field-slip-{index}"
             self.fieldslip_payload_map[slip_id] = field_slip_payload
             horizon_payload = field_slip_payload.get("verbatim_horizon") or {}
+            checkbox_payload = field_slip_payload.get("checkboxes") or {}
+            accession_ident_payload = field_slip_payload.get("accession_identification") or {}
             self.fieldslip_initial.append(
                 {
                     "slip_id": slip_id,
                     "order": index,
                     "field_number": (
                         field_slip_payload.get("field_number") or {}
+                    ).get("interpreted"),
+                    "verbatim_event_date": (
+                        field_slip_payload.get("verbatimEventDate") or {}
+                    ).get("interpreted") or (
+                        field_slip_payload.get("collection_date") or {}
+                    ).get("interpreted"),
+                    "collector": (
+                        field_slip_payload.get("collector") or {}
+                    ).get("interpreted"),
+                    "discoverer": (
+                        field_slip_payload.get("discoverer") or {}
                     ).get("interpreted"),
                     "verbatim_locality": (
                         field_slip_payload.get("verbatim_locality") or {}
@@ -2992,6 +3033,38 @@ class MediaQCFormManager:
                     ).get("interpreted"),
                     "verbatim_elevation": (
                         field_slip_payload.get("verbatim_elevation") or {}
+                    ).get("interpreted"),
+                    "fragments": (
+                        field_slip_payload.get("fragments") or {}
+                    ).get("interpreted") or (
+                        accession_ident_payload.get("fragments") or {}
+                    ).get("interpreted"),
+                    "sedimentary_features": ", ".join(
+                        checkbox_payload.get("sedimentary_features") or []
+                    ),
+                    "rock_type": ", ".join(
+                        checkbox_payload.get("rock_type") or []
+                    ),
+                    "recommended_methods": ", ".join(
+                        checkbox_payload.get("recommended_methods") or []
+                    ),
+                    "provenance": ", ".join(
+                        checkbox_payload.get("provenance") or []
+                    ),
+                    "matrix_grain_size": ", ".join(
+                        checkbox_payload.get("matrix_grain_size") or []
+                    ),
+                    "collection_position": (
+                        field_slip_payload.get("collection_position") or {}
+                    ).get("interpreted"),
+                    "matrix_association": (
+                        field_slip_payload.get("matrix_association") or {}
+                    ).get("interpreted"),
+                    "surface_exposure": (
+                        field_slip_payload.get("surface_exposure") or {}
+                    ).get("interpreted") is True,
+                    "comment": (
+                        field_slip_payload.get("comment") or {}
                     ).get("interpreted"),
                 }
             )
@@ -3245,9 +3318,13 @@ class MediaQCFormManager:
                     "slip_id": slip_id,
                     "order": order_value,
                     "field_number": cleaned.get("field_number"),
+                    "verbatim_event_date": cleaned.get("verbatim_event_date"),
+                    "collector": cleaned.get("collector"),
+                    "discoverer": cleaned.get("discoverer"),
                     "verbatim_locality": cleaned.get("verbatim_locality"),
                     "verbatim_taxon": cleaned.get("verbatim_taxon"),
                     "verbatim_element": cleaned.get("verbatim_element"),
+                    "fragments": normalize_fragments_value(cleaned.get("fragments")),
                     "horizon_formation": cleaned.get("horizon_formation"),
                     "horizon_member": cleaned.get("horizon_member"),
                     "horizon_bed": cleaned.get("horizon_bed"),
@@ -3258,6 +3335,15 @@ class MediaQCFormManager:
                     "verbatim_latitude": cleaned.get("verbatim_latitude"),
                     "verbatim_longitude": cleaned.get("verbatim_longitude"),
                     "verbatim_elevation": cleaned.get("verbatim_elevation"),
+                    "sedimentary_features": _split_csv_tokens(cleaned.get("sedimentary_features")),
+                    "rock_type": _split_csv_tokens(cleaned.get("rock_type")),
+                    "recommended_methods": _split_csv_tokens(cleaned.get("recommended_methods")),
+                    "provenance": _split_csv_tokens(cleaned.get("provenance")),
+                    "matrix_grain_size": _split_csv_tokens(cleaned.get("matrix_grain_size")),
+                    "collection_position": cleaned.get("collection_position"),
+                    "matrix_association": cleaned.get("matrix_association"),
+                    "surface_exposure": bool(cleaned.get("surface_exposure")),
+                    "comment": cleaned.get("comment"),
                 }
             )
 
@@ -3479,6 +3565,21 @@ class MediaQCFormManager:
                 )
                 _set_interpreted(
                     original_field_slip,
+                    "verbatimEventDate",
+                    entry.get("verbatim_event_date"),
+                )
+                _set_interpreted(
+                    original_field_slip,
+                    "collector",
+                    entry.get("collector"),
+                )
+                _set_interpreted(
+                    original_field_slip,
+                    "discoverer",
+                    entry.get("discoverer"),
+                )
+                _set_interpreted(
+                    original_field_slip,
                     "verbatim_locality",
                     entry.get("verbatim_locality"),
                 )
@@ -3534,6 +3635,38 @@ class MediaQCFormManager:
                     original_field_slip,
                     "verbatim_elevation",
                     entry.get("verbatim_elevation"),
+                )
+                _set_interpreted(
+                    original_field_slip,
+                    "fragments",
+                    entry.get("fragments"),
+                )
+                checkbox_payload = copy.deepcopy(original_field_slip.get("checkboxes") or {})
+                checkbox_payload["sedimentary_features"] = entry.get("sedimentary_features") or []
+                checkbox_payload["rock_type"] = entry.get("rock_type") or []
+                checkbox_payload["recommended_methods"] = entry.get("recommended_methods") or []
+                checkbox_payload["provenance"] = entry.get("provenance") or []
+                checkbox_payload["matrix_grain_size"] = entry.get("matrix_grain_size") or []
+                original_field_slip["checkboxes"] = checkbox_payload
+                _set_interpreted(
+                    original_field_slip,
+                    "collection_position",
+                    entry.get("collection_position"),
+                )
+                _set_interpreted(
+                    original_field_slip,
+                    "matrix_association",
+                    entry.get("matrix_association"),
+                )
+                _set_interpreted(
+                    original_field_slip,
+                    "surface_exposure",
+                    entry.get("surface_exposure"),
+                )
+                _set_interpreted(
+                    original_field_slip,
+                    "comment",
+                    entry.get("comment"),
                 )
                 updated_field_slips.append(original_field_slip)
 
