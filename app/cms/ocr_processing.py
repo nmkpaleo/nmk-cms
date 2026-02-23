@@ -873,6 +873,163 @@ def _normalise_boolean(value: object) -> bool:
     return str(value).strip().lower() in {"yes", "true", "1"}
 
 
+
+
+_FIELD_SLIP_PROVENANCE_PRIORITY = {
+    "surface_with_matrix": 6,
+    "surface_without_matrix": 5,
+    "in_situ": 4,
+    "surface": 3,
+    "matrix": 2,
+    "in_situ_or_surface": 1,
+}
+
+
+def _value_interpreted(raw_value: object) -> object:
+    if isinstance(raw_value, dict):
+        return raw_value.get("interpreted")
+    return raw_value
+
+
+def _normalize_label(label: object) -> str:
+    if label in (None, ""):
+        return ""
+    return re.sub(r"\s+", " ", str(label).strip()).upper()
+
+
+def normalize_fragments_value(value: object) -> int | None:
+    interpreted = _value_interpreted(value)
+    if interpreted in (None, ""):
+        return None
+    if isinstance(interpreted, bool):
+        return None
+    if isinstance(interpreted, int):
+        return interpreted
+    cleaned = str(interpreted).strip()
+    if not re.fullmatch(r"-?\d+", cleaned):
+        return None
+    try:
+        return int(cleaned)
+    except (TypeError, ValueError):
+        return None
+
+
+def _expand_row_suffixes(raw_suffixes: object) -> list[str]:
+    suffixes: list[str] = []
+
+    def _append_token(token: str) -> None:
+        token = token.strip().upper()
+        if not token:
+            return
+        match = re.fullmatch(r"([A-Z])-([A-Z])", token)
+        if match:
+            start, end = match.groups()
+            if ord(start) <= ord(end):
+                suffixes.extend(chr(idx) for idx in range(ord(start), ord(end) + 1))
+                return
+        suffixes.append(token)
+
+    interpreted = _value_interpreted(raw_suffixes)
+    if isinstance(interpreted, list):
+        for entry in interpreted:
+            _append_token(str(entry))
+    elif interpreted not in (None, ""):
+        for token in re.split(r"\s*,\s*", str(interpreted)):
+            _append_token(token)
+
+    deduped: list[str] = []
+    for suffix in suffixes:
+        if not re.fullmatch(r"[A-Z0-9-]+", suffix):
+            continue
+        if suffix not in deduped:
+            deduped.append(suffix)
+    return deduped
+
+
+def normalize_field_slip_payload(payload: dict[str, object]) -> dict[str, object]:
+    """Normalize strict/legacy field-slip OCR payloads into model-ready values."""
+
+    field_payload = payload.get("field_slip") if payload.get("card_type") == "field_slip" else payload
+    if not isinstance(field_payload, dict):
+        return {}
+
+    checkboxes = field_payload.get("checkboxes") if isinstance(field_payload.get("checkboxes"), dict) else {}
+    accession_identification = (
+        field_payload.get("accession_identification")
+        if isinstance(field_payload.get("accession_identification"), dict)
+        else {}
+    )
+
+    def _labels(key: str) -> list[str]:
+        values = checkboxes.get(key)
+        if not isinstance(values, list):
+            return []
+        normalized: list[str] = []
+        for value in values:
+            label = _normalize_label(value)
+            if label and label not in normalized:
+                normalized.append(label)
+        return normalized
+
+    provenance_labels = _labels("provenance")
+    selected_rank = -1
+    collection_position: str | None = None
+    surface_exposure: bool | None = None
+    matrix_association: str | None = None
+
+    for label in provenance_labels:
+        key = label.replace(" ", "_").replace("/", "_")
+        rank = _FIELD_SLIP_PROVENANCE_PRIORITY.get(key, -1)
+        if rank > selected_rank:
+            selected_rank = rank
+            if key == "surface_with_matrix":
+                collection_position, surface_exposure, matrix_association = "ex_situ", True, "attached"
+            elif key == "surface_without_matrix":
+                collection_position, surface_exposure, matrix_association = "ex_situ", True, "none"
+            elif key == "in_situ":
+                collection_position, surface_exposure = "in_situ", False
+            elif key == "surface":
+                collection_position, surface_exposure = "ex_situ", True
+            elif key == "matrix":
+                matrix_association = "attached"
+            elif key == "in_situ_or_surface":
+                collection_position = None
+
+    if "MATRIX" in provenance_labels:
+        matrix_association = "attached"
+
+    return {
+        "verbatimEventDate": _value_interpreted(field_payload.get("verbatimEventDate")),
+        "collector": _value_interpreted(field_payload.get("collector")),
+        "discoverer": _value_interpreted(field_payload.get("discoverer")),
+        "verbatim_locality": _value_interpreted(field_payload.get("verbatim_locality")),
+        "field_number": _value_interpreted(field_payload.get("field_number")),
+        "verbatim_horizon": _value_interpreted(field_payload.get("verbatim_horizon")),
+        "aerial_photo": _value_interpreted(field_payload.get("aerial_photo")),
+        "verbatim_taxon": _value_interpreted(field_payload.get("verbatim_taxon")),
+        "verbatim_element": _value_interpreted(field_payload.get("verbatim_element")),
+        "fragments": normalize_fragments_value(field_payload.get("fragments")),
+        "comment": _value_interpreted(field_payload.get("comment")),
+        "verbatim_latitude": _value_interpreted(field_payload.get("verbatim_latitude")),
+        "verbatim_longitude": _value_interpreted(field_payload.get("verbatim_longitude")),
+        "accession_identification": {
+            "collection": _value_interpreted(accession_identification.get("collection")),
+            "locality": _value_interpreted(accession_identification.get("locality")),
+            "accession_number": _value_interpreted(accession_identification.get("accession_number")),
+            "row_suffixes": _expand_row_suffixes(accession_identification.get("row_suffixes")),
+        },
+        "checkboxes": {
+            "sedimentary_features": _labels("sedimentary_features"),
+            "rock_type": _labels("rock_type"),
+            "recommended_methods": _labels("recommended_methods"),
+            "provenance": provenance_labels,
+            "matrix_grain_size": _labels("matrix_grain_size"),
+        },
+        "collection_position": collection_position,
+        "surface_exposure": surface_exposure,
+        "matrix_association": matrix_association,
+    }
+
 def _extract_entry_components(entry: dict) -> dict[str, object]:
     type_status = (entry.get("type_status") or {}).get("interpreted")
     published_val = (entry.get("published") or {}).get("interpreted")
@@ -950,13 +1107,7 @@ def _extract_entry_components(entry: dict) -> dict[str, object]:
             condition = (nature.get("condition") or {}).get("interpreted")
             verbatim_element = (nature.get("verbatim_element") or {}).get("interpreted")
             portion = (nature.get("portion") or {}).get("interpreted")
-            fragments_raw = (nature.get("fragments") or {}).get("interpreted")
-            fragments = None
-            if fragments_raw not in (None, ""):
-                try:
-                    fragments = int(fragments_raw)
-                except (TypeError, ValueError):
-                    fragments = None
+            fragments = normalize_fragments_value(nature.get("fragments"))
             if not (
                 element_name
                 or side

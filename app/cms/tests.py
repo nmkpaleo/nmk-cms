@@ -63,6 +63,8 @@ from cms.ocr_processing import (
     process_pending_scans,
     describe_accession_conflicts,
     build_prompt_for_card_type,
+    normalize_field_slip_payload,
+    normalize_fragments_value,
     UNKNOWN_FIELD_NUMBER_PREFIX,
     _apply_rows,
     MAX_OCR_ROWS_PER_ACCESSION,
@@ -2355,6 +2357,52 @@ class OcrViewTests(TestCase):
         self.assertContains(response, "OpenAI quota has been exhausted")
         self.assertIsNone(self.client.session.get("ocr_loop_stats"))
 
+
+
+
+class FieldSlipNormalizationTests(TestCase):
+    def test_normalize_field_slip_payload_expands_row_suffixes_and_maps_provenance(self):
+        payload = {
+            "card_type": "field_slip",
+            "field_slip": {
+                "field_number": {"interpreted": "FS-101"},
+                "verbatim_locality": {"interpreted": "Area 4"},
+                "fragments": {"interpreted": "12"},
+                "accession_identification": {
+                    "collection": {"interpreted": "KNM"},
+                    "locality": {"interpreted": "ER"},
+                    "accession_number": {"interpreted": "6000"},
+                    "row_suffixes": ["A-C", "B", "D"],
+                },
+                "checkboxes": {
+                    "provenance": ["IN SITU", "SURFACE WITH MATRIX"],
+                    "sedimentary_features": [" ROOT/BUR ", "root/bur"],
+                },
+            },
+        }
+
+        normalized = normalize_field_slip_payload(payload)
+
+        self.assertEqual(normalized["field_number"], "FS-101")
+        self.assertEqual(normalized["verbatim_locality"], "Area 4")
+        self.assertEqual(normalized["fragments"], 12)
+        self.assertEqual(
+            normalized["accession_identification"]["row_suffixes"],
+            ["A", "B", "C", "D"],
+        )
+        self.assertEqual(normalized["collection_position"], "ex_situ")
+        self.assertTrue(normalized["surface_exposure"])
+        self.assertEqual(normalized["matrix_association"], "attached")
+        self.assertEqual(
+            normalized["checkboxes"]["sedimentary_features"],
+            ["ROOT/BUR"],
+        )
+
+    def test_normalize_fragments_value_accepts_integers_only(self):
+        self.assertEqual(normalize_fragments_value({"interpreted": "7"}), 7)
+        self.assertEqual(normalize_fragments_value({"interpreted": 0}), 0)
+        self.assertIsNone(normalize_fragments_value({"interpreted": "7-9"}))
+        self.assertIsNone(normalize_fragments_value({"interpreted": "abc"}))
 
 class OcrPromptBuilderTests(TestCase):
     def test_field_slip_prompt_has_schema_locked_json_contract(self):

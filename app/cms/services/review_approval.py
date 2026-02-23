@@ -29,7 +29,7 @@ from cms.models import (
     SpecimenListPage,
     SpecimenListRowCandidate,
 )
-from cms.ocr_processing import _ensure_field_slip
+from cms.ocr_processing import _ensure_field_slip, normalize_field_slip_payload, normalize_fragments_value
 from cms.tooth_markings.integration import apply_tooth_marking_correction
 
 
@@ -287,12 +287,16 @@ def _build_field_slip(row_data: dict[str, Any]) -> tuple[AccessionFieldSlip | No
     if accession is None:
         errors.append(str(_("Accession is required for field slip creation.")))
         return None, errors
+    normalized_field_payload: dict[str, Any] = {}
+    if isinstance(row_data.get("field_slip"), dict) or row_data.get("card_type") == "field_slip":
+        normalized_field_payload = normalize_field_slip_payload(row_data)
+
     slip_data = {
-        "field_number": row_data.get("field_number"),
-        "verbatim_locality": row_data.get("locality"),
-        "verbatim_taxon": row_data.get("taxon"),
-        "verbatim_element": row_data.get("element") or row_data.get("verbatim_element"),
-        "collection_date": row_data.get("date"),
+        "field_number": normalized_field_payload.get("field_number") or row_data.get("field_number"),
+        "verbatim_locality": normalized_field_payload.get("verbatim_locality") or row_data.get("locality"),
+        "verbatim_taxon": normalized_field_payload.get("verbatim_taxon") or row_data.get("taxon"),
+        "verbatim_element": normalized_field_payload.get("verbatim_element") or row_data.get("element") or row_data.get("verbatim_element"),
+        "collection_date": normalized_field_payload.get("verbatimEventDate") or row_data.get("date"),
     }
     field_slip = _ensure_field_slip(slip_data)
     if not field_slip:
@@ -369,7 +373,7 @@ def _build_nature_of_specimen(accession_row: AccessionRow, row_data: dict[str, A
             "verbatim_element_raw": row_data.get("element_raw") or row_data.get("verbatim_element"),
             "tooth_marking_detections": detections,
             "portion": row_data.get("portion"),
-            "fragments": 0,
+            "fragments": normalize_fragments_value(row_data.get("fragments")) or 0,
         },
     )
 
