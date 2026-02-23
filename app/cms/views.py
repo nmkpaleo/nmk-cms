@@ -1707,6 +1707,7 @@ def _with_fieldslip_sedimentary_related(queryset):
         "recommended_methods",
     ).select_related("matrix_grain_size")
 
+
 class FieldSlipDetailView(DetailView):
     model = FieldSlip
     template_name = 'cms/fieldslip_detail.html'
