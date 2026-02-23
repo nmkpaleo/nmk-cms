@@ -297,6 +297,18 @@ def _build_field_slip(row_data: dict[str, Any]) -> tuple[AccessionFieldSlip | No
         "verbatim_taxon": normalized_field_payload.get("verbatim_taxon") or row_data.get("taxon"),
         "verbatim_element": normalized_field_payload.get("verbatim_element") or row_data.get("element") or row_data.get("verbatim_element"),
         "collection_date": normalized_field_payload.get("verbatimEventDate") or row_data.get("date"),
+        "collector": normalized_field_payload.get("collector") or row_data.get("collector"),
+        "discoverer": normalized_field_payload.get("discoverer") or row_data.get("discoverer"),
+        "comment": normalized_field_payload.get("comment") or row_data.get("comment"),
+        "aerial_photo": normalized_field_payload.get("aerial_photo") or row_data.get("aerial_photo"),
+        "verbatim_latitude": normalized_field_payload.get("verbatim_latitude") or row_data.get("verbatim_latitude"),
+        "verbatim_longitude": normalized_field_payload.get("verbatim_longitude") or row_data.get("verbatim_longitude"),
+        "verbatim_horizon": normalized_field_payload.get("verbatim_horizon") or row_data.get("verbatim_horizon"),
+        "collection_position": normalized_field_payload.get("collection_position") or row_data.get("collection_position"),
+        "matrix_association": normalized_field_payload.get("matrix_association") or row_data.get("matrix_association"),
+        "surface_exposure": normalized_field_payload.get("surface_exposure"),
+        "field_slip": row_data.get("field_slip"),
+        "checkboxes": (normalized_field_payload.get("checkboxes") or {}),
     }
     field_slip = _ensure_field_slip(slip_data)
     if not field_slip:

@@ -43,6 +43,11 @@ from cms.models import (
     Reference,
     AccessionReference,
     FieldSlip,
+    SedimentaryFeature,
+    FossilGroup,
+    PreservationState,
+    CollectionMethod,
+    GrainSize,
     AccessionFieldSlip,
     Identification,
     NatureOfSpecimen,
@@ -65,6 +70,7 @@ from cms.ocr_processing import (
     build_prompt_for_card_type,
     normalize_field_slip_payload,
     normalize_fragments_value,
+    _ensure_field_slip,
     UNKNOWN_FIELD_NUMBER_PREFIX,
     _apply_rows,
     MAX_OCR_ROWS_PER_ACCESSION,
@@ -2403,6 +2409,75 @@ class FieldSlipNormalizationTests(TestCase):
         self.assertEqual(normalize_fragments_value({"interpreted": 0}), 0)
         self.assertIsNone(normalize_fragments_value({"interpreted": "7-9"}))
         self.assertIsNone(normalize_fragments_value({"interpreted": "abc"}))
+
+
+class FieldSlipApprovalIngestionTests(TestCase):
+    def setUp(self):
+        self.sed_feature = SedimentaryFeature.objects.create(
+            name="ROOT/BUR",
+            code="ROOT_BUR",
+            category="sedimentary",
+        )
+        self.fossil_group = FossilGroup.objects.create(name="Molluscs")
+        self.preservation_state = PreservationState.objects.create(name="Whole")
+        self.collection_method = CollectionMethod.objects.create(name="SIEVING")
+        self.grain_size = GrainSize.objects.create(name="SAND")
+
+    def test_ensure_field_slip_resolves_relations_and_updates_idempotently(self):
+        payload = {
+            "card_type": "field_slip",
+            "field_slip": {
+                "field_number": {"interpreted": "FS-500"},
+                "verbatim_locality": {"interpreted": "Area 7"},
+                "verbatim_taxon": {"interpreted": "Homo"},
+                "verbatim_element": {"interpreted": "Femur"},
+                "verbatimEventDate": {"interpreted": "1972"},
+                "collector": {"interpreted": "Leakey"},
+                "discoverer": {"interpreted": "Kamoya"},
+                "comment": {"interpreted": "Backside text"},
+                "checkboxes": {
+                    "sedimentary_features": ["ROOT/BUR"],
+                    "rock_type": ["MOLLUSCS WHOLE"],
+                    "recommended_methods": ["SIEVING"],
+                    "provenance": ["SURFACE WITH MATRIX"],
+                    "matrix_grain_size": ["SAND"],
+                },
+            },
+        }
+
+        first = _ensure_field_slip(payload)
+        second = _ensure_field_slip(payload)
+
+        self.assertIsNotNone(first)
+        self.assertEqual(first.pk, second.pk)
+        self.assertEqual(FieldSlip.objects.count(), 1)
+        self.assertEqual(first.collector, "Leakey")
+        self.assertEqual(first.discoverer, "Kamoya")
+        self.assertEqual(first.comment, "Backside text")
+        self.assertEqual(first.collection_position, "ex_situ")
+        self.assertEqual(first.matrix_association, "attached")
+        self.assertEqual(first.surface_exposure, True)
+        self.assertEqual(first.matrix_grain_size, self.grain_size)
+        self.assertQuerySetEqual(
+            first.sedimentary_features.order_by("name"),
+            [self.sed_feature],
+            transform=lambda x: x,
+        )
+        self.assertQuerySetEqual(
+            first.fossil_groups.order_by("name"),
+            [self.fossil_group],
+            transform=lambda x: x,
+        )
+        self.assertQuerySetEqual(
+            first.preservation_states.order_by("name"),
+            [self.preservation_state],
+            transform=lambda x: x,
+        )
+        self.assertQuerySetEqual(
+            first.recommended_methods.order_by("name"),
+            [self.collection_method],
+            transform=lambda x: x,
+        )
 
 class OcrPromptBuilderTests(TestCase):
     def test_field_slip_prompt_has_schema_locked_json_contract(self):

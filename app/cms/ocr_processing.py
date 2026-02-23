@@ -52,6 +52,13 @@ from .models import (
     Identification,
     NatureOfSpecimen,
     Element,
+    SedimentaryFeature,
+    FossilGroup,
+    PreservationState,
+    CollectionMethod,
+    GrainSize,
+    CollectionPosition,
+    MatrixAssociation,
     SpecimenListPage,
     SpecimenListPageOCR,
     SpecimenListRowCandidate,
@@ -884,6 +891,39 @@ _FIELD_SLIP_PROVENANCE_PRIORITY = {
     "in_situ_or_surface": 1,
 }
 
+_FIELD_SLIP_SEDIMENTARY_ALIASES = {
+    "ROOT/BUR": "ROOT/BUR",
+    "ROOT BUR": "ROOT/BUR",
+    "X-BEDS": "X-BEDS",
+    "X BEDS": "X-BEDS",
+    "HORIZ. BEDS": "HORIZ. BEDS",
+    "HORIZ BEDS": "HORIZ. BEDS",
+    "MUD CRACKS": "MUD CRACKS",
+    "CAC03 NOD": "CAC03 NOD",
+    "CACO3 NOD": "CAC03 NOD",
+    "LIMONITE NOD": "LIMONITE NOD",
+    "LIMONITE FRAGS": "LIMONITE FRAGS",
+}
+
+_FIELD_SLIP_ROCK_TYPE_MAP = {
+    "MOLLUSCS WHOLE": {"fossil_groups": ["Molluscs"], "preservation_states": ["Whole"]},
+    "BROKEN": {"fossil_groups": [], "preservation_states": ["Broken"]},
+    "OSTRACODS": {"fossil_groups": ["Ostracods"], "preservation_states": []},
+    "FISH": {"fossil_groups": ["Fish"], "preservation_states": []},
+}
+
+_FIELD_SLIP_METHOD_ALIASES = {
+    "SIEVING": "SIEVING",
+    "EXCAVATION": "EXCAVATION",
+}
+
+_FIELD_SLIP_GRAIN_ALIASES = {
+    "GRAVEL": "GRAVEL",
+    "SAND": "SAND",
+    "SILT": "SILT",
+    "CLAY": "CLAY",
+}
+
 
 def _value_interpreted(raw_value: object) -> object:
     if isinstance(raw_value, dict):
@@ -1029,6 +1069,69 @@ def normalize_field_slip_payload(payload: dict[str, object]) -> dict[str, object
         "surface_exposure": surface_exposure,
         "matrix_association": matrix_association,
     }
+
+
+def _resolve_lookup_names(model, names: list[str]) -> list[Any]:
+    resolved: list[Any] = []
+    for name in names:
+        item = model.objects.filter(name__iexact=name).first()
+        if item and item not in resolved:
+            resolved.append(item)
+    return resolved
+
+
+def _collect_field_slip_relation_targets(
+    normalized_payload: dict[str, object],
+) -> tuple[list[SedimentaryFeature], list[FossilGroup], list[PreservationState], list[CollectionMethod], GrainSize | None]:
+    checkboxes = normalized_payload.get("checkboxes") or {}
+    if not isinstance(checkboxes, dict):
+        checkboxes = {}
+
+    sedimentary_names: list[str] = []
+    for label in checkboxes.get("sedimentary_features") or []:
+        normalized = _normalize_label(label)
+        mapped = _FIELD_SLIP_SEDIMENTARY_ALIASES.get(normalized)
+        if mapped and mapped not in sedimentary_names:
+            sedimentary_names.append(mapped)
+
+    fossil_group_names: list[str] = []
+    preservation_state_names: list[str] = []
+    for label in checkboxes.get("rock_type") or []:
+        normalized = _normalize_label(label)
+        mapping = _FIELD_SLIP_ROCK_TYPE_MAP.get(normalized)
+        if not mapping:
+            continue
+        for name in mapping["fossil_groups"]:
+            if name not in fossil_group_names:
+                fossil_group_names.append(name)
+        for name in mapping["preservation_states"]:
+            if name not in preservation_state_names:
+                preservation_state_names.append(name)
+
+    method_names: list[str] = []
+    for label in checkboxes.get("recommended_methods") or []:
+        normalized = _normalize_label(label)
+        mapped = _FIELD_SLIP_METHOD_ALIASES.get(normalized)
+        if mapped and mapped not in method_names:
+            method_names.append(mapped)
+
+    grain_target: GrainSize | None = None
+    for label in checkboxes.get("matrix_grain_size") or []:
+        normalized = _normalize_label(label)
+        mapped = _FIELD_SLIP_GRAIN_ALIASES.get(normalized)
+        if not mapped:
+            continue
+        grain_target = GrainSize.objects.filter(name__iexact=mapped).first()
+        if grain_target:
+            break
+
+    return (
+        _resolve_lookup_names(SedimentaryFeature, sedimentary_names),
+        _resolve_lookup_names(FossilGroup, fossil_group_names),
+        _resolve_lookup_names(PreservationState, preservation_state_names),
+        _resolve_lookup_names(CollectionMethod, method_names),
+        grain_target,
+    )
 
 def _extract_entry_components(entry: dict) -> dict[str, object]:
     type_status = (entry.get("type_status") or {}).get("interpreted")
@@ -1263,70 +1366,152 @@ def _generate_unknown_field_number() -> str:
 
 
 def _ensure_field_slip(data: dict[str, object]) -> FieldSlip | None:
-    field_number = _clean_string(data.get("field_number"))
-    verb_locality = _clean_string(data.get("verbatim_locality"))
-    verb_taxon = _clean_string(data.get("verbatim_taxon"))
+    normalized_payload = normalize_field_slip_payload(data)
+
+    field_number = _clean_string(normalized_payload.get("field_number") or data.get("field_number"))
+    verb_locality = _clean_string(
+        normalized_payload.get("verbatim_locality") or data.get("verbatim_locality")
+    )
+    verb_taxon = _clean_string(normalized_payload.get("verbatim_taxon") or data.get("verbatim_taxon"))
     if not verb_taxon:
         return None
 
-    verbatim_element = _clean_string(data.get("verbatim_element"))
+    verbatim_element = _clean_string(
+        normalized_payload.get("verbatim_element") or data.get("verbatim_element")
+    )
     if not verbatim_element:
         return None
 
-    aerial_photo = _clean_string(data.get("aerial_photo"))
-    verbatim_latitude = _clean_string(data.get("verbatim_latitude"))
-    verbatim_longitude = _clean_string(data.get("verbatim_longitude"))
-    verbatim_elevation = _clean_string(data.get("verbatim_elevation"))
-    collection_date_value = _clean_string(data.get("collection_date"))
+    aerial_photo = _clean_string(normalized_payload.get("aerial_photo") or data.get("aerial_photo"))
+    verbatim_latitude = _clean_string(
+        normalized_payload.get("verbatim_latitude") or data.get("verbatim_latitude")
+    )
+    verbatim_longitude = _clean_string(
+        normalized_payload.get("verbatim_longitude") or data.get("verbatim_longitude")
+    )
+    verbatim_elevation = _clean_string(
+        normalized_payload.get("verbatim_elevation") or data.get("verbatim_elevation")
+    )
+    collector = _clean_string(normalized_payload.get("collector") or data.get("collector"))
+    discoverer = _clean_string(normalized_payload.get("discoverer") or data.get("discoverer"))
+    comment = _clean_string(normalized_payload.get("comment") or data.get("comment"))
+
+    collection_date_value = _clean_string(
+        normalized_payload.get("verbatimEventDate") or data.get("collection_date")
+    )
     collection_date = _parse_collection_date_value(collection_date_value)
+
+    horizon = _clean_string(normalized_payload.get("verbatim_horizon") or data.get("verbatim_horizon"))
+    if not horizon:
+        horizon_parts: list[str] = []
+        for key in (
+            "horizon_formation",
+            "horizon_member",
+            "horizon_bed",
+            "horizon_chronostratigraphy",
+        ):
+            value = _clean_string(data.get(key))
+            if value:
+                horizon_parts.append(str(value))
+        horizon = " | ".join(horizon_parts) if horizon_parts else None
+
+    (
+        sedimentary_targets,
+        fossil_group_targets,
+        preservation_state_targets,
+        recommended_method_targets,
+        grain_target,
+    ) = _collect_field_slip_relation_targets(normalized_payload)
+
+    collection_position = _clean_string(
+        normalized_payload.get("collection_position") or data.get("collection_position")
+    )
+    if collection_position not in {choice for choice, _label in CollectionPosition.choices}:
+        collection_position = None
+
+    matrix_association = _clean_string(
+        normalized_payload.get("matrix_association") or data.get("matrix_association")
+    )
+    if matrix_association not in {choice for choice, _label in MatrixAssociation.choices}:
+        matrix_association = None
+
+    surface_exposure = normalized_payload.get("surface_exposure")
+    if not isinstance(surface_exposure, bool):
+        surface_exposure = data.get("surface_exposure")
+    if not isinstance(surface_exposure, bool):
+        surface_exposure = None
 
     base_queryset = FieldSlip.objects.filter(
         verbatim_locality=verb_locality,
         verbatim_taxon=verb_taxon,
         verbatim_element=verbatim_element,
     )
+    field_slip: FieldSlip | None = None
     if field_number:
         field_slip = base_queryset.filter(field_number=field_number).first()
-        if field_slip:
-            if collection_date and field_slip.collection_date != collection_date:
-                field_slip.collection_date = collection_date
-                field_slip.save(update_fields=["collection_date"])
-            return field_slip
     else:
         field_slip = base_queryset.filter(
             field_number__startswith=UNKNOWN_FIELD_NUMBER_PREFIX
         ).first()
-        if field_slip:
-            if collection_date and field_slip.collection_date != collection_date:
-                field_slip.collection_date = collection_date
-                field_slip.save(update_fields=["collection_date"])
-            return field_slip
-        field_number = _generate_unknown_field_number()
 
-    horizon_parts: list[str] = []
-    for key in (
-        "horizon_formation",
-        "horizon_member",
-        "horizon_bed",
-        "horizon_chronostratigraphy",
-    ):
-        value = _clean_string(data.get(key))
-        if value:
-            horizon_parts.append(str(value))
-    horizon = " | ".join(horizon_parts) if horizon_parts else None
+    if field_slip is None:
+        if not field_number:
+            field_number = _generate_unknown_field_number()
+        field_slip = FieldSlip.objects.create(
+            field_number=field_number,
+            verbatim_locality=verb_locality,
+            verbatim_taxon=verb_taxon,
+            verbatim_element=verbatim_element,
+            verbatim_horizon=horizon,
+            aerial_photo=aerial_photo,
+            verbatim_latitude=verbatim_latitude,
+            verbatim_longitude=verbatim_longitude,
+            verbatim_elevation=verbatim_elevation,
+            collection_date=collection_date,
+            collector=collector,
+            discoverer=discoverer,
+            comment=comment,
+            collection_position=collection_position,
+            matrix_association=matrix_association,
+            surface_exposure=surface_exposure,
+            matrix_grain_size=grain_target,
+        )
+    else:
+        update_fields: list[str] = []
+        updates = {
+            "collection_date": collection_date,
+            "verbatim_horizon": horizon,
+            "aerial_photo": aerial_photo,
+            "verbatim_latitude": verbatim_latitude,
+            "verbatim_longitude": verbatim_longitude,
+            "verbatim_elevation": verbatim_elevation,
+            "collector": collector,
+            "discoverer": discoverer,
+            "comment": comment,
+            "collection_position": collection_position,
+            "matrix_association": matrix_association,
+            "surface_exposure": surface_exposure,
+            "matrix_grain_size": grain_target,
+        }
+        for field_name, value in updates.items():
+            if value is None:
+                continue
+            if getattr(field_slip, field_name) != value:
+                setattr(field_slip, field_name, value)
+                update_fields.append(field_name)
+        if update_fields:
+            field_slip.save(update_fields=update_fields)
 
-    return FieldSlip.objects.create(
-        field_number=field_number,
-        verbatim_locality=verb_locality,
-        verbatim_taxon=verb_taxon,
-        verbatim_element=verbatim_element,
-        verbatim_horizon=horizon,
-        aerial_photo=aerial_photo,
-        verbatim_latitude=verbatim_latitude,
-        verbatim_longitude=verbatim_longitude,
-        verbatim_elevation=verbatim_elevation,
-        collection_date=collection_date,
-    )
+    if sedimentary_targets:
+        field_slip.sedimentary_features.set(sedimentary_targets)
+    if fossil_group_targets:
+        field_slip.fossil_groups.set(fossil_group_targets)
+    if preservation_state_targets:
+        field_slip.preservation_states.set(preservation_state_targets)
+    if recommended_method_targets:
+        field_slip.recommended_methods.set(recommended_method_targets)
+
+    return field_slip
 
 
 def _apply_references(
