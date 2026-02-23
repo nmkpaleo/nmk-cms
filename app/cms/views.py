@@ -1766,7 +1766,9 @@ class FieldSlipListView(LoginRequiredMixin, UserPassesTestMixin, FilterView):
 
     def test_func(self):
         user = self.request.user
-        return user.is_superuser or user.groups.filter(name="Collection Managers").exists()
+        return user.is_superuser or user.groups.filter(
+            name__in=["Collection Managers", "Curators"]
+        ).exists()
 
 class AccessionDetailView(DetailView):
     model = Accession

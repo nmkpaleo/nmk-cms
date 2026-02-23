@@ -1077,9 +1077,28 @@ class FieldSlipAdmin(MergeAdminActionMixin, MergeAdminMixin, HistoricalImportExp
     resource_class = FieldSlipResource
     list_display = ('field_number', 'discoverer', 'collector', 'collection_date', 'verbatim_locality', 'verbatim_taxon', 'verbatim_element', 'collection_position', 'matrix_association', 'surface_exposure', 'matrix_grain_size')
     search_fields = ('field_number', 'discoverer', 'collector', 'verbatim_locality')
-    list_filter = ('verbatim_locality',)
+    list_filter = (
+        'verbatim_locality',
+        'collection_position',
+        'matrix_association',
+        'surface_exposure',
+        'matrix_grain_size',
+        'sedimentary_features',
+        'fossil_groups',
+        'preservation_states',
+        'recommended_methods',
+    )
     ordering = ('verbatim_locality', 'field_number')
     filter_horizontal = ('sedimentary_features', 'fossil_groups', 'preservation_states', 'recommended_methods')
+
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        return queryset.select_related("matrix_grain_size").prefetch_related(
+            "sedimentary_features",
+            "fossil_groups",
+            "preservation_states",
+            "recommended_methods",
+        )
 
 
 class SedimentaryFeatureAdmin(admin.ModelAdmin):

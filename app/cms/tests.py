@@ -5069,3 +5069,83 @@ class AdminAutocompleteTests(TestCase):
         scanning_admin = site._registry[Scanning]
         self.assertIn("drawer__code", scanning_admin.search_fields)
         self.assertIn("user__username", scanning_admin.search_fields)
+
+
+class FieldSlipListViewAccessAndFilterTests(TestCase):
+    def setUp(self):
+        self.password = "pass123"
+        self.manager = User.objects.create_user(username="manager", password=self.password)
+        self.curator = User.objects.create_user(username="curator", password=self.password)
+        self.regular = User.objects.create_user(username="regular", password=self.password)
+
+        Group.objects.get_or_create(name="Collection Managers")[0].user_set.add(self.manager)
+        Group.objects.get_or_create(name="Curators")[0].user_set.add(self.curator)
+
+        self.feature = SedimentaryFeature.objects.create(
+            name="ROOT/BUR FILTER",
+            code="ROOT_BUR_FILTER_VIEW",
+            category="sedimentary",
+        )
+
+        self.matching = FieldSlip.objects.create(
+            field_number="FS-FILTER-1",
+            verbatim_taxon="Homo",
+            verbatim_element="Femur",
+            collection_position="ex_situ",
+            surface_exposure=True,
+        )
+        self.matching.sedimentary_features.add(self.feature)
+
+        self.non_matching = FieldSlip.objects.create(
+            field_number="FS-FILTER-2",
+            verbatim_taxon="Pan",
+            verbatim_element="Tooth",
+            collection_position="in_situ",
+            surface_exposure=False,
+        )
+
+    def test_collection_manager_can_filter_field_slips(self):
+        self.client.login(username="manager", password=self.password)
+        response = self.client.get(
+            reverse("fieldslip_list"),
+            {
+                "sedimentary_features": [str(self.feature.pk)],
+                "surface_exposure": "true",
+                "collection_position": "ex_situ",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        object_list = list(response.context["object_list"])
+        self.assertEqual(object_list, [self.matching])
+
+    def test_curator_has_access_to_field_slip_list(self):
+        self.client.login(username="curator", password=self.password)
+        response = self.client.get(reverse("fieldslip_list"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_regular_user_is_forbidden(self):
+        self.client.login(username="regular", password=self.password)
+        response = self.client.get(reverse("fieldslip_list"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_filter_pagination_remains_stable(self):
+        for index in range(2, 14):
+            slip = FieldSlip.objects.create(
+                field_number=f"FS-PAGE-{index}",
+                verbatim_taxon="Homo",
+                verbatim_element="Femur",
+                surface_exposure=True,
+            )
+            slip.sedimentary_features.add(self.feature)
+
+        self.client.login(username="manager", password=self.password)
+        response = self.client.get(
+            reverse("fieldslip_list"),
+            {
+                "sedimentary_features": [str(self.feature.pk)],
+                "surface_exposure": "true",
+                "page": "2",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["page_obj"].number, 2)
