@@ -87,6 +87,20 @@ verbatim horizon (formation, member, bed, chronostratigraphy) and any aerial
 photo or coordinate data. Adjusting these fields ensures the downstream field
 slip linkage is accurate when the media advances to expert review.
 
+### Reviewing structured field-slip metadata
+
+The field-slip review section now includes structured OCR fields used by the
+approval importer:
+
+- event date, collector, and discoverer/finder values,
+- fragments (integer-only interpretation),
+- sedimentary, rock-type, recommended-method, and provenance selections,
+- matrix grain size plus matrix/provenance context,
+- free-text comment content (including back-side notes when present).
+
+Use the wizard fields to correct only what is legible. Leave uncertain values
+blank instead of guessing so experts can triage low-confidence data.
+
 ### Expert feedback panel
 
 When an expert returns a card to interns, the wizard highlights the latest
@@ -180,3 +194,11 @@ the hand-off with interns remains transparent.
 
 Use the queues together with the shared comment log to keep the hand-off between
 interns and experts smooth and well documented.
+
+## Rollout and rollback notes
+
+- Roll out field-slip QC changes in staging first, then promote after intern
+  and expert smoke checks succeed.
+- If ingestion quality regresses, pause approvals and roll back to the previous
+  release. Existing QC history remains intact, so records can be re-opened and
+  re-approved after remediation.

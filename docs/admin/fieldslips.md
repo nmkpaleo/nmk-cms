@@ -26,7 +26,8 @@ The FieldSlip model participates in the same merge engine used across the CMS. S
 ### Access expectations
 
 - Field slip create/edit views continue to follow collection-manager access rules.
-- Field slip list visibility and filtering remain restricted to collection managers and superusers.
+- Field slip list visibility and filtering are available to collection managers,
+  curators, and superusers.
 
 ### Admin verification checklist
 
@@ -41,6 +42,19 @@ When validating a release that includes sedimentary updates:
 
 - Field-level edits are captured by django-simple-history snapshots for FieldSlip records.
 - Filtering does not mutate data and is intended for search and review workflows only.
+
+## QC approval ingestion checks
+
+When validating releases that include field-slip OCR/QC ingestion updates:
+
+1. Run an intern + expert review cycle on a sample card that includes
+   provenance and sedimentary checkboxes.
+2. Approve the media and confirm the resulting FieldSlip stores:
+   - collection/matrix/surface values,
+   - sedimentary/fossil/preservation/recommended-method relations,
+   - matrix grain size and accession link rows.
+3. Re-approve the same reviewed payload in staging and confirm no duplicate
+   `AccessionFieldSlip` links or duplicated relation rows are created.
 
 ## Permissions and entry points
 
