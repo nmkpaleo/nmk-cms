@@ -745,9 +745,74 @@ Rules:
 - Output only the minified JSON."""
         )
     elif card_type == "field_slip":
-        return (
-            "Do your best to OCR this field slip. Extract fields such as FIELD NO., COLLECTOR, DATE, LOCALITY, HORIZON, TAXON NOTES. "
-            "For each field, return a structure like { \"raw\": original_value, \"interpreted\": normalized_value }. Output the result as a JSON."
+        return textwrap.dedent(
+            """You are an OCR transcriber for KNM field slips. Return ONLY one valid JSON object (no markdown fences, no prose).
+
+Use this exact top-level structure:
+{
+  "card_type": "field_slip",
+  "field_slip": {
+    "verbatimEventDate": {"raw": string|null, "interpreted": string|null, "confidence": number|null},
+    "collector": {"raw": string|null, "interpreted": string|null, "confidence": number|null},
+    "discoverer": {"raw": string|null, "interpreted": string|null, "confidence": number|null},
+    "verbatim_locality": {"raw": string|null, "interpreted": string|null, "confidence": number|null},
+    "field_number": {"raw": string|null, "interpreted": string|null, "confidence": number|null},
+    "verbatim_horizon": {"raw": string|null, "interpreted": string|null, "confidence": number|null},
+    "aerial_photo": {"raw": string|null, "interpreted": string|null, "confidence": number|null},
+    "verbatim_taxon": {"raw": string|null, "interpreted": string|null, "confidence": number|null},
+    "verbatim_element": {"raw": string|null, "interpreted": string|null, "confidence": number|null},
+    "fragments": {"raw": string|null, "interpreted": integer|null, "confidence": number|null},
+    "comment": {"raw": string|null, "interpreted": string|null, "confidence": number|null},
+    "verbatim_latitude": {"raw": string|null, "interpreted": string|null, "confidence": number|null},
+    "verbatim_longitude": {"raw": string|null, "interpreted": string|null, "confidence": number|null},
+    "accession_identification": {
+      "collection": {"raw": string|null, "interpreted": string|null, "confidence": number|null},
+      "locality": {"raw": string|null, "interpreted": string|null, "confidence": number|null},
+      "accession_number": {"raw": string|null, "interpreted": string|null, "confidence": number|null},
+      "row_suffixes": [string]
+    },
+    "checkboxes": {
+      "sedimentary_features": [string],
+      "rock_type": [string],
+      "recommended_methods": [string],
+      "provenance": [string],
+      "matrix_grain_size": [string]
+    },
+    "source_labels_seen": [string],
+    "backside_text_present": boolean
+  }
+}
+
+Label hints to locate fields on the scan:
+- DATE -> verbatimEventDate
+- BED/UNIT DERIVED FROM -> checkboxes.sedimentary_features
+- Rock Type -> checkboxes.rock_type
+- RECOMMEND -> checkboxes.recommended_methods
+- PROVENANCE -> checkboxes.provenance
+- MATRIX -> checkboxes.matrix_grain_size
+- COLLECTOR -> collector
+- DISCOVERER or FINDER -> discoverer
+- ACCESSION. KNM / handwritten KNM / ACC.# KNM -> accession_identification
+- AREA -> verbatim_locality
+- FIELD / No. / printed lower-right number -> field_number
+- LEVEL or HORIZON -> verbatim_horizon
+- AERIAL / AERIAL PHOTO# / PHOTO -> aerial_photo
+- FAMILY/TRIBE/GENUS/SPECIES or Taxon -> verbatim_taxon
+- BODY PART or Part -> verbatim_element
+- FRAGMENTS COLLECTED / FRAGMENTS -> fragments
+- COMMENTS / COMMENT / OTHER OBSERVATIONS / backside text -> comment
+- GPS COORDINATES / N / E -> verbatim_latitude, verbatim_longitude
+
+Rules:
+- Preserve exact OCR text in `raw`.
+- Use `interpreted` for normalized value; use null when uncertain.
+- Confidence must be between 0 and 1 when provided.
+- Do not invent values.
+- If multiple checkboxes are visibly marked, include all marked labels.
+- Expand accession row ranges like A-C into ["A","B","C"].
+- `fragments.interpreted` must be integer or null.
+- Include backside text in comment.raw when present.
+- Output JSON only."""
         )
     else:
         return "Please OCR this card and return all recognizable fields in JSON format with raw and interpreted values."

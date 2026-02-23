@@ -62,6 +62,7 @@ from cms import scanning_utils
 from cms.ocr_processing import (
     process_pending_scans,
     describe_accession_conflicts,
+    build_prompt_for_card_type,
     UNKNOWN_FIELD_NUMBER_PREFIX,
     _apply_rows,
     MAX_OCR_ROWS_PER_ACCESSION,
@@ -2225,6 +2226,9 @@ class OcrViewTests(TestCase):
             usage_record.cost_usd,
             Decimal(str(DEFAULT_USAGE_PAYLOAD["total_cost_usd"])),
         )
+
+
+
         self.assertEqual(usage_record.response_id, DEFAULT_USAGE_PAYLOAD["request_id"])
         self.assertEqual(usage_record.remaining_quota_usd, Decimal("11.0"))
         self.assertIsNotNone(usage_record.processing_seconds)
@@ -2350,6 +2354,33 @@ class OcrViewTests(TestCase):
         response = self.client.get(self.loop_url, follow=True)
         self.assertContains(response, "OpenAI quota has been exhausted")
         self.assertIsNone(self.client.session.get("ocr_loop_stats"))
+
+
+class OcrPromptBuilderTests(TestCase):
+    def test_field_slip_prompt_has_schema_locked_json_contract(self):
+        prompt = build_prompt_for_card_type("field_slip")
+
+        self.assertIn('"card_type": "field_slip"', prompt)
+        self.assertIn('"field_slip": {', prompt)
+        self.assertIn('"raw": string|null', prompt)
+        self.assertIn('"interpreted": string|null', prompt)
+        self.assertIn('"confidence": number|null', prompt)
+        self.assertIn('"checkboxes": {', prompt)
+        self.assertIn('"provenance": [string]', prompt)
+        self.assertIn('Output JSON only.', prompt)
+
+    def test_field_slip_prompt_includes_required_extraction_rules(self):
+        prompt = build_prompt_for_card_type("field_slip")
+
+        self.assertIn('Expand accession row ranges like A-C into ["A","B","C"].', prompt)
+        self.assertIn('`fragments.interpreted` must be integer or null.', prompt)
+        self.assertIn('Do not invent values.', prompt)
+
+    def test_non_field_slip_prompt_regression_uses_generic_fallback(self):
+        prompt = build_prompt_for_card_type("other")
+
+        self.assertIn("Please OCR this card", prompt)
+        self.assertNotIn('"card_type": "field_slip"', prompt)
 
 
 class ProcessPendingScansTests(TestCase):
