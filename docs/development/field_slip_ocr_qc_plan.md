@@ -100,6 +100,131 @@
 
 ---
 
+
+## Field-slip OCR contract (FS-001)
+
+### Canonical value object
+Every extractable scalar field uses the same object shape to stay aligned with the existing accession-card contract:
+
+```json
+{
+  "raw": "exact OCR transcription",
+  "interpreted": "normalized value or null",
+  "confidence": 0.0
+}
+```
+
+Rules:
+- `raw` preserves punctuation, spacing, and casing as seen on scan.
+- `interpreted` is `null` when the model cannot normalize with high confidence.
+- `confidence` is optional and only included when `< 0.90` or when the reviewer needs explicit triage context.
+
+### Required top-level JSON payload for `card_type="field_slip"`
+
+```json
+{
+  "card_type": "field_slip",
+  "field_slip": {
+    "verbatimEventDate": {"raw": "...", "interpreted": "...", "confidence": 0.0},
+    "collector": {"raw": "...", "interpreted": "...", "confidence": 0.0},
+    "discoverer": {"raw": "...", "interpreted": "...", "confidence": 0.0},
+    "verbatim_locality": {"raw": "...", "interpreted": "...", "confidence": 0.0},
+    "field_number": {"raw": "...", "interpreted": "...", "confidence": 0.0},
+    "verbatim_horizon": {"raw": "...", "interpreted": "...", "confidence": 0.0},
+    "aerial_photo": {"raw": "...", "interpreted": "...", "confidence": 0.0},
+    "verbatim_taxon": {"raw": "...", "interpreted": "...", "confidence": 0.0},
+    "verbatim_element": {"raw": "...", "interpreted": "...", "confidence": 0.0},
+    "fragments": {"raw": "...", "interpreted": 0, "confidence": 0.0},
+    "comment": {"raw": "...", "interpreted": "...", "confidence": 0.0},
+    "verbatim_latitude": {"raw": "...", "interpreted": "...", "confidence": 0.0},
+    "verbatim_longitude": {"raw": "...", "interpreted": "...", "confidence": 0.0},
+    "accession_identification": {
+      "collection": {"raw": "...", "interpreted": "...", "confidence": 0.0},
+      "locality": {"raw": "...", "interpreted": "...", "confidence": 0.0},
+      "accession_number": {"raw": "...", "interpreted": "...", "confidence": 0.0},
+      "row_suffixes": ["A", "B"]
+    },
+    "checkboxes": {
+      "sedimentary_features": ["ROOT/BUR", "X-BEDS"],
+      "rock_type": ["MOLLUSCS WHOLE", "BROKEN"],
+      "recommended_methods": ["SIEVING"],
+      "provenance": ["SURFACE WITH MATRIX"],
+      "matrix_grain_size": ["SAND"]
+    },
+    "source_labels_seen": ["DISCOVERER", "FINDER:", "ACC.# KNM"],
+    "backside_text_present": true
+  }
+}
+```
+
+### Source-label detection matrix
+- Date: `DATE`
+- Collector: `COLLECTOR`
+- Discoverer: `DISCOVERER`, `FINDER:`
+- Accession identification: `ACCESSION. KNM`, handwritten `KNM-` (top-right), `ACC.# KNM`
+- Locality: `AREA`
+- Field number: `FIELD`, `No.`, printed right-lower number
+- Horizon: `LEVEL`, `HORIZON`
+- Aerial photo: `AERIAL`, `AERIAL PHOTO#`, `PHOTO:`
+- Taxon: `FAMILY/TRIBE/GENUS/SPECIES`, `Taxon:`
+- Element: `BODY PART`, `Part`
+- Fragments: `FRAGMENTS COLLECTED`, `FRAGMENTS`
+- Comment: `COMMENTS:`, `COMMENT:`, `OTHER OBSERVATIONS`, backside free text
+- Coordinates: `GPS COORDINATES`, `N:`, `E:`
+
+### Checkbox mapping to Django models
+
+#### 1) `BED/UNIT DERIVED FROM` -> `FieldSlip.sedimentary_features` (M2M `SedimentaryFeature`)
+- `ROOT/BUR`
+- `X-BEDS`
+- `HORIZ. BEDS`
+- `MUD CRACKS`
+- `CaC03 NOD`
+- `LIMONITE NOD`
+- `LIMONITE FRAGS`
+
+#### 2) `Rock Type` split mapping
+- `MOLLUSCS WHOLE` -> `FieldSlip.fossil_groups` += `Molluscs`; `FieldSlip.preservation_states` += `Whole`
+- `BROKEN` -> `FieldSlip.preservation_states` += `Broken`
+- `OSTRACODS` -> `FieldSlip.fossil_groups` += `Ostracods`
+- `FISH` -> `FieldSlip.fossil_groups` += `Fish`
+
+#### 3) `RECOMMEND` -> `FieldSlip.recommended_methods` (M2M `CollectionMethod`)
+- `SIEVING`
+- `EXCAVATION`
+
+#### 4) `MATRIX` -> `FieldSlip.matrix_grain_size` (FK `GrainSize`)
+- `GRAVEL`, `SAND`, `SILT`, `CLAY`
+
+#### 5) `PROVENANCE` decomposition
+- Target fields: `FieldSlip.collection_position`, `FieldSlip.surface_exposure`, `FieldSlip.matrix_association`
+- Deterministic precedence when multiple boxes appear checked:
+  1. `SURFACE WITH MATRIX` -> `collection_position=ex_situ`, `surface_exposure=true`, `matrix_association=attached`
+  2. `SURFACE WITHOUT MATRIX` -> `collection_position=ex_situ`, `surface_exposure=true`, `matrix_association=none`
+  3. `IN SITU` -> `collection_position=in_situ`, `surface_exposure=false`
+  4. `SURFACE` -> `collection_position=ex_situ`, `surface_exposure=true`
+  5. `MATRIX` -> sets/overrides only `matrix_association=attached`
+  6. `IN SITU OR SURFACE` -> leave `collection_position=null` unless no stronger option is selected
+
+Tie-breakers:
+- If both `IN SITU` and any `SURFACE*` value are marked, prefer the strongest `SURFACE*` value and keep a reviewer warning.
+- If both `SURFACE WITH MATRIX` and `SURFACE WITHOUT MATRIX` are marked, set `matrix_association=attached` (conservative for data retention) and emit reviewer warning.
+
+### Accession linkage normalization
+- Parse accession token variants into `(collection, locality, accession_number)`.
+- Expand row ranges such as `A-C` into `A`, `B`, `C` for candidate `AccessionFieldSlip` linkage review.
+- Preserve original accession token in `raw` so QC can resolve handwriting ambiguity.
+
+### Null handling, confidence, and anti-hallucination
+- Do not infer missing checkmarks from context; unchecked/uncertain options must remain absent from arrays.
+- Do not synthesize accession identifiers, field numbers, or coordinates.
+- If only partial token is visible (e.g., `KNM-ER ?`), store exactly in `raw`, set `interpreted=null`, include `confidence`.
+- For `fragments`, only parse integers into `interpreted`; otherwise keep `interpreted=null`.
+- Backside text must be appended to `comment.raw` with a delimiter and reflected in `comment.interpreted` only when legible.
+- Output must be a single JSON object with no markdown fences or explanatory prose.
+
+---
+
 ## 3️⃣ Tasks (JSON)
 
 ```json
