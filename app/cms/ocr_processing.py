@@ -944,7 +944,13 @@ _FIELD_SLIP_GRAIN_ALIASES = {
 
 def _value_interpreted(raw_value: object) -> object:
     if isinstance(raw_value, dict):
-        return raw_value.get("interpreted")
+        interpreted = raw_value.get("interpreted")
+        if interpreted not in (None, ""):
+            return interpreted
+        raw = raw_value.get("raw")
+        if raw not in (None, ""):
+            return raw
+        return None
     return raw_value
 
 
@@ -1122,6 +1128,8 @@ def normalize_field_slip_payload(payload: dict[str, object]) -> dict[str, object
         "checkboxes": {
             "sedimentary_features": _labels("sedimentary_features"),
             "rock_type": _labels("rock_type"),
+            "fossil_groups": _labels("fossil_groups"),
+            "preservation_states": _labels("preservation_states"),
             "recommended_methods": _labels("recommended_methods"),
             "provenance": provenance_labels,
             "matrix_grain_size": _labels("matrix_grain_size"),
@@ -1156,7 +1164,17 @@ def _collect_field_slip_relation_targets(
             sedimentary_names.append(mapped)
 
     fossil_group_names: list[str] = []
+    for label in checkboxes.get("fossil_groups") or []:
+        normalized = _normalize_label(label)
+        if normalized and normalized.title() not in fossil_group_names:
+            fossil_group_names.append(normalized.title())
+
     preservation_state_names: list[str] = []
+    for label in checkboxes.get("preservation_states") or []:
+        normalized = _normalize_label(label)
+        if normalized and normalized.title() not in preservation_state_names:
+            preservation_state_names.append(normalized.title())
+
     for label in checkboxes.get("rock_type") or []:
         normalized = _normalize_label(label)
         mapping = _FIELD_SLIP_ROCK_TYPE_MAP.get(normalized)
@@ -1232,22 +1250,44 @@ def _extract_entry_components(entry: dict) -> dict[str, object]:
     field_slips: list[dict[str, object]] = []
     for index, slip in enumerate(entry.get("field_slips") or []):
         horizon = slip.get("verbatim_horizon") or {}
+        checkboxes = slip.get("checkboxes") or {}
+        accession_identification = slip.get("accession_identification") or {}
         field_slips.append(
             {
                 "index": index,
-                "field_number": (slip.get("field_number") or {}).get("interpreted"),
-                "collection_date": (slip.get("collection_date") or {}).get("interpreted"),
-                "verbatim_locality": (slip.get("verbatim_locality") or {}).get("interpreted"),
-                "verbatim_taxon": (slip.get("verbatim_taxon") or {}).get("interpreted"),
-                "verbatim_element": (slip.get("verbatim_element") or {}).get("interpreted"),
-                "horizon_formation": (horizon.get("formation") or {}).get("interpreted"),
-                "horizon_member": (horizon.get("member") or {}).get("interpreted"),
-                "horizon_bed": (horizon.get("bed_or_horizon") or {}).get("interpreted"),
-                "horizon_chronostratigraphy": (horizon.get("chronostratigraphy") or {}).get("interpreted"),
-                "aerial_photo": (slip.get("aerial_photo") or {}).get("interpreted"),
-                "verbatim_latitude": (slip.get("verbatim_latitude") or {}).get("interpreted"),
-                "verbatim_longitude": (slip.get("verbatim_longitude") or {}).get("interpreted"),
-                "verbatim_elevation": (slip.get("verbatim_elevation") or {}).get("interpreted"),
+                "field_number": _value_interpreted(slip.get("field_number")),
+                "collection_date": _value_interpreted(slip.get("collection_date")) or _value_interpreted(slip.get("verbatimEventDate")),
+                "verbatim_locality": _value_interpreted(slip.get("verbatim_locality")),
+                "verbatim_taxon": _value_interpreted(slip.get("verbatim_taxon")),
+                "verbatim_element": _value_interpreted(slip.get("verbatim_element")),
+                "horizon_formation": _value_interpreted(horizon.get("formation")),
+                "horizon_member": _value_interpreted(horizon.get("member")),
+                "horizon_bed": _value_interpreted(horizon.get("bed_or_horizon")) or _value_interpreted(slip.get("verbatim_horizon")),
+                "horizon_chronostratigraphy": _value_interpreted(horizon.get("chronostratigraphy")),
+                "aerial_photo": _value_interpreted(slip.get("aerial_photo")),
+                "verbatim_latitude": _value_interpreted(slip.get("verbatim_latitude")),
+                "verbatim_longitude": _value_interpreted(slip.get("verbatim_longitude")),
+                "verbatim_elevation": _value_interpreted(slip.get("verbatim_elevation")),
+                "collector": _value_interpreted(slip.get("collector")),
+                "discoverer": _value_interpreted(slip.get("discoverer")),
+                "comment": _value_interpreted(slip.get("comment")),
+                "collection_position": _value_interpreted(slip.get("collection_position")),
+                "matrix_association": _value_interpreted(slip.get("matrix_association")),
+                "surface_exposure": _value_interpreted(slip.get("surface_exposure")),
+                "checkboxes": {
+                    "sedimentary_features": list(checkboxes.get("sedimentary_features") or []),
+                    "rock_type": list(checkboxes.get("rock_type") or []),
+                    "fossil_groups": list(checkboxes.get("fossil_groups") or []),
+                    "preservation_states": list(checkboxes.get("preservation_states") or []),
+                    "recommended_methods": list(checkboxes.get("recommended_methods") or []),
+                    "provenance": list(checkboxes.get("provenance") or []),
+                    "matrix_grain_size": list(checkboxes.get("matrix_grain_size") or []),
+                },
+                "accession_identification": {
+                    "collection": _value_interpreted(accession_identification.get("collection")),
+                    "locality": _value_interpreted(accession_identification.get("locality")),
+                    "accession_number": _value_interpreted(accession_identification.get("accession_number")),
+                },
             }
         )
 

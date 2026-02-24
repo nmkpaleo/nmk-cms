@@ -144,6 +144,13 @@ from cms.models import (
     SpecimenListPDF,
     SpecimenListPage,
     SpecimenListRowCandidate,
+    SedimentaryFeature,
+    FossilGroup,
+    PreservationState,
+    CollectionMethod,
+    GrainSize,
+    CollectionPosition,
+    MatrixAssociation,
 )
 from django.shortcuts import render
 from .models import Media
@@ -2616,20 +2623,58 @@ class FieldSlipQCForm(forms.Form):
     verbatim_latitude = forms.CharField(label=_("Verbatim latitude"), required=False, max_length=255)
     verbatim_longitude = forms.CharField(label=_("Verbatim longitude"), required=False, max_length=255)
     verbatim_elevation = forms.CharField(label=_("Verbatim elevation"), required=False, max_length=255)
-    sedimentary_features = forms.CharField(label=_("Sedimentary features"), required=False, max_length=255)
-    rock_type = forms.CharField(label=_("Rock type selections"), required=False, max_length=255)
-    recommended_methods = forms.CharField(label=_("Recommended methods"), required=False, max_length=255)
-    provenance = forms.CharField(label=_("Provenance selections"), required=False, max_length=255)
-    matrix_grain_size = forms.CharField(label=_("Matrix grain size"), required=False, max_length=255)
-    collection_position = forms.CharField(label=_("Collection position"), required=False, max_length=255)
-    matrix_association = forms.CharField(label=_("Matrix association"), required=False, max_length=255)
+    sedimentary_features = forms.MultipleChoiceField(label=_("Sedimentary features"), required=False)
+    rock_type = forms.MultipleChoiceField(label=_("Rock type selections"), required=False)
+    fossil_groups = forms.MultipleChoiceField(label=_("Fossil groups"), required=False)
+    preservation_states = forms.MultipleChoiceField(label=_("Preservation states"), required=False)
+    recommended_methods = forms.MultipleChoiceField(label=_("Recommended methods"), required=False)
+    provenance = forms.MultipleChoiceField(label=_("Provenance selections"), required=False)
+    matrix_grain_size = forms.ChoiceField(label=_("Matrix grain size"), required=False)
+    collection_position = forms.ChoiceField(label=_("Collection position"), required=False)
+    matrix_association = forms.ChoiceField(label=_("Matrix association"), required=False)
     surface_exposure = forms.BooleanField(label=_("Surface exposure"), required=False)
     comment = forms.CharField(label=_("Comment"), required=False, widget=forms.Textarea(attrs={"rows": 2}))
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["sedimentary_features"].choices = [
+            (item.name, item.name) for item in SedimentaryFeature.objects.order_by("name")
+        ]
+        self.fields["rock_type"].choices = [
+            ("MOLLUSCS WHOLE", "MOLLUSCS WHOLE"),
+            ("BROKEN", "BROKEN"),
+            ("OSTRACODS", "OSTRACODS"),
+            ("FISH", "FISH"),
+        ]
+        self.fields["fossil_groups"].choices = [
+            (item.name, item.name) for item in FossilGroup.objects.order_by("name")
+        ]
+        self.fields["preservation_states"].choices = [
+            (item.name, item.name) for item in PreservationState.objects.order_by("name")
+        ]
+        self.fields["recommended_methods"].choices = [
+            (item.name, item.name) for item in CollectionMethod.objects.order_by("name")
+        ]
+        self.fields["provenance"].choices = [
+            ("IN SITU OR SURFACE", "IN SITU OR SURFACE"),
+            ("IN SITU", "IN SITU"),
+            ("SURFACE", "SURFACE"),
+            ("MATRIX", "MATRIX"),
+            ("SURFACE WITH MATRIX", "SURFACE WITH MATRIX"),
+            ("SURFACE WITHOUT MATRIX", "SURFACE WITHOUT MATRIX"),
+        ]
+        self.fields["matrix_grain_size"].choices = [("", "---------")] + [
+            (item.name, item.name) for item in GrainSize.objects.order_by("name")
+        ]
+        self.fields["collection_position"].choices = [("", "---------"), *CollectionPosition.choices]
+        self.fields["matrix_association"].choices = [("", "---------"), *MatrixAssociation.choices]
 
 
 def _split_csv_tokens(raw_value: object) -> list[str]:
     if raw_value in (None, ""):
         return []
+    if isinstance(raw_value, (list, tuple)):
+        return [str(token).strip() for token in raw_value if str(token).strip()]
     tokens: list[str] = []
     for token in str(raw_value).split(","):
         cleaned = token.strip()
@@ -2836,6 +2881,45 @@ class MediaQCFormManager:
         if isinstance(prefix_value, str):
             prefix_value = prefix_value.upper()
         return collection_value, prefix_value, specimen_value
+
+    @staticmethod
+    def _rock_type_to_groups(labels: list[str]) -> tuple[list[str], list[str]]:
+        fossil_map = {
+            "MOLLUSCS WHOLE": "Molluscs",
+            "BROKEN": "Molluscs",
+            "OSTRACODS": "Ostracods",
+            "FISH": "Fish",
+        }
+        preserve_map = {
+            "MOLLUSCS WHOLE": "Whole",
+            "BROKEN": "Broken",
+        }
+        fossil_groups: list[str] = []
+        preservation_states: list[str] = []
+        for label in labels:
+            normalized = str(label or "").strip().upper()
+            fossil = fossil_map.get(normalized)
+            if fossil and fossil not in fossil_groups:
+                fossil_groups.append(fossil)
+            state = preserve_map.get(normalized)
+            if state and state not in preservation_states:
+                preservation_states.append(state)
+        return fossil_groups, preservation_states
+
+    @staticmethod
+    def _groups_to_rock_type(fossils: list[str], states: list[str]) -> list[str]:
+        labels: list[str] = []
+        fossil_norm = {str(item).strip().lower() for item in fossils if item}
+        state_norm = {str(item).strip().lower() for item in states if item}
+        if "molluscs" in fossil_norm and "whole" in state_norm:
+            labels.append("MOLLUSCS WHOLE")
+        if "molluscs" in fossil_norm and "broken" in state_norm:
+            labels.append("BROKEN")
+        if "ostracods" in fossil_norm:
+            labels.append("OSTRACODS")
+        if "fish" in fossil_norm:
+            labels.append("FISH")
+        return labels
 
     def __init__(self, request, media: Media):
         self.request = request
@@ -3118,21 +3202,13 @@ class MediaQCFormManager:
                     ) or self._payload_text(
                         accession_ident_payload.get("fragments")
                     ),
-                    "sedimentary_features": ", ".join(
-                        checkbox_payload.get("sedimentary_features") or []
-                    ),
-                    "rock_type": ", ".join(
-                        checkbox_payload.get("rock_type") or []
-                    ),
-                    "recommended_methods": ", ".join(
-                        checkbox_payload.get("recommended_methods") or []
-                    ),
-                    "provenance": ", ".join(
-                        checkbox_payload.get("provenance") or []
-                    ),
-                    "matrix_grain_size": ", ".join(
-                        checkbox_payload.get("matrix_grain_size") or []
-                    ),
+                    "sedimentary_features": list(checkbox_payload.get("sedimentary_features") or []),
+                    "rock_type": list(checkbox_payload.get("rock_type") or []),
+                    "fossil_groups": list(checkbox_payload.get("fossil_groups") or self._rock_type_to_groups(checkbox_payload.get("rock_type") or [])[0]),
+                    "preservation_states": list(checkbox_payload.get("preservation_states") or self._rock_type_to_groups(checkbox_payload.get("rock_type") or [])[1]),
+                    "recommended_methods": list(checkbox_payload.get("recommended_methods") or []),
+                    "provenance": list(checkbox_payload.get("provenance") or []),
+                    "matrix_grain_size": (checkbox_payload.get("matrix_grain_size") or [None])[0],
                     "collection_position": self._payload_text(
                         field_slip_payload.get("collection_position")
                     ),
@@ -3410,6 +3486,8 @@ class MediaQCFormManager:
                     "verbatim_elevation": cleaned.get("verbatim_elevation"),
                     "sedimentary_features": _split_csv_tokens(cleaned.get("sedimentary_features")),
                     "rock_type": _split_csv_tokens(cleaned.get("rock_type")),
+                    "fossil_groups": _split_csv_tokens(cleaned.get("fossil_groups")),
+                    "preservation_states": _split_csv_tokens(cleaned.get("preservation_states")),
                     "recommended_methods": _split_csv_tokens(cleaned.get("recommended_methods")),
                     "provenance": _split_csv_tokens(cleaned.get("provenance")),
                     "matrix_grain_size": _split_csv_tokens(cleaned.get("matrix_grain_size")),
@@ -3716,7 +3794,13 @@ class MediaQCFormManager:
                 )
                 checkbox_payload = copy.deepcopy(original_field_slip.get("checkboxes") or {})
                 checkbox_payload["sedimentary_features"] = entry.get("sedimentary_features") or []
-                checkbox_payload["rock_type"] = entry.get("rock_type") or []
+                checkbox_payload["fossil_groups"] = entry.get("fossil_groups") or []
+                checkbox_payload["preservation_states"] = entry.get("preservation_states") or []
+                derived_rock_type = self._groups_to_rock_type(
+                    entry.get("fossil_groups") or [],
+                    entry.get("preservation_states") or [],
+                )
+                checkbox_payload["rock_type"] = entry.get("rock_type") or derived_rock_type
                 checkbox_payload["recommended_methods"] = entry.get("recommended_methods") or []
                 checkbox_payload["provenance"] = entry.get("provenance") or []
                 checkbox_payload["matrix_grain_size"] = entry.get("matrix_grain_size") or []
