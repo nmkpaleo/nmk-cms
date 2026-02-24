@@ -1000,13 +1000,57 @@ def normalize_field_slip_payload(payload: dict[str, object]) -> dict[str, object
         else {}
     )
 
+    def _is_checkbox_marked(value: object) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return bool(value)
+        if value in (None, ""):
+            return False
+        token = str(value).strip().lower()
+        return token in {"x", "v", "✓", "✔", "check", "checked", "true", "yes", "1"}
+
+    def _label_from_checkbox(value: object) -> str | None:
+        if isinstance(value, str):
+            return _normalize_label(value)
+        if not isinstance(value, dict):
+            return None
+
+        source_label = _normalize_label(
+            value.get("source_label")
+            or value.get("label")
+            or value.get("value")
+            or value.get("text")
+        )
+        if not source_label:
+            return None
+
+        marker_fields = (
+            "checked",
+            "is_checked",
+            "selected",
+            "mark",
+            "marker",
+            "checkmark",
+            "is_marked",
+            "interpreted",
+        )
+        marker_values = [value.get(field) for field in marker_fields if field in value]
+        if not marker_values:
+            return source_label
+        if any(_is_checkbox_marked(marker) for marker in marker_values):
+            return source_label
+        return None
+
     def _labels(key: str) -> list[str]:
         values = checkboxes.get(key)
+        if isinstance(values, dict):
+            values = [values]
         if not isinstance(values, list):
             return []
         normalized: list[str] = []
         for value in values:
-            label = _normalize_label(value)
+            label = _label_from_checkbox(value)
             if label and label not in normalized:
                 normalized.append(label)
         return normalized
@@ -1918,6 +1962,49 @@ def describe_accession_conflicts(media: Media) -> list[dict[str, object]]:
     return conflicts
 
 
+def _resolve_field_slip_accession_context(data: dict[str, object]) -> tuple[str | None, str | None, int | None]:
+    from .manual_import import parse_accession_number
+
+    normalized = normalize_field_slip_payload(data)
+    accession_ident = normalized.get("accession_identification") or {}
+    if not isinstance(accession_ident, dict):
+        accession_ident = {}
+
+    raw_collection = _clean_string(accession_ident.get("collection"))
+    raw_locality = _clean_string(accession_ident.get("locality"))
+    raw_number = _clean_string(accession_ident.get("accession_number"))
+
+    parse_candidates = [raw_collection, raw_number]
+    combined = "-".join(part for part in [raw_collection, raw_locality, raw_number] if part)
+    if combined:
+        parse_candidates.append(combined)
+
+    parsed_context = None
+    for candidate in parse_candidates:
+        context = parse_accession_number(candidate)
+        if context.specimen_number is not None:
+            parsed_context = context
+            break
+
+    collection_abbr = (parsed_context.collection_abbreviation if parsed_context else None) or None
+    if not collection_abbr and raw_collection:
+        token_match = re.search(r"\b(KNMI|KNMP|KNM)\b", raw_collection.upper())
+        if token_match:
+            collection_abbr = token_match.group(1)
+
+    prefix_abbr = (parsed_context.specimen_prefix if parsed_context else None) or raw_locality
+    if prefix_abbr:
+        prefix_abbr = prefix_abbr.upper()
+
+    specimen_no = parsed_context.specimen_number if parsed_context else None
+    if specimen_no is None and raw_number:
+        digits = re.search(r"\d+", raw_number)
+        if digits:
+            specimen_no = int(digits.group(0))
+
+    return (collection_abbr.upper() if collection_abbr else None, prefix_abbr, specimen_no)
+
+
 def create_accessions_from_media(
     media: Media,
     resolution_map: dict[str, dict[str, object]] | None = None,
@@ -1935,6 +2022,58 @@ def create_accessions_from_media(
     """
 
     data = dict(media.ocr_data or {})
+    if data.get("card_type") == "field_slip":
+        collection_abbr, prefix_abbr, specimen_no = _resolve_field_slip_accession_context(data)
+        if not collection_abbr or collection_abbr not in {"KNM", "KNMI", "KNMP"}:
+            return {"created": [], "conflicts": [{"key": "field_slip", "reason": "Collection abbreviation must be one of KNM, KNMI, KNMP."}]}
+        if not prefix_abbr:
+            return {"created": [], "conflicts": [{"key": "field_slip", "reason": "Specimen prefix missing"}]}
+        if specimen_no is None:
+            return {"created": [], "conflicts": [{"key": "field_slip", "reason": "Specimen number missing"}]}
+
+        collection = Collection.objects.filter(abbreviation=collection_abbr).first()
+        if not collection:
+            return {"created": [], "conflicts": [{"key": collection_abbr, "reason": "Collection not found"}]}
+
+        specimen_prefix = Locality.objects.filter(abbreviation=prefix_abbr).first()
+        if not specimen_prefix:
+            specimen_prefix = Locality.objects.create(
+                abbreviation=prefix_abbr,
+                name=f"Temporary Locality {prefix_abbr}",
+            )
+
+        accession, created = Accession.objects.get_or_create(
+            collection=collection,
+            specimen_prefix=specimen_prefix,
+            specimen_no=specimen_no,
+            defaults={"instance_number": 1},
+        )
+        field_slip = _ensure_field_slip(data)
+        if field_slip:
+            AccessionFieldSlip.objects.get_or_create(accession=accession, fieldslip=field_slip)
+
+        record = {
+            "key": f"{collection.abbreviation}:{specimen_prefix.abbreviation}:{specimen_no}",
+            "accession_id": accession.pk,
+            "collection": collection.abbreviation,
+            "specimen_prefix": specimen_prefix.abbreviation,
+            "specimen_no": specimen_no,
+            "instance_number": accession.instance_number,
+            "accession": str(accession),
+        }
+        updates: list[str] = []
+        if media.accession_id != accession.pk:
+            media.accession = accession
+            updates.append("accession")
+        processed_records = data.get("_processed_accessions") or []
+        if not any(entry.get("key") == record["key"] for entry in processed_records if isinstance(entry, dict)):
+            data["_processed_accessions"] = [*processed_records, record]
+            media.ocr_data = data
+            updates.append("ocr_data")
+        if updates:
+            media.save(update_fields=updates)
+        return {"created": [record] if created else [], "conflicts": []}
+
     if data.get("card_type") != "accession_card":
         return {"created": [], "conflicts": []}
 

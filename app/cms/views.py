@@ -2806,6 +2806,26 @@ class MediaQCFormManager:
             media.save(update_fields=["ocr_data"])
         self.original_data = copy.deepcopy(snapshot_source)
         self.data = copy.deepcopy(media.ocr_data or stored_data)
+
+        if self.data.get("card_type") == "field_slip" and isinstance(self.data.get("field_slip"), dict):
+            accessions = self.data.setdefault("accessions", [])
+            if not accessions:
+                field_payload = copy.deepcopy(self.data.get("field_slip") or {})
+                accession_ident = field_payload.get("accession_identification") or {}
+                if not isinstance(accession_ident, dict):
+                    accession_ident = {}
+                accessions.append(
+                    {
+                        "collection_abbreviation": accession_ident.get("collection") or {},
+                        "specimen_prefix_abbreviation": accession_ident.get("locality") or {},
+                        "specimen_no": accession_ident.get("accession_number") or {},
+                        "field_slips": [field_payload],
+                    }
+                )
+                self.data["accessions"] = accessions
+                media.ocr_data = copy.deepcopy(self.data)
+                media.save(update_fields=["ocr_data"])
+
         accessions = self.data.setdefault("accessions", [])
         if not accessions:
             accessions.append({})
