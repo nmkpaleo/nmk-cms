@@ -86,6 +86,14 @@ if "APITimeoutError" in globals() and APITimeoutError is not None:  # pragma: no
 logger = logging.getLogger(__name__)
 
 
+def _default_openai_model() -> str:
+    return str(getattr(settings, "OPENAI_DEFAULT_MODEL", "gpt-5.2"))
+
+
+def _default_ocr_engine() -> str:
+    return str(getattr(settings, "OCR_DEFAULT_ENGINE", "chatgpt-vision"))
+
+
 MAX_OCR_ROWS_PER_ACCESSION = 50
 
 
@@ -199,13 +207,16 @@ def _strip_code_fences(content: str) -> str:
 def run_specimen_list_raw_ocr(
     page: SpecimenListPage,
     *,
-    ocr_engine: str = "chatgpt-vision",
-    model: str = "gpt-5.2",
+    ocr_engine: str | None = None,
+    model: str | None = None,
     timeout: int = 60,
     max_retries: int = 3,
     force: bool = False,
 ) -> SpecimenListPageOCR:
     """Run raw OCR on a specimen list page and persist the verbatim output."""
+
+    ocr_engine = ocr_engine or _default_ocr_engine()
+    model = model or _default_openai_model()
 
     if not page.image_file:
         raise ValueError("Specimen list page has no image file available for OCR.")
@@ -324,13 +335,16 @@ def _load_first_json_object(content: str) -> dict[str, object]:
 def run_specimen_list_row_extraction(
     page: SpecimenListPage,
     *,
-    ocr_engine: str = "chatgpt-vision",
-    model: str = "gpt-5.2",
+    ocr_engine: str | None = None,
+    model: str | None = None,
     timeout: int = 120,
     max_retries: int = 3,
     force: bool = False,
 ) -> list[SpecimenListRowCandidate]:
     """Extract structured rows for specimen list detail pages and store candidates."""
+
+    ocr_engine = ocr_engine or _default_ocr_engine()
+    model = model or _default_openai_model()
 
     if page.page_type != SpecimenListPage.PageType.SPECIMEN_LIST_DETAILS:
         logger.info(
@@ -462,7 +476,8 @@ def run_specimen_list_row_extraction(
     raise RuntimeError("Specimen list row extraction failed unexpectedly.") from last_error
 
 
-def detect_card_type(image_path: Path, model: str = "gpt-4o", timeout: int = 30, max_retries: int = 3) -> dict:
+def detect_card_type(image_path: Path, model: str | None = None, timeout: int = 30, max_retries: int = 3) -> dict:
+    model = model or _default_openai_model()
     client = get_openai_client()
     if client is None:
         raise RuntimeError(
@@ -513,10 +528,11 @@ def detect_card_type(image_path: Path, model: str = "gpt-4o", timeout: int = 30,
 def classify_specimen_list_page(
     image_path: Path,
     *,
-    model: str = "gpt-4o",
+    model: str | None = None,
     timeout: int = 30,
     max_retries: int = 3,
 ) -> dict[str, object]:
+    model = model or _default_openai_model()
     client = get_openai_client()
     if client is None:
         raise RuntimeError(
@@ -829,10 +845,11 @@ def chatgpt_ocr(
     image_path: Path,
     image_id: str,
     user_prompt: str,
-    model: str = "gpt-4o",
+    model: str | None = None,
     timeout: int = 60,
     max_retries: int = 3,
 ) -> dict:
+    model = model or _default_openai_model()
     client = get_openai_client()
     if client is None:
         raise RuntimeError(
