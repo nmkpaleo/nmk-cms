@@ -111,6 +111,8 @@ class FieldSlipCardQCPrefillTests(TestCase):
         self.addCleanup(patcher.stop)
 
     def test_qc_manager_bootstraps_field_slip_into_accession_payload(self):
+        Collection.objects.create(abbreviation="KNM", description="Kenya")
+        Locality.objects.create(abbreviation="LT", name="Lothagam")
         media = Media.objects.create(
             media_location="uploads/pending/field-slip-qc.png",
             ocr_data={
@@ -120,9 +122,12 @@ class FieldSlipCardQCPrefillTests(TestCase):
                     "collector": {"interpreted": "Leakey"},
                     "verbatim_taxon": {"interpreted": "Homo"},
                     "verbatim_element": {"interpreted": "Femur"},
+                    "verbatim_locality": {"raw": "Lahscagam", "interpreted": None},
+                    "verbatim_horizon": {"raw": "Nawata lower (south)", "interpreted": None},
+                    "comment": {"raw": "Back-side comment", "interpreted": None},
                     "accession_identification": {
-                        "collection": {"interpreted": "KNM-LT 28567"},
-                        "locality": {"interpreted": "LT"},
+                        "collection": {"raw": "KNM-LT", "interpreted": "KNM-LT"},
+                        "locality": {"interpreted": None},
                         "accession_number": {"interpreted": "28567"},
                     },
                 },
@@ -136,8 +141,14 @@ class FieldSlipCardQCPrefillTests(TestCase):
         self.assertEqual(len(manager.fieldslip_initial), 1)
         self.assertEqual(manager.fieldslip_initial[0]["field_number"], "FS-77")
         self.assertEqual(manager.fieldslip_initial[0]["collector"], "Leakey")
+        self.assertEqual(manager.fieldslip_initial[0]["verbatim_locality"], "Lahscagam")
+        self.assertEqual(manager.fieldslip_initial[0]["horizon_bed"], "Nawata lower (south)")
+        self.assertEqual(manager.fieldslip_initial[0]["comment"], "Back-side comment")
         self.assertTrue(manager.data.get("accessions"))
         self.assertEqual(
             manager.data["accessions"][0]["field_slips"][0]["field_number"]["interpreted"],
             "FS-77",
         )
+        self.assertEqual(manager.acc_initial["collection"].abbreviation, "KNM")
+        self.assertEqual(manager.acc_initial["specimen_prefix"].abbreviation, "LT")
+        self.assertEqual(manager.acc_initial["specimen_no"], 28567)

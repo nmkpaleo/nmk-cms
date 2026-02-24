@@ -108,6 +108,7 @@ from cms.forms import (
     SpecimenListUploadForm,
 )
 
+from cms.manual_import import parse_accession_number
 from cms.models import (
     Accession,
     AccessionNumberSeries,
@@ -2793,6 +2794,49 @@ def _get_qc_history(media: Media, limit: int | None = None) -> list[MediaQCLog]:
 class MediaQCFormManager:
     """Prepare and persist media QC forms shared by intern and expert wizards."""
 
+    @staticmethod
+    def _payload_text(payload: object) -> object:
+        if isinstance(payload, dict):
+            interpreted = payload.get("interpreted")
+            if interpreted not in (None, ""):
+                return interpreted
+            raw = payload.get("raw")
+            if raw not in (None, ""):
+                return raw
+            return None
+        return payload
+
+    @classmethod
+    def _parse_accession_tokens(cls, accession_payload: dict) -> tuple[str | None, str | None, object | None]:
+        collection_value = cls._payload_text(accession_payload.get("collection_abbreviation"))
+        prefix_value = cls._payload_text(accession_payload.get("specimen_prefix_abbreviation"))
+        specimen_value = cls._payload_text(accession_payload.get("specimen_no"))
+
+        if collection_value and specimen_value and str(collection_value).strip() and str(specimen_value).strip():
+            parsed = parse_accession_number(f"{collection_value}-{specimen_value}")
+            parsed_collection = parsed.collection_abbreviation
+            parsed_prefix = parsed.specimen_prefix
+            parsed_no = parsed.specimen_number
+            if parsed_collection and not prefix_value:
+                collection_value = parsed_collection
+            if parsed_prefix and not prefix_value:
+                prefix_value = parsed_prefix
+            if parsed_no is not None:
+                specimen_value = parsed_no
+
+        if prefix_value in (None, "") and collection_value:
+            parsed_collection = parse_accession_number(str(collection_value))
+            if parsed_collection.collection_abbreviation:
+                collection_value = parsed_collection.collection_abbreviation
+            if parsed_collection.specimen_prefix:
+                prefix_value = parsed_collection.specimen_prefix
+
+        if isinstance(collection_value, str):
+            collection_value = collection_value.upper()
+        if isinstance(prefix_value, str):
+            prefix_value = prefix_value.upper()
+        return collection_value, prefix_value, specimen_value
+
     def __init__(self, request, media: Media):
         self.request = request
         self.media = media
@@ -2814,11 +2858,24 @@ class MediaQCFormManager:
                 accession_ident = field_payload.get("accession_identification") or {}
                 if not isinstance(accession_ident, dict):
                     accession_ident = {}
+                collection_value = accession_ident.get("collection") or {}
+                prefix_value = accession_ident.get("locality") or {}
+                specimen_value = accession_ident.get("accession_number") or {}
+                parsed = parse_accession_number(
+                    f"{self._payload_text(collection_value) or ''}-{self._payload_text(specimen_value) or ''}"
+                )
+                if parsed.collection_abbreviation:
+                    collection_value = {"interpreted": parsed.collection_abbreviation}
+                if parsed.specimen_prefix and self._payload_text(prefix_value) in (None, ""):
+                    prefix_value = {"interpreted": parsed.specimen_prefix}
+                if parsed.specimen_number is not None:
+                    specimen_value = {"interpreted": parsed.specimen_number}
+
                 accessions.append(
                     {
-                        "collection_abbreviation": accession_ident.get("collection") or {},
-                        "specimen_prefix_abbreviation": accession_ident.get("locality") or {},
-                        "specimen_no": accession_ident.get("accession_number") or {},
+                        "collection_abbreviation": collection_value,
+                        "specimen_prefix_abbreviation": prefix_value,
+                        "specimen_no": specimen_value,
                         "field_slips": [field_payload],
                     }
                 )
@@ -3009,58 +3066,58 @@ class MediaQCFormManager:
                 {
                     "slip_id": slip_id,
                     "order": index,
-                    "field_number": (
-                        field_slip_payload.get("field_number") or {}
-                    ).get("interpreted"),
-                    "verbatim_event_date": (
-                        field_slip_payload.get("verbatimEventDate") or {}
-                    ).get("interpreted") or (
-                        field_slip_payload.get("collection_date") or {}
-                    ).get("interpreted"),
-                    "collector": (
-                        field_slip_payload.get("collector") or {}
-                    ).get("interpreted"),
-                    "discoverer": (
-                        field_slip_payload.get("discoverer") or {}
-                    ).get("interpreted"),
-                    "verbatim_locality": (
-                        field_slip_payload.get("verbatim_locality") or {}
-                    ).get("interpreted"),
-                    "verbatim_taxon": (
-                        field_slip_payload.get("verbatim_taxon") or {}
-                    ).get("interpreted"),
-                    "verbatim_element": (
-                        field_slip_payload.get("verbatim_element") or {}
-                    ).get("interpreted"),
-                    "horizon_formation": (
-                        horizon_payload.get("formation") or {}
-                    ).get("interpreted"),
-                    "horizon_member": (
-                        horizon_payload.get("member") or {}
-                    ).get("interpreted"),
-                    "horizon_bed": (
-                        horizon_payload.get("bed_or_horizon") or {}
-                    ).get("interpreted"),
-                    "horizon_chronostratigraphy": (
-                        horizon_payload.get("chronostratigraphy") or {}
-                    ).get("interpreted"),
-                    "aerial_photo": (
-                        field_slip_payload.get("aerial_photo") or {}
-                    ).get("interpreted"),
-                    "verbatim_latitude": (
-                        field_slip_payload.get("verbatim_latitude") or {}
-                    ).get("interpreted"),
-                    "verbatim_longitude": (
-                        field_slip_payload.get("verbatim_longitude") or {}
-                    ).get("interpreted"),
-                    "verbatim_elevation": (
-                        field_slip_payload.get("verbatim_elevation") or {}
-                    ).get("interpreted"),
-                    "fragments": (
-                        field_slip_payload.get("fragments") or {}
-                    ).get("interpreted") or (
-                        accession_ident_payload.get("fragments") or {}
-                    ).get("interpreted"),
+                    "field_number": self._payload_text(
+                        field_slip_payload.get("field_number")
+                    ),
+                    "verbatim_event_date": self._payload_text(
+                        field_slip_payload.get("verbatimEventDate")
+                    ) or self._payload_text(
+                        field_slip_payload.get("collection_date")
+                    ),
+                    "collector": self._payload_text(
+                        field_slip_payload.get("collector")
+                    ),
+                    "discoverer": self._payload_text(
+                        field_slip_payload.get("discoverer")
+                    ),
+                    "verbatim_locality": self._payload_text(
+                        field_slip_payload.get("verbatim_locality")
+                    ),
+                    "verbatim_taxon": self._payload_text(
+                        field_slip_payload.get("verbatim_taxon")
+                    ),
+                    "verbatim_element": self._payload_text(
+                        field_slip_payload.get("verbatim_element")
+                    ),
+                    "horizon_formation": self._payload_text(
+                        horizon_payload.get("formation")
+                    ),
+                    "horizon_member": self._payload_text(
+                        horizon_payload.get("member")
+                    ),
+                    "horizon_bed": self._payload_text(
+                        horizon_payload.get("bed_or_horizon")
+                    ) or self._payload_text(field_slip_payload.get("verbatim_horizon")),
+                    "horizon_chronostratigraphy": self._payload_text(
+                        horizon_payload.get("chronostratigraphy")
+                    ),
+                    "aerial_photo": self._payload_text(
+                        field_slip_payload.get("aerial_photo")
+                    ),
+                    "verbatim_latitude": self._payload_text(
+                        field_slip_payload.get("verbatim_latitude")
+                    ),
+                    "verbatim_longitude": self._payload_text(
+                        field_slip_payload.get("verbatim_longitude")
+                    ),
+                    "verbatim_elevation": self._payload_text(
+                        field_slip_payload.get("verbatim_elevation")
+                    ),
+                    "fragments": self._payload_text(
+                        field_slip_payload.get("fragments")
+                    ) or self._payload_text(
+                        accession_ident_payload.get("fragments")
+                    ),
                     "sedimentary_features": ", ".join(
                         checkbox_payload.get("sedimentary_features") or []
                     ),
@@ -3076,18 +3133,18 @@ class MediaQCFormManager:
                     "matrix_grain_size": ", ".join(
                         checkbox_payload.get("matrix_grain_size") or []
                     ),
-                    "collection_position": (
-                        field_slip_payload.get("collection_position") or {}
-                    ).get("interpreted"),
-                    "matrix_association": (
-                        field_slip_payload.get("matrix_association") or {}
-                    ).get("interpreted"),
-                    "surface_exposure": (
-                        field_slip_payload.get("surface_exposure") or {}
-                    ).get("interpreted") is True,
-                    "comment": (
-                        field_slip_payload.get("comment") or {}
-                    ).get("interpreted"),
+                    "collection_position": self._payload_text(
+                        field_slip_payload.get("collection_position")
+                    ),
+                    "matrix_association": self._payload_text(
+                        field_slip_payload.get("matrix_association")
+                    ),
+                    "surface_exposure": self._payload_text(
+                        field_slip_payload.get("surface_exposure")
+                    ) is True,
+                    "comment": self._payload_text(
+                        field_slip_payload.get("comment")
+                    ),
                 }
             )
 
@@ -3095,35 +3152,29 @@ class MediaQCFormManager:
             dict.fromkeys(value for value in self.storage_suggestions if value)
         )
 
-        collection_abbr = (
-            self.accession_payload.get("collection_abbreviation") or {}
-        ).get("interpreted")
+        collection_abbr, prefix_abbr, specimen_no_value = self._parse_accession_tokens(
+            self.accession_payload
+        )
         collection_obj = (
             Collection.objects.filter(abbreviation=collection_abbr).first()
             if collection_abbr
             else None
         )
-        prefix_abbr = (
-            self.accession_payload.get("specimen_prefix_abbreviation") or {}
-        ).get("interpreted")
         prefix_obj = (
             Locality.objects.filter(abbreviation=prefix_abbr).first()
             if prefix_abbr
             else None
         )
-        specimen_no_value = (
-            self.accession_payload.get("specimen_no") or {}
-        ).get("interpreted")
         try:
             specimen_no_initial = int(specimen_no_value)
         except (TypeError, ValueError):
             specimen_no_initial = specimen_no_value
-        type_status_initial = (
-            self.accession_payload.get("type_status") or {}
-        ).get("interpreted")
-        comment_initial = (
-            self.accession_payload.get("comment") or {}
-        ).get("interpreted")
+        type_status_initial = self._payload_text(
+            self.accession_payload.get("type_status")
+        )
+        comment_initial = self._payload_text(
+            self.accession_payload.get("comment")
+        )
         accession_instance = getattr(media, "accession", None) or Accession()
         accessioned_by_user = (
             getattr(getattr(media, "accession", None), "accessioned_by", None)
