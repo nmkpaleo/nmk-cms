@@ -43,6 +43,11 @@ from cms.models import (
     Reference,
     AccessionReference,
     FieldSlip,
+    SedimentaryFeature,
+    FossilGroup,
+    PreservationState,
+    CollectionMethod,
+    GrainSize,
     AccessionFieldSlip,
     Identification,
     NatureOfSpecimen,
@@ -62,6 +67,10 @@ from cms import scanning_utils
 from cms.ocr_processing import (
     process_pending_scans,
     describe_accession_conflicts,
+    build_prompt_for_card_type,
+    normalize_field_slip_payload,
+    normalize_fragments_value,
+    _ensure_field_slip,
     UNKNOWN_FIELD_NUMBER_PREFIX,
     _apply_rows,
     MAX_OCR_ROWS_PER_ACCESSION,
@@ -2225,6 +2234,9 @@ class OcrViewTests(TestCase):
             usage_record.cost_usd,
             Decimal(str(DEFAULT_USAGE_PAYLOAD["total_cost_usd"])),
         )
+
+
+
         self.assertEqual(usage_record.response_id, DEFAULT_USAGE_PAYLOAD["request_id"])
         self.assertEqual(usage_record.remaining_quota_usd, Decimal("11.0"))
         self.assertIsNotNone(usage_record.processing_seconds)
@@ -2350,6 +2362,148 @@ class OcrViewTests(TestCase):
         response = self.client.get(self.loop_url, follow=True)
         self.assertContains(response, "OpenAI quota has been exhausted")
         self.assertIsNone(self.client.session.get("ocr_loop_stats"))
+
+
+
+
+class FieldSlipNormalizationTests(TestCase):
+    def test_normalize_field_slip_payload_expands_row_suffixes_and_maps_provenance(self):
+        payload = {
+            "card_type": "field_slip",
+            "field_slip": {
+                "field_number": {"interpreted": "FS-101"},
+                "verbatim_locality": {"interpreted": "Area 4"},
+                "fragments": {"interpreted": "12"},
+                "accession_identification": {
+                    "collection": {"interpreted": "KNM"},
+                    "locality": {"interpreted": "ER"},
+                    "accession_number": {"interpreted": "6000"},
+                    "row_suffixes": ["A-C", "B", "D"],
+                },
+                "checkboxes": {
+                    "provenance": ["IN SITU", "SURFACE WITH MATRIX"],
+                    "sedimentary_features": [" ROOT/BUR ", "root/bur"],
+                },
+            },
+        }
+
+        normalized = normalize_field_slip_payload(payload)
+
+        self.assertEqual(normalized["field_number"], "FS-101")
+        self.assertEqual(normalized["verbatim_locality"], "Area 4")
+        self.assertEqual(normalized["fragments"], 12)
+        self.assertEqual(
+            normalized["accession_identification"]["row_suffixes"],
+            ["A", "B", "C", "D"],
+        )
+        self.assertEqual(normalized["collection_position"], "ex_situ")
+        self.assertTrue(normalized["surface_exposure"])
+        self.assertEqual(normalized["matrix_association"], "attached")
+        self.assertEqual(
+            normalized["checkboxes"]["sedimentary_features"],
+            ["ROOT/BUR"],
+        )
+
+    def test_normalize_fragments_value_accepts_integers_only(self):
+        self.assertEqual(normalize_fragments_value({"interpreted": "7"}), 7)
+        self.assertEqual(normalize_fragments_value({"interpreted": 0}), 0)
+        self.assertIsNone(normalize_fragments_value({"interpreted": "7-9"}))
+        self.assertIsNone(normalize_fragments_value({"interpreted": "abc"}))
+
+
+class FieldSlipApprovalIngestionTests(TestCase):
+    def setUp(self):
+        self.sed_feature = SedimentaryFeature.objects.create(
+            name="ROOT/BUR",
+            code="ROOT_BUR",
+            category="sedimentary",
+        )
+        self.fossil_group = FossilGroup.objects.create(name="Molluscs")
+        self.preservation_state = PreservationState.objects.create(name="Whole")
+        self.collection_method = CollectionMethod.objects.create(name="SIEVING")
+        self.grain_size = GrainSize.objects.create(name="SAND")
+
+    def test_ensure_field_slip_resolves_relations_and_updates_idempotently(self):
+        payload = {
+            "card_type": "field_slip",
+            "field_slip": {
+                "field_number": {"interpreted": "FS-500"},
+                "verbatim_locality": {"interpreted": "Area 7"},
+                "verbatim_taxon": {"interpreted": "Homo"},
+                "verbatim_element": {"interpreted": "Femur"},
+                "verbatimEventDate": {"interpreted": "1972"},
+                "collector": {"interpreted": "Leakey"},
+                "discoverer": {"interpreted": "Kamoya"},
+                "comment": {"interpreted": "Backside text"},
+                "checkboxes": {
+                    "sedimentary_features": ["ROOT/BUR"],
+                    "rock_type": ["MOLLUSCS WHOLE"],
+                    "recommended_methods": ["SIEVING"],
+                    "provenance": ["SURFACE WITH MATRIX"],
+                    "matrix_grain_size": ["SAND"],
+                },
+            },
+        }
+
+        first = _ensure_field_slip(payload)
+        second = _ensure_field_slip(payload)
+
+        self.assertIsNotNone(first)
+        self.assertEqual(first.pk, second.pk)
+        self.assertEqual(FieldSlip.objects.count(), 1)
+        self.assertEqual(first.collector, "Leakey")
+        self.assertEqual(first.discoverer, "Kamoya")
+        self.assertEqual(first.comment, "Backside text")
+        self.assertEqual(first.collection_position, "ex_situ")
+        self.assertEqual(first.matrix_association, "attached")
+        self.assertEqual(first.surface_exposure, True)
+        self.assertEqual(first.matrix_grain_size, self.grain_size)
+        self.assertQuerySetEqual(
+            first.sedimentary_features.order_by("name"),
+            [self.sed_feature],
+            transform=lambda x: x,
+        )
+        self.assertQuerySetEqual(
+            first.fossil_groups.order_by("name"),
+            [self.fossil_group],
+            transform=lambda x: x,
+        )
+        self.assertQuerySetEqual(
+            first.preservation_states.order_by("name"),
+            [self.preservation_state],
+            transform=lambda x: x,
+        )
+        self.assertQuerySetEqual(
+            first.recommended_methods.order_by("name"),
+            [self.collection_method],
+            transform=lambda x: x,
+        )
+
+class OcrPromptBuilderTests(TestCase):
+    def test_field_slip_prompt_has_schema_locked_json_contract(self):
+        prompt = build_prompt_for_card_type("field_slip")
+
+        self.assertIn('"card_type": "field_slip"', prompt)
+        self.assertIn('"field_slip": {', prompt)
+        self.assertIn('"raw": string|null', prompt)
+        self.assertIn('"interpreted": string|null', prompt)
+        self.assertIn('"confidence": number|null', prompt)
+        self.assertIn('"checkboxes": {', prompt)
+        self.assertIn('"provenance": [string]', prompt)
+        self.assertIn('Output JSON only.', prompt)
+
+    def test_field_slip_prompt_includes_required_extraction_rules(self):
+        prompt = build_prompt_for_card_type("field_slip")
+
+        self.assertIn('Expand accession row ranges like A-C into ["A","B","C"].', prompt)
+        self.assertIn('`fragments.interpreted` must be integer or null.', prompt)
+        self.assertIn('Do not invent values.', prompt)
+
+    def test_non_field_slip_prompt_regression_uses_generic_fallback(self):
+        prompt = build_prompt_for_card_type("other")
+
+        self.assertIn("Please OCR this card", prompt)
+        self.assertNotIn('"card_type": "field_slip"', prompt)
 
 
 class ProcessPendingScansTests(TestCase):
@@ -4221,9 +4375,13 @@ class MediaInternQCWizardTests(TestCase):
             "fieldslip-0-slip_id": "field-slip-0",
             "fieldslip-0-order": "0",
             "fieldslip-0-field_number": "FS-2",
+            "fieldslip-0-verbatim_event_date": "1968-04-03",
+            "fieldslip-0-collector": "Leakey",
+            "fieldslip-0-discoverer": "Kamoya",
             "fieldslip-0-verbatim_locality": "Loc2",
             "fieldslip-0-verbatim_taxon": "Pan",
             "fieldslip-0-verbatim_element": "Tooth",
+            "fieldslip-0-fragments": "7",
             "fieldslip-0-horizon_formation": "NewForm",
             "fieldslip-0-horizon_member": "NewMember",
             "fieldslip-0-horizon_bed": "NewBed",
@@ -4232,6 +4390,15 @@ class MediaInternQCWizardTests(TestCase):
             "fieldslip-0-verbatim_latitude": "Lat2",
             "fieldslip-0-verbatim_longitude": "Lon2",
             "fieldslip-0-verbatim_elevation": "200",
+            "fieldslip-0-sedimentary_features": "ROOT/BUR, X-BEDS",
+            "fieldslip-0-rock_type": "MOLLUSCS WHOLE, BROKEN",
+            "fieldslip-0-recommended_methods": "SIEVING",
+            "fieldslip-0-provenance": "SURFACE WITH MATRIX",
+            "fieldslip-0-matrix_grain_size": "SAND",
+            "fieldslip-0-collection_position": "ex_situ",
+            "fieldslip-0-matrix_association": "attached",
+            "fieldslip-0-surface_exposure": "on",
+            "fieldslip-0-comment": "Updated by intern",
         }
 
     def test_non_intern_forbidden(self):
@@ -4254,6 +4421,7 @@ class MediaInternQCWizardTests(TestCase):
         fieldslip_forms = response.context["fieldslip_formset"].forms
         self.assertEqual(len(fieldslip_forms), 1)
         self.assertEqual(fieldslip_forms[0]["field_number"].value(), "FS-1")
+        self.assertEqual(fieldslip_forms[0]["surface_exposure"].value(), False)
 
     def test_context_includes_recent_history(self):
         log = MediaQCLog.objects.create(
@@ -4302,6 +4470,22 @@ class MediaInternQCWizardTests(TestCase):
         self.assertEqual(references[0]["page"]["interpreted"], "120-135")
         field_slips = accession_payload["field_slips"]
         self.assertEqual(field_slips[0]["field_number"]["interpreted"], "FS-2")
+        self.assertEqual(field_slips[0]["verbatimEventDate"]["interpreted"], "1968-04-03")
+        self.assertEqual(field_slips[0]["collector"]["interpreted"], "Leakey")
+        self.assertEqual(field_slips[0]["discoverer"]["interpreted"], "Kamoya")
+        self.assertEqual(field_slips[0]["fragments"]["interpreted"], 7)
+        self.assertEqual(field_slips[0]["collection_position"]["interpreted"], "ex_situ")
+        self.assertEqual(field_slips[0]["matrix_association"]["interpreted"], "attached")
+        self.assertEqual(field_slips[0]["surface_exposure"]["interpreted"], True)
+        self.assertEqual(field_slips[0]["comment"]["interpreted"], "Updated by intern")
+        self.assertEqual(
+            field_slips[0]["checkboxes"]["sedimentary_features"],
+            ["ROOT/BUR", "X-BEDS"],
+        )
+        self.assertEqual(
+            field_slips[0]["checkboxes"]["recommended_methods"],
+            ["SIEVING"],
+        )
         self.assertEqual(
             field_slips[0]["verbatim_horizon"]["formation"]["interpreted"],
             "NewForm",
@@ -4885,3 +5069,83 @@ class AdminAutocompleteTests(TestCase):
         scanning_admin = site._registry[Scanning]
         self.assertIn("drawer__code", scanning_admin.search_fields)
         self.assertIn("user__username", scanning_admin.search_fields)
+
+
+class FieldSlipListViewAccessAndFilterTests(TestCase):
+    def setUp(self):
+        self.password = "pass123"
+        self.manager = User.objects.create_user(username="manager", password=self.password)
+        self.curator = User.objects.create_user(username="curator", password=self.password)
+        self.regular = User.objects.create_user(username="regular", password=self.password)
+
+        Group.objects.get_or_create(name="Collection Managers")[0].user_set.add(self.manager)
+        Group.objects.get_or_create(name="Curators")[0].user_set.add(self.curator)
+
+        self.feature = SedimentaryFeature.objects.create(
+            name="ROOT/BUR FILTER",
+            code="ROOT_BUR_FILTER_VIEW",
+            category="sedimentary",
+        )
+
+        self.matching = FieldSlip.objects.create(
+            field_number="FS-FILTER-1",
+            verbatim_taxon="Homo",
+            verbatim_element="Femur",
+            collection_position="ex_situ",
+            surface_exposure=True,
+        )
+        self.matching.sedimentary_features.add(self.feature)
+
+        self.non_matching = FieldSlip.objects.create(
+            field_number="FS-FILTER-2",
+            verbatim_taxon="Pan",
+            verbatim_element="Tooth",
+            collection_position="in_situ",
+            surface_exposure=False,
+        )
+
+    def test_collection_manager_can_filter_field_slips(self):
+        self.client.login(username="manager", password=self.password)
+        response = self.client.get(
+            reverse("fieldslip_list"),
+            {
+                "sedimentary_features": [str(self.feature.pk)],
+                "surface_exposure": "true",
+                "collection_position": "ex_situ",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        object_list = list(response.context["object_list"])
+        self.assertEqual(object_list, [self.matching])
+
+    def test_curator_has_access_to_field_slip_list(self):
+        self.client.login(username="curator", password=self.password)
+        response = self.client.get(reverse("fieldslip_list"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_regular_user_is_forbidden(self):
+        self.client.login(username="regular", password=self.password)
+        response = self.client.get(reverse("fieldslip_list"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_filter_pagination_remains_stable(self):
+        for index in range(2, 14):
+            slip = FieldSlip.objects.create(
+                field_number=f"FS-PAGE-{index}",
+                verbatim_taxon="Homo",
+                verbatim_element="Femur",
+                surface_exposure=True,
+            )
+            slip.sedimentary_features.add(self.feature)
+
+        self.client.login(username="manager", password=self.password)
+        response = self.client.get(
+            reverse("fieldslip_list"),
+            {
+                "sedimentary_features": [str(self.feature.pk)],
+                "surface_exposure": "true",
+                "page": "2",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["page_obj"].number, 2)

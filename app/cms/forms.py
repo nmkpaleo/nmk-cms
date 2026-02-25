@@ -157,6 +157,13 @@ class BaseW3Form(W3StyleMixin, forms.Form):
         self._apply_w3_styles()
 
 
+class FieldSlipFilterForm(BaseW3Form):
+    """Shared filter form so field-slip filter widgets stay style-consistent."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+
 class BaseW3ModelForm(W3StyleMixin, forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

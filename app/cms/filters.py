@@ -25,6 +25,7 @@ from .models import (
     SpecimenListRowCandidate,
 )
 from django.contrib.auth import get_user_model
+from .forms import FieldSlipFilterForm
 
 User = get_user_model()
 
@@ -549,6 +550,7 @@ class FieldSlipFilter(django_filters.FilterSet):
 
     class Meta:
         model = FieldSlip
+        form = FieldSlipFilterForm
         fields = [
             "field_number",
             "collector",

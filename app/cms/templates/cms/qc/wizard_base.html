@@ -1,5 +1,5 @@
 {% extends "base_generic.html" %}
-{% load static %}
+{% load static i18n %}
 
 {% block title %}{% block wizard_title %}{% endblock %}{% endblock %}
 
@@ -632,26 +632,55 @@
         </template>
       </section>
 
-      <section class="qc-section">
+      <section class="qc-section" aria-labelledby="field-slip-qc-heading">
         <div class="qc-section-heading w3-border-bottom w3-padding-small">
-          <h3>Field Slips</h3>
-          <span class="qc-inline-note">Check linked field slip information before forwarding.</span>
+          <h3 id="field-slip-qc-heading">{% trans "Field Slips" %}</h3>
+          <span class="qc-inline-note">{% trans "Check linked field slip information before forwarding." %}</span>
         </div>
 
         {% if fieldslip_formset.forms %}
           {% for field_form in fieldslip_formset %}
-            <div class="qc-card">
+            <article class="qc-card" aria-label="{% trans 'Field slip review card' %}">
               {% for hidden in field_form.hidden_fields %}
                 {{ hidden }}
               {% endfor %}
-              <div class="qc-field-grid">
-                <div class="qc-field qc-field--full">
-                  <label class="qc-label" for="{{ field_form.field_number.id_for_label }}">{{ field_form.field_number.label }}:</label>
-                  <div class="qc-control">
-                    {{ field_form.field_number }}
-                    {{ field_form.field_number.errors }}
+              <fieldset class="w3-border-0 w3-padding-0">
+                <legend class="w3-small w3-text-grey">{% trans "Identity and event" %}</legend>
+                <div class="qc-field-grid">
+                  <div class="qc-field">
+                    <label class="qc-label" for="{{ field_form.field_number.id_for_label }}">{{ field_form.field_number.label }}:</label>
+                    <div class="qc-control">
+                      {{ field_form.field_number }}
+                      {{ field_form.field_number.errors }}
+                    </div>
+                  </div>
+                  <div class="qc-field">
+                    <label class="qc-label" for="{{ field_form.verbatim_event_date.id_for_label }}">{{ field_form.verbatim_event_date.label }}:</label>
+                    <div class="qc-control">
+                      {{ field_form.verbatim_event_date }}
+                      {{ field_form.verbatim_event_date.errors }}
+                    </div>
+                  </div>
+                  <div class="qc-field">
+                    <label class="qc-label" for="{{ field_form.collector.id_for_label }}">{{ field_form.collector.label }}:</label>
+                    <div class="qc-control">
+                      {{ field_form.collector }}
+                      {{ field_form.collector.errors }}
+                    </div>
+                  </div>
+                  <div class="qc-field">
+                    <label class="qc-label" for="{{ field_form.discoverer.id_for_label }}">{{ field_form.discoverer.label }}:</label>
+                    <div class="qc-control">
+                      {{ field_form.discoverer }}
+                      {{ field_form.discoverer.errors }}
+                    </div>
                   </div>
                 </div>
+              </fieldset>
+
+              <fieldset class="w3-border-0 w3-padding-0">
+                <legend class="w3-small w3-text-grey">{% trans "Verbatim text" %}</legend>
+                <div class="qc-field-grid">
                 <div class="qc-field qc-field--full">
                   <label class="qc-label" for="{{ field_form.verbatim_locality.id_for_label }}">{{ field_form.verbatim_locality.label }}:</label>
                   <div class="qc-control">
@@ -673,10 +702,18 @@
                     {{ field_form.verbatim_element.errors }}
                   </div>
                 </div>
+                <div class="qc-field">
+                  <label class="qc-label" for="{{ field_form.fragments.id_for_label }}">{{ field_form.fragments.label }}:</label>
+                  <div class="qc-control">
+                    {{ field_form.fragments }}
+                    {{ field_form.fragments.errors }}
+                  </div>
+                </div>
               </div>
+              </fieldset>
 
-              <div class="qc-subsection">
-                <h4>Verbatim Horizon</h4>
+              <div class="qc-subsection" role="group" aria-label="{% trans 'Verbatim horizon' %}">
+                <h4>{% trans "Verbatim Horizon" %}</h4>
                 <div class="qc-field-grid">
                   <div class="qc-field">
                     <label class="qc-label" for="{{ field_form.horizon_formation.id_for_label }}">{{ field_form.horizon_formation.label }}:</label>
@@ -709,7 +746,9 @@
                 </div>
               </div>
 
-              <div class="qc-field-grid">
+              <fieldset class="w3-border-0 w3-padding-0">
+                <legend class="w3-small w3-text-grey">{% trans "Coordinates and context" %}</legend>
+                <div class="qc-field-grid">
                 <div class="qc-field">
                   <label class="qc-label" for="{{ field_form.aerial_photo.id_for_label }}">{{ field_form.aerial_photo.label }}:</label>
                   <div class="qc-control">
@@ -739,10 +778,57 @@
                   </div>
                 </div>
               </div>
-            </div>
+              </fieldset>
+
+              <fieldset class="w3-border-0 w3-padding-0">
+                <legend class="w3-small w3-text-grey">{% trans "Field-slip structured interpretation" %}</legend>
+                <div class="qc-field-grid">
+                  <div class="qc-field qc-field--full">
+                    <label class="qc-label" for="{{ field_form.sedimentary_features.id_for_label }}">{{ field_form.sedimentary_features.label }}:</label>
+                    <div class="qc-control">{{ field_form.sedimentary_features }}{{ field_form.sedimentary_features.errors }}</div>
+                  </div>
+                  <div class="qc-field qc-field--full">
+                    <label class="qc-label" for="{{ field_form.fossil_groups.id_for_label }}">{{ field_form.fossil_groups.label }}:</label>
+                    <div class="qc-control">{{ field_form.fossil_groups }}{{ field_form.fossil_groups.errors }}</div>
+                  </div>
+                  <div class="qc-field qc-field--full">
+                    <label class="qc-label" for="{{ field_form.preservation_states.id_for_label }}">{{ field_form.preservation_states.label }}:</label>
+                    <div class="qc-control">{{ field_form.preservation_states }}{{ field_form.preservation_states.errors }}</div>
+                  </div>
+                  <div class="qc-field qc-field--full">
+                    <label class="qc-label" for="{{ field_form.recommended_methods.id_for_label }}">{{ field_form.recommended_methods.label }}:</label>
+                    <div class="qc-control">{{ field_form.recommended_methods }}{{ field_form.recommended_methods.errors }}</div>
+                  </div>
+                  <div class="qc-field qc-field--full">
+                    <label class="qc-label" for="{{ field_form.provenance.id_for_label }}">{{ field_form.provenance.label }}:</label>
+                    <div class="qc-control">{{ field_form.provenance }}{{ field_form.provenance.errors }}</div>
+                  </div>
+                  <div class="qc-field">
+                    <label class="qc-label" for="{{ field_form.matrix_grain_size.id_for_label }}">{{ field_form.matrix_grain_size.label }}:</label>
+                    <div class="qc-control">{{ field_form.matrix_grain_size }}{{ field_form.matrix_grain_size.errors }}</div>
+                  </div>
+                  <div class="qc-field">
+                    <label class="qc-label" for="{{ field_form.collection_position.id_for_label }}">{{ field_form.collection_position.label }}:</label>
+                    <div class="qc-control">{{ field_form.collection_position }}{{ field_form.collection_position.errors }}</div>
+                  </div>
+                  <div class="qc-field">
+                    <label class="qc-label" for="{{ field_form.matrix_association.id_for_label }}">{{ field_form.matrix_association.label }}:</label>
+                    <div class="qc-control">{{ field_form.matrix_association }}{{ field_form.matrix_association.errors }}</div>
+                  </div>
+                  <div class="qc-field">
+                    <label class="qc-label" for="{{ field_form.surface_exposure.id_for_label }}">{{ field_form.surface_exposure.label }}:</label>
+                    <div class="qc-control">{{ field_form.surface_exposure }}{{ field_form.surface_exposure.errors }}</div>
+                  </div>
+                  <div class="qc-field qc-field--full">
+                    <label class="qc-label" for="{{ field_form.comment.id_for_label }}">{{ field_form.comment.label }}:</label>
+                    <div class="qc-control">{{ field_form.comment }}{{ field_form.comment.errors }}</div>
+                  </div>
+                </div>
+              </fieldset>
+            </article>
           {% endfor %}
         {% else %}
-          <p class="qc-inline-note">No field slips were detected for this accession.</p>
+          <p class="qc-inline-note">{% trans "No field slips were detected for this accession." %}</p>
         {% endif %}
       </section>
 

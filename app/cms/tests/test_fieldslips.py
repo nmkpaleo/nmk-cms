@@ -34,6 +34,7 @@ from cms.models import (
     Collection,
     Element,
     FieldSlip,
+    SedimentaryFeature,
     Identification,
     Locality,
     NatureOfSpecimen,
@@ -136,6 +137,64 @@ class FieldSlipFilterTests(FieldSlipTestCase):
 
         results = list(filterset.qs)
         self.assertEqual(results, [matching])
+
+    def test_filter_by_sedimentary_feature_and_surface_exposure(self):
+        feature = SedimentaryFeature.objects.create(
+            name="ROOT/BUR FEATURE",
+            code="ROOT_BUR_FEATURE",
+            category="sedimentary",
+        )
+        matching = self.create_fieldslip(field_number="FS-201")
+        matching.surface_exposure = True
+        matching.save(update_fields=["surface_exposure"])
+        matching.sedimentary_features.add(feature)
+
+        non_matching = self.create_fieldslip(field_number="FS-202")
+        non_matching.surface_exposure = False
+        non_matching.save(update_fields=["surface_exposure"])
+
+        filterset = FieldSlipFilter(
+            data={
+                "sedimentary_features": [str(feature.pk)],
+                "surface_exposure": "true",
+            },
+            queryset=FieldSlip.objects.all(),
+        )
+
+        self.assertTrue(filterset.form.is_valid())
+        self.assertEqual(list(filterset.qs), [matching])
+
+
+class FieldSlipListPermissionTests(FieldSlipTestCase):
+    def setUp(self) -> None:
+        super().setUp()
+        self.curator_group, _ = Group.objects.get_or_create(name="Curators")
+        self.curator = get_user_model().objects.create_user(
+            username="curator-user",
+            email="curator@example.com",
+            password="pass1234",
+        )
+        self.curator.groups.add(self.curator_group)
+
+        self.regular_user = get_user_model().objects.create_user(
+            username="regular-user",
+            email="regular@example.com",
+            password="pass1234",
+        )
+
+    def test_curator_can_access_fieldslip_list(self):
+        self.client.force_login(self.curator)
+
+        response = self.client.get(reverse("fieldslip_list"))
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_non_manager_non_curator_is_forbidden(self):
+        self.client.force_login(self.regular_user)
+
+        response = self.client.get(reverse("fieldslip_list"))
+
+        self.assertEqual(response.status_code, 403)
 
 
 class FieldSlipAerialPhotoRenderingTests(FieldSlipTestCase):

@@ -44,7 +44,7 @@ jobs:
       - name: Run tests with coverage
         run: python -m pytest --cov=app --cov-report=xml --cov-fail-under=90
 
-      - name: Run docs tests
+      - name: Run docs tests (Markdown docs only, no MkDocs)
         run: python -m pytest tests/docs
 
   docker:
