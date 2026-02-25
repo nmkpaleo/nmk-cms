@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -152,3 +153,90 @@ class FieldSlipCardQCPrefillTests(TestCase):
         self.assertEqual(manager.acc_initial["collection"].abbreviation, "KNM")
         self.assertEqual(manager.acc_initial["specimen_prefix"].abbreviation, "LT")
         self.assertEqual(manager.acc_initial["specimen_no"], 28567)
+
+    def test_save_cleaned_data_syncs_top_level_field_slip_payload(self):
+        Collection.objects.create(abbreviation="KNM", description="Kenya")
+        Locality.objects.create(abbreviation="WT", name="West Turkana")
+        media = Media.objects.create(
+            media_location="uploads/pending/field-slip-qc-save.png",
+            ocr_data={
+                "card_type": "field_slip",
+                "field_slip": {
+                    "field_number": {"interpreted": "2394"},
+                    "discoverer": {"interpreted": "WM Bivo"},
+                    "verbatim_element": {"interpreted": "M3 talonid (small)"},
+                    "verbatim_horizon": {"interpreted": "Lower NARIATA - below gateway tower"},
+                    "aerial_photo": {"interpreted": "725"},
+                    "comment": {"interpreted": "whiteish seds"},
+                    "verbatim_taxon": {"interpreted": "Cercopithecidae"},
+                    "accession_identification": {
+                        "collection": {"interpreted": "KNM-WT"},
+                        "locality": {"interpreted": None},
+                        "accession_number": {"interpreted": "2394"},
+                    },
+                },
+            },
+        )
+        request = RequestFactory().get("/")
+        request.user = self.user
+        manager = MediaQCFormManager(request, media)
+
+        manager.accession_form = SimpleNamespace(
+            cleaned_data={
+                "collection": Collection.objects.get(abbreviation="KNM"),
+                "specimen_prefix": Locality.objects.get(abbreviation="WT"),
+                "specimen_no": 2394,
+                "type_status": None,
+                "comment": None,
+            },
+            fields={},
+        )
+        manager.row_formset = []
+        manager.ident_formset = []
+        manager.specimen_formset = []
+        manager.reference_formset = []
+        manager.fieldslip_formset = [
+            SimpleNamespace(
+                cleaned_data={
+                    "slip_id": manager.fieldslip_initial[0]["slip_id"],
+                    "order": 0,
+                    "field_number": "WT 2394",
+                    "verbatim_event_date": None,
+                    "collector": None,
+                    "discoverer": "Wambua",
+                    "verbatim_locality": None,
+                    "verbatim_taxon": "Cercopithecidae",
+                    "verbatim_element": "m3 talonid (small)",
+                    "fragments": None,
+                    "horizon_formation": None,
+                    "horizon_member": None,
+                    "horizon_bed": "Lower NAWATA - below gateway farmer",
+                    "horizon_chronostratigraphy": None,
+                    "aerial_photo": "775",
+                    "verbatim_latitude": None,
+                    "verbatim_longitude": None,
+                    "verbatim_elevation": None,
+                    "sedimentary_features": [],
+                    "rock_type": [],
+                    "fossil_groups": [],
+                    "preservation_states": [],
+                    "recommended_methods": [],
+                    "provenance": [],
+                    "matrix_grain_size": "",
+                    "collection_position": "",
+                    "matrix_association": "",
+                    "surface_exposure": False,
+                    "comment": "Western section",
+                },
+                initial={"slip_id": manager.fieldslip_initial[0]["slip_id"]},
+            )
+        ]
+
+        manager.save()
+        media.refresh_from_db()
+        self.assertEqual(media.ocr_data["field_slip"]["field_number"]["interpreted"], "WT 2394")
+        self.assertEqual(media.ocr_data["field_slip"]["discoverer"]["interpreted"], "Wambua")
+        self.assertEqual(media.ocr_data["field_slip"]["verbatim_element"]["interpreted"], "m3 talonid (small)")
+        self.assertEqual(media.ocr_data["field_slip"]["verbatim_horizon"]["bed_or_horizon"]["interpreted"], "Lower NAWATA - below gateway farmer")
+        self.assertEqual(media.ocr_data["field_slip"]["aerial_photo"]["interpreted"], "775")
+        self.assertEqual(media.ocr_data["field_slip"]["comment"]["interpreted"], "Western section")

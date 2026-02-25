@@ -3829,6 +3829,24 @@ class MediaQCFormManager:
 
             self.accession_payload["field_slips"] = updated_field_slips
             self.data["accessions"][0] = self.accession_payload
+            if self.data.get("card_type") == "field_slip" and updated_field_slips:
+                self.data["field_slip"] = copy.deepcopy(updated_field_slips[0])
+                accession_ident = self.data["field_slip"].setdefault("accession_identification", {})
+                _set_interpreted(
+                    accession_ident,
+                    "collection",
+                    self._payload_text(self.accession_payload.get("collection_abbreviation")),
+                )
+                _set_interpreted(
+                    accession_ident,
+                    "locality",
+                    self._payload_text(self.accession_payload.get("specimen_prefix_abbreviation")),
+                )
+                _set_interpreted(
+                    accession_ident,
+                    "accession_number",
+                    self._payload_text(self.accession_payload.get("specimen_no")),
+                )
 
             diff_result = diff_media_payload(
                 self.original_data,
