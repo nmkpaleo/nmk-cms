@@ -4,14 +4,19 @@ from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 from .models import (
     Accession,
+    CollectionMethod,
     DrawerRegister,
     FieldSlip,
+    FossilGroup,
+    GrainSize,
     Locality,
     Organisation,
     Place,
     PlaceType,
     Preparation,
+    PreservationState,
     Reference,
+    SedimentaryFeature,
     Storage,
     Taxon,
     TaxonRank,
@@ -20,6 +25,7 @@ from .models import (
     SpecimenListRowCandidate,
 )
 from django.contrib.auth import get_user_model
+from .forms import FieldSlipFilterForm
 
 User = get_user_model()
 
@@ -463,6 +469,7 @@ class FieldSlipFilter(django_filters.FilterSet):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         _ensure_filters_use_w3_styles(self.filters)
+
     field_number = django_filters.CharFilter(
         lookup_expr="icontains",
         label=_("Field Number"),
@@ -470,43 +477,80 @@ class FieldSlipFilter(django_filters.FilterSet):
     )
     collector = django_filters.CharFilter(
         lookup_expr="icontains",
-        label="Collector",
+        label=_("Collector"),
         widget=forms.TextInput(attrs={"class": "w3-input"}),
     )
-
     collection_date = django_filters.DateFromToRangeFilter(
-        label="Collection Date",
+        label=_("Collection Date"),
         widget=django_filters.widgets.RangeWidget(
             attrs={"type": "date", "class": "w3-input"}
         ),
     )
-
     verbatim_locality = django_filters.CharFilter(
         lookup_expr="icontains",
-        label="Verbatim Locality",
+        label=_("Verbatim Locality"),
         widget=forms.TextInput(attrs={"class": "w3-input"}),
     )
-
     verbatim_taxon = django_filters.CharFilter(
         lookup_expr="icontains",
-        label="Verbatim Taxon",
+        label=_("Verbatim Taxon"),
         widget=forms.TextInput(attrs={"class": "w3-input"}),
     )
-
     verbatim_element = django_filters.CharFilter(
         lookup_expr="icontains",
-        label="Verbatim Element",
+        label=_("Verbatim Element"),
         widget=forms.TextInput(attrs={"class": "w3-input"}),
     )
-
     verbatim_horizon = django_filters.CharFilter(
         lookup_expr="icontains",
-        label="Verbatim Horizon",
+        label=_("Verbatim Horizon"),
         widget=forms.TextInput(attrs={"class": "w3-input"}),
+    )
+    sedimentary_features = django_filters.ModelMultipleChoiceFilter(
+        queryset=SedimentaryFeature.objects.order_by("category", "name"),
+        label=_("Sedimentary Features"),
+        widget=forms.SelectMultiple(attrs={"class": "w3-select"}),
+    )
+    fossil_groups = django_filters.ModelMultipleChoiceFilter(
+        queryset=FossilGroup.objects.order_by("name"),
+        label=_("Associated Fossil Groups"),
+        widget=forms.SelectMultiple(attrs={"class": "w3-select"}),
+    )
+    preservation_states = django_filters.ModelMultipleChoiceFilter(
+        queryset=PreservationState.objects.order_by("name"),
+        label=_("Preservation States"),
+        widget=forms.SelectMultiple(attrs={"class": "w3-select"}),
+    )
+    recommended_methods = django_filters.ModelMultipleChoiceFilter(
+        queryset=CollectionMethod.objects.order_by("name"),
+        label=_("Recommended Collection Methods"),
+        widget=forms.SelectMultiple(attrs={"class": "w3-select"}),
+    )
+    collection_position = django_filters.ChoiceFilter(
+        choices=FieldSlip._meta.get_field("collection_position").choices,
+        label=_("Collection Position"),
+        widget=forms.Select(attrs={"class": "w3-select"}),
+    )
+    matrix_association = django_filters.ChoiceFilter(
+        choices=FieldSlip._meta.get_field("matrix_association").choices,
+        label=_("Matrix Association"),
+        widget=forms.Select(attrs={"class": "w3-select"}),
+    )
+    surface_exposure = django_filters.TypedChoiceFilter(
+        choices=(("", _("Any")), ("true", _("Yes")), ("false", _("No"))),
+        coerce=lambda value: value == "true",
+        label=_("Surface Exposure"),
+        widget=forms.Select(attrs={"class": "w3-select"}),
+    )
+    matrix_grain_size = django_filters.ModelChoiceFilter(
+        queryset=GrainSize.objects.order_by("name"),
+        label=_("Matrix Grain Size"),
+        widget=forms.Select(attrs={"class": "w3-select"}),
     )
 
     class Meta:
         model = FieldSlip
+        form = FieldSlipFilterForm
         fields = [
             "field_number",
             "collector",
@@ -515,7 +559,19 @@ class FieldSlipFilter(django_filters.FilterSet):
             "verbatim_taxon",
             "verbatim_element",
             "verbatim_horizon",
+            "sedimentary_features",
+            "fossil_groups",
+            "preservation_states",
+            "recommended_methods",
+            "collection_position",
+            "matrix_association",
+            "surface_exposure",
+            "matrix_grain_size",
         ]
+
+    @property
+    def qs(self):
+        return super().qs.distinct()
 
 
 class DrawerRegisterFilter(django_filters.FilterSet):

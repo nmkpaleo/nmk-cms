@@ -1,6 +1,11 @@
 # Changelog
 
 ## Unreleased
+- Add FieldSlip sedimentary editing and filtering support across detail, edit, and list workflows, including grouped sedimentary detail layout, deduplicated M2M list filtering, queryset loading optimizations, and regression coverage for ordering/save/filter paths (FS-SED-001 to FS-SED-007).
+- Implement Field-slip OCR/QC delivery tasks FS-002 through FS-006, including strict OCR prompt contract, normalized approval ingestion with relation mapping, expanded QC review controls, admin/filter hardening, and staging rollback runbook guidance.
+- Add CI/rollout/rollback runbook details for Side/Portion inference, including coverage+migration gates, runtime toggle guidance, and staging token verification matrix.
+- Validate inferred specimen Side/Portion compatibility across Nature Of Specimen admin rendering, history auditing, and specimen-list queue filter flows.
+- Preserve active GET filters in shared list pagination links so next/previous navigation keeps filtered result sets on pages like Accessions and Localities, with updated user/admin/development rollout and rollback guidance.
 - Document tooth-marking dependency rollout and rollback runbooks across user/admin/development guides, including operational checks for optional CPU inference updates (TM-006).
 - Surface tooth-marking QC evidence in page review/admin (raw vs corrected element + detections), add the `tooth_marking_debug` management command with overlay output, and document flags/dependencies/fallback behavior across user/admin/developer guides (TM-009).
 - Add FEATURE_REVIEW_UI_ENABLED rollout gate for specimen list review UI endpoints and document user/admin/developer review workflow operations.

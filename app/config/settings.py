@@ -27,6 +27,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # usage. The values default to the public rates as of May 2024 and can be
 # overridden via ``settings_local.py`` or environment variables if needed.
 OPENAI_PRICING = {
+    "gpt-5.2": {"prompt": 0.000005, "completion": 0.000015},
     "gpt-4o": {"prompt": 0.000005, "completion": 0.000015},
     "gpt-4o-mini": {"prompt": 0.00000015, "completion": 0.0000006},
 }
@@ -47,6 +48,10 @@ def get_var(name, default_value=None):
     If the variable is not found on either place, then it returns default_value.
     """
     return os.environ.get(name, config.get(name, default_value))
+
+
+OPENAI_DEFAULT_MODEL = get_var("OPENAI_DEFAULT_MODEL", "gpt-5.2")
+OCR_DEFAULT_ENGINE = get_var("OCR_DEFAULT_ENGINE", "chatgpt-vision")
 
 
 # Quick-start development settings - unsuitable for production

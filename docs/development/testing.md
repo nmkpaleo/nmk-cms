@@ -100,3 +100,34 @@ cd app && python manage.py makemigrations --check --dry-run
 ```
 
 Documentation checks should run using repository tooling only. Do not run MkDocs commands for this project.
+
+## FieldSlip sedimentary regression suite (FS-SED-006)
+
+Use this suite when modifying field slip sedimentary forms, detail rendering, list filters, or queryset loading.
+
+### Targeted coverage
+
+The regression module validates:
+
+- Sedimentary section ordering on detail pages (before Related accessions).
+- Sedimentary field persistence through `/fieldslips/<id>/edit/`.
+- Sedimentary filter behavior on `/fieldslips/`, including deduplicated results for M2M joins.
+
+### Commands
+
+Run from repository root:
+
+```bash
+pytest -q tests/cms/test_fieldslip_sedimentary_regressions.py
+```
+
+```bash
+cd app && python manage.py check
+```
+
+```bash
+cd app && python manage.py makemigrations --check
+```
+
+If your environment does not provide a local MySQL socket, Django may emit a migration-history warning during `makemigrations --check`; treat this as an environment warning when the command still returns `No changes detected`.
+

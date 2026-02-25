@@ -49,6 +49,17 @@ class PlaceType(models.TextChoices):
     SQUARE = "square", "Square"
 
 
+class CollectionPosition(models.TextChoices):
+    IN_SITU = "in_situ", "In situ"
+    EX_SITU = "ex_situ", "Ex situ (surface)"
+
+
+class MatrixAssociation(models.TextChoices):
+    ATTACHED = "attached", "Matrix attached"
+    LOOSE = "loose", "Loose matrix"
+    NONE = "none", "No matrix"
+
+
 
 class BaseModel(models.Model):
     created_on = models.DateTimeField(
@@ -728,8 +739,79 @@ class Comment(BaseModel):
         return self.comment
 
 
+class SedimentaryFeature(models.Model):
+    FEATURE_CATEGORIES = [
+        ("sedimentary", "Sedimentary Structure"),
+        ("biogenic", "Biogenic Structure"),
+        ("pedogenic", "Pedogenic Feature"),
+        ("diagenetic", "Diagenetic Feature"),
+    ]
+
+    name = models.CharField(max_length=100, unique=True)
+    code = models.CharField(max_length=50, unique=True)
+    category = models.CharField(max_length=20, choices=FEATURE_CATEGORIES)
+    description = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class FossilGroup(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class PreservationState(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class CollectionMethod(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class GrainSize(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
 # FieldSlip Model
 class FieldSlip(MergeMixin, BaseModel):
+    SEDIMENTARY_FIELD_CONTRACT = (
+        ("sedimentary_features", _("Sedimentary features")),
+        ("fossil_groups", _("Associated fossil groups")),
+        ("preservation_states", _("Preservation states")),
+        ("recommended_methods", _("Recommended collection methods")),
+        ("collection_position", _("Collection position")),
+        ("matrix_association", _("Matrix association")),
+        ("surface_exposure", _("Surface exposure")),
+        ("matrix_grain_size", _("Matrix grain size")),
+    )
+
     merge_fields = {
         "field_number": MergeStrategy.FIELD_SELECTION,
         "verbatim_taxon": MergeStrategy.FIELD_SELECTION,
@@ -757,6 +839,51 @@ class FieldSlip(MergeMixin, BaseModel):
     verbatim_coordinate_system = models.CharField(max_length=255, null=True, blank=True, help_text="Coordinate system used in the field (WGS84 etc.).")
     verbatim_elevation = models.CharField(max_length=255, null=True, blank=True, help_text="Elevation as recorded.")
     comment = models.TextField(null=True, blank=True, help_text="Additional notes from review.")
+    sedimentary_features = models.ManyToManyField(
+        SedimentaryFeature,
+        blank=True,
+        related_name="field_slips",
+        help_text="Sedimentary, biogenic, pedogenic, or diagenetic features observed at the collection site.",
+    )
+    fossil_groups = models.ManyToManyField(
+        FossilGroup,
+        blank=True,
+        related_name="field_slips",
+    )
+    preservation_states = models.ManyToManyField(
+        PreservationState,
+        blank=True,
+        related_name="field_slips",
+    )
+    recommended_methods = models.ManyToManyField(
+        CollectionMethod,
+        blank=True,
+        related_name="recommended_field_slips",
+    )
+    collection_position = models.CharField(
+        max_length=20,
+        choices=CollectionPosition.choices,
+        null=True,
+        blank=True,
+    )
+    matrix_association = models.CharField(
+        max_length=20,
+        choices=MatrixAssociation.choices,
+        null=True,
+        blank=True,
+    )
+    surface_exposure = models.BooleanField(
+        null=True,
+        blank=True,
+        help_text="Specimen collected from exposed surface.",
+    )
+    matrix_grain_size = models.ForeignKey(
+        GrainSize,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="field_slips",
+    )
 
     history = HistoricalRecords()
 

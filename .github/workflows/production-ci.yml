@@ -32,14 +32,21 @@ jobs:
           python -m pip install -r app/requirements.txt
           python -m pip install pytest pytest-django pytest-cov
 
+      - name: Run Django system check
+        working-directory: app
+        run: python manage.py check
+
       - name: Run migrations check
         working-directory: app
         run: python manage.py makemigrations --check --dry-run
 
+      - name: Run FieldSlip sedimentary regression tests
+        run: python -m pytest tests/cms/test_fieldslip_sedimentary_regressions.py
+
       - name: Run tests with coverage
         run: python -m pytest --cov=app --cov-report=xml --cov-fail-under=90
 
-      - name: Run docs tests
+      - name: Run docs tests (Markdown docs only, no MkDocs)
         run: python -m pytest tests/docs
 
   docker:

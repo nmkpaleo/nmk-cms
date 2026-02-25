@@ -1,4 +1,7 @@
 import itertools
+import re
+from html import unescape
+from urllib.parse import parse_qs
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -117,6 +120,87 @@ def test_locality_list_includes_geological_times_and_accession_counts(client):
     content = response.content.decode()
     assert "Miocene/Pliocene" in content
     assert ">2<" in content
+
+
+def test_locality_list_keeps_multiselect_geological_time_filters_on_pagination(client):
+    selected_times = [
+        Locality.GeologicalTime.MIOCENE,
+        Locality.GeologicalTime.PLIOCENE,
+    ]
+
+    for index in range(12):
+        geological_time = selected_times[index % len(selected_times)]
+        create_locality(
+            abbreviation=f"L{index:02d}",
+            name=f"Locality {index:02d}",
+            geological_times=[geological_time],
+        )
+
+    for index in range(3):
+        create_locality(
+            abbreviation=f"H{index:02d}",
+            name=f"Holocene {index:02d}",
+            geological_times=[Locality.GeologicalTime.HOLOCENE],
+        )
+
+    response = client.get(
+        reverse("locality_list"),
+        {"geological_times": selected_times, "page": 2},
+    )
+
+    assert response.status_code == 200
+    page_obj = response.context["page_obj"]
+    assert page_obj.paginator.count == 12
+    assert page_obj.number == 2
+    assert len(page_obj.object_list) == 2
+    assert all(
+        any(time in locality.geological_times for time in selected_times)
+        for locality in page_obj.object_list
+    )
+
+    content = response.content.decode()
+    hrefs = re.findall(r'href="([^"]+)"', content)
+    assert any(
+        parse_qs(unescape(href).lstrip("?")).get("page") == ["1"]
+        and set(parse_qs(unescape(href).lstrip("?")).get("geological_times", []))
+        == set(selected_times)
+        for href in hrefs
+    )
+
+
+def test_accession_list_keeps_filters_on_pagination_and_page_two_results(client):
+    filtered_locality = create_locality(abbreviation="AF", name="Accession Filtered")
+    other_locality = create_locality(abbreviation="AO", name="Accession Other")
+
+    for index in range(12):
+        create_accession(locality=filtered_locality, specimen_no=index + 1)
+
+    for index in range(5):
+        create_accession(locality=other_locality, specimen_no=200 + index)
+
+    response = client.get(
+        reverse("accession_list"),
+        {"specimen_prefix": filtered_locality.pk, "page": 2},
+    )
+
+    assert response.status_code == 200
+    page_obj = response.context["page_obj"]
+    assert page_obj.paginator.count == 12
+    assert page_obj.number == 2
+    assert len(page_obj.object_list) == 2
+    assert all(
+        accession.specimen_prefix_id == filtered_locality.pk
+        for accession in page_obj.object_list
+    )
+
+    content = response.content.decode()
+    hrefs = re.findall(r'href="([^"]+)"', content)
+    assert any(
+        parse_qs(unescape(href).lstrip("?")).get("specimen_prefix")
+        == [str(filtered_locality.pk)]
+        and parse_qs(unescape(href).lstrip("?")).get("page") == ["1"]
+        for href in hrefs
+    )
 
 
 def test_locality_print_view_orders_two_columns_and_shows_legend(client):

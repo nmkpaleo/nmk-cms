@@ -32,3 +32,31 @@ by `docs/scripts/update_prompts.py`.
 - Update `CATEGORY_RULES` in `docs/scripts/update_prompts.py` when introducing new dependency groups so related packages are
   grouped meaningfully.
 - When reorganising prompt content, preserve the dependency markers so the automation can continue to refresh the section.
+
+
+## CI, rollout, and rollback checks for specimen-list Side/Portion inference
+
+When releasing inference changes, run and capture these checks:
+
+```bash
+pytest --maxfail=1
+pytest --cov=app/cms --cov-report=term-missing
+python app/manage.py makemigrations --check
+python app/manage.py migrate --check
+```
+
+### Runtime toggle
+- Setting: `SPECIMEN_LIST_ENABLE_SIDE_PORTION_INFERENCE`
+- Use `True` for normal operation.
+- Set `False` for immediate rollback if inference quality issues are observed.
+
+### Staging verification matrix
+Validate representative tokens before production rollout:
+- `Lt femur Dist` => `left`, `distal`
+- `Rt humerus Prox` => `right`, `proximal`
+- `Left tibia` => `left`, no inferred portion
+- `Prox radius` => no inferred side, `proximal`
+- `Lt Rt ulna` => ambiguous side; no side inferred
+
+### Docs tooling note
+If a docs verification workflow attempts to run MkDocs, skip that specific step and document the skip reason in the PR because project documentation is Markdown-only under `/docs`.

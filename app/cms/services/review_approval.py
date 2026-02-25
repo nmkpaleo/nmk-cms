@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 import os
 from typing import Any
 
 from crum import set_current_user
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
@@ -27,11 +29,61 @@ from cms.models import (
     SpecimenListPage,
     SpecimenListRowCandidate,
 )
-from cms.ocr_processing import _ensure_field_slip
+from cms.ocr_processing import _ensure_field_slip, normalize_field_slip_payload, normalize_fragments_value
 from cms.tooth_markings.integration import apply_tooth_marking_correction
 
 
 QUALIFIER_TOKENS = {"cf.", "cf", "aff.", "aff", "sp.", "sp", "nr.", "nr"}
+
+_SIDE_TOKEN_MAP = {
+    "l": "left",
+    "lt": "left",
+    "left": "left",
+    "r": "right",
+    "rt": "right",
+    "right": "right",
+}
+
+_PORTION_TOKEN_MAP = {
+    "dist": "distal",
+    "distal": "distal",
+    "prox": "proximal",
+    "proximal": "proximal",
+}
+
+_SIDE_TOKEN_PATTERN = re.compile(r"\b(?:l|lt|left|r|rt|right)\b", re.IGNORECASE)
+_PORTION_TOKEN_PATTERN = re.compile(r"\b(?:dist|distal|prox|proximal)\b", re.IGNORECASE)
+
+
+def _first_unambiguous_match(text: str, pattern: re.Pattern[str], token_map: dict[str, str]) -> str | None:
+    """Return one canonical value when all matches resolve identically."""
+    matches = [
+        token_map[match.group(0).lower().rstrip(".")]
+        for match in pattern.finditer(text)
+    ]
+    if not matches:
+        return None
+    unique_values = set(matches)
+    if len(unique_values) != 1:
+        return None
+    return matches[0]
+
+
+def infer_nature_side_portion_from_element_text(element_text: str | None) -> tuple[str | None, str | None]:
+    """Infer canonical side/portion values from element text token variants.
+
+    Canonical outputs align with existing NatureOfSpecimen usage:
+    - side: ``left`` / ``right``
+    - portion: ``distal`` / ``proximal``
+
+    Returns ``None`` for ambiguous or absent matches.
+    """
+    cleaned = _clean_text(element_text)
+    if not cleaned:
+        return None, None
+    side = _first_unambiguous_match(cleaned, _SIDE_TOKEN_PATTERN, _SIDE_TOKEN_MAP)
+    portion = _first_unambiguous_match(cleaned, _PORTION_TOKEN_PATTERN, _PORTION_TOKEN_MAP)
+    return side, portion
 
 
 def _split_taxon_and_qualifier(value: str | None) -> tuple[str | None, str | None]:
@@ -235,12 +287,28 @@ def _build_field_slip(row_data: dict[str, Any]) -> tuple[AccessionFieldSlip | No
     if accession is None:
         errors.append(str(_("Accession is required for field slip creation.")))
         return None, errors
+    normalized_field_payload: dict[str, Any] = {}
+    if isinstance(row_data.get("field_slip"), dict) or row_data.get("card_type") == "field_slip":
+        normalized_field_payload = normalize_field_slip_payload(row_data)
+
     slip_data = {
-        "field_number": row_data.get("field_number"),
-        "verbatim_locality": row_data.get("locality"),
-        "verbatim_taxon": row_data.get("taxon"),
-        "verbatim_element": row_data.get("element") or row_data.get("verbatim_element"),
-        "collection_date": row_data.get("date"),
+        "field_number": normalized_field_payload.get("field_number") or row_data.get("field_number"),
+        "verbatim_locality": normalized_field_payload.get("verbatim_locality") or row_data.get("locality"),
+        "verbatim_taxon": normalized_field_payload.get("verbatim_taxon") or row_data.get("taxon"),
+        "verbatim_element": normalized_field_payload.get("verbatim_element") or row_data.get("element") or row_data.get("verbatim_element"),
+        "collection_date": normalized_field_payload.get("verbatimEventDate") or row_data.get("date"),
+        "collector": normalized_field_payload.get("collector") or row_data.get("collector"),
+        "discoverer": normalized_field_payload.get("discoverer") or row_data.get("discoverer"),
+        "comment": normalized_field_payload.get("comment") or row_data.get("comment"),
+        "aerial_photo": normalized_field_payload.get("aerial_photo") or row_data.get("aerial_photo"),
+        "verbatim_latitude": normalized_field_payload.get("verbatim_latitude") or row_data.get("verbatim_latitude"),
+        "verbatim_longitude": normalized_field_payload.get("verbatim_longitude") or row_data.get("verbatim_longitude"),
+        "verbatim_horizon": normalized_field_payload.get("verbatim_horizon") or row_data.get("verbatim_horizon"),
+        "collection_position": normalized_field_payload.get("collection_position") or row_data.get("collection_position"),
+        "matrix_association": normalized_field_payload.get("matrix_association") or row_data.get("matrix_association"),
+        "surface_exposure": normalized_field_payload.get("surface_exposure"),
+        "field_slip": row_data.get("field_slip"),
+        "checkboxes": (normalized_field_payload.get("checkboxes") or {}),
     }
     field_slip = _ensure_field_slip(slip_data)
     if not field_slip:
@@ -317,10 +385,34 @@ def _build_nature_of_specimen(accession_row: AccessionRow, row_data: dict[str, A
             "verbatim_element_raw": row_data.get("element_raw") or row_data.get("verbatim_element"),
             "tooth_marking_detections": detections,
             "portion": row_data.get("portion"),
-            "fragments": 0,
+            "fragments": normalize_fragments_value(row_data.get("fragments")) or 0,
         },
     )
 
+
+def _apply_side_portion_inference(row_data: dict[str, Any]) -> dict[str, Any]:
+    """Populate missing side/portion values from element text when enabled."""
+    if not getattr(settings, "SPECIMEN_LIST_ENABLE_SIDE_PORTION_INFERENCE", True):
+        return row_data
+
+    has_side = _clean_text(row_data.get("side")) is not None
+    has_portion = _clean_text(row_data.get("portion")) is not None
+    if has_side and has_portion:
+        return row_data
+
+    source_text = (
+        row_data.get("element_corrected")
+        or row_data.get("element")
+        or row_data.get("verbatim_element")
+        or row_data.get("element_raw")
+    )
+    inferred_side, inferred_portion = infer_nature_side_portion_from_element_text(source_text)
+
+    if not has_side and inferred_side is not None:
+        row_data["side"] = inferred_side
+    if not has_portion and inferred_portion is not None:
+        row_data["portion"] = inferred_portion
+    return row_data
 
 
 def _apply_tooth_marking_to_row_data(
@@ -489,6 +581,7 @@ def approve_row(*, row: SpecimenListRowCandidate, reviewer) -> ApprovalResult:
         return result
 
     row_data = _apply_tooth_marking_to_row_data(row, row_data)
+    row_data = _apply_side_portion_inference(row_data)
     _store_row_draft(row, row_data)
 
     set_current_user(reviewer)

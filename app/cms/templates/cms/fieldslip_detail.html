@@ -20,11 +20,18 @@
     </div>
   </header>
 
-  <section class="w3-margin-top" aria-labelledby="fieldslip-overview-heading">
-    <div class="w3-row-padding">
-      <article class="w3-col s12 m6 l3">
-        <div class="w3-card w3-round w3-white w3-padding">
-          <h2 id="fieldslip-overview-heading" class="w3-margin-top">{% trans "Overview" %}</h2>
+  <section class="w3-margin-top" aria-labelledby="fieldslip-primary-context-heading">
+    <div class="w3-card w3-round w3-white w3-padding">
+      <header class="w3-margin-bottom">
+        <h2 id="fieldslip-primary-context-heading" class="w3-margin-top">
+          <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+          <span class="w3-margin-left">{% trans "Primary context" %}</span>
+        </h2>
+      </header>
+
+      <div class="w3-row-padding">
+        <article class="w3-col s12 m6 l3" aria-labelledby="fieldslip-overview-heading">
+          <h3 id="fieldslip-overview-heading" class="w3-medium w3-text-gray">{% trans "Overview" %}</h3>
           <dl class="w3-margin-top">
             <div class="w3-margin-bottom">
               <dt class="w3-text-gray">{% trans "Field number" %}</dt>
@@ -51,12 +58,10 @@
               <dd class="w3-margin-0">{{ fieldslip.comment|default:"—" }}</dd>
             </div>
           </dl>
-        </div>
-      </article>
+        </article>
 
-      <article class="w3-col s12 m6 l3">
-        <div class="w3-card w3-round w3-white w3-padding" aria-labelledby="fieldslip-taxonomy-heading">
-          <h2 id="fieldslip-taxonomy-heading" class="w3-margin-top">{% trans "Taxonomic notes" %}</h2>
+        <article class="w3-col s12 m6 l3" aria-labelledby="fieldslip-taxonomy-heading">
+          <h3 id="fieldslip-taxonomy-heading" class="w3-medium w3-text-gray">{% trans "Taxonomic notes" %}</h3>
           <dl class="w3-margin-top">
             <div class="w3-margin-bottom">
               <dt class="w3-text-gray">{% trans "Verbatim taxon" %}</dt>
@@ -75,12 +80,10 @@
               <dd class="w3-margin-0">{{ fieldslip.verbatim_SRS|default:"—" }}</dd>
             </div>
           </dl>
-        </div>
-      </article>
+        </article>
 
-      <article class="w3-col s12 m6 l3">
-        <div class="w3-card w3-round w3-white w3-padding" aria-labelledby="fieldslip-location-heading">
-          <h2 id="fieldslip-location-heading" class="w3-margin-top">{% trans "Location" %}</h2>
+        <article class="w3-col s12 m6 l3" aria-labelledby="fieldslip-location-heading">
+          <h3 id="fieldslip-location-heading" class="w3-medium w3-text-gray">{% trans "Location" %}</h3>
           <dl class="w3-margin-top">
             <div class="w3-margin-bottom">
               <dt class="w3-text-gray">{% trans "Verbatim latitude" %}</dt>
@@ -99,12 +102,10 @@
               <dd class="w3-margin-0">{{ fieldslip.verbatim_coordinate_system|default:"—" }}</dd>
             </div>
           </dl>
-        </div>
-      </article>
+        </article>
 
-      <article class="w3-col s12 m6 l3">
-        <div class="w3-card w3-round w3-white w3-padding" aria-labelledby="fieldslip-media-heading">
-          <h2 id="fieldslip-media-heading" class="w3-margin-top">{% trans "Aerial photo" %}</h2>
+        <article class="w3-col s12 m6 l3" aria-labelledby="fieldslip-media-heading">
+          <h3 id="fieldslip-media-heading" class="w3-medium w3-text-gray">{% trans "Aerial photo" %}</h3>
           <div class="w3-margin-top">
             {% if fieldslip.aerial_photo %}
               <p class="w3-tag w3-light-blue w3-round w3-text-black w3-padding-small">
@@ -115,8 +116,104 @@
               <p class="w3-text-gray">{% trans "No aerial photo information provided." %}</p>
             {% endif %}
           </div>
-        </div>
-      </article>
+        </article>
+      </div>
+    </div>
+  </section>
+
+
+  <section class="w3-margin-top" aria-labelledby="fieldslip-sedimentary-heading">
+    <div class="w3-card w3-round w3-white w3-padding">
+      <header class="w3-margin-bottom">
+        <h2 id="fieldslip-sedimentary-heading" class="w3-margin-top">
+          <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+          <span class="w3-margin-left">{% trans "Sedimentary context" %}</span>
+        </h2>
+      </header>
+
+      <div class="w3-row-padding">
+        <article class="w3-col s12 m6 l3" aria-labelledby="fieldslip-sedimentary-features-heading">
+          <h3 id="fieldslip-sedimentary-features-heading" class="w3-medium w3-text-gray">{% trans "Sedimentary features" %}</h3>
+          {% if fieldslip.sedimentary_features.all %}
+            <ul class="w3-ul w3-small">
+              {% for feature in fieldslip.sedimentary_features.all %}
+                <li>{{ feature.name }}</li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="w3-text-gray">{% trans "No sedimentary features recorded." %}</p>
+          {% endif %}
+        </article>
+
+        <article class="w3-col s12 m6 l3" aria-labelledby="fieldslip-fossil-groups-heading">
+          <h3 id="fieldslip-fossil-groups-heading" class="w3-medium w3-text-gray">{% trans "Associated fossil groups" %}</h3>
+          {% if fieldslip.fossil_groups.all %}
+            <ul class="w3-ul w3-small">
+              {% for group in fieldslip.fossil_groups.all %}
+                <li>{{ group.name }}</li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="w3-text-gray">{% trans "No fossil groups recorded." %}</p>
+          {% endif %}
+        </article>
+
+        <article class="w3-col s12 m6 l3" aria-labelledby="fieldslip-preservation-states-heading">
+          <h3 id="fieldslip-preservation-states-heading" class="w3-medium w3-text-gray">{% trans "Preservation states" %}</h3>
+          {% if fieldslip.preservation_states.all %}
+            <ul class="w3-ul w3-small">
+              {% for state in fieldslip.preservation_states.all %}
+                <li>{{ state.name }}</li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="w3-text-gray">{% trans "No preservation states recorded." %}</p>
+          {% endif %}
+        </article>
+
+        <article class="w3-col s12 m6 l3" aria-labelledby="fieldslip-recommended-methods-heading">
+          <h3 id="fieldslip-recommended-methods-heading" class="w3-medium w3-text-gray">{% trans "Recommended collection methods" %}</h3>
+          {% if fieldslip.recommended_methods.all %}
+            <ul class="w3-ul w3-small">
+              {% for method in fieldslip.recommended_methods.all %}
+                <li>{{ method.name }}</li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="w3-text-gray">{% trans "No recommended methods recorded." %}</p>
+          {% endif %}
+        </article>
+      </div>
+
+      <div class="w3-row-padding w3-margin-top">
+        <article class="w3-col s12 m4" aria-labelledby="fieldslip-collection-position-heading">
+          <h3 id="fieldslip-collection-position-heading" class="w3-medium w3-text-gray">{% trans "Collection position" %}</h3>
+          <p>{{ fieldslip.get_collection_position_display|default:"—" }}</p>
+        </article>
+
+        <article class="w3-col s12 m4" aria-labelledby="fieldslip-matrix-association-heading">
+          <h3 id="fieldslip-matrix-association-heading" class="w3-medium w3-text-gray">{% trans "Matrix association" %}</h3>
+          <p>{{ fieldslip.get_matrix_association_display|default:"—" }}</p>
+        </article>
+
+        <article class="w3-col s12 m4" aria-labelledby="fieldslip-surface-exposure-heading">
+          <h3 id="fieldslip-surface-exposure-heading" class="w3-medium w3-text-gray">{% trans "Surface exposure" %}</h3>
+          {% if fieldslip.surface_exposure is None %}
+            <p>—</p>
+          {% elif fieldslip.surface_exposure %}
+            <p>{% trans "Yes" %}</p>
+          {% else %}
+            <p>{% trans "No" %}</p>
+          {% endif %}
+        </article>
+      </div>
+
+      <div class="w3-row-padding">
+        <article class="w3-col s12" aria-labelledby="fieldslip-matrix-grain-size-heading">
+          <h3 id="fieldslip-matrix-grain-size-heading" class="w3-medium w3-text-gray">{% trans "Matrix grain size" %}</h3>
+          <p>{{ fieldslip.matrix_grain_size.name|default:"—" }}</p>
+        </article>
+      </div>
     </div>
   </section>
 

@@ -13,6 +13,10 @@ Administrators can manage locality codes through the Django admin interface.
 - The changelist exposes a **Geological time** filter that narrows results to localities containing a selected time period.
 - Standard search looks through abbreviations and names. Entering either a geological time abbreviation or its label (for example, `Pi` or `Pliocene`) will also return matching localities.
 
+### Pagination with active filters
+- When using the CMS Localities list outside admin, active filters now persist when staff move between pages.
+- Multi-select geological time filters remain selected across **Previous**/**Next** navigation, so support and curation teams can review long filtered result sets without reapplying filters.
+
 ## Importing and Exporting
 1. From the **Localities** changelist, use **Import** or **Export** for bulk operations.
 2. CSV files include the `geological_times` column. Exports list geological time names joined with `/` (for example, `Miocene/Pliocene`). Imports accept either the abbreviations (`M/Pi`) or the labels (`Miocene/Pliocene`).

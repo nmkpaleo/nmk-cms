@@ -108,6 +108,7 @@ from cms.forms import (
     SpecimenListUploadForm,
 )
 
+from cms.manual_import import parse_accession_number
 from cms.models import (
     Accession,
     AccessionNumberSeries,
@@ -143,6 +144,13 @@ from cms.models import (
     SpecimenListPDF,
     SpecimenListPage,
     SpecimenListRowCandidate,
+    SedimentaryFeature,
+    FossilGroup,
+    PreservationState,
+    CollectionMethod,
+    GrainSize,
+    CollectionPosition,
+    MatrixAssociation,
 )
 from django.shortcuts import render
 from .models import Media
@@ -168,7 +176,11 @@ from cms.resources import FieldSlipResource
 from .utils import build_accession_identification_maps, build_history_entries
 from cms.utils import generate_accessions_from_series
 from cms.upload_processing import process_file, queue_specimen_list_processing
-from cms.ocr_processing import process_pending_scans, describe_accession_conflicts
+from cms.ocr_processing import (
+    process_pending_scans,
+    describe_accession_conflicts,
+    normalize_fragments_value,
+)
 from cms.qc import (
     build_preview_accession,
     diff_media_payload,
@@ -1596,6 +1608,8 @@ def index(request):
 def base_generic(request):
     return render(request, 'base_generic.html')
 
+@login_required
+@user_passes_test(is_collection_manager)
 def fieldslip_create(request):
     if request.method == 'POST':
         form = FieldSlipForm(request.POST, request.FILES)
@@ -1606,6 +1620,8 @@ def fieldslip_create(request):
         form = FieldSlipForm()
     return render(request, 'cms/fieldslip_form.html', {'form': form})
 
+@login_required
+@user_passes_test(is_collection_manager)
 def fieldslip_edit(request, pk):
     fieldslip = get_object_or_404(FieldSlip, pk=pk)
     if request.method == 'POST':
@@ -1695,6 +1711,15 @@ def place_edit(request, pk):
     return render(request, 'cms/place_form.html', {'form': form})
 
 
+def _with_fieldslip_sedimentary_related(queryset):
+    return queryset.prefetch_related(
+        "sedimentary_features",
+        "fossil_groups",
+        "preservation_states",
+        "recommended_methods",
+    ).select_related("matrix_grain_size")
+
+
 class FieldSlipDetailView(DetailView):
     model = FieldSlip
     template_name = 'cms/fieldslip_detail.html'
@@ -1711,11 +1736,8 @@ class FieldSlipDetailView(DetailView):
             queryset=prefetch_accession_related(Accession.objects.all()),
         )
 
-        return (
-            super()
-            .get_queryset()
-            .prefetch_related(accession_link_prefetch, accession_prefetch)
-        )
+        queryset = _with_fieldslip_sedimentary_related(super().get_queryset())
+        return queryset.prefetch_related(accession_link_prefetch, accession_prefetch)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1747,9 +1769,14 @@ class FieldSlipListView(LoginRequiredMixin, UserPassesTestMixin, FilterView):
     paginate_by = 10
     filterset_class = FieldSlipFilter
 
+    def get_queryset(self):
+        return _with_fieldslip_sedimentary_related(super().get_queryset())
+
     def test_func(self):
         user = self.request.user
-        return user.is_superuser or user.groups.filter(name="Collection Managers").exists()
+        return user.is_superuser or user.groups.filter(
+            name__in=["Collection Managers", "Curators"]
+        ).exists()
 
 class AccessionDetailView(DetailView):
     model = Accession
@@ -2568,30 +2595,92 @@ class AccessionReferenceQCForm(forms.Form):
 class FieldSlipQCForm(forms.Form):
     slip_id = forms.CharField(widget=forms.HiddenInput())
     order = forms.IntegerField(widget=forms.HiddenInput())
-    field_number = forms.CharField(label="Field number", required=False, max_length=255)
+    field_number = forms.CharField(label=_("Field number"), required=False, max_length=255)
+    verbatim_event_date = forms.CharField(label=_("Verbatim event date"), required=False, max_length=255)
+    collector = forms.CharField(label=_("Collector"), required=False, max_length=255)
+    discoverer = forms.CharField(label=_("Discoverer / finder"), required=False, max_length=255)
     verbatim_locality = forms.CharField(
-        label="Verbatim locality",
+        label=_("Verbatim locality"),
         required=False,
         widget=forms.Textarea(attrs={"rows": 2}),
     )
     verbatim_taxon = forms.CharField(
-        label="Verbatim taxon",
+        label=_("Verbatim taxon"),
         required=False,
         widget=forms.Textarea(attrs={"rows": 2}),
     )
     verbatim_element = forms.CharField(
-        label="Verbatim element",
+        label=_("Verbatim element"),
         required=False,
         widget=forms.Textarea(attrs={"rows": 2}),
     )
-    horizon_formation = forms.CharField(label="Formation", required=False, max_length=255)
-    horizon_member = forms.CharField(label="Member", required=False, max_length=255)
-    horizon_bed = forms.CharField(label="Bed or horizon", required=False, max_length=255)
-    horizon_chronostratigraphy = forms.CharField(label="Chronostratigraphy", required=False, max_length=255)
-    aerial_photo = forms.CharField(label="Aerial photo", required=False, max_length=255)
-    verbatim_latitude = forms.CharField(label="Verbatim latitude", required=False, max_length=255)
-    verbatim_longitude = forms.CharField(label="Verbatim longitude", required=False, max_length=255)
-    verbatim_elevation = forms.CharField(label="Verbatim elevation", required=False, max_length=255)
+    fragments = forms.CharField(label=_("Fragments"), required=False, max_length=64)
+    horizon_formation = forms.CharField(label=_("Formation"), required=False, max_length=255)
+    horizon_member = forms.CharField(label=_("Member"), required=False, max_length=255)
+    horizon_bed = forms.CharField(label=_("Bed or horizon"), required=False, max_length=255)
+    horizon_chronostratigraphy = forms.CharField(label=_("Chronostratigraphy"), required=False, max_length=255)
+    aerial_photo = forms.CharField(label=_("Aerial photo"), required=False, max_length=255)
+    verbatim_latitude = forms.CharField(label=_("Verbatim latitude"), required=False, max_length=255)
+    verbatim_longitude = forms.CharField(label=_("Verbatim longitude"), required=False, max_length=255)
+    verbatim_elevation = forms.CharField(label=_("Verbatim elevation"), required=False, max_length=255)
+    sedimentary_features = forms.MultipleChoiceField(label=_("Sedimentary features"), required=False)
+    rock_type = forms.MultipleChoiceField(label=_("Rock type selections"), required=False)
+    fossil_groups = forms.MultipleChoiceField(label=_("Fossil groups"), required=False)
+    preservation_states = forms.MultipleChoiceField(label=_("Preservation states"), required=False)
+    recommended_methods = forms.MultipleChoiceField(label=_("Recommended methods"), required=False)
+    provenance = forms.MultipleChoiceField(label=_("Provenance selections"), required=False)
+    matrix_grain_size = forms.ChoiceField(label=_("Matrix grain size"), required=False)
+    collection_position = forms.ChoiceField(label=_("Collection position"), required=False)
+    matrix_association = forms.ChoiceField(label=_("Matrix association"), required=False)
+    surface_exposure = forms.BooleanField(label=_("Surface exposure"), required=False)
+    comment = forms.CharField(label=_("Comment"), required=False, widget=forms.Textarea(attrs={"rows": 2}))
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["sedimentary_features"].choices = [
+            (item.name, item.name) for item in SedimentaryFeature.objects.order_by("name")
+        ]
+        self.fields["rock_type"].choices = [
+            ("MOLLUSCS WHOLE", "MOLLUSCS WHOLE"),
+            ("BROKEN", "BROKEN"),
+            ("OSTRACODS", "OSTRACODS"),
+            ("FISH", "FISH"),
+        ]
+        self.fields["fossil_groups"].choices = [
+            (item.name, item.name) for item in FossilGroup.objects.order_by("name")
+        ]
+        self.fields["preservation_states"].choices = [
+            (item.name, item.name) for item in PreservationState.objects.order_by("name")
+        ]
+        self.fields["recommended_methods"].choices = [
+            (item.name, item.name) for item in CollectionMethod.objects.order_by("name")
+        ]
+        self.fields["provenance"].choices = [
+            ("IN SITU OR SURFACE", "IN SITU OR SURFACE"),
+            ("IN SITU", "IN SITU"),
+            ("SURFACE", "SURFACE"),
+            ("MATRIX", "MATRIX"),
+            ("SURFACE WITH MATRIX", "SURFACE WITH MATRIX"),
+            ("SURFACE WITHOUT MATRIX", "SURFACE WITHOUT MATRIX"),
+        ]
+        self.fields["matrix_grain_size"].choices = [("", "---------")] + [
+            (item.name, item.name) for item in GrainSize.objects.order_by("name")
+        ]
+        self.fields["collection_position"].choices = [("", "---------"), *CollectionPosition.choices]
+        self.fields["matrix_association"].choices = [("", "---------"), *MatrixAssociation.choices]
+
+
+def _split_csv_tokens(raw_value: object) -> list[str]:
+    if raw_value in (None, ""):
+        return []
+    if isinstance(raw_value, (list, tuple)):
+        return [str(token).strip() for token in raw_value if str(token).strip()]
+    tokens: list[str] = []
+    for token in str(raw_value).split(","):
+        cleaned = token.strip()
+        if cleaned and cleaned not in tokens:
+            tokens.append(cleaned)
+    return tokens
 
 
 ReferenceQCFormSet = formset_factory(
@@ -2750,6 +2839,88 @@ def _get_qc_history(media: Media, limit: int | None = None) -> list[MediaQCLog]:
 class MediaQCFormManager:
     """Prepare and persist media QC forms shared by intern and expert wizards."""
 
+    @staticmethod
+    def _payload_text(payload: object) -> object:
+        if isinstance(payload, dict):
+            interpreted = payload.get("interpreted")
+            if interpreted not in (None, ""):
+                return interpreted
+            raw = payload.get("raw")
+            if raw not in (None, ""):
+                return raw
+            return None
+        return payload
+
+    @classmethod
+    def _parse_accession_tokens(cls, accession_payload: dict) -> tuple[str | None, str | None, object | None]:
+        collection_value = cls._payload_text(accession_payload.get("collection_abbreviation"))
+        prefix_value = cls._payload_text(accession_payload.get("specimen_prefix_abbreviation"))
+        specimen_value = cls._payload_text(accession_payload.get("specimen_no"))
+
+        if collection_value and specimen_value and str(collection_value).strip() and str(specimen_value).strip():
+            parsed = parse_accession_number(f"{collection_value}-{specimen_value}")
+            parsed_collection = parsed.collection_abbreviation
+            parsed_prefix = parsed.specimen_prefix
+            parsed_no = parsed.specimen_number
+            if parsed_collection and not prefix_value:
+                collection_value = parsed_collection
+            if parsed_prefix and not prefix_value:
+                prefix_value = parsed_prefix
+            if parsed_no is not None:
+                specimen_value = parsed_no
+
+        if prefix_value in (None, "") and collection_value:
+            parsed_collection = parse_accession_number(str(collection_value))
+            if parsed_collection.collection_abbreviation:
+                collection_value = parsed_collection.collection_abbreviation
+            if parsed_collection.specimen_prefix:
+                prefix_value = parsed_collection.specimen_prefix
+
+        if isinstance(collection_value, str):
+            collection_value = collection_value.upper()
+        if isinstance(prefix_value, str):
+            prefix_value = prefix_value.upper()
+        return collection_value, prefix_value, specimen_value
+
+    @staticmethod
+    def _rock_type_to_groups(labels: list[str]) -> tuple[list[str], list[str]]:
+        fossil_map = {
+            "MOLLUSCS WHOLE": "Molluscs",
+            "BROKEN": "Molluscs",
+            "OSTRACODS": "Ostracods",
+            "FISH": "Fish",
+        }
+        preserve_map = {
+            "MOLLUSCS WHOLE": "Whole",
+            "BROKEN": "Broken",
+        }
+        fossil_groups: list[str] = []
+        preservation_states: list[str] = []
+        for label in labels:
+            normalized = str(label or "").strip().upper()
+            fossil = fossil_map.get(normalized)
+            if fossil and fossil not in fossil_groups:
+                fossil_groups.append(fossil)
+            state = preserve_map.get(normalized)
+            if state and state not in preservation_states:
+                preservation_states.append(state)
+        return fossil_groups, preservation_states
+
+    @staticmethod
+    def _groups_to_rock_type(fossils: list[str], states: list[str]) -> list[str]:
+        labels: list[str] = []
+        fossil_norm = {str(item).strip().lower() for item in fossils if item}
+        state_norm = {str(item).strip().lower() for item in states if item}
+        if "molluscs" in fossil_norm and "whole" in state_norm:
+            labels.append("MOLLUSCS WHOLE")
+        if "molluscs" in fossil_norm and "broken" in state_norm:
+            labels.append("BROKEN")
+        if "ostracods" in fossil_norm:
+            labels.append("OSTRACODS")
+        if "fish" in fossil_norm:
+            labels.append("FISH")
+        return labels
+
     def __init__(self, request, media: Media):
         self.request = request
         self.media = media
@@ -2763,6 +2934,39 @@ class MediaQCFormManager:
             media.save(update_fields=["ocr_data"])
         self.original_data = copy.deepcopy(snapshot_source)
         self.data = copy.deepcopy(media.ocr_data or stored_data)
+
+        if self.data.get("card_type") == "field_slip" and isinstance(self.data.get("field_slip"), dict):
+            accessions = self.data.setdefault("accessions", [])
+            if not accessions:
+                field_payload = copy.deepcopy(self.data.get("field_slip") or {})
+                accession_ident = field_payload.get("accession_identification") or {}
+                if not isinstance(accession_ident, dict):
+                    accession_ident = {}
+                collection_value = accession_ident.get("collection") or {}
+                prefix_value = accession_ident.get("locality") or {}
+                specimen_value = accession_ident.get("accession_number") or {}
+                parsed = parse_accession_number(
+                    f"{self._payload_text(collection_value) or ''}-{self._payload_text(specimen_value) or ''}"
+                )
+                if parsed.collection_abbreviation:
+                    collection_value = {"interpreted": parsed.collection_abbreviation}
+                if parsed.specimen_prefix and self._payload_text(prefix_value) in (None, ""):
+                    prefix_value = {"interpreted": parsed.specimen_prefix}
+                if parsed.specimen_number is not None:
+                    specimen_value = {"interpreted": parsed.specimen_number}
+
+                accessions.append(
+                    {
+                        "collection_abbreviation": collection_value,
+                        "specimen_prefix_abbreviation": prefix_value,
+                        "specimen_no": specimen_value,
+                        "field_slips": [field_payload],
+                    }
+                )
+                self.data["accessions"] = accessions
+                media.ocr_data = copy.deepcopy(self.data)
+                media.save(update_fields=["ocr_data"])
+
         accessions = self.data.setdefault("accessions", [])
         if not accessions:
             accessions.append({})
@@ -2940,46 +3144,83 @@ class MediaQCFormManager:
             slip_id = field_slip_payload.get("_field_slip_id") or f"field-slip-{index}"
             self.fieldslip_payload_map[slip_id] = field_slip_payload
             horizon_payload = field_slip_payload.get("verbatim_horizon") or {}
+            checkbox_payload = field_slip_payload.get("checkboxes") or {}
+            accession_ident_payload = field_slip_payload.get("accession_identification") or {}
             self.fieldslip_initial.append(
                 {
                     "slip_id": slip_id,
                     "order": index,
-                    "field_number": (
-                        field_slip_payload.get("field_number") or {}
-                    ).get("interpreted"),
-                    "verbatim_locality": (
-                        field_slip_payload.get("verbatim_locality") or {}
-                    ).get("interpreted"),
-                    "verbatim_taxon": (
-                        field_slip_payload.get("verbatim_taxon") or {}
-                    ).get("interpreted"),
-                    "verbatim_element": (
-                        field_slip_payload.get("verbatim_element") or {}
-                    ).get("interpreted"),
-                    "horizon_formation": (
-                        horizon_payload.get("formation") or {}
-                    ).get("interpreted"),
-                    "horizon_member": (
-                        horizon_payload.get("member") or {}
-                    ).get("interpreted"),
-                    "horizon_bed": (
-                        horizon_payload.get("bed_or_horizon") or {}
-                    ).get("interpreted"),
-                    "horizon_chronostratigraphy": (
-                        horizon_payload.get("chronostratigraphy") or {}
-                    ).get("interpreted"),
-                    "aerial_photo": (
-                        field_slip_payload.get("aerial_photo") or {}
-                    ).get("interpreted"),
-                    "verbatim_latitude": (
-                        field_slip_payload.get("verbatim_latitude") or {}
-                    ).get("interpreted"),
-                    "verbatim_longitude": (
-                        field_slip_payload.get("verbatim_longitude") or {}
-                    ).get("interpreted"),
-                    "verbatim_elevation": (
-                        field_slip_payload.get("verbatim_elevation") or {}
-                    ).get("interpreted"),
+                    "field_number": self._payload_text(
+                        field_slip_payload.get("field_number")
+                    ),
+                    "verbatim_event_date": self._payload_text(
+                        field_slip_payload.get("verbatimEventDate")
+                    ) or self._payload_text(
+                        field_slip_payload.get("collection_date")
+                    ),
+                    "collector": self._payload_text(
+                        field_slip_payload.get("collector")
+                    ),
+                    "discoverer": self._payload_text(
+                        field_slip_payload.get("discoverer")
+                    ),
+                    "verbatim_locality": self._payload_text(
+                        field_slip_payload.get("verbatim_locality")
+                    ),
+                    "verbatim_taxon": self._payload_text(
+                        field_slip_payload.get("verbatim_taxon")
+                    ),
+                    "verbatim_element": self._payload_text(
+                        field_slip_payload.get("verbatim_element")
+                    ),
+                    "horizon_formation": self._payload_text(
+                        horizon_payload.get("formation")
+                    ),
+                    "horizon_member": self._payload_text(
+                        horizon_payload.get("member")
+                    ),
+                    "horizon_bed": self._payload_text(
+                        horizon_payload.get("bed_or_horizon")
+                    ) or self._payload_text(field_slip_payload.get("verbatim_horizon")),
+                    "horizon_chronostratigraphy": self._payload_text(
+                        horizon_payload.get("chronostratigraphy")
+                    ),
+                    "aerial_photo": self._payload_text(
+                        field_slip_payload.get("aerial_photo")
+                    ),
+                    "verbatim_latitude": self._payload_text(
+                        field_slip_payload.get("verbatim_latitude")
+                    ),
+                    "verbatim_longitude": self._payload_text(
+                        field_slip_payload.get("verbatim_longitude")
+                    ),
+                    "verbatim_elevation": self._payload_text(
+                        field_slip_payload.get("verbatim_elevation")
+                    ),
+                    "fragments": self._payload_text(
+                        field_slip_payload.get("fragments")
+                    ) or self._payload_text(
+                        accession_ident_payload.get("fragments")
+                    ),
+                    "sedimentary_features": list(checkbox_payload.get("sedimentary_features") or []),
+                    "rock_type": list(checkbox_payload.get("rock_type") or []),
+                    "fossil_groups": list(checkbox_payload.get("fossil_groups") or self._rock_type_to_groups(checkbox_payload.get("rock_type") or [])[0]),
+                    "preservation_states": list(checkbox_payload.get("preservation_states") or self._rock_type_to_groups(checkbox_payload.get("rock_type") or [])[1]),
+                    "recommended_methods": list(checkbox_payload.get("recommended_methods") or []),
+                    "provenance": list(checkbox_payload.get("provenance") or []),
+                    "matrix_grain_size": (checkbox_payload.get("matrix_grain_size") or [None])[0],
+                    "collection_position": self._payload_text(
+                        field_slip_payload.get("collection_position")
+                    ),
+                    "matrix_association": self._payload_text(
+                        field_slip_payload.get("matrix_association")
+                    ),
+                    "surface_exposure": self._payload_text(
+                        field_slip_payload.get("surface_exposure")
+                    ) is True,
+                    "comment": self._payload_text(
+                        field_slip_payload.get("comment")
+                    ),
                 }
             )
 
@@ -2987,35 +3228,29 @@ class MediaQCFormManager:
             dict.fromkeys(value for value in self.storage_suggestions if value)
         )
 
-        collection_abbr = (
-            self.accession_payload.get("collection_abbreviation") or {}
-        ).get("interpreted")
+        collection_abbr, prefix_abbr, specimen_no_value = self._parse_accession_tokens(
+            self.accession_payload
+        )
         collection_obj = (
             Collection.objects.filter(abbreviation=collection_abbr).first()
             if collection_abbr
             else None
         )
-        prefix_abbr = (
-            self.accession_payload.get("specimen_prefix_abbreviation") or {}
-        ).get("interpreted")
         prefix_obj = (
             Locality.objects.filter(abbreviation=prefix_abbr).first()
             if prefix_abbr
             else None
         )
-        specimen_no_value = (
-            self.accession_payload.get("specimen_no") or {}
-        ).get("interpreted")
         try:
             specimen_no_initial = int(specimen_no_value)
         except (TypeError, ValueError):
             specimen_no_initial = specimen_no_value
-        type_status_initial = (
-            self.accession_payload.get("type_status") or {}
-        ).get("interpreted")
-        comment_initial = (
-            self.accession_payload.get("comment") or {}
-        ).get("interpreted")
+        type_status_initial = self._payload_text(
+            self.accession_payload.get("type_status")
+        )
+        comment_initial = self._payload_text(
+            self.accession_payload.get("comment")
+        )
         accession_instance = getattr(media, "accession", None) or Accession()
         accessioned_by_user = (
             getattr(getattr(media, "accession", None), "accessioned_by", None)
@@ -3227,14 +3462,25 @@ class MediaQCFormManager:
                 order_value = int(cleaned.get("order"))
             except (TypeError, ValueError):
                 order_value = len(fieldslip_entries)
+            provenance_values = _split_csv_tokens(cleaned.get("provenance"))
+            collection_position_value = cleaned.get("collection_position")
+            surface_exposure_value = bool(cleaned.get("surface_exposure"))
+            if "SURFACE" in {item.upper() for item in provenance_values} and not collection_position_value:
+                collection_position_value = CollectionPosition.EX_SITU
+                surface_exposure_value = True
+
             fieldslip_entries.append(
                 {
                     "slip_id": slip_id,
                     "order": order_value,
                     "field_number": cleaned.get("field_number"),
+                    "verbatim_event_date": cleaned.get("verbatim_event_date"),
+                    "collector": cleaned.get("collector"),
+                    "discoverer": cleaned.get("discoverer"),
                     "verbatim_locality": cleaned.get("verbatim_locality"),
                     "verbatim_taxon": cleaned.get("verbatim_taxon"),
                     "verbatim_element": cleaned.get("verbatim_element"),
+                    "fragments": normalize_fragments_value(cleaned.get("fragments")),
                     "horizon_formation": cleaned.get("horizon_formation"),
                     "horizon_member": cleaned.get("horizon_member"),
                     "horizon_bed": cleaned.get("horizon_bed"),
@@ -3245,6 +3491,17 @@ class MediaQCFormManager:
                     "verbatim_latitude": cleaned.get("verbatim_latitude"),
                     "verbatim_longitude": cleaned.get("verbatim_longitude"),
                     "verbatim_elevation": cleaned.get("verbatim_elevation"),
+                    "sedimentary_features": _split_csv_tokens(cleaned.get("sedimentary_features")),
+                    "rock_type": _split_csv_tokens(cleaned.get("rock_type")),
+                    "fossil_groups": _split_csv_tokens(cleaned.get("fossil_groups")),
+                    "preservation_states": _split_csv_tokens(cleaned.get("preservation_states")),
+                    "recommended_methods": _split_csv_tokens(cleaned.get("recommended_methods")),
+                    "provenance": provenance_values,
+                    "matrix_grain_size": _split_csv_tokens(cleaned.get("matrix_grain_size")),
+                    "collection_position": collection_position_value,
+                    "matrix_association": cleaned.get("matrix_association"),
+                    "surface_exposure": surface_exposure_value,
+                    "comment": cleaned.get("comment"),
                 }
             )
 
@@ -3466,6 +3723,21 @@ class MediaQCFormManager:
                 )
                 _set_interpreted(
                     original_field_slip,
+                    "verbatimEventDate",
+                    entry.get("verbatim_event_date"),
+                )
+                _set_interpreted(
+                    original_field_slip,
+                    "collector",
+                    entry.get("collector"),
+                )
+                _set_interpreted(
+                    original_field_slip,
+                    "discoverer",
+                    entry.get("discoverer"),
+                )
+                _set_interpreted(
+                    original_field_slip,
                     "verbatim_locality",
                     entry.get("verbatim_locality"),
                 )
@@ -3522,10 +3794,81 @@ class MediaQCFormManager:
                     "verbatim_elevation",
                     entry.get("verbatim_elevation"),
                 )
+                _set_interpreted(
+                    original_field_slip,
+                    "fragments",
+                    entry.get("fragments"),
+                )
+                checkbox_payload = copy.deepcopy(original_field_slip.get("checkboxes") or {})
+                checkbox_payload["sedimentary_features"] = entry.get("sedimentary_features") or []
+                checkbox_payload["fossil_groups"] = entry.get("fossil_groups") or []
+                checkbox_payload["preservation_states"] = entry.get("preservation_states") or []
+                derived_rock_type = self._groups_to_rock_type(
+                    entry.get("fossil_groups") or [],
+                    entry.get("preservation_states") or [],
+                )
+                checkbox_payload["rock_type"] = entry.get("rock_type") or derived_rock_type
+                checkbox_payload["recommended_methods"] = entry.get("recommended_methods") or []
+                checkbox_payload["provenance"] = entry.get("provenance") or []
+                checkbox_payload["matrix_grain_size"] = entry.get("matrix_grain_size") or []
+                original_field_slip["checkboxes"] = checkbox_payload
+                _set_interpreted(
+                    original_field_slip,
+                    "collection_position",
+                    entry.get("collection_position"),
+                )
+                _set_interpreted(
+                    original_field_slip,
+                    "matrix_association",
+                    entry.get("matrix_association"),
+                )
+                _set_interpreted(
+                    original_field_slip,
+                    "surface_exposure",
+                    entry.get("surface_exposure"),
+                )
+                _set_interpreted(
+                    original_field_slip,
+                    "comment",
+                    entry.get("comment"),
+                )
+                horizon_text = " | ".join(
+                    part
+                    for part in [
+                        entry.get("horizon_formation"),
+                        entry.get("horizon_member"),
+                        entry.get("horizon_bed"),
+                        entry.get("horizon_chronostratigraphy"),
+                    ]
+                    if part not in (None, "")
+                )
+                _set_interpreted(
+                    original_field_slip,
+                    "verbatim_horizon",
+                    horizon_text or None,
+                )
                 updated_field_slips.append(original_field_slip)
 
             self.accession_payload["field_slips"] = updated_field_slips
             self.data["accessions"][0] = self.accession_payload
+            if self.data.get("card_type") == "field_slip" and updated_field_slips:
+                self.data["field_slip"] = copy.deepcopy(updated_field_slips[0])
+                accession_ident = self.data["field_slip"].setdefault("accession_identification", {})
+                _set_interpreted(
+                    accession_ident,
+                    "collection",
+                    self._payload_text(self.accession_payload.get("collection_abbreviation")),
+                )
+                _set_interpreted(
+                    accession_ident,
+                    "locality",
+                    self._payload_text(self.accession_payload.get("specimen_prefix_abbreviation")),
+                )
+                _set_interpreted(
+                    accession_ident,
+                    "accession_number",
+                    self._payload_text(self.accession_payload.get("specimen_no")),
+                )
 
             diff_result = diff_media_payload(
                 self.original_data,
@@ -5150,11 +5493,10 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
                 if not form.cleaned_data:
                     continue
                 row_id = form.cleaned_data.get("row_id")
+                row = row_map.get(row_id) if row_id else None
                 if form.cleaned_data.get("DELETE"):
-                    if row_id:
-                        row = row_map.get(row_id)
-                        if row:
-                            row.delete()
+                    if row:
+                        row.delete()
                     continue
 
                 data = {}
@@ -5162,9 +5504,9 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
                 for column in column_order:
                     value = form.cleaned_data.get(column)
                     if column == "tooth_marking_detections":
-                        value = row.data.get("tooth_marking_detections") if row_id and row_id in row_map else None
+                        value = row.data.get("tooth_marking_detections") if row else None
                     if column in {"element_raw", "element_corrected"}:
-                        value = row.data.get(column) if row_id and row_id in row_map else None
+                        value = row.data.get(column) if row else None
                     if value not in (None, ""):
                         has_content = True
                         data[column] = value
@@ -5180,7 +5522,6 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
                     data.update(data_json_payload)
 
                 if row_id:
-                    row = row_map.get(row_id)
                     if not row:
                         continue
                     existing_data = dict(row.data or {})
