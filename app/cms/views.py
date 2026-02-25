@@ -3462,6 +3462,13 @@ class MediaQCFormManager:
                 order_value = int(cleaned.get("order"))
             except (TypeError, ValueError):
                 order_value = len(fieldslip_entries)
+            provenance_values = _split_csv_tokens(cleaned.get("provenance"))
+            collection_position_value = cleaned.get("collection_position")
+            surface_exposure_value = bool(cleaned.get("surface_exposure"))
+            if "SURFACE" in {item.upper() for item in provenance_values} and not collection_position_value:
+                collection_position_value = CollectionPosition.EX_SITU
+                surface_exposure_value = True
+
             fieldslip_entries.append(
                 {
                     "slip_id": slip_id,
@@ -3489,11 +3496,11 @@ class MediaQCFormManager:
                     "fossil_groups": _split_csv_tokens(cleaned.get("fossil_groups")),
                     "preservation_states": _split_csv_tokens(cleaned.get("preservation_states")),
                     "recommended_methods": _split_csv_tokens(cleaned.get("recommended_methods")),
-                    "provenance": _split_csv_tokens(cleaned.get("provenance")),
+                    "provenance": provenance_values,
                     "matrix_grain_size": _split_csv_tokens(cleaned.get("matrix_grain_size")),
-                    "collection_position": cleaned.get("collection_position"),
+                    "collection_position": collection_position_value,
                     "matrix_association": cleaned.get("matrix_association"),
-                    "surface_exposure": bool(cleaned.get("surface_exposure")),
+                    "surface_exposure": surface_exposure_value,
                     "comment": cleaned.get("comment"),
                 }
             )
@@ -3824,6 +3831,21 @@ class MediaQCFormManager:
                     original_field_slip,
                     "comment",
                     entry.get("comment"),
+                )
+                horizon_text = " | ".join(
+                    part
+                    for part in [
+                        entry.get("horizon_formation"),
+                        entry.get("horizon_member"),
+                        entry.get("horizon_bed"),
+                        entry.get("horizon_chronostratigraphy"),
+                    ]
+                    if part not in (None, "")
+                )
+                _set_interpreted(
+                    original_field_slip,
+                    "verbatim_horizon",
+                    horizon_text or None,
                 )
                 updated_field_slips.append(original_field_slip)
 

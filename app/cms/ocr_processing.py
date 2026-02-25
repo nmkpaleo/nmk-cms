@@ -1503,6 +1503,18 @@ def _ensure_field_slip(data: dict[str, object]) -> FieldSlip | None:
     collection_date = _parse_collection_date_value(collection_date_value)
 
     horizon = _clean_string(normalized_payload.get("verbatim_horizon") or data.get("verbatim_horizon"))
+    if isinstance(data.get("verbatim_horizon"), dict):
+        horizon_payload = data.get("verbatim_horizon") or {}
+        horizon_parts = [
+            _clean_string(_value_interpreted(horizon_payload.get("formation"))),
+            _clean_string(_value_interpreted(horizon_payload.get("member"))),
+            _clean_string(_value_interpreted(horizon_payload.get("bed_or_horizon"))),
+            _clean_string(_value_interpreted(horizon_payload.get("chronostratigraphy"))),
+        ]
+        horizon_parts = [part for part in horizon_parts if part]
+        if horizon_parts:
+            horizon = " | ".join(horizon_parts)
+
     if not horizon:
         horizon_parts: list[str] = []
         for key in (
@@ -1594,8 +1606,16 @@ def _ensure_field_slip(data: dict[str, object]) -> FieldSlip | None:
             "surface_exposure": surface_exposure,
             "matrix_grain_size": grain_target,
         }
+        nullable_editable_fields = {
+            "comment",
+            "verbatim_elevation",
+            "collection_position",
+            "matrix_association",
+            "surface_exposure",
+            "matrix_grain_size",
+        }
         for field_name, value in updates.items():
-            if value is None:
+            if value is None and field_name not in nullable_editable_fields:
                 continue
             if getattr(field_slip, field_name) != value:
                 setattr(field_slip, field_name, value)
@@ -1603,13 +1623,14 @@ def _ensure_field_slip(data: dict[str, object]) -> FieldSlip | None:
         if update_fields:
             field_slip.save(update_fields=update_fields)
 
-    if sedimentary_targets:
+    checkboxes_payload = normalized_payload.get("checkboxes") if isinstance(normalized_payload.get("checkboxes"), dict) else {}
+    if "sedimentary_features" in checkboxes_payload:
         field_slip.sedimentary_features.set(sedimentary_targets)
-    if fossil_group_targets:
+    if "fossil_groups" in checkboxes_payload or "rock_type" in checkboxes_payload:
         field_slip.fossil_groups.set(fossil_group_targets)
-    if preservation_state_targets:
+    if "preservation_states" in checkboxes_payload or "rock_type" in checkboxes_payload:
         field_slip.preservation_states.set(preservation_state_targets)
-    if recommended_method_targets:
+    if "recommended_methods" in checkboxes_payload:
         field_slip.recommended_methods.set(recommended_method_targets)
 
     return field_slip

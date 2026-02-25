@@ -13,7 +13,7 @@ from cms.models import (
     Media,
     SedimentaryFeature,
 )
-from cms.ocr_processing import create_accessions_from_media, normalize_field_slip_payload
+from cms.ocr_processing import create_accessions_from_media, normalize_field_slip_payload, _ensure_field_slip
 from cms.views import MediaQCFormManager
 
 
@@ -240,3 +240,55 @@ class FieldSlipCardQCPrefillTests(TestCase):
         self.assertEqual(media.ocr_data["field_slip"]["verbatim_horizon"]["bed_or_horizon"]["interpreted"], "Lower NAWATA - below gateway farmer")
         self.assertEqual(media.ocr_data["field_slip"]["aerial_photo"]["interpreted"], "775")
         self.assertEqual(media.ocr_data["field_slip"]["comment"]["interpreted"], "Western section")
+        self.assertEqual(media.ocr_data["field_slip"]["verbatim_horizon"]["interpreted"], "Lower NAWATA - below gateway farmer")
+
+
+class FieldSlipPersistenceRuleTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username="persist_tester", password="pass")
+        patcher = patch("cms.models.get_current_user", return_value=self.user)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_ensure_field_slip_clears_nullable_fields_and_sets_surface_provenance_defaults(self):
+        slip = FieldSlip.objects.create(
+            field_number="WT 2394",
+            verbatim_taxon="Cercopithecidae",
+            verbatim_element="M3 talonid",
+            comment="old",
+            verbatim_elevation="123",
+            collection_position="in_situ",
+            matrix_association="attached",
+            surface_exposure=False,
+        )
+
+        payload = {
+            "field_number": "WT 2394",
+            "verbatim_taxon": "Cercopithecidae",
+            "verbatim_element": "M3 talonid",
+            "horizon_bed": "Lower NAWATA",
+            "comment": None,
+            "verbatim_elevation": None,
+            "collection_position": "ex_situ",
+            "surface_exposure": True,
+            "matrix_association": None,
+            "checkboxes": {
+                "sedimentary_features": [],
+                "provenance": ["SURFACE"],
+                "recommended_methods": [],
+                "rock_type": [],
+                "matrix_grain_size": [],
+            },
+        }
+
+        updated = _ensure_field_slip(payload)
+        updated.refresh_from_db()
+
+        self.assertEqual(updated.id, slip.id)
+        self.assertIsNone(updated.comment)
+        self.assertIsNone(updated.verbatim_elevation)
+        self.assertEqual(updated.collection_position, "ex_situ")
+        self.assertTrue(updated.surface_exposure)
+        self.assertIsNone(updated.matrix_association)
+        self.assertEqual(updated.verbatim_horizon, "Lower NAWATA")
