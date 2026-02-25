@@ -2135,10 +2135,15 @@ def create_accessions_from_media(
 
         specimen_prefix = Locality.objects.filter(abbreviation=prefix_abbr).first()
         if not specimen_prefix:
-            specimen_prefix = Locality.objects.create(
-                abbreviation=prefix_abbr,
-                name=f"Temporary Locality {prefix_abbr}",
-            )
+            return {
+                "created": [],
+                "conflicts": [
+                    {
+                        "key": f"{collection.abbreviation}:{prefix_abbr}",
+                        "reason": "Locality abbreviation does not exist",
+                    }
+                ],
+            }
 
         accession, created = Accession.objects.get_or_create(
             collection=collection,

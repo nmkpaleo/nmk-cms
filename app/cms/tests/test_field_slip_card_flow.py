@@ -54,6 +54,7 @@ class FieldSlipCardCreationTests(TestCase):
 
     def test_create_accessions_from_field_slip_card_creates_accession_and_link(self):
         Collection.objects.create(abbreviation="KNM", description="Kenya")
+        Locality.objects.create(abbreviation="LT", name="Lothagam")
         feature = SedimentaryFeature.objects.filter(name__iexact="MUD CRACKS").first()
         if feature is None:
             feature = SedimentaryFeature.objects.filter(code="MUD_CRACKS").first()
@@ -102,6 +103,34 @@ class FieldSlipCardCreationTests(TestCase):
             transform=lambda x: x,
         )
 
+
+
+    def test_field_slip_card_type_requires_existing_locality_prefix(self):
+        Collection.objects.create(abbreviation="KNM", description="Kenya")
+        media = Media.objects.create(
+            media_location="uploads/pending/field-slip-missing-locality.png",
+            ocr_data={
+                "card_type": "field_slip",
+                "field_slip": {
+                    "field_number": {"interpreted": "FS-10"},
+                    "verbatim_locality": {"interpreted": "Area 2"},
+                    "verbatim_taxon": {"interpreted": "Homo"},
+                    "verbatim_element": {"interpreted": "Femur"},
+                    "accession_identification": {
+                        "collection": {"interpreted": "KNM-XX 200"},
+                        "locality": {"interpreted": "XX"},
+                        "accession_number": {"interpreted": "200"},
+                    },
+                },
+            },
+        )
+
+        result = create_accessions_from_media(media)
+
+        self.assertEqual(result["created"], [])
+        self.assertTrue(result["conflicts"])
+        self.assertEqual(result["conflicts"][0]["reason"], "Locality abbreviation does not exist")
+        self.assertFalse(Locality.objects.filter(abbreviation="XX").exists())
 
 class FieldSlipCardQCPrefillTests(TestCase):
     def setUp(self):
