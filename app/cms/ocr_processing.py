@@ -1142,8 +1142,16 @@ def normalize_field_slip_payload(payload: dict[str, object]) -> dict[str, object
 
 def _resolve_lookup_names(model, names: list[str]) -> list[Any]:
     resolved: list[Any] = []
+    has_code = hasattr(model, "code")
     for name in names:
-        item = model.objects.filter(name__iexact=name).first()
+        cleaned = _clean_string(name)
+        if not cleaned:
+            continue
+        item = model.objects.filter(name__iexact=cleaned).first()
+        if item is None and has_code:
+            code_candidate = re.sub(r"[^A-Z0-9]+", "_", str(cleaned).upper()).strip("_")
+            if code_candidate:
+                item = model.objects.filter(code__iexact=code_candidate).first()
         if item and item not in resolved:
             resolved.append(item)
     return resolved
@@ -1162,6 +1170,10 @@ def _collect_field_slip_relation_targets(
         mapped = _FIELD_SLIP_SEDIMENTARY_ALIASES.get(normalized)
         if mapped and mapped not in sedimentary_names:
             sedimentary_names.append(mapped)
+            continue
+        cleaned_label = _clean_string(label)
+        if cleaned_label and cleaned_label not in sedimentary_names:
+            sedimentary_names.append(cleaned_label)
 
     fossil_group_names: list[str] = []
     for label in checkboxes.get("fossil_groups") or []:
@@ -1469,40 +1481,40 @@ def _generate_unknown_field_number() -> str:
 def _ensure_field_slip(data: dict[str, object]) -> FieldSlip | None:
     normalized_payload = normalize_field_slip_payload(data)
 
-    field_number = _clean_string(normalized_payload.get("field_number") or data.get("field_number"))
+    field_number = _clean_string(normalized_payload.get("field_number") or _value_interpreted(data.get("field_number")))
     verb_locality = _clean_string(
-        normalized_payload.get("verbatim_locality") or data.get("verbatim_locality")
+        normalized_payload.get("verbatim_locality") or _value_interpreted(data.get("verbatim_locality"))
     )
-    verb_taxon = _clean_string(normalized_payload.get("verbatim_taxon") or data.get("verbatim_taxon"))
+    verb_taxon = _clean_string(normalized_payload.get("verbatim_taxon") or _value_interpreted(data.get("verbatim_taxon")))
     if not verb_taxon:
         return None
 
     verbatim_element = _clean_string(
-        normalized_payload.get("verbatim_element") or data.get("verbatim_element")
+        normalized_payload.get("verbatim_element") or _value_interpreted(data.get("verbatim_element"))
     )
     if not verbatim_element:
         return None
 
-    aerial_photo = _clean_string(normalized_payload.get("aerial_photo") or data.get("aerial_photo"))
+    aerial_photo = _clean_string(normalized_payload.get("aerial_photo") or _value_interpreted(data.get("aerial_photo")))
     verbatim_latitude = _clean_string(
-        normalized_payload.get("verbatim_latitude") or data.get("verbatim_latitude")
+        normalized_payload.get("verbatim_latitude") or _value_interpreted(data.get("verbatim_latitude"))
     )
     verbatim_longitude = _clean_string(
-        normalized_payload.get("verbatim_longitude") or data.get("verbatim_longitude")
+        normalized_payload.get("verbatim_longitude") or _value_interpreted(data.get("verbatim_longitude"))
     )
     verbatim_elevation = _clean_string(
-        normalized_payload.get("verbatim_elevation") or data.get("verbatim_elevation")
+        normalized_payload.get("verbatim_elevation") or _value_interpreted(data.get("verbatim_elevation"))
     )
-    collector = _clean_string(normalized_payload.get("collector") or data.get("collector"))
-    discoverer = _clean_string(normalized_payload.get("discoverer") or data.get("discoverer"))
-    comment = _clean_string(normalized_payload.get("comment") or data.get("comment"))
+    collector = _clean_string(normalized_payload.get("collector") or _value_interpreted(data.get("collector")))
+    discoverer = _clean_string(normalized_payload.get("discoverer") or _value_interpreted(data.get("discoverer")))
+    comment = _clean_string(normalized_payload.get("comment") or _value_interpreted(data.get("comment")))
 
     collection_date_value = _clean_string(
-        normalized_payload.get("verbatimEventDate") or data.get("collection_date")
+        normalized_payload.get("verbatimEventDate") or _value_interpreted(data.get("collection_date"))
     )
     collection_date = _parse_collection_date_value(collection_date_value)
 
-    horizon = _clean_string(normalized_payload.get("verbatim_horizon") or data.get("verbatim_horizon"))
+    horizon = _clean_string(normalized_payload.get("verbatim_horizon") or _value_interpreted(data.get("verbatim_horizon")))
     if isinstance(data.get("verbatim_horizon"), dict):
         horizon_payload = data.get("verbatim_horizon") or {}
         horizon_parts = [
@@ -1537,20 +1549,28 @@ def _ensure_field_slip(data: dict[str, object]) -> FieldSlip | None:
     ) = _collect_field_slip_relation_targets(normalized_payload)
 
     collection_position = _clean_string(
-        normalized_payload.get("collection_position") or data.get("collection_position")
+        normalized_payload.get("collection_position") or _value_interpreted(data.get("collection_position"))
     )
     if collection_position not in {choice for choice, _label in CollectionPosition.choices}:
         collection_position = None
 
     matrix_association = _clean_string(
-        normalized_payload.get("matrix_association") or data.get("matrix_association")
+        normalized_payload.get("matrix_association") or _value_interpreted(data.get("matrix_association"))
     )
     if matrix_association not in {choice for choice, _label in MatrixAssociation.choices}:
         matrix_association = None
 
     surface_exposure = normalized_payload.get("surface_exposure")
     if not isinstance(surface_exposure, bool):
-        surface_exposure = data.get("surface_exposure")
+        raw_surface = _value_interpreted(data.get("surface_exposure"))
+        if isinstance(raw_surface, bool):
+            surface_exposure = raw_surface
+        elif isinstance(raw_surface, str):
+            lowered = raw_surface.strip().lower()
+            if lowered in {"true", "yes", "1", "on"}:
+                surface_exposure = True
+            elif lowered in {"false", "no", "0", "off"}:
+                surface_exposure = False
     if not isinstance(surface_exposure, bool):
         surface_exposure = None
 

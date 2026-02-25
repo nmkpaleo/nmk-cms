@@ -216,7 +216,7 @@ class FieldSlipCardQCPrefillTests(TestCase):
                     "verbatim_latitude": None,
                     "verbatim_longitude": None,
                     "verbatim_elevation": None,
-                    "sedimentary_features": [],
+                    "sedimentary_features": ["Mud cracks"],
                     "rock_type": [],
                     "fossil_groups": [],
                     "preservation_states": [],
@@ -252,6 +252,13 @@ class FieldSlipPersistenceRuleTests(TestCase):
         self.addCleanup(patcher.stop)
 
     def test_ensure_field_slip_clears_nullable_fields_and_sets_surface_provenance_defaults(self):
+        sedimentary = SedimentaryFeature.objects.filter(code="MUD_CRACKS").first()
+        if sedimentary is None:
+            sedimentary = SedimentaryFeature.objects.create(
+                name="Mud cracks",
+                code="MUD_CRACKS_TEST",
+                category="Sedimentary Structure",
+            )
         slip = FieldSlip.objects.create(
             field_number="WT 2394",
             verbatim_taxon="Cercopithecidae",
@@ -274,7 +281,7 @@ class FieldSlipPersistenceRuleTests(TestCase):
             "surface_exposure": True,
             "matrix_association": None,
             "checkboxes": {
-                "sedimentary_features": [],
+                "sedimentary_features": ["Mud cracks"],
                 "provenance": ["SURFACE"],
                 "recommended_methods": [],
                 "rock_type": [],
@@ -292,3 +299,40 @@ class FieldSlipPersistenceRuleTests(TestCase):
         self.assertTrue(updated.surface_exposure)
         self.assertIsNone(updated.matrix_association)
         self.assertEqual(updated.verbatim_horizon, "Lower NAWATA")
+        self.assertQuerySetEqual(
+            updated.sedimentary_features.values_list("id", flat=True),
+            [sedimentary.id],
+            transform=lambda x: x,
+        )
+
+    def test_ensure_field_slip_reads_value_objects_for_scalar_updates(self):
+        slip = FieldSlip.objects.create(
+            field_number="WT 2500",
+            verbatim_taxon="Cercopithecidae",
+            verbatim_element="M3",
+            comment="old comment",
+            verbatim_elevation="555",
+            collection_position="in_situ",
+            matrix_association="attached",
+            surface_exposure=False,
+        )
+
+        payload = {
+            "field_number": {"interpreted": "WT 2500"},
+            "verbatim_taxon": {"interpreted": "Cercopithecidae"},
+            "verbatim_element": {"interpreted": "M3"},
+            "comment": {"interpreted": None, "raw": ""},
+            "verbatim_elevation": {"interpreted": None, "raw": ""},
+            "collection_position": {"interpreted": "ex_situ"},
+            "matrix_association": {"interpreted": "none"},
+            "surface_exposure": {"interpreted": True},
+        }
+
+        updated = _ensure_field_slip(payload)
+        updated.refresh_from_db()
+        self.assertEqual(updated.id, slip.id)
+        self.assertIsNone(updated.comment)
+        self.assertIsNone(updated.verbatim_elevation)
+        self.assertEqual(updated.collection_position, "ex_situ")
+        self.assertEqual(updated.matrix_association, "none")
+        self.assertTrue(updated.surface_exposure)
