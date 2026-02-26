@@ -7,7 +7,7 @@ import pytest
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 
-pytestmark = pytest.mark.usefixtures("django_db_setup")
+pytestmark = pytest.mark.django_db
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase

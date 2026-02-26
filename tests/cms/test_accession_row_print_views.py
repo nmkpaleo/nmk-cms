@@ -9,7 +9,7 @@ from django.urls import reverse
 
 from cms.models import Accession, AccessionRow, Collection, Locality
 
-pytestmark = pytest.mark.usefixtures("django_db_setup")
+pytestmark = pytest.mark.django_db
 
 
 def _login_collection_manager() -> tuple[Client, object]:
