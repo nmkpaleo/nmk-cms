@@ -118,6 +118,7 @@ def identification(accession_row, person):
     return Identification.objects.create(
         accession_row=accession_row,
         identified_by=person,
+        taxon_verbatim="Homo sapiens",
         taxon="Homo sapiens",
         date_identified=date(2024, 1, 15),
         verbatim_identification="Human",
@@ -252,7 +253,7 @@ class TestIdentificationEdit:
         from datetime import date
         new_data = {
             'identified_by': identification.identified_by.id,
-            'taxon': 'Homo neanderthalensis',
+            'taxon_verbatim': 'Homo neanderthalensis',
             'date_identified': date(2024, 2, 20).isoformat(),
             'verbatim_identification': 'Neanderthal',
             'identification_qualifier': 'cf.',
@@ -311,6 +312,7 @@ class TestAccessionRowDetailPageOrdering:
         id1 = Identification.objects.create(
             accession_row=accession_row,
             identified_by=person,
+            taxon_verbatim="Taxon A",
             taxon="Taxon A",
             date_identified=date(2024, 1, 1),
         )
@@ -321,6 +323,7 @@ class TestAccessionRowDetailPageOrdering:
         id2 = Identification.objects.create(
             accession_row=accession_row,
             identified_by=person,
+            taxon_verbatim="Taxon B",
             taxon="Taxon B",
             date_identified=date(2024, 3, 1),
         )
@@ -331,6 +334,7 @@ class TestAccessionRowDetailPageOrdering:
         id3 = Identification.objects.create(
             accession_row=accession_row,
             identified_by=person,
+            taxon_verbatim="Taxon C",
             taxon="Taxon C",
             date_identified=date(2024, 2, 1),
         )
@@ -360,12 +364,14 @@ class TestIdentificationRowCSSClasses:
         id1 = Identification.objects.create(
             accession_row=accession_row,
             identified_by=person,
+            taxon_verbatim="Taxon A",
             taxon="Taxon A",
             date_identified=date(2024, 3, 1),
         )
         id2 = Identification.objects.create(
             accession_row=accession_row,
             identified_by=person,
+            taxon_verbatim="Taxon B",
             taxon="Taxon B",
             date_identified=date(2024, 1, 1),
         )
