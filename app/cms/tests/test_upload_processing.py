@@ -16,18 +16,12 @@ pytestmark = pytest.mark.django_db
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.core.management import call_command
 from django.test import Client
 from django.urls import reverse
 
 from cms.models import Media  # noqa: E402  pylint: disable=wrong-import-position
 from cms.upload_processing import process_file  # noqa: E402  pylint: disable=wrong-import-position
 
-
-@pytest.fixture(scope="session", autouse=True)
-def _migrate_db(django_db_blocker):
-    with django_db_blocker.unblock():
-        call_command("migrate", run_syncdb=True, verbosity=0)
 
 
 @pytest.fixture(autouse=True)

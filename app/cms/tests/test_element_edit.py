@@ -27,7 +27,7 @@ def collection_manager_user():
         email="manager@test.com"
     )
     # Create collection manager group if it doesn't exist
-    group, _ = Group.objects.get_or_create(name="Collection Manager")
+    group, _ = Group.objects.get_or_create(name="Collection Managers")
     user.groups.add(group)
     return user
 
@@ -65,7 +65,8 @@ def accession_with_element(collection_manager_user):
     accession = Accession.objects.create(
         collection=collection,
         specimen_prefix=locality,
-        specimen_no=1
+        specimen_no=1,
+        is_published=True
     )
     
     accession_row = AccessionRow.objects.create(
@@ -288,7 +289,8 @@ def accession_with_identification(collection_manager_user):
     accession = Accession.objects.create(
         collection=collection,
         specimen_prefix=locality,
-        specimen_no=1
+        specimen_no=1,
+        is_published=True
     )
     
     accession_row = AccessionRow.objects.create(
