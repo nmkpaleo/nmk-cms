@@ -38,7 +38,7 @@ class SpecimenListUploadViewTests(TransactionTestCase):
                 )
 
                 self.client.force_login(self.user)
-                with patch("cms.upload_processing.queue_specimen_list_processing") as queued:
+                with patch("cms.views.queue_specimen_list_processing") as queued:
                     response = self.client.post(
                         reverse("specimen_list_upload"),
                         {

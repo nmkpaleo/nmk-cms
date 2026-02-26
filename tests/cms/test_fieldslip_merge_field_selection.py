@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from crum import set_current_user
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -18,8 +19,11 @@ class FieldSlipMergeFieldSelectionTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.User = get_user_model()
+        cls._creator = cls.User.objects.create_user(username="fieldslip-merge-seeder")
+        set_current_user(cls._creator)
         cls.grain_size_a = GrainSize.objects.create(name="Fine")
         cls.grain_size_b = GrainSize.objects.create(name="Coarse")
+        set_current_user(None)
 
     def setUp(self):
         self.staff = self.User.objects.create_superuser(
