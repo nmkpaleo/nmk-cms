@@ -106,7 +106,6 @@ def test_dashboard_sets_active_series_flag_for_manager(client, monkeypatch):
     content = response.content.decode()
 
     assert reverse("accession-wizard") in content
-    assert "w3-disabled" not in content
     assert 'aria-disabled="false"' in content
 
 

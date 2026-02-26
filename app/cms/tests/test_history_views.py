@@ -8,7 +8,7 @@ pytestmark = pytest.mark.django_db
 
 
 def _create_storage_with_history(monkeypatch, user):
-    monkeypatch.setattr("app.cms.models.get_current_user", lambda: user)
+    monkeypatch.setattr("cms.models.get_current_user", lambda: user)
     storage = Storage.objects.create(area="Vault A")
     storage.area = "Vault B"
     storage.save()
@@ -48,7 +48,7 @@ def staff_user(django_user_model):
 
 
 def _create_qc_logs(monkeypatch, staff):
-    monkeypatch.setattr("app.cms.models.get_current_user", lambda: staff)
+    monkeypatch.setattr("cms.models.get_current_user", lambda: staff)
     media = Media.objects.create(media_location="uploads/history.png", file_name="history.png")
     MediaQCLog.objects.create(
         media=media,

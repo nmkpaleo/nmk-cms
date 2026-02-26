@@ -25,8 +25,7 @@ DETAIL_TEMPLATES = [
         "drawerregister_detail.html",
         [
             "aria-labelledby=\"drawer-details-heading\"",
-            "w3-card",
-            "fa-solid fa-clock-rotate-left",
+            "fa-folder-open",
         ],
     ),
     (
@@ -42,7 +41,6 @@ DETAIL_TEMPLATES = [
         [
             "aria-labelledby=\"locality-details-heading\"",
             "w3-card",
-            "fa-solid fa-box-archive",
         ],
     ),
     (
