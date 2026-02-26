@@ -6,7 +6,6 @@ from django import forms
 from django.contrib.auth.models import AnonymousUser
 from django.contrib.auth import get_user_model
 from django.core.paginator import Paginator
-from django.core.management import call_command
 from django.template.loader import render_to_string
 from django.test import RequestFactory
 from django.urls import reverse
@@ -15,7 +14,6 @@ from crum import impersonate
 from cms.merge.forms import ElementFieldSelectionForm, FieldSelectionCandidate
 from cms.models import Element
 
-call_command("migrate", run_syncdb=True, verbosity=0)
 
 
 @pytest.mark.django_db
