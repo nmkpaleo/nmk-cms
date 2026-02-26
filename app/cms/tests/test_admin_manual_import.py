@@ -188,8 +188,15 @@ def test_manual_import_history_tracks_metadata(collection, locality, staff_user,
         file_name="history-1.jpg",
     )
 
-    def _fake_create(media_obj):
-        return {"created": []}
+    accession = Accession.objects.create(
+        collection=collection,
+        specimen_prefix=locality,
+        specimen_no=999,
+        is_published=False,
+    )
+
+    def _fake_create(media_obj, **kwargs):
+        return {"created": [{"accession_id": accession.pk}]}
 
     monkeypatch.setattr("cms.manual_import.create_accessions_from_media", _fake_create)
 

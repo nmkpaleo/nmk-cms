@@ -260,6 +260,8 @@ class TestAccessionRowDetailPageOrdering:
     def test_identifications_section_appears_before_elements(self, client, collection_manager_user, accession_row):
         """Test that the Identifications section appears before Elements section."""
         client.force_login(collection_manager_user)
+        client.force_login(collection_manager_user)
+        client.force_login(collection_manager_user)
         url = reverse('accessionrow_detail', args=[accession_row.id])
         response = client.get(url)
         
@@ -274,7 +276,7 @@ class TestAccessionRowDetailPageOrdering:
         assert elements_pos > 0
         assert identifications_pos < elements_pos
 
-    def test_identification_ordering_by_date_desc_then_created_at_desc(self, client, accession_row, person, admin_user):
+    def test_identification_ordering_by_date_desc_then_created_at_desc(self, client, collection_manager_user, accession_row, person, admin_user):
         """Test that identifications are ordered by date DESC, then created_at DESC."""
         # Create multiple identifications with different dates
         with impersonate(admin_user):
@@ -300,6 +302,7 @@ class TestAccessionRowDetailPageOrdering:
                 date_identified="2023-03-01",
             )
         
+        client.force_login(collection_manager_user)
         url = reverse('accessionrow_detail', args=[accession_row.id])
         response = client.get(url)
         
@@ -311,7 +314,7 @@ class TestAccessionRowDetailPageOrdering:
         assert identifications[1].id == id3.id
         assert identifications[2].id == id1.id
 
-    def test_identification_w3css_classes_latest_green_others_red(self, client, accession_row, person, admin_user):
+    def test_identification_w3css_classes_latest_green_others_red(self, client, collection_manager_user, accession_row, person, admin_user):
         """Test that the latest identification has w3-pale-green and others have w3-pale-red."""
         # Create multiple identifications
         with impersonate(admin_user):
@@ -337,6 +340,7 @@ class TestAccessionRowDetailPageOrdering:
                 date_identified="2023-03-01",
             )
         
+        client.force_login(collection_manager_user)
         url = reverse('accessionrow_detail', args=[accession_row.id])
         response = client.get(url)
         
