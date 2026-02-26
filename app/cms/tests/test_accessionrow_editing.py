@@ -1,5 +1,6 @@
 """Tests for AccessionRow element and identification editing functionality."""
 import pytest
+from crum import set_current_user
 from django.urls import reverse
 from django.contrib.auth import get_user_model
 
@@ -31,6 +32,16 @@ def collection_manager(django_user_model):
     group, _ = Group.objects.get_or_create(name="Collection Managers")
     user.groups.add(group)
     return user
+
+
+@pytest.fixture(autouse=True)
+def authenticated_model_user(collection_manager):
+    """Ensure model validation has a current user during test data setup."""
+    set_current_user(collection_manager)
+    try:
+        yield
+    finally:
+        set_current_user(None)
 
 
 @pytest.fixture
@@ -107,6 +118,7 @@ def identification(accession_row, person):
     return Identification.objects.create(
         accession_row=accession_row,
         identified_by=person,
+        taxon_verbatim="Homo sapiens",
         taxon="Homo sapiens",
         date_identified=date(2024, 1, 15),
         verbatim_identification="Human",
@@ -241,7 +253,7 @@ class TestIdentificationEdit:
         from datetime import date
         new_data = {
             'identified_by': identification.identified_by.id,
-            'taxon': 'Homo neanderthalensis',
+            'taxon_verbatim': 'Homo neanderthalensis',
             'date_identified': date(2024, 2, 20).isoformat(),
             'verbatim_identification': 'Neanderthal',
             'identification_qualifier': 'cf.',
@@ -300,6 +312,7 @@ class TestAccessionRowDetailPageOrdering:
         id1 = Identification.objects.create(
             accession_row=accession_row,
             identified_by=person,
+            taxon_verbatim="Taxon A",
             taxon="Taxon A",
             date_identified=date(2024, 1, 1),
         )
@@ -310,6 +323,7 @@ class TestAccessionRowDetailPageOrdering:
         id2 = Identification.objects.create(
             accession_row=accession_row,
             identified_by=person,
+            taxon_verbatim="Taxon B",
             taxon="Taxon B",
             date_identified=date(2024, 3, 1),
         )
@@ -320,6 +334,7 @@ class TestAccessionRowDetailPageOrdering:
         id3 = Identification.objects.create(
             accession_row=accession_row,
             identified_by=person,
+            taxon_verbatim="Taxon C",
             taxon="Taxon C",
             date_identified=date(2024, 2, 1),
         )
@@ -349,12 +364,14 @@ class TestIdentificationRowCSSClasses:
         id1 = Identification.objects.create(
             accession_row=accession_row,
             identified_by=person,
+            taxon_verbatim="Taxon A",
             taxon="Taxon A",
             date_identified=date(2024, 3, 1),
         )
         id2 = Identification.objects.create(
             accession_row=accession_row,
             identified_by=person,
+            taxon_verbatim="Taxon B",
             taxon="Taxon B",
             date_identified=date(2024, 1, 1),
         )

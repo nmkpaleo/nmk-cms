@@ -117,7 +117,7 @@ class FieldSlipTestCase(TestCase):
         )
 
         if taxon:
-            Identification.objects.create(accession_row=row, taxon=taxon)
+            Identification.objects.create(accession_row=row, taxon_verbatim=taxon, taxon=taxon)
 
         if element_name:
             element = Element.objects.create(name=element_name)

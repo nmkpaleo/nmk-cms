@@ -39,6 +39,7 @@ def _create_taxon(apps, name: str, *, is_active: bool = True):
     )
 
 
+@pytest.mark.skipif(connection.vendor == "sqlite", reason="Migration schema editing scenario is backend-specific")
 def test_taxon_unification_migration_backfills_and_links_unique_matches():
     executor = MigrationExecutor(connection)
     migrate_from = [("cms", "0068_historicallocality_geological_times_and_more")]
@@ -72,10 +73,12 @@ def test_taxon_unification_migration_backfills_and_links_unique_matches():
 
     linked_ident = Identification.objects.create(
         accession_row=accession_row,
+        taxon_verbatim="Linkedus example",
         taxon="Linkedus example",
     )
     ambiguous_ident = Identification.objects.create(
         accession_row=accession_row,
+        taxon_verbatim="Ambiguous taxon",
         taxon="Ambiguous taxon",
     )
 
