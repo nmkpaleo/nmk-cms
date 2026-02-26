@@ -172,8 +172,11 @@ class GenerateAccessionBatchViewTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertFormError(
-            response, "form", "count", "You can generate up to 100 accession numbers at a time."
+        form = response.context["form"]
+        assert form.errors.get("count")
+        self.assertIn(
+            "You can generate up to 100 accession numbers at a time.",
+            form.errors["count"],
         )
 
     def test_superuser_can_create_series_even_with_existing_one(self):

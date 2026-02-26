@@ -26,6 +26,15 @@ from app.cms.models import (
 pytestmark = pytest.mark.django_db
 
 
+@pytest.fixture(autouse=True)
+def authenticated_model_user(locality_user):
+    set_current_user(locality_user)
+    try:
+        yield
+    finally:
+        set_current_user(None)
+
+
 @pytest.fixture
 def locality_user():
     user_model = get_user_model()
