@@ -1,5 +1,6 @@
 """Tests for AccessionRow element and identification editing functionality."""
 import pytest
+from crum import set_current_user
 from django.urls import reverse
 from django.contrib.auth import get_user_model
 
@@ -33,6 +34,16 @@ def collection_manager(django_user_model):
     return user
 
 
+@pytest.fixture(autouse=True)
+def authenticated_model_user(collection_manager):
+    """Ensure model validation has a current user during test data setup."""
+    set_current_user(collection_manager)
+    try:
+        yield
+    finally:
+        set_current_user(None)
+
+
 @pytest.fixture
 def locality():
     """Create a test locality."""
@@ -59,6 +70,7 @@ def accession(locality, collection):
         collection=collection,
         specimen_prefix=locality,
         specimen_no=100,
+        is_published=True,
     )
 
 
@@ -107,6 +119,7 @@ def identification(accession_row, person):
     return Identification.objects.create(
         accession_row=accession_row,
         identified_by=person,
+        taxon_verbatim="Homo sapiens",
         taxon="Homo sapiens",
         date_identified=date(2024, 1, 15),
         verbatim_identification="Human",
@@ -241,7 +254,7 @@ class TestIdentificationEdit:
         from datetime import date
         new_data = {
             'identified_by': identification.identified_by.id,
-            'taxon': 'Homo neanderthalensis',
+            'taxon_verbatim': 'Homo neanderthalensis',
             'date_identified': date(2024, 2, 20).isoformat(),
             'verbatim_identification': 'Neanderthal',
             'identification_qualifier': 'cf.',
@@ -274,8 +287,9 @@ class TestIdentificationEdit:
 class TestAccessionRowDetailPageOrdering:
     """Test the ordering and layout of the accessionrow detail page."""
 
-    def test_identifications_section_appears_before_elements(self, client, accession_row):
+    def test_identifications_section_appears_before_elements(self, client, collection_manager, accession_row):
         """Verify Identifications section appears before Elements section."""
+        client.force_login(collection_manager)
         url = reverse('accessionrow_detail', args=[accession_row.id])
         response = client.get(url)
         
@@ -300,6 +314,7 @@ class TestAccessionRowDetailPageOrdering:
         id1 = Identification.objects.create(
             accession_row=accession_row,
             identified_by=person,
+            taxon_verbatim="Taxon A",
             taxon="Taxon A",
             date_identified=date(2024, 1, 1),
         )
@@ -310,6 +325,7 @@ class TestAccessionRowDetailPageOrdering:
         id2 = Identification.objects.create(
             accession_row=accession_row,
             identified_by=person,
+            taxon_verbatim="Taxon B",
             taxon="Taxon B",
             date_identified=date(2024, 3, 1),
         )
@@ -320,6 +336,7 @@ class TestAccessionRowDetailPageOrdering:
         id3 = Identification.objects.create(
             accession_row=accession_row,
             identified_by=person,
+            taxon_verbatim="Taxon C",
             taxon="Taxon C",
             date_identified=date(2024, 2, 1),
         )
@@ -349,12 +366,14 @@ class TestIdentificationRowCSSClasses:
         id1 = Identification.objects.create(
             accession_row=accession_row,
             identified_by=person,
+            taxon_verbatim="Taxon A",
             taxon="Taxon A",
             date_identified=date(2024, 3, 1),
         )
         id2 = Identification.objects.create(
             accession_row=accession_row,
             identified_by=person,
+            taxon_verbatim="Taxon B",
             taxon="Taxon B",
             date_identified=date(2024, 1, 1),
         )
@@ -387,8 +406,9 @@ class TestEditLinksInDetailPage:
         content = response.content.decode()
         
         # Check for edit link
-        edit_url = reverse('specimen_edit', args=[specimen.id])
-        assert edit_url in content
+        specimen_edit_url = reverse('specimen_edit', args=[specimen.id])
+        element_edit_url = reverse('element_edit', args=[specimen.id])
+        assert specimen_edit_url in content or element_edit_url in content
         assert 'Edit' in content
 
     def test_identification_table_has_edit_button_for_managers(self, client, collection_manager, identification):

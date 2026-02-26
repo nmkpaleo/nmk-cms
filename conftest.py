@@ -8,9 +8,15 @@ setting Django env vars so plugin startup order remains intact.
 from __future__ import annotations
 
 import importlib
+import os
 import sys
 from pathlib import Path
 from types import ModuleType
+
+
+# Ensure pytest uses a local SQLite database unless caller explicitly overrides DB settings.
+os.environ.setdefault("DB_ENGINE", "django.db.backends.sqlite3")
+os.environ.setdefault("DB_NAME", str(Path(__file__).resolve().parent / "db.sqlite3"))
 
 LEGACY_SUBMODULE_ALIASES: tuple[str, ...] = (
     "models",

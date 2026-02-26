@@ -110,6 +110,7 @@ def identification(accession_row, person, admin_user):
         return Identification.objects.create(
             accession_row=accession_row,
             identified_by=person,
+            taxon_verbatim="Australopithecus afarensis",
             taxon="Australopithecus afarensis",
             date_identified="2023-01-15",
         )
@@ -228,7 +229,7 @@ class TestIdentificationEdit:
         
         data = {
             'identified_by': identification.identified_by.id,
-            'taxon': 'Homo habilis',
+            'taxon_verbatim': 'Homo habilis',
             'date_identified': '2023-06-20',
             'identification_qualifier': 'cf.',
             'verbatim_identification': 'Homo habilis cf.',
@@ -256,8 +257,11 @@ class TestIdentificationEdit:
 class TestAccessionRowDetailPageOrdering:
     """Test section ordering and identification display on accessionrow detail page."""
 
-    def test_identifications_section_appears_before_elements(self, client, accession_row):
+    def test_identifications_section_appears_before_elements(self, client, collection_manager_user, accession_row):
         """Test that the Identifications section appears before Elements section."""
+        client.force_login(collection_manager_user)
+        client.force_login(collection_manager_user)
+        client.force_login(collection_manager_user)
         url = reverse('accessionrow_detail', args=[accession_row.id])
         response = client.get(url)
         
@@ -272,29 +276,33 @@ class TestAccessionRowDetailPageOrdering:
         assert elements_pos > 0
         assert identifications_pos < elements_pos
 
-    def test_identification_ordering_by_date_desc_then_created_at_desc(self, client, accession_row, person, admin_user):
+    def test_identification_ordering_by_date_desc_then_created_at_desc(self, client, collection_manager_user, accession_row, person, admin_user):
         """Test that identifications are ordered by date DESC, then created_at DESC."""
         # Create multiple identifications with different dates
         with impersonate(admin_user):
             id1 = Identification.objects.create(
                 accession_row=accession_row,
                 identified_by=person,
+                taxon_verbatim="Taxon A",
                 taxon="Taxon A",
                 date_identified="2023-01-01",
             )
             id2 = Identification.objects.create(
                 accession_row=accession_row,
                 identified_by=person,
+                taxon_verbatim="Taxon B",
                 taxon="Taxon B",
                 date_identified="2023-06-01",
             )
             id3 = Identification.objects.create(
                 accession_row=accession_row,
                 identified_by=person,
+                taxon_verbatim="Taxon C",
                 taxon="Taxon C",
                 date_identified="2023-03-01",
             )
         
+        client.force_login(collection_manager_user)
         url = reverse('accessionrow_detail', args=[accession_row.id])
         response = client.get(url)
         
@@ -306,29 +314,33 @@ class TestAccessionRowDetailPageOrdering:
         assert identifications[1].id == id3.id
         assert identifications[2].id == id1.id
 
-    def test_identification_w3css_classes_latest_green_others_red(self, client, accession_row, person, admin_user):
+    def test_identification_w3css_classes_latest_green_others_red(self, client, collection_manager_user, accession_row, person, admin_user):
         """Test that the latest identification has w3-pale-green and others have w3-pale-red."""
         # Create multiple identifications
         with impersonate(admin_user):
             id1 = Identification.objects.create(
                 accession_row=accession_row,
                 identified_by=person,
+                taxon_verbatim="Taxon A",
                 taxon="Taxon A",
                 date_identified="2023-01-01",
             )
             id2 = Identification.objects.create(
                 accession_row=accession_row,
                 identified_by=person,
+                taxon_verbatim="Taxon B (Latest)",
                 taxon="Taxon B (Latest)",
                 date_identified="2023-06-01",
             )
             id3 = Identification.objects.create(
                 accession_row=accession_row,
                 identified_by=person,
+                taxon_verbatim="Taxon C",
                 taxon="Taxon C",
                 date_identified="2023-03-01",
             )
         
+        client.force_login(collection_manager_user)
         url = reverse('accessionrow_detail', args=[accession_row.id])
         response = client.get(url)
         

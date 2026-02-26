@@ -113,7 +113,7 @@ class FieldSelectionMergeIntegrationTests(SimpleTestCase):
             def __get__(self, instance, owner):
                 return self
 
-        class MergeSubject(MergeMixin):
+        class MergeSubjectPerField(MergeMixin):
             objects = DummyManager()
 
             title = models.CharField(max_length=128)
@@ -132,8 +132,8 @@ class FieldSelectionMergeIntegrationTests(SimpleTestCase):
             def delete(self, *args, **kwargs):
                 return None
 
-        cls.MergeSubject = MergeSubject
-        cls.manager = MergeSubject.objects
+        cls.MergeSubject = MergeSubjectPerField
+        cls.manager = MergeSubjectPerField.objects
 
     def setUp(self):
         self.target = self.MergeSubject(title="Existing", code="ABC")

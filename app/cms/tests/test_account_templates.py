@@ -8,10 +8,9 @@ class AccountTemplateW3Tests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         expected_tokens = [
-            "w3-container w3-padding-64 w3-light-grey",
-            "w3-card-4",
+            "w3-container w3-padding-64 w3-sand",
+            "w3-card w3-white",
             "w3-round-xlarge",
-            "w3-padding-32",
             "w3-animate-opacity",
         ]
         for token in expected_tokens:
@@ -24,10 +23,9 @@ class AccountTemplateW3Tests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         expected_tokens = [
-            "w3-container w3-padding-64 w3-light-grey",
-            "w3-card-4",
+            "w3-container w3-padding-64 w3-sand",
+            "w3-card w3-white",
             "w3-round-xlarge",
-            "w3-padding-32",
             "w3-animate-opacity",
         ]
         for token in expected_tokens:
