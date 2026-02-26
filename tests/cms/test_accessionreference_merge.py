@@ -11,7 +11,7 @@ from django.core.exceptions import ValidationError
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 
-pytestmark = pytest.mark.usefixtures("django_db_setup")
+pytestmark = pytest.mark.django_db
 
 from cms.merge.forms import FieldSelectionForm
 from cms.merge.services import merge_accession_references

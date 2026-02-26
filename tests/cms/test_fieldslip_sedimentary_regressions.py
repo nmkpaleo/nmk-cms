@@ -17,7 +17,7 @@ from cms.models import (
 )
 
 
-pytestmark = pytest.mark.usefixtures("django_db_setup")
+pytestmark = pytest.mark.django_db
 
 
 class FieldSlipSedimentaryRegressionTests(TestCase):

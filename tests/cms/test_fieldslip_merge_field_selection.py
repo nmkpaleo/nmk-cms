@@ -11,7 +11,7 @@ from cms.merge.views import FieldSelectionMergeView
 from cms.models import FieldSlip, GrainSize
 
 
-pytestmark = pytest.mark.usefixtures("django_db_setup")
+pytestmark = pytest.mark.django_db
 
 
 class FieldSlipMergeFieldSelectionTests(TestCase):
