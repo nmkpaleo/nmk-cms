@@ -4,6 +4,7 @@ from html import unescape
 from urllib.parse import parse_qs
 
 import pytest
+from crum import set_current_user
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.urls import reverse
@@ -25,6 +26,23 @@ pytestmark = pytest.mark.django_db
 
 
 User = get_user_model()
+
+
+@pytest.fixture
+def collection_manager_user() -> User:
+    """Create and set the current user for model save validation."""
+    user = create_collection_manager_user(username="views-manager")
+    set_current_user(user)
+    try:
+        yield user
+    finally:
+        set_current_user(None)
+
+
+@pytest.fixture(autouse=True)
+def authenticated_model_user(collection_manager_user: User) -> User:
+    """Ensure a current user exists during model fixture/object creation."""
+    return collection_manager_user
 
 
 def create_locality(*, abbreviation: str, name: str, geological_times: list[str] | None = None) -> Locality:

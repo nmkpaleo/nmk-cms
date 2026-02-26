@@ -1,5 +1,6 @@
 """Tests for AccessionRow element and identification editing functionality."""
 import pytest
+from crum import set_current_user
 from django.urls import reverse
 from django.contrib.auth import get_user_model
 
@@ -31,6 +32,16 @@ def collection_manager(django_user_model):
     group, _ = Group.objects.get_or_create(name="Collection Managers")
     user.groups.add(group)
     return user
+
+
+@pytest.fixture(autouse=True)
+def authenticated_model_user(collection_manager):
+    """Ensure model validation has a current user during test data setup."""
+    set_current_user(collection_manager)
+    try:
+        yield
+    finally:
+        set_current_user(None)
 
 
 @pytest.fixture

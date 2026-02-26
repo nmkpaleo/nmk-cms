@@ -1,6 +1,7 @@
 """Tests for element (NatureOfSpecimen) editing functionality."""
 
 import pytest
+from crum import set_current_user
 from django.urls import reverse
 from django.test import Client
 from cms.models import (
@@ -29,6 +30,16 @@ def collection_manager_user():
     group, _ = Group.objects.get_or_create(name="Collection Manager")
     user.groups.add(group)
     return user
+
+
+@pytest.fixture(autouse=True)
+def authenticated_model_user(collection_manager_user):
+    """Provide a current user for model-level save validation."""
+    set_current_user(collection_manager_user)
+    try:
+        yield
+    finally:
+        set_current_user(None)
 
 
 @pytest.fixture
