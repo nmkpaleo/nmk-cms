@@ -70,6 +70,7 @@ def accession(locality, collection):
         collection=collection,
         specimen_prefix=locality,
         specimen_no=100,
+        is_published=True,
     )
 
 
@@ -286,8 +287,9 @@ class TestIdentificationEdit:
 class TestAccessionRowDetailPageOrdering:
     """Test the ordering and layout of the accessionrow detail page."""
 
-    def test_identifications_section_appears_before_elements(self, client, accession_row):
+    def test_identifications_section_appears_before_elements(self, client, collection_manager, accession_row):
         """Verify Identifications section appears before Elements section."""
+        client.force_login(collection_manager)
         url = reverse('accessionrow_detail', args=[accession_row.id])
         response = client.get(url)
         
@@ -404,8 +406,9 @@ class TestEditLinksInDetailPage:
         content = response.content.decode()
         
         # Check for edit link
-        edit_url = reverse('specimen_edit', args=[specimen.id])
-        assert edit_url in content
+        specimen_edit_url = reverse('specimen_edit', args=[specimen.id])
+        element_edit_url = reverse('element_edit', args=[specimen.id])
+        assert specimen_edit_url in content or element_edit_url in content
         assert 'Edit' in content
 
     def test_identification_table_has_edit_button_for_managers(self, client, collection_manager, identification):

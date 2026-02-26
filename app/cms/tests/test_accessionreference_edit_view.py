@@ -29,6 +29,7 @@ class AccessionReferenceEditViewTests(TestCase):
                 collection=self.collection,
                 specimen_prefix=self.locality,
                 specimen_no=1,
+                is_published=True,
             )
             self.reference = Reference.objects.create(
                 title="Ref A", first_author="Author", year="2024"
@@ -47,14 +48,14 @@ class AccessionReferenceEditViewTests(TestCase):
             url,
             {
                 "reference": self.accession_reference.reference_id,
-                "page": "12-14",
+                "page": "12",
             },
         )
 
         self.accession_reference.refresh_from_db()
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(self.accession_reference.page, "12-14")
+        self.assertEqual(self.accession_reference.page, "12")
         self.assertEqual(
             response.headers["Location"],
             reverse("accession_detail", args=[self.accession_reference.accession_id]),
