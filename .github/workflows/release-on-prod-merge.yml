@@ -45,9 +45,7 @@ jobs:
           fi
 
           version="${latest_tag#v}"
-          IFS='.' read -r major minor patch <<EOF
-$version
-EOF
+          IFS='.' read -r major minor patch <<< "$version"
 
           case "$BUMP_KIND" in
             major)

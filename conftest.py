@@ -1,34 +1,52 @@
+"""Pytest bootstrap helpers.
+
+Pytest-django owns Django initialization via ``DJANGO_SETTINGS_MODULE`` in
+``pytest.ini``. This module intentionally avoids calling ``django.setup()`` or
+setting Django env vars so plugin startup order remains intact.
+"""
+
+from __future__ import annotations
+
 import importlib
-import os
 import sys
+from pathlib import Path
 from types import ModuleType
 
-PROJECT_ROOT = os.path.dirname(__file__)
-APP_DIR = os.path.join(PROJECT_ROOT, "app")
-if APP_DIR not in sys.path:
-    sys.path.insert(0, APP_DIR)
+LEGACY_SUBMODULE_ALIASES: tuple[str, ...] = (
+    "models",
+    "filters",
+    "forms",
+    "tests",
+    "views",
+    "urls",
+    "resources",
+)
 
-# Ensure the legacy "app.cms" namespace resolves to the Django app module.
-if "app" not in sys.modules:
-    namespace_pkg = ModuleType("app")
-    namespace_pkg.__path__ = [APP_DIR]
-    sys.modules["app"] = namespace_pkg
 
-cms_module = importlib.import_module("cms")
-sys.modules.setdefault("app.cms", cms_module)
+def _install_legacy_app_cms_aliases() -> None:
+    """Map legacy ``app.cms`` imports to canonical ``cms`` modules.
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
-os.environ.setdefault("DB_ENGINE", "django.db.backends.sqlite3")
-os.environ.setdefault("DB_NAME", os.path.join(APP_DIR, "db.sqlite3"))
+    This shim only touches ``sys.modules`` aliases and is invoked during pytest
+    configuration, after pytest-django has initialized Django.
+    """
 
-import django  # noqa: E402  (import after environment configured)
+    cms_module = importlib.import_module("cms")
 
-django.setup()
+    app_namespace = sys.modules.get("app")
+    if app_namespace is None:
+        app_namespace = ModuleType("app")
+        cms_path = next(iter(getattr(cms_module, "__path__", [])), None)
+        app_namespace.__path__ = [str(Path(cms_path).parent)] if cms_path else []
+        sys.modules["app"] = app_namespace
 
-# Mirror commonly imported submodules for backwards compatibility.
-for submodule in ("models", "filters", "forms", "tests", "views", "urls", "resources"):
-    try:
+    sys.modules.setdefault("app.cms", cms_module)
+
+    for submodule in LEGACY_SUBMODULE_ALIASES:
         module = importlib.import_module(f"cms.{submodule}")
-    except ModuleNotFoundError:
-        continue
-    sys.modules.setdefault(f"app.cms.{submodule}", module)
+        sys.modules.setdefault(f"app.cms.{submodule}", module)
+
+
+def pytest_configure() -> None:
+    """Install legacy import aliases without duplicating pytest-django setup."""
+
+    _install_legacy_app_cms_aliases()

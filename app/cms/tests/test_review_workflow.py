@@ -9,7 +9,7 @@ from django.urls import reverse
 from cms.models import Collection, Locality, SpecimenListPage, SpecimenListPDF, SpecimenListRowCandidate
 from cms.services.review_approval import approve_page
 
-pytestmark = pytest.mark.usefixtures("django_db_setup")
+pytestmark = pytest.mark.django_db
 
 
 class ReviewWorkflowFeatureFlagTests(TestCase):

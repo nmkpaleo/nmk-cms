@@ -12,7 +12,7 @@ from django.urls import reverse
 from cms.models import DrawerRegister, Storage
 
 
-pytestmark = pytest.mark.usefixtures("django_db_setup")
+pytestmark = pytest.mark.django_db
 
 
 def _login_collection_manager() -> tuple[Client, object]:

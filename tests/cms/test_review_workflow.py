@@ -11,7 +11,7 @@ from cms.models import SpecimenListPage, SpecimenListPDF
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 
-pytestmark = pytest.mark.usefixtures("django_db_setup")
+pytestmark = pytest.mark.django_db
 
 
 class ReviewWorkflowFeatureFlagTests(TestCase):
