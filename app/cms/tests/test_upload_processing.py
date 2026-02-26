@@ -3,7 +3,7 @@ import shutil
 from pathlib import Path
 from unittest.mock import patch
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings_test")
 os.environ.setdefault("DB_ENGINE", "django.db.backends.sqlite3")
 
 import django
@@ -11,6 +11,8 @@ import django
 django.setup()
 
 import pytest
+
+pytestmark = pytest.mark.django_db
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -23,12 +25,13 @@ from cms.upload_processing import process_file  # noqa: E402  pylint: disable=wr
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _migrate_db():
-    call_command("migrate", run_syncdb=True, verbosity=0)
+def _migrate_db(django_db_blocker):
+    with django_db_blocker.unblock():
+        call_command("migrate", run_syncdb=True, verbosity=0)
 
 
 @pytest.fixture(autouse=True)
-def _current_user_patch():
+def _current_user_patch(db):
     user_model = get_user_model()
     user, _ = user_model.objects.get_or_create(
         username="manual-uploader",
@@ -39,7 +42,7 @@ def _current_user_patch():
 
 
 @pytest.fixture(autouse=True)
-def _clean_media_storage():
+def _clean_media_storage(db):
     uploads_root = Path(settings.MEDIA_ROOT) / "uploads"
     if uploads_root.exists():
         shutil.rmtree(uploads_root)

@@ -5,6 +5,8 @@ from unittest.mock import patch
 
 import django
 import pytest
+
+pytestmark = pytest.mark.django_db
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -19,7 +21,7 @@ from cms.forms import (
     ensure_manual_qc_permission,
 )
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings_test")
 os.environ.setdefault("DB_ENGINE", "django.db.backends.sqlite3")
 django.setup()
 
@@ -102,8 +104,9 @@ def build_minimal_workbook(headers: list[str], rows: list[list[str]]) -> bytes:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _migrate_db():
-    call_command("migrate", run_syncdb=True, verbosity=0)
+def _migrate_db(django_db_blocker):
+    with django_db_blocker.unblock():
+        call_command("migrate", run_syncdb=True, verbosity=0)
 
 
 @pytest.fixture(scope="session", autouse=True)
