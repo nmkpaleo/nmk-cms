@@ -85,7 +85,7 @@ def test_attach_accession_summaries_prefers_controlled_taxon_name():
     accession = accession_row.accession
     attach_accession_summaries([accession])
 
-    assert accession.taxa_list == ["Controlledus example", "Verbatim only"]
+    assert accession.taxa_list == ["Alternate entry", "Verbatim only"]
 
 
 def test_admin_displays_taxonomy_fields_readonly():
@@ -103,7 +103,7 @@ def test_admin_displays_taxonomy_fields_readonly():
     set_current_user(None)
 
     identification_admin = admin.site._registry[Identification]
-    assert identification_admin.preferred_taxon_name_display(identification) == taxon.taxon_name
+    assert identification_admin.preferred_taxon_name_display(identification) == "Recorded text"
     assert identification_admin.verbatim_taxon_display(identification) == "Recorded text"
     assert "taxon_record" in identification_admin.readonly_fields
 

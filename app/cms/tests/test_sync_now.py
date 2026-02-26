@@ -1,8 +1,22 @@
 import pytest
+from crum import set_current_user
+from django.contrib.auth import get_user_model
 from django.test import override_settings
 
 from app.cms.models import Taxon, TaxonExternalSource, TaxonStatus, TaxonomyImport
 from app.cms.taxonomy.sync import NowTaxonomySyncService
+
+
+@pytest.fixture(autouse=True)
+def authenticated_model_user(db):
+    """Ensure model saves in sync tests have a current user."""
+    user_model = get_user_model()
+    user, _ = user_model.objects.get_or_create(username="sync-now-user")
+    set_current_user(user)
+    try:
+        yield
+    finally:
+        set_current_user(None)
 
 
 class _StaticResponse:
