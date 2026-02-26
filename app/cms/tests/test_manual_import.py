@@ -3,6 +3,8 @@ from unittest.mock import patch
 
 import django
 import pytest
+
+pytestmark = pytest.mark.django_db
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 
@@ -31,18 +33,19 @@ from cms.models import (
 )
 
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings_test")
 os.environ.setdefault("DB_ENGINE", "django.db.backends.sqlite3")
 django.setup()
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _migrate_db():
-    call_command("migrate", run_syncdb=True, verbosity=0)
+def _migrate_db(django_db_blocker):
+    with django_db_blocker.unblock():
+        call_command("migrate", run_syncdb=True, verbosity=0)
 
 
 @pytest.fixture(autouse=True)
-def _current_user_patch():
+def _current_user_patch(db):
     user_model = get_user_model()
     user, _ = user_model.objects.get_or_create(
         username="importer",

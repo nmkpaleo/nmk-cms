@@ -22,8 +22,9 @@ def client():
 
 
 @pytest.fixture(autouse=True)
-def apply_migrations():
-    call_command("migrate", run_syncdb=True, verbosity=0)
+def apply_migrations(django_db_blocker):
+    with django_db_blocker.unblock():
+        call_command("migrate", run_syncdb=True, verbosity=0)
 
 
 @pytest.fixture(autouse=True)
