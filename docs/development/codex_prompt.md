@@ -77,7 +77,7 @@ Describe the desired feature: user stories, data model changes, permissions, ext
 1. **Clarify context** using the feature intake and project stack snapshot. Flag assumptions or constraints specific to Django 5.2/MySQL.
 2. **Assess impacted apps** within `/apps/<app_name>/`, shared templates, and supporting services.
 3. **Identify reuse vs. net-new components** (models, forms, views, serializers, filters, tasks) and required integrations (django-allauth, django-simple-history, django-filter, etc.).
-4. **Outline testing and quality strategy** (pytest/pytest-django, coverage ≥ 90%, linting, typing, migrations check, docs build).
+4. **Outline testing and quality strategy** (pytest/pytest-django, coverage gate from CI env, linting, typing, migrations check, docs checks). Explicitly call out test fragility risks: current-user model validation hooks, backend-specific assertions, monkeypatch import paths, and patch-target location.
 5. **Consider deployment and ops** (GitHub Actions workflows, Docker usage, environment variables, rollback strategies).
 6. **Account for accessibility, localization, and security** (WCAG AA, gettext, CSP/secure defaults).
 
@@ -94,7 +94,7 @@ Produce the deliverables in this exact order:
 Cover: models/migrations, URLs & CBVs/APIs, forms/serializers, templates (extend `base_generic.html` with semantic HTML5 + W3.CSS + Font Awesome), filters/pagination, permissions/auth, admin registration, django-simple-history, tests, docs/changelog, rollout/feature flags.
 - **Documentation hygiene:** When documenting work, avoid internal code citations (e.g., file paths/line numbers) in user-facing docs; prefer descriptive prose and links suitable for external audiences.
 - **PR messaging:** Note how PR headings/descriptions should evolve with later commits—summaries must stay aligned to the latest scope.
-- **Testing/CI expectations:** Explicitly call out pytest/pytest-django usage, coverage ≥ 90%, migrations checks, and docs lint/build steps required by Django 5.2/MySQL constraints.
+- **Testing/CI expectations:** Explicitly call out pytest/pytest-django usage, CI-configured coverage thresholds (do not hard-code outdated values), migrations checks, and docs checks required by Django 5.2/MySQL constraints. Ensure no test file is redundantly run in a separate CI step if it is already included in the main pytest command.
 
 ### 3️⃣ Tasks (JSON)
 Follow the provided schema verbatim, reflecting project paths (apps/, templates/, docs/, etc.).
@@ -106,7 +106,7 @@ Address auth flows, data migrations, data loss prevention, performance, accessib
 List excluded features or deferred work.
 
 ### 6️⃣ Definition of Done ✅
-Checklist must include: acceptance criteria satisfied, tests (unit/integration) green with ≥90% coverage, migrations applied (if any), admin integration, django-simple-history, django-filter, mobile-first templates, semantic HTML5 landmarks, i18n strings wrapped, requirements changes justified, docs updated (`/docs/user`, `/docs/admin`, `/docs/development`, `CHANGELOG.md`), CI green, staging verified, feature demoed, rollback plan confirmed.
+Checklist must include: acceptance criteria satisfied, tests (unit/integration) green with CI coverage gate met, migrations applied (if any), admin integration, django-simple-history, django-filter, mobile-first templates, semantic HTML5 landmarks, i18n strings wrapped, requirements changes justified, docs updated (`/docs/user`, `/docs/admin`, `/docs/development`, `CHANGELOG.md`), CI green, staging verified, feature demoed, rollback plan confirmed.
 
 ## 6. Guardrails & Style Rules
 - Prefer Django class-based patterns and existing apps; justify any new app.
@@ -119,3 +119,5 @@ Checklist must include: acceptance criteria satisfied, tests (unit/integration) 
 - Captures the end-to-end planning expectations, including dependency awareness, accessibility, rollout, and DRY guidance.
 - Tasks JSON schema is clearly specified for downstream implementation prompts.
 - Gaps addressed: reinforce documentation hygiene (no internal code citations), evolving PR messaging guidance, and explicit testing/CI expectations for Django 5.2.
+- Test-planning gap addressed: require explicit checks for pytest settings alignment, correct monkeypatch/patch import targets, CRUM/current-user setup in model-save paths, and avoiding backend-brittle assertions.
+

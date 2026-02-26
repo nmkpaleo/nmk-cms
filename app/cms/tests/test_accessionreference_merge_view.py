@@ -3,6 +3,7 @@ from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
 from django.test import TransactionTestCase, override_settings
 from django.urls import reverse
+from unittest.mock import patch
 
 from crum import impersonate
 
@@ -48,6 +49,10 @@ class AccessionReferenceMergeViewTests(TransactionTestCase):
         )
         self.user_without_perm.groups.add(self.collection_managers)
 
+        self.user_patcher = patch("cms.models.get_current_user", return_value=self.user_with_perm)
+        self.user_patcher.start()
+        self.addCleanup(self.user_patcher.stop)
+
         with impersonate(self.staff_user):
             self.collection = Collection.objects.create(
                 abbreviation="AC", description="Alpha Collection"
@@ -55,6 +60,10 @@ class AccessionReferenceMergeViewTests(TransactionTestCase):
             self.locality = Locality.objects.create(abbreviation="AL", name="Alpha Locality")
 
     def _create_accession_with_references(self) -> tuple[Accession, list[AccessionReference]]:
+        self.user_patcher = patch("cms.models.get_current_user", return_value=self.user_with_perm)
+        self.user_patcher.start()
+        self.addCleanup(self.user_patcher.stop)
+
         with impersonate(self.staff_user):
             accession = Accession.objects.create(
                 collection=self.collection,
@@ -200,6 +209,10 @@ class AccessionReferenceMergeViewTests(TransactionTestCase):
 
     @override_settings(MERGE_TOOL_FEATURE=True)
     def test_merge_button_hidden_with_single_reference(self):
+        self.user_patcher = patch("cms.models.get_current_user", return_value=self.user_with_perm)
+        self.user_patcher.start()
+        self.addCleanup(self.user_patcher.stop)
+
         with impersonate(self.staff_user):
             accession = Accession.objects.create(
                 collection=self.collection,

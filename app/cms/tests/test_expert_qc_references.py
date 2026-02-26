@@ -4,11 +4,9 @@ import uuid
 import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.core.management import call_command
 from django.conf import settings
 from django.urls import reverse
 from django.test import Client
-from django.test.utils import setup_test_environment, teardown_test_environment
 from crum import impersonate
 
 from cms.models import Collection, Locality, Media
@@ -21,10 +19,6 @@ def client():
     return Client()
 
 
-@pytest.fixture(autouse=True)
-def apply_migrations():
-    call_command("migrate", run_syncdb=True, verbosity=0)
-
 
 @pytest.fixture(autouse=True)
 def allow_test_host():
@@ -32,12 +26,6 @@ def allow_test_host():
         {"testserver", "localhost", *settings.ALLOWED_HOSTS}
     )
 
-
-@pytest.fixture(autouse=True)
-def test_environment():
-    setup_test_environment()
-    yield
-    teardown_test_environment()
 
 
 def _create_expert_user():
