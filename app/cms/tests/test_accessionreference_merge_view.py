@@ -1,7 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
-from django.core.management import call_command
 from django.test import TransactionTestCase, override_settings
 from django.urls import reverse
 
@@ -17,7 +16,6 @@ from cms.models import (
 )
 
 
-call_command("migrate", verbosity=0, run_syncdb=True)
 
 
 class AccessionReferenceMergeViewTests(TransactionTestCase):

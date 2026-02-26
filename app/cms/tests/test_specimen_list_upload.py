@@ -4,14 +4,12 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.core.management import call_command
 from django.test import TransactionTestCase, override_settings
 from django.urls import reverse
 
 from cms.models import SpecimenListPDF
 
 
-call_command("migrate", verbosity=0, run_syncdb=True)
 
 
 class SpecimenListUploadViewTests(TransactionTestCase):

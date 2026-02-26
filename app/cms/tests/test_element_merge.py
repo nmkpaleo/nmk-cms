@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
-from django.core.management import call_command
 from django.test import TestCase
 
 from crum import impersonate
@@ -11,7 +10,6 @@ from cms.merge.services import merge_elements
 from cms.models import Element, MergeLog
 
 
-call_command("migrate", run_syncdb=True, verbosity=0)
 
 
 class ElementMergeEndToEndTests(TestCase):

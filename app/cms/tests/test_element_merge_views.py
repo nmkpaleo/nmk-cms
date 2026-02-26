@@ -2,7 +2,6 @@ from __future__ import annotations
 from crum import impersonate
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
-from django.core.management import call_command
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
@@ -10,7 +9,6 @@ from cms.merge.forms import ElementFieldSelectionForm, FieldSelectionCandidate
 from cms.models import Element
 
 
-call_command("migrate", run_syncdb=True, verbosity=0)
 
 
 class ElementFieldSelectionFormTests(TestCase):
