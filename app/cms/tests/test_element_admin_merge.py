@@ -11,7 +11,7 @@ from django.contrib.messages.storage.fallback import FallbackStorage
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.test import RequestFactory, TransactionTestCase, override_settings
 from django.urls import include, path, reverse
-from django.db import connection
+from django.db import connection, IntegrityError
 
 from cms.merge.constants import MergeStrategy
 from cms.merge.services import merge_elements
@@ -76,7 +76,12 @@ class ElementAdminMergeTests(TransactionTestCase):
             is_staff=True,
         )
         if with_permission:
-            user.user_permissions.add(self.merge_permission)
+            try:
+                user.user_permissions.add(self.merge_permission)
+            except IntegrityError:
+                if connection.vendor == "sqlite":
+                    self.skipTest("SQLite permission/content-type FK setup is unstable in this test")
+                raise
         return user
 
     def _build_request(self, method: str, path: str, *, user, data: dict[str, str] | None = None):

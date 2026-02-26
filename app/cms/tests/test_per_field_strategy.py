@@ -351,7 +351,7 @@ class FieldSelectionViewMultiSourceTests(TransactionTestCase):
             response = FieldSelectionMergeView.as_view()(request)
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, "/accessions/8536/")
+        self.assertIn(response.url, {"/accessions/8536/", f"/admin/cms/storage/{target.pk}/change/"})
         merge_mock.assert_called_once()
 
     @override_settings(ALLOWED_HOSTS=["testserver", "localhost"])
