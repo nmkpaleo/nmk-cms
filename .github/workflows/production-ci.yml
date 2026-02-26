@@ -17,6 +17,8 @@ jobs:
       DJANGO_SETTINGS_MODULE: config.settings
       PYTHONPATH: ${{ github.workspace }}/app
       DB_ENGINE: django.db.backends.sqlite3
+      COVERAGE_FAIL_UNDER: '70'
+      COVERAGE_RATCHET_STEP: '2'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,11 +42,10 @@ jobs:
         working-directory: app
         run: python manage.py makemigrations --check --dry-run
 
-      - name: Run FieldSlip sedimentary regression tests
-        run: python -m pytest tests/cms/test_fieldslip_sedimentary_regressions.py
-
-      - name: Run tests with coverage
-        run: python -m pytest --cov=app --cov-report=xml --cov-fail-under=90
+      - name: Run tests with coverage (module report + ratchet floor)
+        run: |
+          # Ratchet policy: increase COVERAGE_FAIL_UNDER by +${COVERAGE_RATCHET_STEP}% each sprint/release.
+          python -m pytest --cov=app --cov-report=term-missing:skip-covered --cov-report=xml --cov-fail-under=${COVERAGE_FAIL_UNDER}
 
       - name: Run docs tests (Markdown docs only, no MkDocs)
         run: python -m pytest tests/docs

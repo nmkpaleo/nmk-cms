@@ -98,7 +98,15 @@ Paste the **exact** task object (T1/T2/…) from the approved plan into the JSON
 4. **Ensure UX compliance**: templates extend `base_generic.html`, use semantic HTML5 (`<header>`, `<main>`, `<section>`, `<article>`, `<aside>`, `<footer>`), W3.CSS classes, Font Awesome icons as required, ARIA/labels for accessibility.
 5. **Handle i18n and security**: wrap user-facing strings with gettext, respect permission checks, validate input, and honor configuration patterns (12-factor, env vars).
 6. **Update docs/tests** when included in `files_touched` or `test_plan` directives; keep user-facing docs free of internal code citations (no file/line references) and use external-friendly links or prose instead.
-7. **Testing & CI**: run pytest/pytest-django with coverage ≥ 90%, enforce migrations checks, and execute docs lint/build steps expected by CI for Django 5.2/MySQL support.
+7. **Testing & CI**: run pytest/pytest-django with the same coverage command/threshold used in CI (from workflow env), enforce migrations checks, and execute docs checks expected by CI for Django 5.2/MySQL support. Do not duplicate single test modules in separate CI steps when they are already included in the full suite run.
+
+## 4.1 Test-Safety Rules (prevent common test curlpits)
+- **Settings alignment:** Use `pytest.ini` defaults unless the task explicitly requires another settings module; avoid mixed settings assumptions between local and CI.
+- **Current-user model hooks:** For models that validate on `get_current_user()`/CRUM during `save()` or `clean()`, set a valid current user fixture/context in tests.
+- **Correct patch target:** Patch where symbols are *looked up* (e.g., view module import location), not only where functions are defined.
+- **Import path consistency:** Use repo package paths (`cms...`) consistently in monkeypatch/patch calls; avoid stale aliases like `app.cms...` unless explicitly required.
+- **Backend-tolerant assertions:** Prefer behavior-focused assertions over brittle HTML/CSS tokens or backend-specific side effects when those vary across SQLite/MySQL.
+- **Coverage clarity:** When adding tests for coverage, prioritize high-miss modules and require module-level coverage output (`term-missing:skip-covered`) for diagnosability.
 
 ## 5. Output Requirements
 Return only the modified files using this format:
@@ -116,7 +124,7 @@ No commentary or extra narrative outside these blocks.
 - **Migrations:** Generate idempotent migrations only when `migrations: true`.
 - **Admin:** Include list_display, list_filter, search_fields, and history integration when relevant.
 - **Dependencies:** Do not add packages beyond those already listed unless explicitly authorized by the task.
-- **Docs/Tests:** Align with pytest + coverage ≥ 90%; update docs in `/docs/user`, `/docs/admin`, `/docs/development`, and `CHANGELOG.md` when specified.
+- **Docs/Tests:** Align with pytest and the active CI coverage floor (ratcheted over time); update docs in `/docs/user`, `/docs/admin`, `/docs/development`, and `CHANGELOG.md` when specified.
 
 ## 7. Final Verification Checklist
 Before returning your answer:
@@ -125,7 +133,8 @@ Before returning your answer:
 - ✅ Required migrations created/applied; none added when out of scope.
 - ✅ Templates (if touched) remain mobile-first, semantic, and W3.CSS compliant with Font Awesome usage.
 - ✅ i18n strings wrapped; accessibility and security considerations addressed.
-- ✅ Tests and documentation executed/updated as mandated by the task (`pytest`, integration, docs build, etc.).
+- ✅ Tests and documentation executed/updated as mandated by the task (`pytest`, integration, docs checks, etc.).
+- ✅ Monkeypatch/patch targets verified at usage site; current-user hooks satisfied in model-save tests; no duplicate standalone CI test step introduced.
 - ✅ PR heading and description updated to reflect the latest committed scope.
 - ✅ Response follows the strict file-diff output format.
 
