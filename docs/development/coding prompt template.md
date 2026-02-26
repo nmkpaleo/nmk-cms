@@ -13,7 +13,7 @@ Ground your implementation decisions in this dependency list generated from `app
 - debugpy == 1.5.1
 - Django == 5.2.11
 - gunicorn == 23.0.0
-- sqlparse == 0.5.1
+- sqlparse == 0.5.4
 - watchdog >= 4.0.0
 
 ### Database, Caching & State
@@ -60,6 +60,7 @@ Ground your implementation decisions in this dependency list generated from `app
 - django-qr-code == 4.2.0
 - pycparser == 2.21
 - pytesseract >= 0.3.10
+- pytest-django >= 4.8.0
 
 > ℹ️ **Automation note:** Run `python docs/scripts/update_prompts.py` after editing `app/requirements.txt` to regenerate this dependency snapshot.
 
