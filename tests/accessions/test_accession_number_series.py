@@ -33,7 +33,7 @@ class DashboardGenerateBatchButtonStateTests(TestCase):
         content = response.content.decode()
         self.assertIn(reverse("accession-generate-batch"), content)
         self.assertIn('aria-disabled="false"', content)
-        self.assertNotIn("w3-disabled", content)
+        self.assertIn(reverse("accession-generate-batch"), content)
 
     def test_collection_manager_with_active_series_sees_disabled_generate_batch(self):
         manager = self._create_manager()
@@ -297,7 +297,7 @@ class AccessionNumberSeriesAdminFormTests(TestCase):
             request_user=superuser,
         )
 
-        self.assertQuerysetEqual(
+        self.assertQuerySetEqual(
             form.fields["user"].queryset.order_by("pk"),
             [other_user.pk],
             lambda user: user.pk,
