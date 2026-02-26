@@ -2,9 +2,10 @@ import os
 
 import django
 import pytest
+
+pytestmark = pytest.mark.django_db
 from django.contrib import admin
 from django.contrib.auth import get_user_model
-from django.core.management import call_command
 from django.test import RequestFactory
 
 from cms.admin import (
@@ -17,14 +18,10 @@ from cms.forms import ensure_manual_qc_permission
 from cms.manual_import import import_manual_row
 from cms.models import Accession, Collection, Locality, Media
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings_test")
 os.environ.setdefault("DB_ENGINE", "django.db.backends.sqlite3")
 django.setup()
 
-
-@pytest.fixture(scope="session", autouse=True)
-def _migrate_db():
-    call_command("migrate", run_syncdb=True, verbosity=0)
 
 
 @pytest.fixture()

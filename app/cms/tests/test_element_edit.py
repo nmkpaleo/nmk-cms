@@ -1,6 +1,7 @@
 """Tests for element (NatureOfSpecimen) editing functionality."""
 
 import pytest
+from crum import set_current_user
 from django.urls import reverse
 from django.test import Client
 from cms.models import (
@@ -26,9 +27,19 @@ def collection_manager_user():
         email="manager@test.com"
     )
     # Create collection manager group if it doesn't exist
-    group, _ = Group.objects.get_or_create(name="Collection Manager")
+    group, _ = Group.objects.get_or_create(name="Collection Managers")
     user.groups.add(group)
     return user
+
+
+@pytest.fixture(autouse=True)
+def authenticated_model_user(collection_manager_user):
+    """Provide a current user for model-level save validation."""
+    set_current_user(collection_manager_user)
+    try:
+        yield
+    finally:
+        set_current_user(None)
 
 
 @pytest.fixture
@@ -54,7 +65,8 @@ def accession_with_element(collection_manager_user):
     accession = Accession.objects.create(
         collection=collection,
         specimen_prefix=locality,
-        specimen_no=1
+        specimen_no=1,
+        is_published=True
     )
     
     accession_row = AccessionRow.objects.create(
@@ -277,7 +289,8 @@ def accession_with_identification(collection_manager_user):
     accession = Accession.objects.create(
         collection=collection,
         specimen_prefix=locality,
-        specimen_no=1
+        specimen_no=1,
+        is_published=True
     )
     
     accession_row = AccessionRow.objects.create(
@@ -295,6 +308,7 @@ def accession_with_identification(collection_manager_user):
     identification = Identification.objects.create(
         accession_row=accession_row,
         identified_by=person,
+        taxon_verbatim="Homo sapiens",
         taxon="Homo sapiens",
         verbatim_identification="Human",
         identification_qualifier="cf.",
@@ -367,7 +381,7 @@ def test_identification_edit_post_updates_identification(client, collection_mana
     
     updated_data = {
         'identified_by': person.id,
-        'taxon': 'Homo neanderthalensis',
+        'taxon_verbatim': 'Homo neanderthalensis',
         'verbatim_identification': 'Neanderthal (updated)',
         'identification_qualifier': 'aff.',
         'identification_remarks': 'Updated remarks'
@@ -442,6 +456,7 @@ def test_accession_row_detail_highlights_latest_identification(client, collectio
     older_identification = Identification.objects.create(
         accession_row=accession_row,
         identified_by=person,
+        taxon_verbatim="Homo erectus",
         taxon="Homo erectus",
         verbatim_identification="Older identification"
     )
