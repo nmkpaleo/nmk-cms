@@ -547,21 +547,56 @@ def _store_page_results(
 def _move_page_image(page: SpecimenListPage, reviewer) -> None:
     if not page.image_file:
         return
+
     current_name = page.image_file.name
     if "/pages/approved/" in current_name:
+        _sync_media_locations(source_names=[current_name], target_name=current_name, reviewer=reviewer)
         return
+
     new_name = current_name.replace("/pages/", "/pages/approved/", 1)
     with page.image_file.open("rb") as handle:
         content = ContentFile(handle.read())
+
     stored_name = default_storage.save(new_name, content)
+    try:
+        with transaction.atomic():
+            page.image_file.name = stored_name
+            set_current_user(reviewer)
+            try:
+                page.save(update_fields=["image_file"])
+            finally:
+                set_current_user(None)
+
+            _sync_media_locations(
+                source_names=[current_name, stored_name],
+                target_name=stored_name,
+                reviewer=reviewer,
+            )
+    except Exception:
+        if stored_name != current_name:
+            default_storage.delete(stored_name)
+        raise
+
     if stored_name != current_name:
         default_storage.delete(current_name)
-    page.image_file.name = stored_name
-    set_current_user(reviewer)
-    try:
-        page.save(update_fields=["image_file"])
-    finally:
-        set_current_user(None)
+
+
+def _sync_media_locations(*, source_names: list[str], target_name: str, reviewer) -> None:
+    names = {name for name in source_names if name}
+    if not names:
+        return
+
+    media_items = list(Media.objects.filter(media_location__in=names))
+    for media in media_items:
+        if media.media_location.name == target_name:
+            continue
+        media.media_location.name = target_name
+        media._history_user = reviewer
+        set_current_user(reviewer)
+        try:
+            media.save(update_fields=["media_location", "file_name", "format"])
+        finally:
+            set_current_user(None)
 
 
 def approve_row(*, row: SpecimenListRowCandidate, reviewer) -> ApprovalResult:

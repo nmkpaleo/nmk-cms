@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Add specimen page approval media-location synchronization guidance across user/admin/development docs, including operator checks, staged reconciliation rollout, rollback procedures, and known legacy-path limitations.
 - Add FieldSlip sedimentary editing and filtering support across detail, edit, and list workflows, including grouped sedimentary detail layout, deduplicated M2M list filtering, queryset loading optimizations, and regression coverage for ordering/save/filter paths (FS-SED-001 to FS-SED-007).
 - Implement Field-slip OCR/QC delivery tasks FS-002 through FS-006, including strict OCR prompt contract, normalized approval ingestion with relation mapping, expanded QC review controls, admin/filter hardening, and staging rollback runbook guidance.
 - Add CI/rollout/rollback runbook details for Side/Portion inference, including coverage+migration gates, runtime toggle guidance, and staging token verification matrix.

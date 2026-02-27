@@ -43,7 +43,7 @@ jobs:
       - name: Run tests with coverage (module report + ratchet floor)
         run: |
           # Ratchet policy: increase COVERAGE_FAIL_UNDER by +${COVERAGE_RATCHET_STEP}% each sprint/release.
-          python -m pytest --cov=app --cov-report=term-missing:skip-covered --cov-report=xml --cov-fail-under=${COVERAGE_FAIL_UNDER}
+          python -m pytest app/cms/tests tests --ignore=tests/docs --cov=app --cov-report=term-missing:skip-covered --cov-report=xml --cov-fail-under=${COVERAGE_FAIL_UNDER}
 
       - name: Run docs tests (Markdown docs only, no MkDocs)
         run: python -m pytest tests/docs

@@ -2,8 +2,6 @@ import os
 
 import django
 import pytest
-
-pytestmark = pytest.mark.django_db
 from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.test import RequestFactory
@@ -22,6 +20,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings_test")
 os.environ.setdefault("DB_ENGINE", "django.db.backends.sqlite3")
 django.setup()
 
+pytestmark = pytest.mark.django_db
 
 
 @pytest.fixture()
@@ -129,6 +128,17 @@ def test_media_admin_permissions_toggle_columns(request_factory, staff_user, bas
     filtered = media_filter.queryset(staff_filter_request, Media.objects.all())
     assert list(filtered) == [manual_media]
 
+
+
+
+def test_media_admin_exposes_location_for_operator_visibility(request_factory, staff_user):
+    media_admin = MediaAdmin(Media, admin.site)
+    request = request_factory.get("/admin/cms/media/")
+    request.user = staff_user
+
+    list_display = media_admin.get_list_display(request)
+    assert "media_location" in list_display
+    assert "media_location" in media_admin.search_fields
 
 def test_accession_admin_badge_and_filter(collection, locality, request_factory, staff_user, basic_user):
     Media.objects.all().delete()
