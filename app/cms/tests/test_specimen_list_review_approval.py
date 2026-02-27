@@ -127,6 +127,9 @@ def test_approve_page_creates_records_and_moves_image(tmp_path):
     assert Media.objects.filter(accession=accession).exists()
     for media in Media.objects.filter(accession=accession):
         assert media.media_location.name == page.image_file.name
+        latest_history = media.history.latest()
+        assert latest_history.media_location == page.image_file.name
+        assert latest_history.history_user == reviewer
 
     fieldslip_link = AccessionFieldSlip.objects.filter(accession=accession).first()
     assert fieldslip_link.notes == "QC check ok."

@@ -591,6 +591,7 @@ def _sync_media_locations(*, source_names: list[str], target_name: str, reviewer
         if media.media_location.name == target_name:
             continue
         media.media_location.name = target_name
+        media._history_user = reviewer
         set_current_user(reviewer)
         try:
             media.save()
