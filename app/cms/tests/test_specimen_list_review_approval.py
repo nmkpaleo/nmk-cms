@@ -1,10 +1,12 @@
 import json
 import uuid
+from unittest import mock
 
 import pytest
 from crum import set_current_user
 from django.contrib.admin.sites import AdminSite
 from django.contrib.auth import get_user_model
+from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory, TestCase
 from django.test import override_settings
@@ -26,6 +28,7 @@ from cms.models import (
     SpecimenListRowCandidate,
 )
 from cms.services.review_approval import (
+    _move_page_image,
     approve_page,
     approve_row,
     infer_nature_side_portion_from_element_text,
@@ -122,6 +125,8 @@ def test_approve_page_creates_records_and_moves_image(tmp_path):
     assert Identification.objects.filter(accession_row__accession=accession).exists()
     assert NatureOfSpecimen.objects.filter(accession_row__accession=accession).exists()
     assert Media.objects.filter(accession=accession).exists()
+    for media in Media.objects.filter(accession=accession):
+        assert media.media_location.name == page.image_file.name
 
     fieldslip_link = AccessionFieldSlip.objects.filter(accession=accession).first()
     assert fieldslip_link.notes == "QC check ok."
@@ -131,6 +136,64 @@ def test_approve_page_creates_records_and_moves_image(tmp_path):
     summary_line = [line for line in page.classification_notes.splitlines() if line][-1]
     summary = json.loads(summary_line)
     assert summary["results"]
+
+
+def test_move_page_image_is_idempotent_and_keeps_media_in_sync(tmp_path):
+    reviewer = _build_reviewer()
+    pdf = _build_pdf()
+    page = SpecimenListPage.objects.create(pdf=pdf, page_number=1)
+    image_file = SimpleUploadedFile("page.png", b"fake-image-data", content_type="image/png")
+
+    with override_settings(MEDIA_ROOT=tmp_path):
+        page.image_file.save("page.png", image_file, save=True)
+
+    set_current_user(reviewer)
+    try:
+        media = Media.objects.create(
+            file_name="page.png",
+            type="document",
+            format="png",
+            media_location=page.image_file,
+        )
+    finally:
+        set_current_user(None)
+
+    with override_settings(MEDIA_ROOT=tmp_path):
+        _move_page_image(page, reviewer)
+        page.refresh_from_db()
+        media.refresh_from_db()
+        first_name = page.image_file.name
+
+        _move_page_image(page, reviewer)
+        page.refresh_from_db()
+        media.refresh_from_db()
+
+    assert "/pages/approved/" in first_name
+    assert page.image_file.name == first_name
+    assert media.media_location.name == first_name
+
+
+def test_move_page_image_rolls_back_when_media_sync_fails(tmp_path):
+    reviewer = _build_reviewer()
+    pdf = _build_pdf()
+    page = SpecimenListPage.objects.create(pdf=pdf, page_number=1)
+    image_file = SimpleUploadedFile("page.png", b"fake-image-data", content_type="image/png")
+
+    with override_settings(MEDIA_ROOT=tmp_path):
+        page.image_file.save("page.png", image_file, save=True)
+
+    original_name = page.image_file.name
+    target_name = original_name.replace("/pages/", "/pages/approved/", 1)
+
+    with override_settings(MEDIA_ROOT=tmp_path):
+        with mock.patch("cms.services.review_approval._sync_media_locations", side_effect=RuntimeError("sync failed")):
+            with pytest.raises(RuntimeError):
+                _move_page_image(page, reviewer)
+
+        page.refresh_from_db()
+        assert page.image_file.name == original_name
+        assert default_storage.exists(original_name)
+        assert not default_storage.exists(target_name)
 
 
 def test_approve_row_records_errors():
