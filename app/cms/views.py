@@ -5110,6 +5110,16 @@ class SpecimenListPageReviewView(LoginRequiredMixin, PermissionRequiredMixin, Vi
                 messages.error(request, " ".join(str(message) for message in exc.messages))
                 context = self._build_context(request, page)
                 return render(request, self._get_template_name(page), context)
+            except Exception:
+                if action == "approve" and not can_approve_specimen_list_page(request.user):
+                    raise PermissionDenied
+                if action != "approve":
+                    raise
+                messages.error(
+                    request,
+                    _("Page approval could not be completed because of a system error. Please try again."),
+                )
+                return redirect("specimen_list_queue")
 
             if action == "approve":
                 page.refresh_from_db()
