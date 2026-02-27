@@ -68,7 +68,7 @@ class Command(BaseCommand):
             media._history_user = actor
             set_current_user(actor)
             try:
-                media.save()
+                media.save(update_fields=["media_location", "file_name", "format"])
             finally:
                 set_current_user(None)
             updated += 1

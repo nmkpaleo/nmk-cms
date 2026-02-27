@@ -594,7 +594,7 @@ def _sync_media_locations(*, source_names: list[str], target_name: str, reviewer
         media._history_user = reviewer
         set_current_user(reviewer)
         try:
-            media.save()
+            media.save(update_fields=["media_location", "file_name", "format"])
         finally:
             set_current_user(None)
 
