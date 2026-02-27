@@ -48,3 +48,13 @@ class ReviewWorkflowFeatureFlagTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Back to queue")
         self.assertContains(response, reverse("specimen_list_queue"))
+
+    @override_settings(FEATURE_REVIEW_UI_ENABLED=True)
+    def test_review_page_shows_approval_sync_feedback(self):
+        self.client.login(username="reviewer", password="pass")
+
+        response = self.client.get(reverse("specimen_list_page_review", args=[self.page.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Approval feedback")
+        self.assertContains(response, "related media file locations are synchronized automatically")
