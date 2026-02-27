@@ -131,3 +131,7 @@ cd app && python manage.py makemigrations --check
 
 If your environment does not provide a local MySQL socket, Django may emit a migration-history warning during `makemigrations --check`; treat this as an environment warning when the command still returns `No changes detected`.
 
+## CI test execution split
+
+The CI workflow runs the main coverage-enabled pytest command with `tests/docs` excluded, then runs `tests/docs` in a dedicated docs-check step. This avoids executing the same docs tests twice while still enforcing docs checks.
+
