@@ -1832,10 +1832,10 @@ def _apply_rows(
 
     if truncated_suffixes:
         logger.warning(
-            "Truncated OCR rows for accession %s to %s suffixes; skipped suffixes: %s",
+            "Truncated OCR rows for accession %s to %s suffixes; skipped suffix count: %s",
             accession.pk,
             MAX_OCR_ROWS_PER_ACCESSION,
-            ", ".join(truncated_suffixes),
+            len(truncated_suffixes),
         )
 
 
