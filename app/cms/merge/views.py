@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 import logging
 from typing import Iterable, Mapping
-from urllib.parse import urlencode
 
 from django.apps import apps
 from django.conf import settings
@@ -31,6 +30,26 @@ from cms.merge.forms import (
 from cms.merge.mixins import MergeMixin
 from cms.merge.services import merge_elements
 from cms.models import Element, NatureOfSpecimen
+
+
+def _is_safe_cancel_url(request: HttpRequest, url: str) -> bool:
+    return url_has_allowed_host_and_scheme(
+        url=url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    )
+
+
+def _safe_cancel_url(
+    request: HttpRequest,
+    raw_url: object,
+    *,
+    fallback: str = "",
+) -> str:
+    url = str(raw_url or "").strip()
+    if url and _is_safe_cancel_url(request, url):
+        return url
+    return fallback
 
 
 class FieldSelectionMergeView(LoginRequiredMixin, View):
@@ -129,7 +148,7 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
             )
 
         cancel_url = context.get("cancel_url") or request.META.get("HTTP_REFERER", "")
-        if cancel_url and url_has_allowed_host_and_scheme(cancel_url, allowed_hosts={request.get_host()}):
+        if cancel_url and _is_safe_cancel_url(request, str(cancel_url)):
             return redirect(cancel_url)
 
         meta = target_instance._meta
@@ -192,10 +211,11 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
             data=data,
         )
 
-        cancel_url = (
+        raw_cancel_url = (
             (request.POST.get("cancel") if request.method == "POST" else request.GET.get("cancel"))
             or request.META.get("HTTP_REFERER", "")
         )
+        cancel_url = _safe_cancel_url(request, raw_cancel_url)
 
         return {
             "form": form,
@@ -344,7 +364,10 @@ class ElementMergeSelectionView(LoginRequiredMixin, PermissionRequiredMixin, Vie
             "filter": filterset,
             "page_obj": page_obj,
             "confirm_url": reverse("merge:merge_element_review"),
-            "cancel_url": request.GET.get("cancel") or request.META.get("HTTP_REFERER", ""),
+            "cancel_url": _safe_cancel_url(
+                request,
+                request.GET.get("cancel") or request.META.get("HTTP_REFERER", ""),
+            ),
         }
         return render(request, self.template_name, context)
 
@@ -371,25 +394,20 @@ class ElementMergeSelectionView(LoginRequiredMixin, PermissionRequiredMixin, Vie
             messages.error(request, _("Select valid elements to merge."))
             return redirect(reverse("merge:merge_element_selection"))
 
-        cancel_url = (request.POST.get("cancel") or request.META.get("HTTP_REFERER", "")).strip()
-        # Validate the cancel URL so that any later use as a redirect target is safe.
-        if cancel_url:
-            # Only allow URLs that point to this host and use an allowed scheme, or are relative.
-            if not url_has_allowed_host_and_scheme(
-                url=cancel_url,
-                allowed_hosts={request.get_host()},
-                require_https=request.is_secure(),
-            ):
-                cancel_url = reverse("merge:merge_element_selection")
+        cancel_url = _safe_cancel_url(
+            request,
+            request.POST.get("cancel") or request.META.get("HTTP_REFERER", ""),
+            fallback=reverse("merge:merge_element_selection"),
+        )
 
-        params = {
+        request.session["merge_element_review"] = {
             "target": target,
             "candidates": ",".join(candidate_ids),
         }
         if cancel_url:
-            params["cancel"] = cancel_url
+            request.session["merge_element_review"]["cancel"] = cancel_url
 
-        return redirect(f"{reverse('merge:merge_element_review')}?{urlencode(params)}")
+        return redirect(reverse("merge:merge_element_review"))
 
     def _build_filter(self, request: HttpRequest) -> tuple[ElementMergeFilter, Paginator.page | None]:
         queryset = Element.objects.select_related("parent_element").order_by("name", "pk")
@@ -418,8 +436,9 @@ class ElementMergeReviewView(LoginRequiredMixin, PermissionRequiredMixin, View):
         return super().dispatch(request, *args, **kwargs)
 
     def get(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
-        candidates_param = request.GET.get("candidates") or ""
-        target_id = (request.GET.get("target") or "").strip()
+        review_payload = request.session.get("merge_element_review", {})
+        candidates_param = request.GET.get("candidates") or review_payload.get("candidates") or ""
+        target_id = (request.GET.get("target") or review_payload.get("target") or "").strip()
         candidate_ids = [value for value in (item.strip() for item in candidates_param.split(",")) if value]
 
         if not target_id or target_id not in candidate_ids or len(candidate_ids) < 2:
@@ -451,7 +470,11 @@ class ElementMergeReviewView(LoginRequiredMixin, PermissionRequiredMixin, View):
         )
 
         sources = [candidate.instance for candidate in candidates if candidate.role == "source"]
-        cancel_url = request.GET.get("cancel") or reverse("merge:merge_element_selection")
+        cancel_url = _safe_cancel_url(
+            request,
+            request.GET.get("cancel") or review_payload.get("cancel") or "",
+            fallback=reverse("merge:merge_element_selection"),
+        )
 
         return render(
             request,

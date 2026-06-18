@@ -323,6 +323,36 @@ class FieldSelectionViewMultiSourceTests(TransactionTestCase):
         self.assertEqual(response.url, "/accessions/8535/")
         merge_mock.assert_called_once()
 
+    def test_ignores_external_cancel_url_when_provided(self):
+        set_current_user(self.user)
+        target = cms_models.Storage.objects.create(area="Target")
+        source = cms_models.Storage.objects.create(area="Source")
+        set_current_user(None)
+
+        view = FieldSelectionMergeView()
+        merge_fields = view.get_mergeable_fields(cms_models.Storage)
+        data = {
+            "model": cms_models.Storage._meta.label,
+            "target": str(target.pk),
+            "candidates": ",".join([str(target.pk), str(source.pk)]),
+            "cancel": "https://evil.example/phish",
+        }
+        for field in merge_fields:
+            field_name = FieldSelectionForm.selection_field_name(field.name)
+            data.setdefault(field_name, str(target.pk))
+
+        request = self._build_request(data)
+
+        with mock.patch("cms.merge.views.merge_records") as merge_mock:
+            merge_mock.return_value = SimpleNamespace(
+                target=target, resolved_values={}, relation_actions={}
+            )
+            response = FieldSelectionMergeView.as_view()(request)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertNotIn("evil.example", response.url)
+        merge_mock.assert_called_once()
+
     def test_redirects_to_cancel_querystring_when_post_missing_cancel(self):
         set_current_user(self.user)
         target = cms_models.Storage.objects.create(area="Target")
@@ -379,3 +409,25 @@ class FieldSelectionViewMultiSourceTests(TransactionTestCase):
             f'<input type="hidden" name="cancel" value="{cancel_url}" />',
             html=False,
         )
+
+    @override_settings(ALLOWED_HOSTS=["testserver", "localhost"])
+    def test_does_not_render_external_cancel_hidden_input(self):
+        set_current_user(self.user)
+        target = cms_models.Storage.objects.create(area="Target")
+        source = cms_models.Storage.objects.create(area="Source")
+        set_current_user(None)
+
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse("merge:merge_field_selection"),
+            {
+                "model": cms_models.Storage._meta.label,
+                "target": target.pk,
+                "candidates": f"{target.pk},{source.pk}",
+                "cancel": "https://evil.example/phish",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "evil.example")
+        self.assertNotContains(response, 'name="cancel"')
