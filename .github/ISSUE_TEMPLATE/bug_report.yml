@@ -1,0 +1,41 @@
+name: Bug report
+description: Report reproducible incorrect behavior in NMK CMS.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: Do not report vulnerabilities or include secrets or personal data here.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to ...
+        2. Select ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Version shown by the application, release tag, or commit SHA.
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser, operating system, deployment type, and relevant feature flags.
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Add sanitized logs or screenshots if useful.
