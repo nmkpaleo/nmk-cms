@@ -13,7 +13,13 @@ from django.core.serializers.json import DjangoJSONEncoder
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Model
-from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, JsonResponse
+from django.http import (
+    HttpRequest,
+    HttpResponse,
+    HttpResponseBadRequest,
+    HttpResponseRedirect,
+    JsonResponse,
+)
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -147,9 +153,15 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
                 }
             )
 
-        cancel_url = context.get("cancel_url") or request.META.get("HTTP_REFERER", "")
-        if cancel_url and _is_safe_cancel_url(request, str(cancel_url)):
-            return redirect(cancel_url)
+        cancel_url = str(
+            context.get("cancel_url") or request.META.get("HTTP_REFERER", "")
+        ).strip()
+        if cancel_url and url_has_allowed_host_and_scheme(
+            url=cancel_url,
+            allowed_hosts={request.get_host()},
+            require_https=request.is_secure(),
+        ):
+            return HttpResponseRedirect(cancel_url)
 
         meta = target_instance._meta
         try:
