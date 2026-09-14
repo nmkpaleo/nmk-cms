@@ -6,6 +6,8 @@ Thank you for improving NMK CMS.
 
 - Read the [development guide](docs/development/README.md) and
   [environment setup](docs/development/environment-setup.md).
+- Follow the [GitHub workflow and security guide](docs/development/github-workflow.md)
+  for CI, review, bot, and emergency-bypass policy.
 - Open an issue for substantial behavior or data-model changes before investing
   in a large implementation.
 - Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).

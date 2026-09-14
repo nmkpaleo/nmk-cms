@@ -13,8 +13,9 @@ Run these commands before merge:
 - `cd app && python manage.py test cms.tests.test_fieldslips.FieldSlipFilterTests cms.tests.test_fieldslips.FieldSlipListPermissionTests`
 - `python -m pytest tests/docs`
 
-For CI parity, coverage remains enforced with `pytest --cov --cov-fail-under=90`
-in staging/prod workflows.
+For CI parity, repository coverage is enforced with
+`pytest --cov --cov-fail-under=70` in pull-request, staging, and production
+workflows. Targeted suites may retain higher feature-specific thresholds.
 
 ## Docs verification policy
 

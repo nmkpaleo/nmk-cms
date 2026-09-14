@@ -1,5 +1,8 @@
 # Prompt Automation Reference
 
+For repository CI, dependency automation, action pinning, and security checks,
+see [GitHub workflow and security](./github-workflow.md).
+
 ## Overview
 The planning (`codex_prompt.md`) and coding (`coding prompt template.md`) guides in `docs/development/` display a dependency
 snapshot so contributors understand the active Django stack. The snapshot is generated automatically from `app/requirements.txt`
@@ -32,6 +35,20 @@ by `docs/scripts/update_prompts.py`.
 - Update `CATEGORY_RULES` in `docs/scripts/update_prompts.py` when introducing new dependency groups so related packages are
   grouped meaningfully.
 - When reorganising prompt content, preserve the dependency markers so the automation can continue to refresh the section.
+
+## GitHub automation maintenance
+
+- Pull requests into `main` run the secret-free `CI / test` check defined in
+  `.github/workflows/ci.yml`.
+- CodeQL default setup supplies the code-scanning checks; its configuration is a
+  GitHub setting rather than a repository workflow file.
+- Production and staging workflows run only for their named branches or release
+  tags. They may use publishing credentials and must not be copied into an
+  untrusted pull-request trigger.
+- External actions are pinned to full commit SHAs. Dependabot proposes grouped
+  weekly updates while preserving SHA pins and version comments.
+- Review automated updates like any other change: inspect the publisher and
+  release notes, keep permissions least-privilege, and require green CI.
 
 
 ## CI, rollout, and rollback checks for specimen-list Side/Portion inference

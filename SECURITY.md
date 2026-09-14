@@ -25,3 +25,6 @@ with impact and fix complexity.
 Security changes follow the normal reviewed pull-request workflow. Maintainers
 may use the documented emergency bypass only when delaying a fix would create a
 greater risk, and must record and review any bypass afterward.
+
+See the [GitHub workflow and security guide](docs/development/github-workflow.md)
+for CI, alert handling, bot behavior, and the emergency follow-up checklist.
