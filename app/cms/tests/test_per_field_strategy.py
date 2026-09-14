@@ -25,7 +25,7 @@ from cms.merge.constants import MergeStrategy
 from cms.merge.engine import merge_records
 from cms.merge.forms import FieldSelectionForm
 from cms.merge.mixins import MergeMixin
-from cms.merge.views import FieldSelectionMergeView
+from cms.merge.views import FieldSelectionMergeView, _is_safe_cancel_url
 from cms.models import MergeLog
 from cms import models as cms_models
 from cms.merge.strategies import FieldSelectionStrategy, UNCHANGED
@@ -94,6 +94,15 @@ class FieldSelectionStrategyTests(SimpleTestCase):
 @isolate_apps("cms")
 class FieldSelectionMergeIntegrationTests(SimpleTestCase):
     databases = {"default"}
+
+    def test_cancel_url_validation_accepts_only_relative_urls(self):
+        request = RequestFactory().get("/merge/field-selection/")
+
+        self.assertTrue(_is_safe_cancel_url(request, "/accessions/8535/"))
+        self.assertFalse(
+            _is_safe_cancel_url(request, "http://testserver/accessions/8535/")
+        )
+        self.assertFalse(_is_safe_cancel_url(request, "https://evil.example/phish"))
 
     @classmethod
     def setUpClass(cls):
