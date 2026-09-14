@@ -36,3 +36,13 @@ def test_documentation_policy_remains_markdown_only() -> None:
 
     assert "does not use\nMkDocs" in readme
     assert "mkdocs build" not in workflow.lower()
+
+
+def test_publishing_jobs_use_protected_environments() -> None:
+    production = _read(".github/workflows/production-ci.yml")
+    staging = _read(".github/workflows/staging-ci.yml")
+    automation = _read("docs/development/automation.md")
+
+    assert "    environment: production" in production
+    assert "    environment: staging" in staging
+    assert "prevents\n  self-approval" in automation

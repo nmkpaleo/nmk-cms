@@ -45,6 +45,13 @@ by `docs/scripts/update_prompts.py`.
 - Production and staging workflows run only for their named branches or release
   tags. They may use publishing credentials and must not be copied into an
   untrusted pull-request trigger.
+- Docker publishing jobs use the staging and production GitHub environments.
+  Staging accepts only the staging branch. Production accepts only prod and
+  v* release tags, requires approval from a designated maintainer, prevents
+  self-approval, and does not allow administrator bypass.
+- Docker Hub credentials currently remain repository secrets. Rotate them into
+  matching environment secrets before removing the repository-level copies;
+  GitHub does not expose existing secret values for an in-place move.
 - External actions are pinned to full commit SHAs. Dependabot proposes grouped
   weekly updates while preserving SHA pins and version comments.
 - Review automated updates like any other change: inspect the publisher and

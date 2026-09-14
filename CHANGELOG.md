@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Gate staging and production image publishing through restricted GitHub environments.
 - Document the GitHub pull-request, CI, dependency-security, release, and emergency-bypass workflow; refresh the root project overview and Django 5.2 guidance.
 - Add specimen page approval media-location synchronization guidance across user/admin/development docs, including operator checks, staged reconciliation rollout, rollback procedures, and known legacy-path limitations.
 - Add FieldSlip sedimentary editing and filtering support across detail, edit, and list workflows, including grouped sedimentary detail layout, deduplicated M2M list filtering, queryset loading optimizations, and regression coverage for ordering/save/filter paths (FS-SED-001 to FS-SED-007).
