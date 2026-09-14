@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Upgrade the optional CPU-only Torch stack to torch 2.13.0 and torchvision 0.28.0 to resolve GHSA-rrmf-rvhw-rf47.
 - Gate staging and production image publishing through restricted GitHub environments.
 - Document the GitHub pull-request, CI, dependency-security, release, and emergency-bypass workflow; refresh the root project overview and Django 5.2 guidance.
 - Add specimen page approval media-location synchronization guidance across user/admin/development docs, including operator checks, staged reconciliation rollout, rollback procedures, and known legacy-path limitations.
