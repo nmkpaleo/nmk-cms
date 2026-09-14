@@ -50,6 +50,7 @@ jobs:
 
   docker:
     runs-on: ubuntu-latest
+    environment: staging
     needs:
       - quality
     steps:
