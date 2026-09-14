@@ -1,0 +1,35 @@
+name: Feature request
+description: Propose an improvement to NMK CMS.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or need
+      description: Describe the workflow or user need this proposal addresses.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed outcome
+      description: Describe the desired behavior without prescribing implementation unnecessarily.
+    validations:
+      required: true
+  - type: dropdown
+    id: users
+    attributes:
+      label: Primary users
+      multiple: true
+      options:
+        - Collection staff
+        - Administrators
+        - Researchers
+        - Developers or operators
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and context
+      description: Note current workarounds, dependencies, risks, or supporting examples.
