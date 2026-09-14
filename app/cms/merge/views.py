@@ -17,7 +17,6 @@ from django.http import (
     HttpRequest,
     HttpResponse,
     HttpResponseBadRequest,
-    HttpResponseRedirect,
     JsonResponse,
 )
 from django.shortcuts import get_object_or_404, render, redirect
@@ -153,15 +152,6 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
                 }
             )
 
-        cancel_url = str(
-            context.get("cancel_url") or request.META.get("HTTP_REFERER", "")
-        ).strip()
-        if cancel_url and url_has_allowed_host_and_scheme(
-            url=cancel_url,
-            allowed_hosts=None,
-            require_https=request.is_secure(),
-        ):
-            return HttpResponseRedirect(cancel_url)
 
         meta = target_instance._meta
         try:

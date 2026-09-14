@@ -302,7 +302,7 @@ class FieldSelectionViewMultiSourceTests(TransactionTestCase):
             "Source Two",
         )
 
-    def test_redirects_to_cancel_url_when_provided(self):
+    def test_redirects_to_server_generated_url_when_cancel_is_provided(self):
         set_current_user(self.user)
         target = cms_models.Storage.objects.create(area="Target")
         source = cms_models.Storage.objects.create(area="Source")
@@ -329,7 +329,10 @@ class FieldSelectionViewMultiSourceTests(TransactionTestCase):
             response = FieldSelectionMergeView.as_view()(request)
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, "/accessions/8535/")
+        self.assertEqual(
+            response.url,
+            reverse("admin:cms_storage_change", args=[target.pk]),
+        )
         merge_mock.assert_called_once()
 
     def test_ignores_external_cancel_url_when_provided(self):
