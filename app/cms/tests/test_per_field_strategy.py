@@ -25,7 +25,7 @@ from cms.merge.constants import MergeStrategy
 from cms.merge.engine import merge_records
 from cms.merge.forms import FieldSelectionForm
 from cms.merge.mixins import MergeMixin
-from cms.merge.views import FieldSelectionMergeView
+from cms.merge.views import FieldSelectionMergeView, _is_safe_cancel_url
 from cms.models import MergeLog
 from cms import models as cms_models
 from cms.merge.strategies import FieldSelectionStrategy, UNCHANGED
@@ -94,6 +94,15 @@ class FieldSelectionStrategyTests(SimpleTestCase):
 @isolate_apps("cms")
 class FieldSelectionMergeIntegrationTests(SimpleTestCase):
     databases = {"default"}
+
+    def test_cancel_url_validation_accepts_only_relative_urls(self):
+        request = RequestFactory().get("/merge/field-selection/")
+
+        self.assertTrue(_is_safe_cancel_url(request, "/accessions/8535/"))
+        self.assertFalse(
+            _is_safe_cancel_url(request, "http://testserver/accessions/8535/")
+        )
+        self.assertFalse(_is_safe_cancel_url(request, "https://evil.example/phish"))
 
     @classmethod
     def setUpClass(cls):
@@ -293,7 +302,7 @@ class FieldSelectionViewMultiSourceTests(TransactionTestCase):
             "Source Two",
         )
 
-    def test_redirects_to_cancel_url_when_provided(self):
+    def test_redirects_to_server_generated_url_when_cancel_is_provided(self):
         set_current_user(self.user)
         target = cms_models.Storage.objects.create(area="Target")
         source = cms_models.Storage.objects.create(area="Source")
@@ -320,7 +329,10 @@ class FieldSelectionViewMultiSourceTests(TransactionTestCase):
             response = FieldSelectionMergeView.as_view()(request)
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, "/accessions/8535/")
+        self.assertEqual(
+            response.url,
+            reverse("admin:cms_storage_change", args=[target.pk]),
+        )
         merge_mock.assert_called_once()
 
     def test_ignores_external_cancel_url_when_provided(self):
