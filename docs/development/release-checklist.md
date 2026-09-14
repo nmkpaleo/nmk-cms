@@ -14,10 +14,13 @@ This project ships production releases by merging a pull request from `main` int
 ## Pre-merge checklist
 
 1. Create PR from `main` to `prod`.
-2. Confirm CI is green.
-3. Add one release label (`release:major` or `release:minor`) when needed.
-4. Review changelog impact and migrations.
-5. Merge PR into `prod`.
+2. Confirm the branch contains only the intended, already-reviewed `main`
+   changes and is synchronized with its base.
+3. Confirm required CI and CodeQL checks are green.
+4. Obtain an independent approval and resolve every review conversation.
+5. Add one release label (`release:major` or `release:minor`) when needed.
+6. Review `CHANGELOG.md`, migrations, deployment steps, and rollback impact.
+7. Merge through the normal pull-request path without administrator bypass.
 
 ## Pagination filter persistence rollout notes
 
@@ -44,7 +47,7 @@ Confirm the following checks are green on both staging and production pipelines:
 
 1. Django system checks (`python manage.py check`).
 2. Migration drift checks (`python manage.py makemigrations --check --dry-run`).
-3. Pytest with coverage threshold (`--cov-fail-under=90`).
+3. Pytest with the repository coverage threshold (`--cov-fail-under=70`).
 4. Documentation verification (`pytest tests/docs`).
 
 ### Staging walkthrough
@@ -81,6 +84,24 @@ If release validation fails after deployment:
 2. The workflow pushes the tag and creates a GitHub Release with generated notes.
 3. `production-ci` runs on `prod` and on `v*` tags.
 4. Docker image build gets `APP_VERSION` from the git reference (`v*` tag on release builds).
+
+Check both workflow runs after the merge. A GitHub Release is not proof that the
+container build or deployment succeeded.
+
+## General rollback
+
+1. Stop further promotion or automatic image updates.
+2. Identify the last known-good release tag and image digest.
+3. Revert the release change through a reviewed pull request, or redeploy the
+   last known-good immutable image when application rollback is urgent.
+4. Handle database migrations according to their documented reversibility; do
+   not reverse a destructive migration without a verified backup.
+5. Run system checks and focused smoke tests after rollback.
+6. Record the affected version, reason, operator, and follow-up work in the
+   incident notes, changelog, or release notes.
+
+Release tags are evidence and must not be moved or reused. If a release is bad,
+publish a new corrective version rather than changing the existing tag.
 
 ## Showing version in the UI
 

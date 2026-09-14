@@ -8,6 +8,7 @@ This guide collects conventions that keep NMK CMS consistent and maintainable. I
 - **Consult dedicated integration notes as needed.** Deep-dive guidance for framework add-ons (e.g., merge tooling or select widgets) now lives in separate documents such as [Django Integrations](./django-integrations.md).
 - **Review upgrade guides before major version bumps.** Follow the [Django 5.2 upgrade playbook](./django-52-upgrade.md) for configuration expectations, behavioural shifts, and rollback steps.
 - **Follow the release process for production deployments.** Use the [release checklist](./release-checklist.md) for `main` -> `prod` merges, automated tags, and GitHub Releases.
+- **Follow the repository collaboration policy.** Use [GitHub workflow and security](./github-workflow.md) for pull requests, CI, Dependabot, security monitoring, and emergency bypass.
 - **Propose additions when new patterns emerge.** Capture decisions in pull requests so this guide evolves alongside the product.
 
 ## Table of Contents

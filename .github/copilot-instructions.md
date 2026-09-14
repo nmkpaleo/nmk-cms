@@ -7,7 +7,7 @@ NMK CMS is a Django-based content management system for paleontological collecti
 ## Technology Stack
 
 - **Python:** 3.10-slim
-- **Django:** 4.2.25
+- **Django:** 5.2 LTS (see `app/requirements.txt` for the exact patch version)
 - **Database:** MariaDB/MySQL
 - **Cache:** Redis
 - **Web Server:** Gunicorn (production) / Django dev server (development)
@@ -292,10 +292,10 @@ Comprehensive documentation is available in the `docs/` directory:
 ## CI/CD and Quality Checks
 
 ### Automated Checks
-- **Docker Build:** CI builds the Docker image on every push
-- **Tests:** Run via `docker compose exec web python manage.py test`
-- **Linting:** Follow PEP 8; use tools like `black`, `isort`, `flake8` if configured
-- **Security:** Check for vulnerabilities in dependencies
+- **Pull requests to `main`:** `CI / test` runs Django checks, migration drift detection, pytest with the 70% coverage floor, and Markdown documentation tests
+- **Docker publishing:** staging and production workflows build and publish images only from their trusted branches or release tags
+- **Code scanning:** CodeQL checks Python, JavaScript/TypeScript, and GitHub Actions changes
+- **Dependencies:** Dependabot reports vulnerable dependencies and proposes version and pinned-action updates
 
 ### Local Verification Before Push
 ```bash
