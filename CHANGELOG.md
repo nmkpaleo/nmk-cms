@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Add OpenSSF Scorecard analysis and publish maximum-mode provenance and SPDX SBOM attestations with staging and production container images.
 - Remove request-derived post-merge redirects to resolve CodeQL alert #25.
 - Upgrade the optional CPU-only Torch stack to torch 2.13.0 and torchvision 0.28.0 to resolve GHSA-rrmf-rvhw-rf47.
 - Gate staging and production image publishing through restricted GitHub environments.
