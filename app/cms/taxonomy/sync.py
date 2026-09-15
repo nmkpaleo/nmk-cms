@@ -12,7 +12,10 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
+from ..taxon_identity import taxon_identity
 from ..models import (
+    FieldSlip,
+    Identification,
     Taxon,
     TaxonExternalSource,
     TaxonStatus,
@@ -100,6 +103,7 @@ class AcceptedRecord:
     author_year: str
     source_version: str
     taxonomy: Dict[str, str]
+    external_source: str = TaxonExternalSource.NOW
 
 
 @dataclass(frozen=True)
@@ -114,6 +118,7 @@ class SynonymRecord:
     author_year: str
     source_version: str
     taxonomy: Dict[str, str]
+    external_source: str = TaxonExternalSource.NOW
 
 
 @dataclass(frozen=True)
@@ -146,6 +151,7 @@ class SyncPreview:
     to_deactivate: List[Taxon]
     issues: List[SyncIssue]
     source_version: str
+    import_source: str = TaxonomyImport.Source.NOW
 
     @property
     def counts(self) -> Dict[str, Any]:
@@ -282,6 +288,42 @@ class NowTaxonomySyncService:
     # ------------------------
     # Preview & Diff
     # ------------------------
+    def _scope_records(
+        self,
+        accepted_records: Sequence[AcceptedRecord],
+        synonym_records: Sequence[SynonymRecord],
+        existing_taxa: Sequence[Taxon],
+    ) -> tuple[List[AcceptedRecord], List[SynonymRecord]]:
+        """Keep local names and accepted targets needed by their synonyms."""
+        names = {_normalize_label(taxon.taxon_name).lower() for taxon in existing_taxa}
+        # DrawerRegister.taxa and Identification.taxon_record already point to
+        # existing_taxa. Free text lets unlinked fossils seed imports as well.
+        for verbatim, legacy in Identification.objects.order_by().values_list(
+            "taxon_verbatim", "taxon"
+        ).iterator():
+            names.add((_normalize_label(verbatim) or _normalize_label(legacy)).lower())
+        names.update(
+            _normalize_label(name).lower()
+            for name in FieldSlip.objects.order_by().values_list("verbatim_taxon", flat=True).iterator()
+        )
+        names.discard("")
+        existing_ids = {
+            taxon.external_id for taxon in existing_taxa
+            if taxon.external_source == TaxonExternalSource.NOW and taxon.external_id
+        }
+        synonyms = [
+            record for record in synonym_records
+            if record.name.lower() in names or record.external_id in existing_ids
+        ]
+        accepted_ids = {record.accepted_external_id for record in synonyms}
+        accepted = [
+            record for record in accepted_records
+            if record.name.lower() in names
+            or record.external_id in existing_ids
+            or record.external_id in accepted_ids
+        ]
+        return accepted, synonyms
+
     def _build_preview(
         self,
         accepted_records: Sequence[AcceptedRecord],
@@ -289,18 +331,27 @@ class NowTaxonomySyncService:
     ) -> SyncPreview:
         accepted_records = _deduplicate_records(accepted_records)
         synonym_records = _deduplicate_records(synonym_records)
-        existing_taxa = list(
-            Taxon.objects.filter(external_source=TaxonExternalSource.NOW).select_related("accepted_taxon")
+        latest_version = _latest_version(accepted_records, synonym_records)
+        all_taxa = list(Taxon.objects.select_related("accepted_taxon"))
+        accepted_records, synonym_records = self._scope_records(
+            accepted_records, synonym_records, all_taxa
         )
+        existing_taxa = all_taxa
         existing_by_external_id = {taxon.external_id: taxon for taxon in existing_taxa if taxon.external_id}
-        existing_by_rank_name = {
-            (
-                _normalize_label(taxon.taxon_name).lower(),
-                (taxon.taxon_rank or "").lower(),
-                taxon.status,
-            ): taxon
-            for taxon in existing_taxa
-        }
+        existing_by_rank_name = {taxon_identity(t.taxon_name, t.taxon_rank): t for t in existing_taxa}
+        desired_keys = {taxon_identity(r.name, r.rank) for r in accepted_records + synonym_records}
+
+        def find_existing(record):
+            key = taxon_identity(record.name, record.rank)
+            existing = existing_by_rank_name.get(key)
+            if existing is None:
+                candidate = existing_by_external_id.get(record.external_id)
+                # A usage key can move to a newly accepted name while the old
+                # name remains as a synonym. Keep that synonym's row separate.
+                if candidate and taxon_identity(candidate.taxon_name, candidate.taxon_rank) not in desired_keys:
+                    existing = candidate
+            return existing
+
 
         accepted_to_create: List[AcceptedRecord] = []
         accepted_to_update: List[AcceptedUpdate] = []
@@ -309,17 +360,20 @@ class NowTaxonomySyncService:
         issues: List[SyncIssue] = []
 
         desired_ids = set()
-        latest_version = _latest_version(accepted_records, synonym_records)
+        matched_taxon_ids = set()
 
         for record in accepted_records:
             desired_ids.add(record.external_id)
-            existing = existing_by_external_id.get(record.external_id)
-            if existing is None:
-                existing = existing_by_rank_name.get((record.name.lower(), record.rank, TaxonStatus.ACCEPTED))
+            existing = find_existing(record)
             if existing is None:
                 accepted_to_create.append(record)
                 continue
+            matched_taxon_ids.add(existing.pk)
             changes: Dict[str, Any] = {}
+            if existing.external_source != record.external_source:
+                changes["external_source"] = record.external_source
+            if existing.accepted_taxon_id:
+                changes["accepted_taxon"] = None
             if _normalize_label(existing.taxon_name) != record.name:
                 changes["taxon_name"] = record.name
             if (existing.taxon_rank or "").lower() != record.rank:
@@ -336,7 +390,7 @@ class NowTaxonomySyncService:
                 changes["source_version"] = record.source_version
             for field in TAXONOMY_FIELDS:
                 desired_value = record.taxonomy.get(field, TAXONOMY_DEFAULTS.get(field, ""))
-                if field in TAXONOMY_DEFAULTS:
+                if record.external_source == TaxonExternalSource.NOW and field in TAXONOMY_DEFAULTS:
                     desired_value = desired_value or TAXONOMY_DEFAULTS[field]
                 existing_value = getattr(existing, field, "")
                 if _normalize_label(existing_value) != desired_value:
@@ -348,9 +402,7 @@ class NowTaxonomySyncService:
 
         for record in synonym_records:
             desired_ids.add(record.external_id)
-            existing = existing_by_external_id.get(record.external_id)
-            if existing is None:
-                existing = existing_by_rank_name.get((record.name.lower(), record.rank, TaxonStatus.SYNONYM))
+            existing = find_existing(record)
             accepted_record = accepted_lookup.get(record.accepted_external_id)
             if accepted_record is None:
                 issues.append(
@@ -364,7 +416,10 @@ class NowTaxonomySyncService:
             if existing is None:
                 synonyms_to_create.append(record)
                 continue
+            matched_taxon_ids.add(existing.pk)
             changes = {}
+            if existing.external_source != record.external_source:
+                changes["external_source"] = record.external_source
             if _normalize_label(existing.taxon_name) != record.name:
                 changes["taxon_name"] = record.name
             if existing.status != TaxonStatus.SYNONYM:
@@ -384,7 +439,7 @@ class NowTaxonomySyncService:
                 changes["source_version"] = record.source_version
             for field in TAXONOMY_FIELDS:
                 desired_value = record.taxonomy.get(field, TAXONOMY_DEFAULTS.get(field, ""))
-                if field in TAXONOMY_DEFAULTS:
+                if record.external_source == TaxonExternalSource.NOW and field in TAXONOMY_DEFAULTS:
                     desired_value = desired_value or TAXONOMY_DEFAULTS[field]
                 existing_value = getattr(existing, field, "")
                 if _normalize_label(existing_value) != desired_value:
@@ -396,7 +451,15 @@ class NowTaxonomySyncService:
         to_deactivate: List[Taxon] = []
         if deactivate_flag:
             for taxon in existing_taxa:
-                if taxon.external_id and taxon.external_id not in desired_ids and taxon.is_active:
+                # Fallback matches can replace an external ID (for example when
+                # a synonym's accepted name changes). Preserve the matched row.
+                if (
+                    taxon.external_source == TaxonExternalSource.NOW
+                    and taxon.pk not in matched_taxon_ids
+                    and taxon.external_id
+                    and taxon.external_id not in desired_ids
+                    and taxon.is_active
+                ):
                     to_deactivate.append(taxon)
 
         preview = SyncPreview(
@@ -417,10 +480,16 @@ class NowTaxonomySyncService:
         deactivate_flag = getattr(settings, "TAXON_SYNC_DEACTIVATE_MISSING", True)
         with transaction.atomic():
             import_log = TaxonomyImport.objects.create(
-                source=TaxonomyImport.Source.NOW,
+                source=preview.import_source,
                 source_version=preview.source_version,
             )
 
+            # Release changing source IDs before creates: a former accepted
+            # usage can keep its row as a synonym while its old ID moves to the
+            # new accepted name. This is atomic with the remaining changes.
+            changing_ids = [u.instance.pk for u in preview.accepted_to_update + preview.synonyms_to_update
+                            if "external_id" in u.changes or "external_source" in u.changes]
+            Taxon.objects.filter(pk__in=changing_ids).update(external_id=None)
             created_taxa: List[Taxon] = []
             if preview.accepted_to_create:
                 accepted_instances = [
@@ -434,7 +503,6 @@ class NowTaxonomySyncService:
             accepted_mapping = {
                 taxon.external_id: taxon
                 for taxon in Taxon.objects.filter(
-                    external_source=TaxonExternalSource.NOW,
                     status=TaxonStatus.ACCEPTED,
                 )
             }
@@ -450,10 +518,13 @@ class NowTaxonomySyncService:
                 Taxon.objects.bulk_update(
                     [item.instance for item in accepted_updates],
                     [
+                        "identity_key",
+                        "external_source",
                         "taxon_name",
                         "taxon_rank",
                         "author_year",
                         "status",
+                        "accepted_taxon",
                         "is_active",
                         "source_version",
                         "external_id",
@@ -498,7 +569,6 @@ class NowTaxonomySyncService:
                     accepted_external_id = changes.pop("accepted_taxon", None)
                     if accepted_external_id:
                         accepted_taxon = accepted_mapping.get(accepted_external_id) or Taxon.objects.filter(
-                            external_source=TaxonExternalSource.NOW,
                             external_id=accepted_external_id,
                         ).first()
                         if not accepted_taxon:
@@ -511,6 +581,8 @@ class NowTaxonomySyncService:
                 Taxon.objects.bulk_update(
                     [item.instance for item in synonym_updates],
                     [
+                        "identity_key",
+                        "external_source",
                         "taxon_name",
                         "taxon_rank",
                         "author_year",
@@ -540,6 +612,7 @@ class NowTaxonomySyncService:
                     deactivated_taxa.append(taxon)
                 Taxon.objects.bulk_update(deactivated_taxa, ["is_active"])
 
+            self._link_identifications()
             counts = preview.counts
             report = {
                 "accepted_created": [record.external_id for record in preview.accepted_to_create],
@@ -547,7 +620,9 @@ class NowTaxonomySyncService:
                 "synonyms_created": [record.external_id for record in preview.synonyms_to_create],
                 "synonyms_updated": [update.instance.external_id for update in preview.synonyms_to_update],
                 "deactivated": [taxon.external_id for taxon in deactivated_taxa],
-                "issues": [issue.context for issue in preview.issues],
+                "issues": [{"code": issue.code, **issue.context} for issue in preview.issues],
+                "sources": sorted({r.external_source for r in preview.accepted_to_create + preview.synonyms_to_create}
+                                  | {u.record.external_source for u in preview.accepted_to_update + preview.synonyms_to_update}),
             }
 
             import_log.mark_finished(
@@ -559,6 +634,27 @@ class NowTaxonomySyncService:
             import_log.save()
 
         return import_log
+
+    def _link_identifications(self):
+        """Link previously ambiguous or unlinked names without changing recorded text."""
+        by_name = {}
+        for taxon in Taxon.objects.filter(is_active=True).select_related("accepted_taxon"):
+            target = taxon if taxon.status == TaxonStatus.ACCEPTED else taxon.accepted_taxon
+            if target and target.is_active and target.status == TaxonStatus.ACCEPTED:
+                by_name.setdefault(_normalize_label(taxon.taxon_name).lower(), set()).add(target.pk)
+        changed = []
+        for identification in Identification.objects.all().iterator():
+            name = _normalize_label(identification.taxon_verbatim or identification.taxon).lower()
+            targets = by_name.get(name, set())
+            if len(targets) == 1:
+                target_id = next(iter(targets))
+                if identification.taxon_record_id != target_id:
+                    identification.taxon_record_id = target_id
+                    changed.append(identification)
+        if changed:
+            from simple_history.utils import bulk_update_with_history
+            bulk_update_with_history(changed, Identification, ["taxon_record"],
+                                     default_change_reason="Linked during taxonomy sync")
 
     # ------------------------
     # Helpers
@@ -714,7 +810,8 @@ def build_taxon_from_record(
         taxonomy["infraspecific_epithet"] = infra_part
 
     instance = Taxon(
-        external_source=TaxonExternalSource.NOW,
+        identity_key=taxon_identity(normalized_name, taxon_rank_value),
+        external_source=record.external_source,
         external_id=record.external_id,
         author_year=getattr(record, "author_year", ""),
         status=status,
@@ -741,4 +838,5 @@ def build_taxon_from_record(
 def apply_changes(instance: Taxon, changes: Dict[str, Any]) -> None:
     for field, value in changes.items():
         setattr(instance, field, value)
+    instance.identity_key = taxon_identity(instance.taxon_name, instance.taxon_rank)
 

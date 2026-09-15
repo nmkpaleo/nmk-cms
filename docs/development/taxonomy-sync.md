@@ -8,10 +8,22 @@ The sync feature ingests two TSV exports from the NOW-Data repository—`latest_
 
 1. Downloads the TSV files using configured environment variables.
 2. Parses the rows into in-memory records (`AcceptedRecord` / `SynonymRecord`).
-3. Compares them with existing `Taxon` rows for the NOW source to produce a diff preview.
-4. Applies the diff inside a single transaction, creating a `TaxonomyImport` audit row.
+3. Restricts records to normalized local names from `Taxon`, identification text, and field-slip text, plus accepted targets required by matching synonyms. Existing NOW external IDs also retain their matching source records. Drawer links are covered by the existing `Taxon` records.
+4. Compares that subset with existing `Taxon` rows across sources to produce a diff preview. Matched database rows are excluded from deactivation even if their external IDs change.
+5. Applies the diff inside a single transaction, creating a `TaxonomyImport` audit row.
 
-All functionality is encapsulated in `app/cms/taxonomy/sync.py`.
+The UI uses `TaxonomySyncService` in `app/cms/taxonomy/combined.py`. GBIF response
+validation lives in `gbif.py`; the shared diff/apply machinery remains in `sync.py`.
+`NowTaxonomySyncService` remains available for NOW-only callers. All sync writers
+populate the source-independent `Taxon.identity_key`; bulk writers must compute it
+with `cms.taxon_identity.taxon_identity` when changing name/rank.
+
+GBIF is queried only for locally recorded names. Exact matches establish the class:
+NOW takes priority for Mammalia, GBIF for other classes and mammals missing in NOW.
+Source transitions reuse the existing row. Apply also links resolvable identification
+text and records the link changes in history. See the
+[administrator guide](../admin/taxonomy-sync.md#source-selection-and-duplicate-prevention)
+for migration and error-handling details.
 
 ## Key components
 
@@ -42,8 +54,8 @@ Configuration lives in standard settings files; keep secrets and URLs out of the
 Alternatively, use the service directly from the shell:
 
 ```python
-from app.cms.taxonomy.sync import NowTaxonomySyncService
-service = NowTaxonomySyncService()
+from cms.taxonomy.combined import TaxonomySyncService
+service = TaxonomySyncService()
 preview = service.preview()
 result = service.sync(apply=True)
 ```

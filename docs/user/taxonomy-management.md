@@ -54,3 +54,24 @@ Previewing does not change the database—it is a safe dry-run.
 | Button missing | Verify that you are a staff user with the `cms.can_sync` permission. |
 
 Contact the technical team if a problem persists or if you need to restore from a previous import log.
+
+
+## Scope of NOW synchronization
+
+NOW sync imports names already recorded in the taxonomy catalogue, identifications,
+or field slips. Drawer taxa are included through the catalogue. A matching synonym
+also includes its accepted name. Recording an order or family does not import all
+species below it. Names are compared ignoring case and extra whitespace; uncertain
+or abbreviated names need review rather than fuzzy matching.
+
+See the [administrator guide](../admin/taxonomy-sync.md#which-taxa-are-included)
+for details and preview checks.
+
+
+## GBIF and source changes
+
+Taxonomy sync now also checks GBIF for the locally recorded names. NOW remains the
+preferred source for mammals; GBIF covers other classes and mammals not yet in NOW.
+Source changes update the existing catalogue row, so specimen and drawer links
+remain intact. Identifications can link through a synonym to its accepted name.
+The catalogue allows only one row for each normalized name and rank across sources.

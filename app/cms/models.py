@@ -27,6 +27,7 @@ MANUAL_QC_SOURCE = "manual_qc"
 
 from .merge import MergeMixin, MergeStrategy
 from .notifications import notify_media_qc_transition
+from .taxon_identity import normalize_taxon_label, taxon_identity
 
 
 class InventoryStatus(models.TextChoices):
@@ -1489,23 +1490,22 @@ class Identification(BaseModel):
         if not taxon_name:
             return None
 
-        matches = list(
-            Taxon.objects.filter(
-                taxon_name__iexact=taxon_name,
-                status=TaxonStatus.ACCEPTED,
-                is_active=True,
-            )[:2]
-        )
+        matches = Taxon.objects.filter(
+            taxon_name__iexact=normalize_taxon_label(taxon_name), is_active=True,
+        ).select_related("accepted_taxon")
+        accepted = {}
+        for match in matches:
+            target = match if match.status == TaxonStatus.ACCEPTED else match.accepted_taxon
+            if target and target.status == TaxonStatus.ACCEPTED and target.is_active:
+                accepted[target.pk] = target
+        return next(iter(accepted.values())) if len(accepted) == 1 else None
 
-        if len(matches) == 1:
-            return matches[0]
-
-        return None
 
 
 # Taxon Model
 
 class TaxonExternalSource(models.TextChoices):
+    GBIF = "GBIF", _("GBIF / Catalogue of Life")
     NOW = "NOW", _("NOW")
     PBDB = "PBDB", _("PBDB")
     LEGACY = "LEGACY", _("Legacy")
@@ -1534,6 +1534,16 @@ class TaxonRank(models.TextChoices):
 TAXON_RANK_CHOICES = TaxonRank.choices
 
 class Taxon(BaseModel):
+    identity_key = models.CharField(max_length=320, unique=True, editable=False, default="")
+
+    def save(self, *args, **kwargs):
+        self.taxon_name = normalize_taxon_label(self.taxon_name)
+        self.taxon_rank = normalize_taxon_label(self.taxon_rank).lower()
+        self.identity_key = taxon_identity(self.taxon_name, self.taxon_rank)
+        if kwargs.get("update_fields") is not None:
+            kwargs["update_fields"] = set(kwargs["update_fields"]) | {"identity_key", "taxon_name", "taxon_rank"}
+        super().save(*args, **kwargs)
+
     external_source = models.CharField(
         max_length=16,
         choices=TaxonExternalSource.choices,
@@ -1589,7 +1599,7 @@ class Taxon(BaseModel):
         help_text="Taxonomic rank represented by this record.",
     )
     taxon_name = models.CharField(
-        max_length=50,
+        max_length=255,
         help_text="Primary taxon name for the selected rank.",
     )
     kingdom = models.CharField(
@@ -1661,10 +1671,6 @@ class Taxon(BaseModel):
         verbose_name_plural = "Taxa"
         constraints = [
             models.UniqueConstraint(
-                fields=["taxon_rank", "taxon_name", "scientific_name_authorship"],
-                name="unique_taxon_rank_name_authorship",
-            ),
-            models.UniqueConstraint(
                 fields=["external_source", "external_id"],
                 name="unique_taxon_external_source_id",
                 condition=(
@@ -1732,6 +1738,7 @@ class Taxon(BaseModel):
 
 class TaxonomyImport(BaseModel):
     class Source(models.TextChoices):
+        COMBINED = "NOW_GBIF", _("NOW + GBIF")
         NOW = "NOW", _("NOW")
 
     source = models.CharField(

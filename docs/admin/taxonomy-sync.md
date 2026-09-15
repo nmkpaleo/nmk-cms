@@ -1,6 +1,6 @@
-# Taxonomy Sync (NOW Mammals)
+# Taxonomy Sync (NOW and GBIF)
 
-This guide covers the administrative workflow for synchronising the CMS taxonomy with the NOW mammal dataset. The tooling lives inside the Django admin and provides a preview-first experience followed by a transactional apply step.
+This guide covers the administrative workflow for synchronising the CMS taxonomy with NOW mammal data and GBIF Catalogue of Life matches. The tooling lives inside the Django admin and provides a preview-first experience followed by a transactional apply step.
 
 ## Prerequisites
 
@@ -15,6 +15,62 @@ This guide covers the administrative workflow for synchronising the CMS taxonomy
 
 1. Navigate to **CMS → Taxa** inside the Django admin.
 2. If you have permission, a **Sync Taxa Now** button appears beside the standard add button. Selecting it triggers the preview fetch.
+
+## Which taxa are included
+
+Sync uses names already present in the CMS:
+
+- Existing `Taxon` records from any source, including taxa linked to drawers and identifications.
+- Identification taxon text (`taxon_verbatim`, falling back to the legacy `taxon` field).
+- Field-slip `verbatim_taxon` text.
+
+Names must match the NOW name after ignoring case and normalizing whitespace.
+A matching synonym also brings in its accepted taxon so the link can be stored.
+An order or family entry does not import all of its descendants, and an accepted
+name does not import all of its synonyms. With no local names, nothing is imported.
+
+The complete NOW TSV files are still downloaded because they are bulk exports;
+only the relevant records enter the preview and apply steps. Existing NOW records
+remain eligible for updates and missing-record deactivation. Previously imported catalogue records remain in scope.
+
+## Source selection and duplicate prevention
+
+- GBIF checks each locally recorded name, using its rank when known.
+- For Mammalia, NOW takes priority if the same name/rank is available there.
+- For other classes, GBIF supplies the taxonomy. Mammals absent from NOW also use GBIF.
+- A later NOW match updates a GBIF mammal row in place, preserving its ID and links.
+- LEGACY rows are reused by name/rank. A normalized identity key prevents a second
+  row with the same name/rank, regardless of source, authorship, or status.
+- Synonyms link to the selected accepted record, including across sources.
+
+Only exact GBIF name/rank matches with a class and no diagnostic issues are applied.
+Uncertain matches and network failures appear in the preview issues; they do not
+cause existing records to be deactivated. Successful changes can still be applied
+when other names have issues; the import log marks that run as needing review.
+
+The preview shows the source beside each proposed new name and reports source
+changes on updates. GBIF IDs include the checklist key and usage key. GBIF source
+versions are content hashes; NOW versions remain the export timestamp.
+
+### Deployment migration
+
+Migration 0088 consolidates existing duplicates before creating the uniqueness
+constraint. It prefers NOW for mammals and GBIF for non-mammals, then reconnects
+identifications, drawers, parent links, and synonym links to the surviving row.
+Historical identification links are redirected, and historical taxon records are
+retained. Previously ambiguous identifications are linked when a unique accepted
+name (or synonym target) can be resolved. The consolidation is not reversed by
+rolling the schema migration back; recovery of separate duplicate rows requires
+restoring a backup.
+
+### GBIF configuration
+
+- `TAXON_GBIF_MATCH_URL`: defaults to `https://api.gbif.org/v2/species/match`.
+- `TAXON_GBIF_CHECKLIST_KEY`: defaults to `7ddf754f-d193-4cc9-b351-99906754a03b` (COL XR).
+- `TAXON_GBIF_TIMEOUT`: per-request timeout in seconds, default 15.
+
+Matches are reused within a sync run. Preview and apply each fetch current data.
+See the [GBIF matching documentation](https://techdocs.gbif.org/en/data-processing/taxonomy-interpretation).
 
 ## Understanding the preview
 
@@ -41,7 +97,7 @@ If an exception occurs, the transaction is rolled back, a red alert banner is sh
 
 The Django admin registers a **Taxonomy Imports** section. Each sync produces a row containing:
 
-* Source (`NOW`)
+* Source (`NOW_GBIF` for the combined sync, or `NOW` for NOW-only runs)
 * Source version (NOW timestamp or commit hash)
 * Started / finished timestamps
 * A boolean `ok` flag
@@ -55,7 +111,7 @@ Import logs are managed by `django-simple-history`, allowing auditors to review 
 | --- | --- |
 | Preview raises connection errors | Confirm the NOW URLs are correct and reachable. Retry once connectivity is restored. |
 | Issues reported for missing accepted taxa | Contact the NOW data maintainers or postpone the sync until the dataset includes the referenced taxon. |
-| Sync result shows `ok = False` | Investigate the associated import log. Nothing was committed; fix the issues and run again. |
+| Sync result shows `ok = False` | Investigate the associated import log. Successful changes may have been committed; inspect the report before retrying. |
 | Need to undo a sync | Locate the relevant `TaxonomyImport`, export the list of affected taxa, and restore them from backups or re-run the sync after correcting the upstream data. Because each sync runs in a single transaction, partial updates do not occur. |
 
 ## Identification linkage checks

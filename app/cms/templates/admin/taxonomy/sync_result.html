@@ -14,7 +14,7 @@
     {% translate "Taxonomy Sync Result" %}
   </h1>
   <p class="w3-text-gray">
-    {% translate "The NOW dataset sync has completed. Review the applied changes below." %}
+    {% translate "The NOW and GBIF taxonomy sync has completed. Review the applied changes below." %}
   </p>
   {% if source_version %}
   <p class="w3-small w3-text-gray">
@@ -29,7 +29,7 @@
     {% if success %}
     <div class="w3-panel w3-pale-green w3-border w3-border-green" role="status">
       <p class="w3-large">
-        {% translate "NOW taxonomy sync completed successfully." %}
+        {% translate "Taxonomy sync completed successfully." %}
       </p>
       <p class="w3-small">
         {% translate "All changes were applied in a single transaction." %}
@@ -109,7 +109,7 @@
         <tbody>
           {% for record in preview_data.accepted_creates %}
           <tr>
-            <td>{{ record.name }}</td>
+            <td>{{ record.name }} <span class="w3-tag w3-light-grey">{{ record.source }}</span></td>
             <td>
               {% if record.rank %}
                 {{ record.rank }}
@@ -189,7 +189,7 @@
         <tbody>
           {% for record in preview_data.synonym_creates %}
           <tr>
-            <td>{{ record.name }}</td>
+            <td>{{ record.name }} <span class="w3-tag w3-light-grey">{{ record.source }}</span></td>
             <td>{{ record.accepted_name }}</td>
             <td>{% translate "Created" %}</td>
           </tr>
