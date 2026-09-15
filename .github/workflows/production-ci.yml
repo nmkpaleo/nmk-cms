@@ -84,6 +84,8 @@ jobs:
         with:
           context: ./app
           push: true
+          provenance: mode=max
+          sbom: true
           build-args: |
             APP_VERSION=${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
           tags: |

@@ -82,4 +82,6 @@ jobs:
         with:
           context: ./app
           push: true
+          provenance: mode=max
+          sbom: true
           tags: palaeontologyhelsinki/${{ secrets.DOCKERHUB_PROJECTNAME }}_staging:latest
