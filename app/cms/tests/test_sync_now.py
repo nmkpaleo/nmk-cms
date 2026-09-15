@@ -1,10 +1,12 @@
+import io
+
 import pytest
 from crum import set_current_user
 from django.contrib.auth import get_user_model
 from django.test import override_settings
 
 from app.cms.models import Taxon, TaxonExternalSource, TaxonStatus, TaxonomyImport
-from app.cms.taxonomy.sync import NowTaxonomySyncService
+from app.cms.taxonomy.sync import NowTaxonomySyncService, build_taxon_from_record
 
 
 @pytest.fixture(autouse=True)
@@ -266,3 +268,61 @@ def test_now_sync_records_issue_when_missing_accepted(db):
     assert preview.synonyms_to_create == []
     assert preview.synonyms_to_update == []
     assert preview.issues[0].code == "missing-accepted"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("reassign_synonym", [False, True], ids=["accepted-id", "synonym-target"])
+@override_settings(TAXON_SYNC_DEACTIVATE_MISSING=True)
+def test_fallback_matched_taxon_stays_active_after_id_change(db, reassign_synonym):
+    service = NowTaxonomySyncService(http_get=lambda url: None)
+    accepted = list(service._parse_accepted(io.StringIO(
+        "taxon_name\ttaxon_rank\tfamily\nAlpha beta\tspecies\tAlphidae\nAlpha gamma\tspecies\tAlphidae\n"
+    )))
+    existing = [build_taxon_from_record(record, status=TaxonStatus.ACCEPTED) for record in accepted]
+    for taxon in existing:
+        taxon.save()
+    synonyms = []
+    if reassign_synonym:
+        old_synonym = list(service._parse_synonyms(io.StringIO(
+            "syn_name\ttaxon_name\ttaxon_rank\nAlpha delta\tAlpha beta\tspecies\n"
+        ), accepted))[0]
+        matched = build_taxon_from_record(
+            old_synonym, status=TaxonStatus.SYNONYM, accepted_taxon=existing[0]
+        )
+        matched.save()
+        synonyms = list(service._parse_synonyms(io.StringIO(
+            "syn_name\ttaxon_name\ttaxon_rank\nAlpha delta\tAlpha gamma\tspecies\n"
+        ), accepted))
+        desired_id = synonyms[0].external_id
+    else:
+        matched = existing[0]
+        matched.external_id = "old-id-format"
+        matched.save()
+        desired_id = accepted[0].external_id
+
+    obsolete_record = list(service._parse_accepted(io.StringIO(
+        "taxon_name\ttaxon_rank\tfamily\nObsolete species\tspecies\tAlphidae\n"
+    )))[0]
+    obsolete = build_taxon_from_record(obsolete_record, status=TaxonStatus.ACCEPTED)
+    obsolete.save()
+    original_pk = matched.pk
+
+    preview = service._build_preview(accepted, synonyms)
+    assert preview.counts["created"] == 0
+    assert preview.counts["updated"] == 1
+    assert [taxon.pk for taxon in preview.to_deactivate] == [obsolete.pk]
+
+    import_log = service._apply(preview)
+    assert import_log.counts["deactivated"] == 1
+    matched.refresh_from_db()
+    obsolete.refresh_from_db()
+    assert matched.pk == original_pk
+    assert matched.external_id == desired_id
+    assert matched.is_active is True
+    assert obsolete.is_active is False
+    if reassign_synonym:
+        assert matched.accepted_taxon_id == existing[1].pk
+    repeated = service._build_preview(accepted, synonyms)
+    assert repeated.counts["created"] == 0
+    assert repeated.counts["updated"] == 0
+    assert repeated.counts["deactivated"] == 0

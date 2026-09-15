@@ -309,6 +309,7 @@ class NowTaxonomySyncService:
         issues: List[SyncIssue] = []
 
         desired_ids = set()
+        matched_taxon_ids = set()
         latest_version = _latest_version(accepted_records, synonym_records)
 
         for record in accepted_records:
@@ -319,6 +320,7 @@ class NowTaxonomySyncService:
             if existing is None:
                 accepted_to_create.append(record)
                 continue
+            matched_taxon_ids.add(existing.pk)
             changes: Dict[str, Any] = {}
             if _normalize_label(existing.taxon_name) != record.name:
                 changes["taxon_name"] = record.name
@@ -364,6 +366,7 @@ class NowTaxonomySyncService:
             if existing is None:
                 synonyms_to_create.append(record)
                 continue
+            matched_taxon_ids.add(existing.pk)
             changes = {}
             if _normalize_label(existing.taxon_name) != record.name:
                 changes["taxon_name"] = record.name
@@ -396,7 +399,14 @@ class NowTaxonomySyncService:
         to_deactivate: List[Taxon] = []
         if deactivate_flag:
             for taxon in existing_taxa:
-                if taxon.external_id and taxon.external_id not in desired_ids and taxon.is_active:
+                # Fallback matches can replace an external ID (for example when
+                # a synonym's accepted name changes). Preserve the matched row.
+                if (
+                    taxon.pk not in matched_taxon_ids
+                    and taxon.external_id
+                    and taxon.external_id not in desired_ids
+                    and taxon.is_active
+                ):
                     to_deactivate.append(taxon)
 
         preview = SyncPreview(
