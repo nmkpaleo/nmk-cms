@@ -66,3 +66,12 @@ or abbreviated names need review rather than fuzzy matching.
 
 See the [administrator guide](../admin/taxonomy-sync.md#which-taxa-are-included)
 for details and preview checks.
+
+
+## GBIF and source changes
+
+Taxonomy sync now also checks GBIF for the locally recorded names. NOW remains the
+preferred source for mammals; GBIF covers other classes and mammals not yet in NOW.
+Source changes update the existing catalogue row, so specimen and drawer links
+remain intact. Identifications can link through a synonym to its accepted name.
+The catalogue allows only one row for each normalized name and rank across sources.

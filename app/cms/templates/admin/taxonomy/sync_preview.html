@@ -10,7 +10,7 @@
     {% translate "Sync Taxa Now" %}
   </h1>
   <p class="w3-text-gray">
-    {% translate "Review NOW changes for taxa already in the catalogue or named in identifications and field slips. Accepted names required by matching synonyms are included." %}
+    {% translate "Review taxonomy changes for names in the catalogue, identifications and field slips. NOW is preferred for mammals; GBIF supplies other classes and mammals missing from NOW." %}
   </p>
   {% if source_version %}
   <p class="w3-small w3-text-gray">
@@ -86,7 +86,7 @@
         <tbody>
           {% for record in preview_data.accepted_creates %}
           <tr>
-            <td>{{ record.name }}</td>
+            <td>{{ record.name }} <span class="w3-tag w3-light-grey">{{ record.source }}</span></td>
             <td>
               {% if record.rank %}
                 {{ record.rank }}
@@ -166,7 +166,7 @@
         <tbody>
           {% for record in preview_data.synonym_creates %}
           <tr>
-            <td>{{ record.name }}</td>
+            <td>{{ record.name }} <span class="w3-tag w3-light-grey">{{ record.source }}</span></td>
             <td>{{ record.accepted_name }}</td>
             <td>{% translate "Create link" %}</td>
           </tr>

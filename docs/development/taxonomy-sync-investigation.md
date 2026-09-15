@@ -1,5 +1,7 @@
 # NOW taxonomy sync investigation
 
+Historical findings from the NOW-only implementation. The combined NOW/GBIF sync now reuses rows across sources and migration 0088 consolidates duplicate name/rank entries.
+
 Investigated on 15 September 2026. No application database was changed.
 
 ## Source comparison

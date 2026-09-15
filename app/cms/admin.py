@@ -84,7 +84,7 @@ from django.utils.timezone import now, localtime
 from django.contrib.auth import admin as auth_admin
 from django.contrib.auth import get_user_model
 
-from .taxonomy import NowTaxonomySyncService
+from .taxonomy.combined import TaxonomySyncService
 from cms.upload_processing import queue_specimen_list_processing
 
 # Configure the logger
@@ -135,6 +135,7 @@ def _serialize_preview_for_template(preview):
                 "rank": record.rank,
                 "author_year": record.author_year,
                 "external_id": record.external_id,
+                "source": record.external_source,
             }
             for record in preview.accepted_to_create
         ],
@@ -142,6 +143,7 @@ def _serialize_preview_for_template(preview):
             {
                 "name": update.record.name,
                 "external_id": update.record.external_id,
+                "source": update.record.external_source,
                 "changes": _serialize_changeset(update),
             }
             for update in preview.accepted_to_update
@@ -151,6 +153,7 @@ def _serialize_preview_for_template(preview):
                 "name": record.name,
                 "accepted_name": record.accepted_name,
                 "external_id": record.external_id,
+                "source": record.external_source,
             }
             for record in preview.synonyms_to_create
         ],
@@ -159,6 +162,7 @@ def _serialize_preview_for_template(preview):
                 "name": update.record.name,
                 "accepted_name": update.record.accepted_name,
                 "external_id": update.record.external_id,
+                "source": update.record.external_source,
                 "changes": _serialize_changeset(update),
             }
             for update in preview.synonyms_to_update
@@ -185,7 +189,7 @@ def _taxonomy_sync_preview_view(request):
     if not _user_can_sync_taxa(request.user):
         raise PermissionDenied
 
-    service = NowTaxonomySyncService()
+    service = TaxonomySyncService()
 
     try:
         preview = service.preview()
@@ -223,7 +227,7 @@ def _taxonomy_sync_apply_view(request):
     if request.method != "POST":
         return redirect("taxonomy_sync_preview")
 
-    service = NowTaxonomySyncService()
+    service = TaxonomySyncService()
 
     try:
         result = service.sync(apply=True)

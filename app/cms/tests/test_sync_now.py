@@ -389,7 +389,15 @@ def test_sync_only_imports_locally_recorded_names(db, source):
     service = _scope_service()
     preview = service.preview()
     expected = set() if source == "empty" else {"Carnivora" if source in {"taxon", "drawer"} else "Alpha beta"}
-    assert {r.name for r in preview.accepted_to_create} == expected
+    if source in {"taxon", "drawer"}:
+        assert preview.accepted_to_create == []
+        assert {u.record.name for u in preview.accepted_to_update} == expected
+        service.sync(apply=True)
+        taxon.refresh_from_db()
+        assert taxon.external_source == TaxonExternalSource.NOW
+        assert Taxon.objects.count() == 1
+    else:
+        assert {r.name for r in preview.accepted_to_create} == expected
     assert preview.synonyms_to_create == []
     assert preview.to_deactivate == []
     assert preview.issues == []
