@@ -36,6 +36,19 @@ class ElementMergeSelectionViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Merge elements")
 
+    def test_selection_page_does_not_render_external_cancel_url(self):
+        with impersonate(self.user):
+            Element.objects.create(name="Femur")
+
+        response = self.client.get(
+            reverse("merge:merge_element_selection"),
+            {"cancel": "https://evil.example/phish"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "evil.example")
+        self.assertNotContains(response, 'name="cancel"')
+
     def test_selection_post_redirects_to_review(self):
         with impersonate(self.user):
             target = Element.objects.create(name="Target")
@@ -51,9 +64,32 @@ class ElementMergeSelectionViewTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 302)
-        self.assertIn(reverse("merge:merge_element_review"), response["Location"])
-        self.assertIn(str(target.pk), response["Location"])
-        self.assertIn(str(source.pk), response["Location"])
+        self.assertEqual(response["Location"], reverse("merge:merge_element_review"))
+
+        review_payload = self.client.session["merge_element_review"]
+        self.assertEqual(review_payload["target"], str(target.pk))
+        self.assertEqual(review_payload["candidates"], f"{target.pk},{source.pk}")
+
+    def test_selection_post_does_not_propagate_external_cancel_url(self):
+        with impersonate(self.user):
+            target = Element.objects.create(name="Target")
+            source = Element.objects.create(name="Source")
+
+        response = self.client.post(
+            reverse("merge:merge_element_selection"),
+            {
+                "target": str(target.pk),
+                "source_ids": [str(source.pk)],
+                "cancel": "https://evil.example/phish",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], reverse("merge:merge_element_review"))
+        self.assertEqual(
+            self.client.session["merge_element_review"]["cancel"],
+            reverse("merge:merge_element_selection"),
+        )
 
     def test_review_page_renders_field_selection(self):
         with impersonate(self.user):
@@ -71,3 +107,28 @@ class ElementMergeSelectionViewTests(TestCase):
         self.assertContains(response, "Review selections")
         self.assertContains(response, target.name)
         self.assertContains(response, source.name)
+
+    def test_review_page_uses_session_selection_after_post(self):
+        with impersonate(self.user):
+            target = Element.objects.create(name="Target")
+            source = Element.objects.create(name="Source")
+
+        self.client.post(
+            reverse("merge:merge_element_selection"),
+            {
+                "target": str(target.pk),
+                "source_ids": [str(source.pk)],
+                "cancel": "/admin/cms/element/",
+            },
+        )
+
+        response = self.client.get(reverse("merge:merge_element_review"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, target.name)
+        self.assertContains(response, source.name)
+        self.assertContains(
+            response,
+            '<input type="hidden" name="cancel" value="/admin/cms/element/" />',
+            html=False,
+        )

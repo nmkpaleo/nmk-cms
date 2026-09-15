@@ -1,0 +1,11 @@
+# Repository governance and automation
+/.github/CODEOWNERS @karilint @smaikweki
+/.github/dependabot.yml @karilint @smaikweki
+/.github/workflows/ @karilint @smaikweki
+/SECURITY.md @karilint @smaikweki
+
+# Production and release-sensitive configuration
+/app/Dockerfile @karilint @smaikweki
+/app/config/settings.py @karilint @smaikweki
+/docker-compose.prod.yml @karilint @smaikweki
+/nginx/ @karilint @smaikweki

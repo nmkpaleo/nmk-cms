@@ -1,6 +1,13 @@
 # Changelog
 
 ## Unreleased
+- Require hash-verified Python dependency locks in CI, staging/production quality checks, and optional CPU inference validation; restore the Torch/Torchvision import and CPU operation smoke check.
+- Add OpenSSF Scorecard analysis and publish maximum-mode provenance and SPDX SBOM attestations with staging and production container images.
+- Remove request-derived post-merge redirects to resolve CodeQL alert #25.
+- Upgrade the optional CPU-only Torch stack to torch 2.13.0 and torchvision 0.28.0 to resolve GHSA-rrmf-rvhw-rf47.
+- Gate staging and production image publishing through restricted GitHub environments.
+- Document the GitHub pull-request, CI, dependency-security, release, and emergency-bypass workflow; refresh the root project overview and Django 5.2 guidance.
+- Add specimen page approval media-location synchronization guidance across user/admin/development docs, including operator checks, staged reconciliation rollout, rollback procedures, and known legacy-path limitations.
 - Add FieldSlip sedimentary editing and filtering support across detail, edit, and list workflows, including grouped sedimentary detail layout, deduplicated M2M list filtering, queryset loading optimizations, and regression coverage for ordering/save/filter paths (FS-SED-001 to FS-SED-007).
 - Implement Field-slip OCR/QC delivery tasks FS-002 through FS-006, including strict OCR prompt contract, normalized approval ingestion with relation mapping, expanded QC review controls, admin/filter hardening, and staging rollback runbook guidance.
 - Add CI/rollout/rollback runbook details for Side/Portion inference, including coverage+migration gates, runtime toggle guidance, and staging token verification matrix.
