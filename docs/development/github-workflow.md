@@ -43,6 +43,40 @@ version comment. `.github/dependabot.yml` groups weekly GitHub Actions updates;
 review publisher, release notes, permission changes, and CI results before
 merging an update.
 
+## Updating CI dependency locks
+
+CI, staging, and production quality jobs install `app/requirements-ci.lock` with
+`pip --require-hashes`. The optional inference job uses
+`app/requirements-tooth-marking-cpu.lock`. Both locks target Linux x86_64 and
+Python 3.10; keep the editable requirements files as the dependency inputs.
+The container build still uses `app/requirements.txt`.
+
+After changing an input requirement (including a Dependabot update), regenerate
+and commit its lock file using uv 0.12.14:
+
+```sh
+uv pip compile app/requirements-ci.in --python-version 3.10 --python-platform x86_64-unknown-linux-gnu --generate-hashes --output-file app/requirements-ci.lock --no-emit-index-url
+uv pip compile app/requirements-tooth-marking-cpu.txt --python-version 3.10 --python-platform x86_64-unknown-linux-gnu --generate-hashes --output-file app/requirements-tooth-marking-cpu.lock --emit-index-url --index-strategy unsafe-best-match
+```
+
+The second command uses pip-compatible index selection because the input combines
+PyPI with the official PyTorch CPU index. Review package versions, origins, and
+hash changes before merging. Existing lock versions are preserved when compatible;
+use `--upgrade-package NAME` for an intentional dependency upgrade.
+
+Validate with a clean Linux Python 3.10 environment:
+
+```sh
+python -m pip install --require-hashes -r app/requirements-ci.lock
+python -m pip check
+python -m pytest tests/test_dependency_locks.py tests/docs
+```
+
+Run the usual application CI checks and the optional inference workflow when its
+lock changes. The inference check imports both libraries and exercises the compiled
+CPU non-maximum suppression operation to detect incompatible paired wheels.
+Rollback by reverting the workflow and lock-file changes together.
+
 ## Security monitoring
 
 - CodeQL default setup scans Python, JavaScript/TypeScript, and Actions changes.
