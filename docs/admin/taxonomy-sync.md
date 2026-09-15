@@ -16,6 +16,26 @@ This guide covers the administrative workflow for synchronising the CMS taxonomy
 1. Navigate to **CMS → Taxa** inside the Django admin.
 2. If you have permission, a **Sync Taxa Now** button appears beside the standard add button. Selecting it triggers the preview fetch.
 
+## Which taxa are included
+
+Sync uses names already present in the CMS:
+
+- Existing `Taxon` records from any source, including taxa linked to drawers and identifications.
+- Identification taxon text (`taxon_verbatim`, falling back to the legacy `taxon` field).
+- Field-slip `verbatim_taxon` text.
+
+Names must match the NOW name after ignoring case and normalizing whitespace.
+A matching synonym also brings in its accepted taxon so the link can be stored.
+An order or family entry does not import all of its descendants, and an accepted
+name does not import all of its synonyms. With no local names, nothing is imported.
+
+The complete NOW TSV files are still downloaded because they are bulk exports;
+only the relevant records enter the preview and apply steps. Existing NOW records
+remain eligible for updates and missing-record deactivation. This change does not
+remove previously imported catalogue records or change source ownership: a LEGACY
+record is not automatically converted into a NOW record. Check the preview for
+cross-source duplicates before applying.
+
 ## Understanding the preview
 
 The preview page is a dry-run. No records are modified. It displays:

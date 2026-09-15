@@ -13,6 +13,8 @@ from django.db import transaction
 from django.utils import timezone
 
 from ..models import (
+    FieldSlip,
+    Identification,
     Taxon,
     TaxonExternalSource,
     TaxonStatus,
@@ -282,6 +284,42 @@ class NowTaxonomySyncService:
     # ------------------------
     # Preview & Diff
     # ------------------------
+    def _scope_records(
+        self,
+        accepted_records: Sequence[AcceptedRecord],
+        synonym_records: Sequence[SynonymRecord],
+        existing_taxa: Sequence[Taxon],
+    ) -> tuple[List[AcceptedRecord], List[SynonymRecord]]:
+        """Keep local names and accepted targets needed by their synonyms."""
+        names = {_normalize_label(taxon.taxon_name).lower() for taxon in existing_taxa}
+        # DrawerRegister.taxa and Identification.taxon_record already point to
+        # existing_taxa. Free text lets unlinked fossils seed imports as well.
+        for verbatim, legacy in Identification.objects.order_by().values_list(
+            "taxon_verbatim", "taxon"
+        ).iterator():
+            names.add((_normalize_label(verbatim) or _normalize_label(legacy)).lower())
+        names.update(
+            _normalize_label(name).lower()
+            for name in FieldSlip.objects.order_by().values_list("verbatim_taxon", flat=True).iterator()
+        )
+        names.discard("")
+        existing_ids = {
+            taxon.external_id for taxon in existing_taxa
+            if taxon.external_source == TaxonExternalSource.NOW and taxon.external_id
+        }
+        synonyms = [
+            record for record in synonym_records
+            if record.name.lower() in names or record.external_id in existing_ids
+        ]
+        accepted_ids = {record.accepted_external_id for record in synonyms}
+        accepted = [
+            record for record in accepted_records
+            if record.name.lower() in names
+            or record.external_id in existing_ids
+            or record.external_id in accepted_ids
+        ]
+        return accepted, synonyms
+
     def _build_preview(
         self,
         accepted_records: Sequence[AcceptedRecord],
@@ -289,9 +327,12 @@ class NowTaxonomySyncService:
     ) -> SyncPreview:
         accepted_records = _deduplicate_records(accepted_records)
         synonym_records = _deduplicate_records(synonym_records)
-        existing_taxa = list(
-            Taxon.objects.filter(external_source=TaxonExternalSource.NOW).select_related("accepted_taxon")
+        latest_version = _latest_version(accepted_records, synonym_records)
+        all_taxa = list(Taxon.objects.select_related("accepted_taxon"))
+        accepted_records, synonym_records = self._scope_records(
+            accepted_records, synonym_records, all_taxa
         )
+        existing_taxa = [taxon for taxon in all_taxa if taxon.external_source == TaxonExternalSource.NOW]
         existing_by_external_id = {taxon.external_id: taxon for taxon in existing_taxa if taxon.external_id}
         existing_by_rank_name = {
             (
@@ -310,7 +351,6 @@ class NowTaxonomySyncService:
 
         desired_ids = set()
         matched_taxon_ids = set()
-        latest_version = _latest_version(accepted_records, synonym_records)
 
         for record in accepted_records:
             desired_ids.add(record.external_id)

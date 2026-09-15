@@ -5,7 +5,10 @@ from crum import set_current_user
 from django.contrib.auth import get_user_model
 from django.test import override_settings
 
-from app.cms.models import Taxon, TaxonExternalSource, TaxonStatus, TaxonomyImport
+from app.cms.models import (
+    Accession, AccessionRow, Collection, DrawerRegister, FieldSlip,
+    Identification, Locality, Taxon, TaxonExternalSource, TaxonStatus, TaxonomyImport,
+)
 from app.cms.taxonomy.sync import NowTaxonomySyncService, build_taxon_from_record
 
 
@@ -49,6 +52,7 @@ def _http_get_factory(mapping):
     TAXON_SYNC_DEACTIVATE_MISSING=True,
 )
 def test_now_sync_creates_updates_and_deactivates(db):
+    _field_slip("Newcanis junior")
     accepted_existing = Taxon.objects.create(
         external_source=TaxonExternalSource.NOW,
         external_id="NOW:species:Herpestes major",
@@ -201,6 +205,8 @@ def test_now_sync_creates_updates_and_deactivates(db):
     TAXON_SYNC_DEACTIVATE_MISSING=True,
 )
 def test_now_sync_skips_subranks_and_limits_lower_taxonomy(db):
+    _field_slip("Felidae")
+    _field_slip("Theria")
     accepted_tsv = "\n".join(
         [
             "taxon_name\ttaxon_rank\torder_name\tsuperfamily\tfamily\tsubfamily\ttribe\tgenus\tspecies\tauthor\tSTG_TIME_STAMP",
@@ -242,6 +248,8 @@ def test_now_sync_skips_subranks_and_limits_lower_taxonomy(db):
     TAXON_SYNC_DEACTIVATE_MISSING=True,
 )
 def test_now_sync_records_issue_when_missing_accepted(db):
+    _field_slip("Alpha beta")
+    _field_slip("Missing target")
     accepted_tsv = "\n".join(
         [
             "taxon_name\ttaxon_rank\tauthor\tSTG_TIME_STAMP",
@@ -326,3 +334,84 @@ def test_fallback_matched_taxon_stays_active_after_id_change(db, reassign_synony
     assert repeated.counts["created"] == 0
     assert repeated.counts["updated"] == 0
     assert repeated.counts["deactivated"] == 0
+
+
+def _field_slip(name):
+    return FieldSlip.objects.create(
+        field_number="scope-test", verbatim_taxon=name, verbatim_element="tooth"
+    )
+
+
+def _scope_service():
+    return NowTaxonomySyncService(http_get=_http_get_factory({
+        "https://example.com/accepted.tsv": (
+            "taxon_name\ttaxon_rank\tfamily\torder_name\n"
+            "Alpha beta\tspecies\tAlphidae\tCarnivora\n"
+            "Other species\tspecies\tAlphidae\tCarnivora\n"
+            "Carnivora\torder\t\tCarnivora\n"
+        ),
+        "https://example.com/synonyms.tsv": (
+            "syn_name\ttaxon_name\ttaxon_rank\n"
+            "Alpha old\tAlpha beta\tspecies\n"
+            "Alpha unused\tAlpha beta\tspecies\n"
+        ),
+    }))
+
+
+@pytest.mark.django_db
+@override_settings(
+    TAXON_NOW_ACCEPTED_URL="https://example.com/accepted.tsv",
+    TAXON_NOW_SYNONYMS_URL="https://example.com/synonyms.tsv",
+)
+@pytest.mark.parametrize("source", ["empty", "field-slip", "identification", "legacy-identification", "taxon", "drawer"])
+def test_sync_only_imports_locally_recorded_names(db, source):
+    if source == "field-slip":
+        _field_slip("  ALPHA   beta  ")
+    elif source in {"identification", "legacy-identification"}:
+        user = get_user_model().objects.get(username="sync-now-user")
+        collection = Collection.objects.create(abbreviation="TX", description="Taxon tests")
+        locality = Locality.objects.create(abbreviation="TL", name="Taxon locality")
+        accession = Accession.objects.create(
+            collection=collection, specimen_prefix=locality, specimen_no=1, accessioned_by=user
+        )
+        row = AccessionRow.objects.create(accession=accession)
+        ident = Identification.objects.create(accession_row=row, taxon_verbatim="Alpha beta")
+        if source == "legacy-identification":
+            Identification.objects.filter(pk=ident.pk).update(taxon_verbatim=None)
+    elif source in {"taxon", "drawer"}:
+        taxon = Taxon.objects.create(
+            taxon_name="Carnivora", taxon_rank="order", order="Carnivora"
+        )
+        if source == "drawer":
+            drawer = DrawerRegister.objects.create(code="TX", description="Test", estimated_documents=1)
+            drawer.taxa.add(taxon)
+
+    service = _scope_service()
+    preview = service.preview()
+    expected = set() if source == "empty" else {"Carnivora" if source in {"taxon", "drawer"} else "Alpha beta"}
+    assert {r.name for r in preview.accepted_to_create} == expected
+    assert preview.synonyms_to_create == []
+    assert preview.to_deactivate == []
+    assert preview.issues == []
+    if source in {"empty", "field-slip", "identification", "legacy-identification"}:
+        service.sync(apply=True)
+        assert set(Taxon.objects.values_list("taxon_name", flat=True)) == expected
+        assert service.preview().counts["created"] == 0
+
+
+@pytest.mark.django_db
+@override_settings(
+    TAXON_NOW_ACCEPTED_URL="https://example.com/accepted.tsv",
+    TAXON_NOW_SYNONYMS_URL="https://example.com/synonyms.tsv",
+)
+def test_local_synonym_imports_only_its_required_accepted_name(db):
+    _field_slip("Alpha old")
+    service = _scope_service()
+    preview = service.preview()
+    assert [r.name for r in preview.accepted_to_create] == ["Alpha beta"]
+    assert [r.name for r in preview.synonyms_to_create] == ["Alpha old"]
+    service.sync(apply=True)
+    synonym = Taxon.objects.get(taxon_name="Alpha old")
+    assert synonym.accepted_taxon.taxon_name == "Alpha beta"
+    assert set(Taxon.objects.values_list("taxon_name", flat=True)) == {"Alpha old", "Alpha beta"}
+    assert service.preview().counts["created"] == 0

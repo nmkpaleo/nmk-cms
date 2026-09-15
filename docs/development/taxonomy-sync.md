@@ -8,8 +8,9 @@ The sync feature ingests two TSV exports from the NOW-Data repository—`latest_
 
 1. Downloads the TSV files using configured environment variables.
 2. Parses the rows into in-memory records (`AcceptedRecord` / `SynonymRecord`).
-3. Compares them with existing `Taxon` rows for the NOW source to produce a diff preview.
-4. Applies the diff inside a single transaction, creating a `TaxonomyImport` audit row.
+3. Restricts records to normalized local names from `Taxon`, identification text, and field-slip text, plus accepted targets required by matching synonyms. Existing NOW external IDs also retain their matching source records. Drawer links are covered by the existing `Taxon` records.
+4. Compares that subset with existing `Taxon` rows for the NOW source to produce a diff preview. Matched database rows are excluded from deactivation even if their external IDs change.
+5. Applies the diff inside a single transaction, creating a `TaxonomyImport` audit row.
 
 All functionality is encapsulated in `app/cms/taxonomy/sync.py`.
 
