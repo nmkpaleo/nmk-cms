@@ -20,7 +20,7 @@ class TaxonomySyncService(NowTaxonomySyncService):
         now_accepted, now_synonyms = self._load_remote_records()
         full_now_accepted, full_now_synonyms = now_accepted, now_synonyms
         taxa = list(Taxon.objects.all())
-        names = {(normalize_taxon_label(t.taxon_name), normalize_taxon_label(t.taxon_rank).lower()) for t in taxa}
+        names = {(normalize_taxon_label(t.taxon_name).lower(), normalize_taxon_label(t.taxon_rank).lower()) for t in taxa}
         # Free-text identifications have no known rank; retain that query even
         # when a catalogue row has the same label at a different rank. Stream the
         # values directly into the set to avoid a catalogue-sized temporary list.
@@ -36,18 +36,19 @@ class TaxonomySyncService(NowTaxonomySyncService):
             for verbatim in FieldSlip.objects.order_by().values_list("verbatim_taxon", flat=True).iterator()
             if (name := normalize_taxon_label(verbatim))
         )
-        names = {(name, rank) for name, rank in names if name}
+        names = {(name.lower(), rank) for name, rank in names if name}
         now_accepted, now_synonyms = self._scope_records(now_accepted, now_synonyms, taxa)
         candidates = list(now_accepted) + list(now_synonyms)
         issues = []
         failed_names = set()
         blocked_now_keys = set()
-        now_names = {r.name.lower() for r in candidates}
-        now_keys = {(r.name.lower(), _record_rank(r.rank)) for r in candidates}
+        taxa_by_name = {}
         non_mammals_by_name = {}
         for taxon in taxa:
+            normalized_name = normalize_taxon_label(taxon.taxon_name).lower()
+            taxa_by_name.setdefault(normalized_name, []).append(taxon)
             if normalize_taxon_label(taxon.class_name).lower() not in {"", "mammalia"}:
-                non_mammals_by_name.setdefault(normalize_taxon_label(taxon.taxon_name).lower(), []).append(taxon)
+                non_mammals_by_name.setdefault(normalized_name, []).append(taxon)
         for name, rank, result in self.gbif.match_many(names):
             try:
                 if isinstance(result, Exception):
@@ -56,13 +57,12 @@ class TaxonomySyncService(NowTaxonomySyncService):
                 candidates.extend(accepted)
                 candidates.extend(synonyms)
             except (requests.RequestException, ValueError, KeyError, TypeError) as exc:
-                failed_names.add(name.lower())
+                failed_names.add((name.lower(), _record_rank(rank) if rank else None))
                 known_non_mammals = [t for t in non_mammals_by_name.get(name.lower(), [])
                                      if not rank or normalize_taxon_label(t.taxon_rank).lower() == rank]
                 known_mammals = [
-                    t for t in taxa
-                    if normalize_taxon_label(t.taxon_name).lower() == name.lower()
-                    and normalize_taxon_label(t.class_name).lower() == "mammalia"
+                    t for t in taxa_by_name.get(name.lower(), [])
+                    if normalize_taxon_label(t.class_name).lower() == "mammalia"
                     and (not rank or _record_rank(t.taxon_rank) == _record_rank(rank))
                 ]
                 # A failed class lookup cannot safely turn a new free-text name
@@ -120,14 +120,17 @@ class TaxonomySyncService(NowTaxonomySyncService):
                 target = selected.get(by_external.get(target.accepted_key))
             if target is None or taxon_identity(target.name, _record_rank(target.rank)) == key:
                 issues.append(SyncIssue("source-conflict", "Cannot resolve accepted taxon across sources", {"name": record.name}))
-                failed_names.add(record.name.lower())
+                failed_names.add((record.name.lower(), _record_rank(record.rank)))
                 continue
             synonyms.append(replace(record, accepted_external_id=target.external_id, accepted_external_source=target.external_source,
                                     accepted_name=target.name))
         preview = self._build_preview(accepted, synonyms)
         # A missing or failed lookup is not evidence that an existing taxon disappeared.
-        preview.to_deactivate = [t for t in preview.to_deactivate
-                                 if normalize_taxon_label(t.taxon_name).lower() not in failed_names]
+        preview.to_deactivate = [
+            taxon for taxon in preview.to_deactivate
+            if (normalize_taxon_label(taxon.taxon_name).lower(), _record_rank(taxon.taxon_rank)) not in failed_names
+            and (normalize_taxon_label(taxon.taxon_name).lower(), None) not in failed_names
+        ]
         preview.issues.extend(issues)
         preview.import_source = TaxonomyImport.Source.COMBINED
         gbif_hashes = sorted({record.source_version for record in candidates

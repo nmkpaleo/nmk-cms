@@ -523,7 +523,7 @@ class NowTaxonomySyncService:
             import_log = TaxonomyImport.objects.create(
                 source=preview.import_source, source_version=preview.source_version,
             )
-            for group in self._apply_groups(preview):
+            def apply_group(group):
                 try:
                     with transaction.atomic():
                         self._apply_changes(group)
@@ -533,9 +533,34 @@ class NowTaxonomySyncService:
                     names += [t.taxon_name for t in group.to_deactivate]
                     logger.exception("Skipping taxonomy sync group: %s", names)
                     preview.issues.append(SyncIssue("apply-failed", str(exc), {"taxa": names}))
-                    continue
+                    return False
                 for category in categories:
                     successful[category].extend(getattr(group, category))
+                return True
+
+            groups = list(self._apply_groups(preview))
+            # Fast-path independent groups in bulk. If a batch has a data error,
+            # retry its dependency groups individually so only the bad group is skipped.
+            for start in range(0, len(groups), 500):
+                batch = groups[start:start + 500]
+                if len(batch) == 1:
+                    apply_group(batch[0])
+                    continue
+                merged = SyncPreview(
+                    **{category: [item for group in batch for item in getattr(group, category)]
+                       for category in categories},
+                    issues=[], source_version=preview.source_version, import_source=preview.import_source,
+                )
+                try:
+                    with transaction.atomic():
+                        self._apply_changes(merged)
+                except (DataError, IntegrityError, ValidationError):
+                    for group in batch:
+                        apply_group(group)
+                else:
+                    for group in batch:
+                        for category in categories:
+                            successful[category].extend(getattr(group, category))
             for category in categories:
                 setattr(preview, category, successful[category])
             try:
