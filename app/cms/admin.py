@@ -118,7 +118,6 @@ def _serialize_changeset(update) -> list[dict[str, str]]:
             old_value = old_value.taxon_name if old_value else ""
             new_display = getattr(update.record, "accepted_name", "")
         else:
-            old_value = getattr(update.instance, field, "")
             new_display = new_value
         changes.append(
             {

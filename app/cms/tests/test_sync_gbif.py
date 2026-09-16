@@ -4,6 +4,7 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 import requests
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.test import override_settings
 
@@ -179,7 +180,7 @@ def test_gbif_synonym_uses_now_accepted_target_and_links_identification():
 
 def test_name_rank_uniqueness_is_source_independent():
     Taxon.objects.create(taxon_name="Struthio", taxon_rank="genus", external_source="LEGACY")
-    with pytest.raises(IntegrityError), transaction.atomic():
+    with pytest.raises(ValidationError):
         Taxon.objects.create(taxon_name="  STRUTHIO  ", taxon_rank="GENUS", external_source="GBIF")
     Taxon.objects.create(taxon_name="Struthio", taxon_rank="family", external_source="GBIF")
     assert Taxon.objects.count() == 2

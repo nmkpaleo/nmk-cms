@@ -666,7 +666,7 @@ class NowTaxonomySyncService:
         accepted_updates = [update for update in preview.accepted_to_update if update.changes]
         if accepted_updates:
             for item in accepted_updates:
-                item.previous = {field: getattr(item.instance, field) for field in item.changes}
+                item.previous = item.previous or {field: getattr(item.instance, field) for field in item.changes}
                 apply_changes(item.instance, item.changes)
             Taxon.objects.bulk_update(
                 [item.instance for item in accepted_updates],
@@ -727,6 +727,7 @@ class NowTaxonomySyncService:
         synonym_updates = [update for update in preview.synonyms_to_update if update.changes]
         if synonym_updates:
             for item in synonym_updates:
+                item.previous = item.previous or {field: getattr(item.instance, field) for field in item.changes}
                 changes = item.changes.copy()
                 accepted_external_id = changes.pop("accepted_taxon", None)
                 if accepted_external_id:

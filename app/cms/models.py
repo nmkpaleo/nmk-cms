@@ -1698,6 +1698,10 @@ class Taxon(BaseModel):
 
     def clean(self):
         super().clean()
+        identity = taxon_identity(self.taxon_name, self.taxon_rank or TaxonRank.SPECIES)
+        duplicate = Taxon.objects.filter(identity_key=identity).exclude(pk=self.pk).exists()
+        if duplicate:
+            raise ValidationError({"taxon_name": _("A taxon with this normalized name and rank already exists.")})
         if not self.family and (self.genus or self.species):
             raise ValidationError("Genus and species must have a family.")
         if not self.genus and self.species:
