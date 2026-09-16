@@ -113,10 +113,9 @@ def _user_can_sync_taxa(user) -> bool:
 def _serialize_changeset(update) -> list[dict[str, str]]:
     changes = []
     for field, new_value in update.changes.items():
+        old_value = getattr(update, "previous", {}).get(field, getattr(update.instance, field))
         if field == "accepted_taxon":
-            old_value = (
-                update.instance.accepted_taxon.taxon_name if update.instance.accepted_taxon else ""
-            )
+            old_value = old_value.taxon_name if old_value else ""
             new_display = getattr(update.record, "accepted_name", "")
         else:
             old_value = getattr(update.instance, field, "")

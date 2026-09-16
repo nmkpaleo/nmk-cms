@@ -140,6 +140,7 @@ class AcceptedUpdate:
     instance: Taxon
     record: AcceptedRecord
     changes: Dict[str, Any]
+    previous: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -147,6 +148,7 @@ class SynonymUpdate:
     instance: Taxon
     record: SynonymRecord
     changes: Dict[str, Any]
+    previous: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -450,7 +452,10 @@ class NowTaxonomySyncService:
                 matched_taxon_ids.add(existing.pk)
             accepted_record = accepted_lookup.get(record.accepted_key)
             if accepted_record is None:
-                accepted_instance = existing_by_external_id.get(record.accepted_key)
+                accepted_instance = (
+                    existing_by_external_id.get(record.accepted_key)
+                    or existing_by_rank_name.get(taxon_identity(record.accepted_name, _record_rank(record.rank)))
+                )
                 if accepted_instance is not None:
                     matched_taxon_ids.add(accepted_instance.pk)
                 issues.append(
@@ -661,6 +666,7 @@ class NowTaxonomySyncService:
         accepted_updates = [update for update in preview.accepted_to_update if update.changes]
         if accepted_updates:
             for item in accepted_updates:
+                item.previous = {field: getattr(item.instance, field) for field in item.changes}
                 apply_changes(item.instance, item.changes)
             Taxon.objects.bulk_update(
                 [item.instance for item in accepted_updates],

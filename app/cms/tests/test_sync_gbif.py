@@ -113,7 +113,7 @@ def test_unsafe_or_failed_gbif_match_preserves_existing_taxon(problem):
         data["usage"]["rank"] = "SPECIES"
     def get(url, **kwargs):
         if problem == "timeout":
-            raise requests.Timeout("test timeout")
+            raise requests.exceptions.Timeout("test timeout")
         if problem == "null":
             return Response(None)
         if problem == "list":
@@ -227,7 +227,7 @@ def test_gbif_outage_does_not_replace_known_bird_with_now_homonym():
     taxon = Taxon.objects.create(taxon_name="Struthio", taxon_rank="genus", class_name="Aves",
                                 external_source="GBIF", external_id="GBIF:bird")
     def get(url, **kwargs):
-        raise requests.Timeout("unavailable")
+        raise requests.exceptions.Timeout("unavailable")
     preview = service(payload(), "Struthio\tgenus\tWrongidae\n", gbif_get=get).preview()
     assert preview.counts["created"] == 0
     assert preview.counts["updated"] == 0
@@ -265,12 +265,12 @@ def test_gbif_lookups_run_in_bounded_concurrent_batches():
 @override_settings(TAXON_GBIF_WORKERS=2)
 def test_gbif_outage_stops_requests_and_reports_every_deferred_name():
     from unittest.mock import Mock
-    http_get = Mock(side_effect=requests.Timeout("unavailable"))
+    http_get = Mock(side_effect=requests.exceptions.Timeout("unavailable"))
     names = [(f"Bird{i}", "genus") for i in range(20)]
     results = list(GbifClient(http_get=http_get).match_many(names))
     assert http_get.call_count == 2
     assert len(results) == len(names)
-    assert all(isinstance(result, requests.RequestException) for name, rank, result in results)
+    assert all(isinstance(result, requests.exceptions.RequestException) for name, rank, result in results)
 
 
 @override_settings(TAXON_GBIF_WORKERS=2)
@@ -323,7 +323,7 @@ def test_gbif_outage_does_not_import_unestablished_now_mammal_homonym():
     _field_slip("Struthio")
 
     def get(url, **kwargs):
-        raise requests.Timeout("unavailable")
+        raise requests.exceptions.Timeout("unavailable")
 
     preview = service(
         payload(), "Struthio\tgenus\tMammalidae\n", gbif_get=get

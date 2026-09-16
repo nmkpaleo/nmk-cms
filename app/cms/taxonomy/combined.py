@@ -56,7 +56,7 @@ class TaxonomySyncService(NowTaxonomySyncService):
                 accepted, synonyms = result
                 candidates.extend(accepted)
                 candidates.extend(synonyms)
-            except (requests.RequestException, ValueError, KeyError, TypeError) as exc:
+            except (requests.exceptions.RequestException, ValueError, KeyError, TypeError) as exc:
                 failed_names.add((name.lower(), _record_rank(rank) if rank else None))
                 known_non_mammals = [t for t in non_mammals_by_name.get(name.lower(), [])
                                      if not rank or normalize_taxon_label(t.taxon_rank).lower() == rank]

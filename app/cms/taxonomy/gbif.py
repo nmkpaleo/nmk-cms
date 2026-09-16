@@ -32,7 +32,7 @@ class GbifClient:
         def lookup(item):
             try:
                 return self.match(*item)
-            except (requests.RequestException, ValueError, KeyError, TypeError) as exc:
+            except (requests.exceptions.RequestException, ValueError, KeyError, TypeError) as exc:
                 return exc
 
         with ThreadPoolExecutor(max_workers=workers) as executor:
@@ -42,9 +42,9 @@ class GbifClient:
                     yield name, rank, result
                 # Exact-name misses do not open the circuit. A whole batch of
                 # transport/HTTP failures does, avoiding one timeout per taxon.
-                if all(isinstance(result, requests.RequestException) for result in results):
+                if all(isinstance(result, requests.exceptions.RequestException) for result in results):
                     for name, rank in pending:
-                        yield name, rank, requests.RequestException(
+                        yield name, rank, requests.exceptions.RequestException(
                             "GBIF lookups deferred after service failures; retry the preview later"
                         )
                     break
