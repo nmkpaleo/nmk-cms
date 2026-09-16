@@ -69,6 +69,20 @@ class DayFirstDateTimeWidget(DateTimeWidget):
         return dt
 
 
+class TaxonExternalIdWidget(ForeignKeyWidget):
+    """Resolve a taxon external ID with its source when a source column exists."""
+
+    def __init__(self, source_column, *args, **kwargs):
+        self.source_column = source_column
+        super().__init__(Taxon, "external_id", *args, **kwargs)
+
+    def get_lookup_kwargs(self, value, row, **kwargs):
+        source = (row or {}).get(self.source_column)
+        if source:
+            return {"external_source": source, "external_id": value}
+        return super().get_lookup_kwargs(value, row, **kwargs)
+
+
 class AccessionResource(resources.ModelResource):
     accession = fields.Field()
     collection = fields.Field(
@@ -452,8 +466,9 @@ class IdentificationResource(resources.ModelResource):
     taxon_record = fields.Field(
         column_name="taxon_record",
         attribute="taxon_record",
-        widget=ForeignKeyWidget(Taxon, "external_id"),
+        widget=TaxonExternalIdWidget("taxon_record_source"),
     )
+    taxon_record_source = fields.Field(column_name="taxon_record_source", readonly=True)
 
     reference = fields.Field(
         column_name="reference",
@@ -487,6 +502,9 @@ class IdentificationResource(resources.ModelResource):
         # Mmodel, but not in dataset
         dataset.headers.append("accession_row")
         super().before_import(dataset, **kwargs)
+
+    def dehydrate_taxon_record_source(self, obj):
+        return obj.taxon_record.external_source if obj.taxon_record else ""
 
     def before_import_row(self, row, **kwargs):
         # Add accession_row_id to the row
@@ -542,6 +560,7 @@ class IdentificationResource(resources.ModelResource):
             "identified_by",
             "taxon",
             "taxon_record",
+            "taxon_record_source",
             "reference",
             "date_identified",
             "identification_qualifier",
@@ -1122,13 +1141,21 @@ class TaxonResource(resources.ModelResource):
     accepted_taxon = fields.Field(
         column_name="accepted_taxon",
         attribute="accepted_taxon",
-        widget=ForeignKeyWidget(Taxon, "external_id"),
+        widget=TaxonExternalIdWidget("accepted_taxon_source"),
     )
+    accepted_taxon_source = fields.Field(column_name="accepted_taxon_source", readonly=True)
     parent = fields.Field(
         column_name="parent",
         attribute="parent",
-        widget=ForeignKeyWidget(Taxon, "external_id"),
+        widget=TaxonExternalIdWidget("parent_source"),
     )
+    parent_source = fields.Field(column_name="parent_source", readonly=True)
+
+    def dehydrate_accepted_taxon_source(self, obj):
+        return obj.accepted_taxon.external_source if obj.accepted_taxon else ""
+
+    def dehydrate_parent_source(self, obj):
+        return obj.parent.external_source if obj.parent else ""
 
     class Meta:
         model = Taxon
@@ -1143,7 +1170,9 @@ class TaxonResource(resources.ModelResource):
             "author_year",
             "status",
             "accepted_taxon",
+            "accepted_taxon_source",
             "parent",
+            "parent_source",
             "is_active",
             "source_version",
             "kingdom",

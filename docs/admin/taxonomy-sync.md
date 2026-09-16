@@ -68,7 +68,7 @@ restoring a backup.
 - `TAXON_GBIF_MATCH_URL`: defaults to `https://api.gbif.org/v2/species/match`.
 - `TAXON_GBIF_CHECKLIST_KEY`: defaults to `7ddf754f-d193-4cc9-b351-99906754a03b` (COL XR).
 - `TAXON_GBIF_TIMEOUT`: per-request timeout in seconds, default 15.
-- `TAXON_GBIF_WORKERS`: concurrent GBIF lookups, default 4 (limited to 1?16). A full batch of connection/HTTP failures stops further requests for that preview; deferred names appear as issues when NOW cannot supply a safe match. Retry after service recovery.
+- `TAXON_GBIF_WORKERS`: concurrent GBIF lookups, default 4 (limited to 1-16). A full batch of connection/HTTP failures stops further requests for that preview; deferred names appear as issues when NOW cannot supply a safe match. Retry after service recovery.
 
 Matches are reused within a preview run. Apply uses the reviewed snapshot without
 repeating NOW or GBIF requests. Previews expire after one hour and are rejected if
