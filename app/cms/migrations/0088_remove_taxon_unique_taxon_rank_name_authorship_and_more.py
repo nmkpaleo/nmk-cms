@@ -65,7 +65,8 @@ def consolidate_taxa(apps, schema_editor):
         if taxon.is_active and target and target.is_active and target.status == "accepted":
             by_name.setdefault(label(taxon.taxon_name).lower(), set()).add(target.pk)
     for identification in Identification.objects.using(alias).all().iterator():
-        targets = by_name.get(label(identification.taxon_verbatim or identification.taxon).lower(), set())
+        recorded_name = label(identification.taxon_verbatim) or label(identification.taxon)
+        targets = by_name.get(recorded_name.lower(), set())
         if len(targets) == 1:
             Identification.objects.using(alias).filter(pk=identification.pk).update(taxon_record_id=next(iter(targets)))
 

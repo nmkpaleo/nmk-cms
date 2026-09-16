@@ -354,17 +354,33 @@ class NowTaxonomySyncService:
         existing_by_external_id = {(taxon.external_source, taxon.external_id): taxon for taxon in existing_taxa if taxon.external_id}
         existing_by_rank_name = {taxon_identity(t.taxon_name, t.taxon_rank): t for t in existing_taxa}
         desired_keys = {taxon_identity(r.name, _record_rank(r.rank)) for r in accepted_records + synonym_records}
+        source_conflicts = {}
 
         def find_existing(record):
             key = taxon_identity(record.name, _record_rank(record.rank))
             existing = existing_by_rank_name.get(key)
-            if existing is None:
-                candidate = existing_by_external_id.get((record.external_source, record.external_id))
+            candidate = existing_by_external_id.get((record.external_source, record.external_id))
+            if candidate and existing and candidate.pk != existing.pk:
+                source_conflicts[(record.external_source, record.external_id)] = (existing, candidate)
+                return None
+            if existing is None and candidate:
                 # A usage key can move to a newly accepted name while the old
                 # name remains as a synonym. Keep that synonym's row separate.
-                if candidate and taxon_identity(candidate.taxon_name, candidate.taxon_rank) not in desired_keys:
+                if taxon_identity(candidate.taxon_name, candidate.taxon_rank) not in desired_keys:
                     existing = candidate
             return existing
+
+        def has_source_conflict(record):
+            conflict = source_conflicts.get((record.external_source, record.external_id))
+            if conflict is None:
+                return False
+            matched_taxon_ids.update(taxon.pk for taxon in conflict)
+            issues.append(SyncIssue(
+                "source-id-conflict",
+                "Source ID belongs to a different local taxon with the same incoming identity",
+                {"name": record.name, "external_id": record.external_id},
+            ))
+            return True
 
 
         accepted_to_create: List[AcceptedRecord] = []
@@ -379,6 +395,8 @@ class NowTaxonomySyncService:
         for record in accepted_records:
             desired_ids.add((record.external_source, record.external_id))
             existing = find_existing(record)
+            if has_source_conflict(record):
+                continue
             if existing is None:
                 accepted_to_create.append(record)
                 continue
@@ -417,6 +435,12 @@ class NowTaxonomySyncService:
         for record in synonym_records:
             desired_ids.add((record.external_source, record.external_id))
             existing = find_existing(record)
+            if has_source_conflict(record):
+                continue
+            if existing is not None:
+                # Presence upstream is enough to retain this local synonym when
+                # its accepted target is temporarily absent from the export.
+                matched_taxon_ids.add(existing.pk)
             accepted_record = accepted_lookup.get(record.accepted_key)
             if accepted_record is None:
                 issues.append(

@@ -115,6 +115,12 @@ class GbifClient:
             item_rank = raw_rank.lower()
             if not item_name or not item.get("key") or item_rank not in TaxonRank.values:
                 raise GbifMatchError("GBIF returned an unsupported rank or incomplete name")
+            def optional_text(field):
+                value = item.get(field)
+                if value is not None and not isinstance(value, str):
+                    raise GbifMatchError(f"GBIF returned an invalid {field}")
+                return value or ""
+
             taxonomy = {field: "" for field in TAXONOMY_FIELDS}
             for field in taxonomy:
                 taxonomy[field] = classification.get("class" if field == "class_name" else field, "")
@@ -124,14 +130,14 @@ class GbifClient:
                     taxonomy[field] = ""
             parts = item_name.split()
             if item_rank in {"genus", "species", "subspecies"}:
-                taxonomy["genus"] = item.get("genericName") or parts[0]
+                taxonomy["genus"] = optional_text("genericName") or parts[0]
             if item_rank in {"species", "subspecies"}:
-                taxonomy["species"] = item.get("specificEpithet") or (parts[1] if len(parts) > 1 else "")
+                taxonomy["species"] = optional_text("specificEpithet") or (parts[1] if len(parts) > 1 else "")
             if item_rank == "subspecies":
-                taxonomy["infraspecific_epithet"] = item.get("infraspecificEpithet") or (parts[2] if len(parts) > 2 else "")
+                taxonomy["infraspecific_epithet"] = optional_text("infraspecificEpithet") or (parts[2] if len(parts) > 2 else "")
             return dict(
                 external_id=f"GBIF:{self.checklist}:{item['key']}", name=item_name, rank=item_rank,
-                author_year=item.get("authorship") or "", source_version=version, taxonomy=taxonomy,
+                author_year=optional_text("authorship"), source_version=version, taxonomy=taxonomy,
                 external_source=TaxonExternalSource.GBIF,
             )
 

@@ -148,6 +148,11 @@ def test_gbif_rejects_non_string_classification_and_accepted_names():
     with pytest.raises(GbifMatchError):
         client.parse(malformed_accepted, "Felis leo", "species")
 
+    malformed_optional = payload()
+    malformed_optional["usage"]["authorship"] = ["not", "text"]
+    with pytest.raises(GbifMatchError):
+        client.parse(malformed_optional, "Struthio", "genus")
+
 
 @override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")
 def test_gbif_synonym_uses_now_accepted_target_and_links_identification():
@@ -311,3 +316,17 @@ def test_combined_source_version_includes_gbif_response_hash():
     preview = service(payload()).preview()
     assert "GBIF:7ddf754f-d193-4cc9-b351-99906754a03b:" in preview.source_version
     assert not preview.source_version.endswith("7ddf754f-d193-4cc9-b351-99906754a03b")
+
+
+@override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")
+def test_gbif_outage_does_not_import_unestablished_now_mammal_homonym():
+    _field_slip("Struthio")
+
+    def get(url, **kwargs):
+        raise requests.Timeout("unavailable")
+
+    preview = service(
+        payload(), "Struthio\tgenus\tMammalidae\n", gbif_get=get
+    ).preview()
+    assert preview.counts["created"] == 0
+    assert preview.issues[0].code == "gbif-match"

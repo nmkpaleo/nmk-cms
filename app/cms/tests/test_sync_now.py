@@ -440,3 +440,23 @@ def test_now_synonym_uses_accepted_taxon_with_matching_rank():
     species = next(record for record in accepted if record.rank == "species")
     assert synonym.accepted_external_id == species.external_id
     assert synonym.taxonomy["family"] == "Species family"
+
+
+@pytest.mark.django_db
+def test_source_id_conflict_is_reported_without_deactivation(db):
+    service = NowTaxonomySyncService(http_get=lambda url: None)
+    old = Taxon.objects.create(
+        taxon_name="Old name", taxon_rank="species", external_source=TaxonExternalSource.NOW,
+        external_id="NOW:species:New name",
+    )
+    current = Taxon.objects.create(taxon_name="New name", taxon_rank="species")
+    incoming = list(service._parse_accepted(io.StringIO(
+        "taxon_name\ttaxon_rank\nNew name\tspecies\n"
+    )))
+
+    preview = service._build_preview(incoming, [])
+    assert preview.accepted_to_create == []
+    assert preview.accepted_to_update == []
+    assert [issue.code for issue in preview.issues] == ["source-id-conflict"]
+    assert preview.to_deactivate == []
+    assert Taxon.objects.filter(pk__in=[old.pk, current.pk], is_active=True).count() == 2

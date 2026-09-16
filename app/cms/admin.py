@@ -196,8 +196,9 @@ def _taxonomy_sync_preview_view(request):
     service = TaxonomySyncService()
 
     try:
-        fingerprint = catalogue_fingerprint()
         preview = service.preview()
+        # Bind the token to the catalogue state from which this preview was built.
+        fingerprint = catalogue_fingerprint()
         preview_token = sign_preview(preview, request.user.pk, fingerprint)
     except Exception as exc:  # pragma: no cover - defensive guard for runtime errors
         messages.error(

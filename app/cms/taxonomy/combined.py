@@ -59,11 +59,25 @@ class TaxonomySyncService(NowTaxonomySyncService):
                 failed_names.add(name.lower())
                 known_non_mammals = [t for t in non_mammals_by_name.get(name.lower(), [])
                                      if not rank or normalize_taxon_label(t.taxon_rank).lower() == rank]
+                known_mammals = [
+                    t for t in taxa
+                    if normalize_taxon_label(t.taxon_name).lower() == name.lower()
+                    and normalize_taxon_label(t.class_name).lower() == "mammalia"
+                    and (not rank or _record_rank(t.taxon_rank) == _record_rank(rank))
+                ]
+                # A failed class lookup cannot safely turn a new free-text name
+                # into a NOW mammal homonym. NOW is safe only for an established
+                # local mammal at this identity.
+                if not known_mammals:
+                    blocked_now_keys.update(
+                        taxon_identity(candidate.name, _record_rank(candidate.rank))
+                        for candidate in candidates
+                        if candidate.external_source == TaxonExternalSource.NOW
+                        and candidate.name.lower() == name.lower()
+                        and (not rank or _record_rank(candidate.rank) == _record_rank(rank))
+                    )
                 blocked_now_keys.update(taxon_identity(t.taxon_name, _record_rank(t.taxon_rank)) for t in known_non_mammals)
-                # NOW remains usable for mammals, but an outage must not turn a
-                # known bird/reptile/etc. into a mammalian homonym.
-                has_now_match = (name.lower(), rank) in now_keys if rank else name.lower() in now_names
-                if known_non_mammals or not has_now_match:
+                if known_non_mammals or not known_mammals:
                     issues.append(SyncIssue("gbif-match", str(exc), {"name": name, "rank": rank}))
 
         # GBIF may resolve a local synonym to a mammal whose accepted name is
