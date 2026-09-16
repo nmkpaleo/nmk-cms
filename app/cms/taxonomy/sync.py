@@ -259,7 +259,10 @@ class NowTaxonomySyncService:
         stream: io.StringIO,
         accepted_records: Sequence[AcceptedRecord],
     ) -> Iterable[SynonymRecord]:
-        accepted_by_name = {record.name.lower(): record for record in accepted_records}
+        accepted_by_identity = {
+            (record.name.lower(), _record_rank(record.rank)): record
+            for record in accepted_records
+        }
         reader = csv.DictReader(stream, delimiter="\t")
         for row in reader:
             syn_name = _normalize_label(row.get("syn_name", ""))
@@ -274,7 +277,7 @@ class NowTaxonomySyncService:
                 continue
             author = _normalize_label(row.get("author", ""))
             source_version = _normalize_label(row.get("STG_TIME_STAMP", ""))
-            accepted_record = accepted_by_name.get(accepted_name.lower())
+            accepted_record = accepted_by_identity.get((accepted_name.lower(), _record_rank(rank)))
             accepted_external_id = (
                 accepted_record.external_id if accepted_record else build_accepted_external_id(accepted_name, rank)
             )

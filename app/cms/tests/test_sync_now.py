@@ -423,3 +423,20 @@ def test_local_synonym_imports_only_its_required_accepted_name(db):
     assert synonym.accepted_taxon.taxon_name == "Alpha beta"
     assert set(Taxon.objects.values_list("taxon_name", flat=True)) == {"Alpha old", "Alpha beta"}
     assert service.preview().counts["created"] == 0
+
+
+def test_now_synonym_uses_accepted_taxon_with_matching_rank():
+    service = NowTaxonomySyncService(http_get=lambda url: None)
+    accepted = list(service._parse_accepted(io.StringIO(
+        "taxon_name\ttaxon_rank\tfamily\n"
+        "Duplicatus\tgenus\tGenus family\n"
+        "Duplicatus\tspecies\tSpecies family\n"
+    )))
+    synonym = list(service._parse_synonyms(io.StringIO(
+        "syn_name\ttaxon_name\ttaxon_rank\n"
+        "Old duplicatus\tDuplicatus\tspecies\n"
+    ), accepted))[0]
+
+    species = next(record for record in accepted if record.rank == "species")
+    assert synonym.accepted_external_id == species.external_id
+    assert synonym.taxonomy["family"] == "Species family"
