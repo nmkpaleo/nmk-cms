@@ -110,7 +110,7 @@ for long authorship values first to avoid truncation.
 The Django admin registers a **Taxonomy Imports** section. Each sync produces a row containing:
 
 * Source (`NOW_GBIF` for the combined sync, or `NOW` for NOW-only runs)
-* Source version (NOW timestamp or commit hash)
+* Source version (`NOW:<timestamp-or-commit>; GBIF:<checklist-key>` for `NOW_GBIF` runs, or NOW timestamp/commit for `NOW` runs)
 * Started / finished timestamps
 * A boolean `ok` flag
 * JSON summaries of counts and issues

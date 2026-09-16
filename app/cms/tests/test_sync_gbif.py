@@ -100,7 +100,7 @@ def test_non_mammal_gbif_overrides_now_homonym():
     assert Taxon.objects.get().class_name == "Aves"
 
 
-@pytest.mark.parametrize("problem", ["fuzzy", "higher", "none", "class", "rank", "timeout"])
+@pytest.mark.parametrize("problem", ["fuzzy", "higher", "none", "class", "rank", "timeout", "null", "list", "malformed"])
 @override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")
 def test_unsafe_or_failed_gbif_match_preserves_existing_taxon(problem):
     taxon = Taxon.objects.create(taxon_name="Struthio", taxon_rank="genus", external_source="NOW", external_id="old")
@@ -114,6 +114,12 @@ def test_unsafe_or_failed_gbif_match_preserves_existing_taxon(problem):
     def get(url, **kwargs):
         if problem == "timeout":
             raise requests.Timeout("test timeout")
+        if problem == "null":
+            return Response(None)
+        if problem == "list":
+            return Response([])
+        if problem == "malformed":
+            return Response({"usage": [], "classification": [None], "diagnostics": {}})
         return Response(data)
     svc = service(data, gbif_get=get)
     preview = svc.preview()

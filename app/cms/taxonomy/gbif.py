@@ -64,24 +64,31 @@ class GbifClient:
         return self.results[key]
 
     def parse(self, payload, name, rank=""):
-        usage = payload.get("usage") or {}
-        diagnostics = payload.get("diagnostics") or {}
-        canonical = normalize_taxon_label(usage.get("canonicalName"))
-        if (diagnostics.get("matchType") != "EXACT"
-                or canonical.lower() != normalize_taxon_label(name).lower()
-                or (rank and usage.get("rank", "").lower() != rank.lower())):
-            raise GbifMatchError("GBIF did not return an exact name/rank match")
-        classification = {item["rank"].lower(): item["name"] for item in payload.get("classification", [])}
-        if usage.get("rank") == "CLASS":
-            classification["class"] = canonical
-        if not classification.get("class"):
-            raise GbifMatchError("GBIF match has no taxonomic class")
-        if diagnostics.get("issues"):
-            raise GbifMatchError("GBIF match has diagnostic issues requiring review")
-        version = hashlib.sha256(json.dumps(
-            {"usage": usage, "accepted": payload.get("acceptedUsage"), "classification": classification},
-            sort_keys=True,
-        ).encode()).hexdigest()
+        try:
+            if not isinstance(payload, dict):
+                raise TypeError("GBIF payload must be a JSON object")
+            usage = payload.get("usage") or {}
+            diagnostics = payload.get("diagnostics") or {}
+            canonical = normalize_taxon_label(usage.get("canonicalName"))
+            if (diagnostics.get("matchType") != "EXACT"
+                    or canonical.lower() != normalize_taxon_label(name).lower()
+                    or (rank and usage.get("rank", "").lower() != rank.lower())):
+                raise GbifMatchError("GBIF did not return an exact name/rank match")
+            classification = {item["rank"].lower(): item["name"] for item in payload.get("classification", [])}
+            if usage.get("rank") == "CLASS":
+                classification["class"] = canonical
+            if not classification.get("class"):
+                raise GbifMatchError("GBIF match has no taxonomic class")
+            if diagnostics.get("issues"):
+                raise GbifMatchError("GBIF match has diagnostic issues requiring review")
+            version = hashlib.sha256(json.dumps(
+                {"usage": usage, "accepted": payload.get("acceptedUsage"), "classification": classification},
+                sort_keys=True,
+            ).encode()).hexdigest()
+        except GbifMatchError:
+            raise
+        except (AttributeError, KeyError, TypeError, ValueError) as exc:
+            raise GbifMatchError("GBIF returned a malformed match response") from exc
 
         def record_fields(item):
             item_name = normalize_taxon_label(item.get("canonicalName"))

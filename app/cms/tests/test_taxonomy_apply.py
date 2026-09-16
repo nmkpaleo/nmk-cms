@@ -4,13 +4,22 @@ from unittest.mock import Mock
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.core import signing
+from django.core.cache import cache
 from django.db import OperationalError, connection
 from django.test import RequestFactory
 
 from cms import admin as cms_admin
 from cms.models import Taxon
 from cms.taxonomy.sync import AcceptedRecord, AcceptedUpdate, SynonymUpdate, SynonymRecord, SyncPreview, SyncIssue, NowTaxonomySyncService
-from cms.taxonomy.snapshot import catalogue_fingerprint, sign_preview, apply_signed_preview, PreviewUnavailable
+from cms.taxonomy.snapshot import (
+    MAX_AGE,
+    SALT,
+    PreviewUnavailable,
+    apply_signed_preview,
+    catalogue_fingerprint,
+    sign_preview,
+)
 from cms.tests.test_sync_now import authenticated_model_user
 
 pytestmark = pytest.mark.django_db
@@ -99,6 +108,14 @@ def test_snapshot_rejects_unreviewed_or_outdated_changes(problem, monkeypatch):
     with pytest.raises(PreviewUnavailable):
         apply_signed_preview(token, person_id, NowTaxonomySyncService())
     assert not Taxon.objects.filter(taxon_name="Struthio").exists()
+
+
+def test_snapshot_token_stores_preview_server_side():
+    person = user()
+    token = sign_preview(preview([record()]), person.pk, catalogue_fingerprint())
+    payload = signing.loads(token, salt=SALT, max_age=MAX_AGE)
+    assert set(payload) == {"user", "fingerprint", "preview_key"}
+    assert cache.get(payload["preview_key"]) is not None
 
 
 def test_fatal_apply_error_renders_visible_error_without_redirect(monkeypatch):
