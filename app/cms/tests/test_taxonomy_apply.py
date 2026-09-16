@@ -140,7 +140,8 @@ def test_fatal_apply_error_renders_visible_error_without_redirect(monkeypatch):
     response = cms_admin._taxonomy_sync_apply_view(request)
     response.render()
     assert response.status_code == 500
-    assert b"database unavailable" in response.content
+    assert b"database unavailable" not in response.content
+    assert b"unexpected error occurred while applying the sync" in response.content
     assert b"No changes from this request were saved" in response.content
     assert "Location" not in response
 

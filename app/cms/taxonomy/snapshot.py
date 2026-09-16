@@ -98,7 +98,7 @@ def apply_signed_preview(token, user_id, service):
                         pass
             if data.get("fingerprint") != catalogue_fingerprint():
                 raise PreviewUnavailable("The catalogue changed after this preview. Generate a new preview before applying.")
-            taxa = {t.pk: t for t in Taxon.objects.select_related("accepted_taxon")}
+            taxa = {t.pk: t for t in Taxon.objects.select_related("accepted_taxon").all()}
             preview = _deserialize_preview(preview_data, taxa)
             return NowTaxonomySyncResult(preview, service._apply(preview))
     finally:
