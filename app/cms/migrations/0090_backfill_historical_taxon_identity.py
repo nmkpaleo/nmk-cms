@@ -10,7 +10,7 @@ def backfill_history_identity(apps, schema_editor):
         if not batch:
             break
         for row in batch:
-            rank = " ".join((row.taxon_rank or "").split()).lower()
+            rank = " ".join((row.taxon_rank or "").split()).lower() or "species"
             name = " ".join((row.taxon_name or "").split()).lower()
             row.identity_key = rank + ":" + name
         rows.bulk_update(batch, ["identity_key"], batch_size=1000)

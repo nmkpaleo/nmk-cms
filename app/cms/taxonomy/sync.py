@@ -278,7 +278,7 @@ class NowTaxonomySyncService:
             accepted_external_id = (
                 accepted_record.external_id if accepted_record else build_accepted_external_id(accepted_name, rank)
             )
-            external_id = build_synonym_external_id(syn_name, accepted_name)
+            external_id = build_synonym_external_id(syn_name, accepted_name, rank)
             taxonomy = _extract_taxonomy(
                 row,
                 rank,
@@ -759,8 +759,10 @@ def build_accepted_external_id(name: str, rank: str) -> str:
     return _bounded_now_id(f"NOW:{normalized_rank}:{normalized_name}")
 
 
-def build_synonym_external_id(synonym_name: str, accepted_name: str) -> str:
-    return _bounded_now_id(f"NOW:syn:{_normalize_label(synonym_name)}::accepted:{_normalize_label(accepted_name)}")
+def build_synonym_external_id(synonym_name: str, accepted_name: str, rank: str = "") -> str:
+    return _bounded_now_id(
+        f"NOW:syn:{_record_rank(rank)}:{_normalize_label(synonym_name)}::accepted:{_normalize_label(accepted_name)}"
+    )
 
 
 def _latest_version(

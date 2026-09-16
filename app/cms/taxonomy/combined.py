@@ -8,7 +8,7 @@ from django.conf import settings
 from ..models import FieldSlip, Identification, Taxon, TaxonExternalSource, TaxonomyImport
 from ..taxon_identity import normalize_taxon_label, taxon_identity
 from .gbif import GbifClient
-from .sync import NowTaxonomySyncService, SynonymRecord, SyncIssue, _latest_version
+from .sync import NowTaxonomySyncService, SynonymRecord, SyncIssue, _latest_version, _record_rank
 
 
 class TaxonomySyncService(NowTaxonomySyncService):
@@ -36,7 +36,7 @@ class TaxonomySyncService(NowTaxonomySyncService):
         failed_names = set()
         blocked_now_keys = set()
         now_names = {r.name.lower() for r in candidates}
-        now_keys = {(r.name.lower(), r.rank) for r in candidates}
+        now_keys = {(r.name.lower(), _record_rank(r.rank)) for r in candidates}
         non_mammals_by_name = {}
         for taxon in taxa:
             if normalize_taxon_label(taxon.class_name).lower() not in {"", "mammalia"}:
@@ -52,7 +52,7 @@ class TaxonomySyncService(NowTaxonomySyncService):
                 failed_names.add(name.lower())
                 known_non_mammals = [t for t in non_mammals_by_name.get(name.lower(), [])
                                      if not rank or normalize_taxon_label(t.taxon_rank).lower() == rank]
-                blocked_now_keys.update(taxon_identity(t.taxon_name, t.taxon_rank) for t in known_non_mammals)
+                blocked_now_keys.update(taxon_identity(t.taxon_name, _record_rank(t.taxon_rank)) for t in known_non_mammals)
                 # NOW remains usable for mammals, but an outage must not turn a
                 # known bird/reptile/etc. into a mammalian homonym.
                 has_now_match = (name.lower(), rank) in now_keys if rank else name.lower() in now_names
@@ -61,16 +61,16 @@ class TaxonomySyncService(NowTaxonomySyncService):
 
         # GBIF may resolve a local synonym to a mammal whose accepted name is
         # already in NOW, even though that accepted name was not locally entered.
-        candidate_keys = {taxon_identity(r.name, r.rank) for r in candidates}
-        additional_synonyms = [r for r in full_now_synonyms if taxon_identity(r.name, r.rank) in candidate_keys]
+        candidate_keys = {taxon_identity(r.name, _record_rank(r.rank)) for r in candidates}
+        additional_synonyms = [r for r in full_now_synonyms if taxon_identity(r.name, _record_rank(r.rank)) in candidate_keys]
         dependency_ids = {r.accepted_external_id for r in additional_synonyms}
         candidates.extend(additional_synonyms)
-        candidates.extend(r for r in full_now_accepted if taxon_identity(r.name, r.rank) in candidate_keys
+        candidates.extend(r for r in full_now_accepted if taxon_identity(r.name, _record_rank(r.rank)) in candidate_keys
                           or r.external_id in dependency_ids)
 
         candidates = [r for r in candidates if not (
             r.external_source == TaxonExternalSource.NOW
-            and taxon_identity(r.name, r.rank) in blocked_now_keys
+            and taxon_identity(r.name, _record_rank(r.rank)) in blocked_now_keys
         )]
 
         def priority(record):
@@ -80,9 +80,9 @@ class TaxonomySyncService(NowTaxonomySyncService):
                     isinstance(record, SynonymRecord), record.external_id)
 
         selected = {}
-        by_external = {(r.external_source, r.external_id): taxon_identity(r.name, r.rank) for r in candidates}
+        by_external = {(r.external_source, r.external_id): taxon_identity(r.name, _record_rank(r.rank)) for r in candidates}
         for record in sorted(candidates, key=priority):
-            selected.setdefault(taxon_identity(record.name, record.rank), record)
+            selected.setdefault(taxon_identity(record.name, _record_rank(record.rank)), record)
         accepted, synonyms = [], []
         for key, record in selected.items():
             if not isinstance(record, SynonymRecord):
@@ -91,13 +91,13 @@ class TaxonomySyncService(NowTaxonomySyncService):
             target = selected.get(by_external.get(record.accepted_key))
             visited = {key}
             while isinstance(target, SynonymRecord):
-                target_key = taxon_identity(target.name, target.rank)
+                target_key = taxon_identity(target.name, _record_rank(target.rank))
                 if target_key in visited:
                     target = None
                     break
                 visited.add(target_key)
                 target = selected.get(by_external.get(target.accepted_key))
-            if target is None or taxon_identity(target.name, target.rank) == key:
+            if target is None or taxon_identity(target.name, _record_rank(target.rank)) == key:
                 issues.append(SyncIssue("source-conflict", "Cannot resolve accepted taxon across sources", {"name": record.name}))
                 failed_names.add(record.name.lower())
                 continue

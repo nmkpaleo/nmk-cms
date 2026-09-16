@@ -267,14 +267,15 @@ def test_long_now_names_have_bounded_stable_ids_and_apply():
     name = "Accepted" + "a" * 247
     alias = "Alias" + "b" * 250
     target_id = build_accepted_external_id(name, "genus")
-    alias_id = build_synonym_external_id(alias, name)
+    alias_id = build_synonym_external_id(alias, name, "genus")
     assert len(target_id) <= 191
     assert len(alias_id) <= 191
     assert target_id == build_accepted_external_id(name, "genus")
     assert target_id != build_accepted_external_id(name[:-1] + "z", "genus")
-    assert alias_id != build_synonym_external_id(alias, name[:-1] + "z")
+    assert alias_id != build_synonym_external_id(alias, name[:-1] + "z", "genus")
     assert build_accepted_external_id("Panthera", "genus") == "NOW:genus:Panthera"
-    assert build_synonym_external_id("Leo", "Panthera") == "NOW:syn:Leo::accepted:Panthera"
+    assert build_synonym_external_id("Leo", "Panthera", "genus") == "NOW:syn:genus:Leo::accepted:Panthera"
+    assert build_synonym_external_id("Leo", "Panthera", "species") != build_synonym_external_id("Leo", "Panthera", "genus")
     target = record(name, external_id=target_id)
     synonym = SynonymRecord(alias_id, alias, name, target_id, "genus", "", "v1", {})
     log = NowTaxonomySyncService()._apply(preview([target], [synonym]))

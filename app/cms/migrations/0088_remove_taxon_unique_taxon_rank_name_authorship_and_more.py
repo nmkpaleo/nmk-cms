@@ -18,7 +18,8 @@ def consolidate_taxa(apps, schema_editor):
 
     groups = {}
     for taxon in Taxon.objects.using(alias).all().iterator():
-        key = label(taxon.taxon_rank).lower() + ":" + label(taxon.taxon_name).lower()
+        rank = label(taxon.taxon_rank).lower() or "species"
+        key = rank + ":" + label(taxon.taxon_name).lower()
         groups.setdefault(key, []).append(taxon)
     redirects = {}
     survivors = {}
@@ -50,7 +51,7 @@ def consolidate_taxa(apps, schema_editor):
         Taxon.objects.using(alias).filter(pk=old_id).delete()
     for survivor_id, (key, original) in survivors.items():
         taxon = Taxon.objects.using(alias).get(pk=survivor_id)
-        changes = {"identity_key": key, "taxon_name": label(taxon.taxon_name), "taxon_rank": label(taxon.taxon_rank).lower()}
+        changes = {"identity_key": key, "taxon_name": label(taxon.taxon_name), "taxon_rank": label(taxon.taxon_rank).lower() or "species"}
         if taxon.parent_id == taxon.pk:
             changes["parent_id"] = None
         if taxon.accepted_taxon_id == taxon.pk:

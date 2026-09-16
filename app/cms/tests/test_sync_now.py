@@ -174,7 +174,7 @@ def test_now_sync_creates_updates_and_deactivates(db):
     assert synonym_existing.family == "Herpestidae"
     assert synonym_existing.genus == "Herpestes"
 
-    created_synonym = Taxon.objects.get(external_id="NOW:syn:Newcanis junior::accepted:Newcanis novus")
+    created_synonym = Taxon.objects.get(external_id="NOW:syn:species:Newcanis junior::accepted:Newcanis novus")
     created_accepted = Taxon.objects.get(external_id="NOW:species:Newcanis novus")
     assert created_synonym.accepted_taxon == created_accepted
     assert created_accepted.order == "Carnivora"

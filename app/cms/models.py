@@ -1538,7 +1538,7 @@ class Taxon(BaseModel):
 
     def save(self, *args, **kwargs):
         self.taxon_name = normalize_taxon_label(self.taxon_name)
-        self.taxon_rank = normalize_taxon_label(self.taxon_rank).lower()
+        self.taxon_rank = normalize_taxon_label(self.taxon_rank).lower() or TaxonRank.SPECIES
         self.identity_key = taxon_identity(self.taxon_name, self.taxon_rank)
         if kwargs.get("update_fields") is not None:
             kwargs["update_fields"] = set(kwargs["update_fields"]) | {"identity_key", "taxon_name", "taxon_rank"}
