@@ -145,7 +145,9 @@ row's recorded name and rank; recorded taxonomy fields are preserved. This migra
 also repairs installations that have already applied 0088 and 0089.
 
 NOW IDs that exceed 191 characters use a SHA-256 digest of the full generated ID.
-Shorter IDs retain their existing format; names remain stored in full.
+Accepted IDs under the limit use `NOW:<rank>:<name>`. Synonym IDs use
+`NOW:syn:<rank>:<synonym>::accepted:<accepted>` and are rewritten to that
+rank-qualified form during sync; names remain stored in full.
 
 Generate a fresh preview after deployment; snapshots created before the source-aware
 accepted-target format are rejected. Apply locks existing taxa, identifications, and

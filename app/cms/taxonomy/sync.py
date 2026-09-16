@@ -443,6 +443,9 @@ class NowTaxonomySyncService:
                 matched_taxon_ids.add(existing.pk)
             accepted_record = accepted_lookup.get(record.accepted_key)
             if accepted_record is None:
+                accepted_instance = existing_by_external_id.get(record.accepted_key)
+                if accepted_instance is not None:
+                    matched_taxon_ids.add(accepted_instance.pk)
                 issues.append(
                     SyncIssue(
                         code="missing-accepted",

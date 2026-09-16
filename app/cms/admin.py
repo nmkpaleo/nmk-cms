@@ -196,9 +196,13 @@ def _taxonomy_sync_preview_view(request):
     service = TaxonomySyncService()
 
     try:
+        fingerprint_before = catalogue_fingerprint()
         preview = service.preview()
-        # Bind the token to the catalogue state from which this preview was built.
+        # Remote previewing can take time. A catalogue edit during that work
+        # invalidates the derived diff, so require a fresh preview.
         fingerprint = catalogue_fingerprint()
+        if fingerprint != fingerprint_before:
+            raise PreviewUnavailable("The catalogue changed while this preview was generated. Generate a new preview.")
         preview_token = sign_preview(preview, request.user.pk, fingerprint)
     except Exception as exc:  # pragma: no cover - defensive guard for runtime errors
         messages.error(

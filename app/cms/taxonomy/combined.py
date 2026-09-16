@@ -89,9 +89,24 @@ class TaxonomySyncService(NowTaxonomySyncService):
         candidates.extend(r for r in full_now_accepted if taxon_identity(r.name, _record_rank(r.rank)) in candidate_keys
                           or r.external_id in dependency_ids)
 
+        local_keys = {
+            (name, _record_rank(rank)) for name, rank in names if rank
+        }
+        local_names_without_rank = {name for name, rank in names if not rank}
+        blocked_now_dependencies = {
+            record.accepted_key for record in candidates
+            if isinstance(record, SynonymRecord)
+            and record.external_source == TaxonExternalSource.NOW
+            and taxon_identity(record.name, _record_rank(record.rank)) in blocked_now_keys
+            and (record.accepted_name.lower(), _record_rank(record.rank)) not in local_keys
+            and record.accepted_name.lower() not in local_names_without_rank
+        }
         candidates = [r for r in candidates if not (
             r.external_source == TaxonExternalSource.NOW
-            and taxon_identity(r.name, _record_rank(r.rank)) in blocked_now_keys
+            and (
+                taxon_identity(r.name, _record_rank(r.rank)) in blocked_now_keys
+                or (r.external_source, r.external_id) in blocked_now_dependencies
+            )
         )]
 
         def priority(record):

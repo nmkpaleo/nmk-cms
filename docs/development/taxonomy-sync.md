@@ -97,7 +97,7 @@ All tests should pass with coverage ≥ 90%. Mock external requests in additiona
 
 ## Reviewed preview apply
 
-The UI posts a compressed, signed, user-bound snapshot (`taxonomy/snapshot.py`).
+The UI posts a server-side cached, signed, user-bound snapshot reference (`taxonomy/snapshot.py`).
 It contains the reviewed records and a hash of the local taxa, identification names
 and links, and field-slip names. Apply verifies the signature, one-hour lifetime,
 user, and current catalogue hash while locking existing taxa. It does not refetch
