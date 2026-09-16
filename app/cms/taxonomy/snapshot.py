@@ -11,7 +11,7 @@ from ..models import Taxon, Identification, FieldSlip
 from .sync import (AcceptedRecord, AcceptedUpdate, SynonymRecord, SynonymUpdate,
                    SyncIssue, SyncPreview, NowTaxonomySyncResult)
 
-SALT = "cms.taxonomy.preview.v1"
+SALT = "cms.taxonomy.preview.v2"
 MAX_AGE = 3600
 
 
@@ -52,7 +52,8 @@ def apply_signed_preview(token, user_id, service):
         raise PreviewUnavailable("This preview belongs to another user. Generate your own preview.")
     with transaction.atomic():
         # Serialize applies and reject changes made since the user reviewed the data.
-        list(Taxon.objects.select_for_update().order_by("pk").values_list("pk", flat=True))
+        for model in (Taxon, Identification, FieldSlip):
+            list(model.objects.select_for_update().order_by("pk").values_list("pk", flat=True))
         if data["fingerprint"] != catalogue_fingerprint():
             raise PreviewUnavailable("The catalogue changed after this preview. Generate a new preview before applying.")
         taxa = {t.pk: t for t in Taxon.objects.select_related("accepted_taxon")}

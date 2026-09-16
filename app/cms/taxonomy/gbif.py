@@ -1,4 +1,7 @@
 """GBIF v2 matching against the configured Catalogue of Life checklist."""
+from concurrent.futures import ThreadPoolExecutor
+from itertools import islice
+
 import hashlib
 import json
 from urllib.parse import urlencode
@@ -20,6 +23,31 @@ class GbifClient:
         self.http_get = http_get or requests.get
         self.checklist = settings.TAXON_GBIF_CHECKLIST_KEY
         self.results = {}
+
+    def match_many(self, names):
+        """Bound in-flight requests and stop contacting an unavailable service."""
+        workers = max(1, min(16, settings.TAXON_GBIF_WORKERS))
+        pending = iter(sorted(set(names)))
+
+        def lookup(item):
+            try:
+                return self.match(*item)
+            except (requests.RequestException, ValueError, KeyError, TypeError) as exc:
+                return exc
+
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            while batch := list(islice(pending, workers)):
+                results = list(executor.map(lookup, batch))
+                for (name, rank), result in zip(batch, results):
+                    yield name, rank, result
+                # Exact-name misses do not open the circuit. A whole batch of
+                # transport/HTTP failures does, avoiding one timeout per taxon.
+                if all(isinstance(result, requests.RequestException) for result in results):
+                    for name, rank in pending:
+                        yield name, rank, requests.RequestException(
+                            "GBIF lookups deferred after service failures; retry the preview later"
+                        )
+                    break
 
     def match(self, name, rank=""):
         key = (name.lower(), rank.lower())

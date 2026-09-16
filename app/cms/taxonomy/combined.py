@@ -32,22 +32,28 @@ class TaxonomySyncService(NowTaxonomySyncService):
         issues = []
         failed_names = set()
         blocked_now_keys = set()
-        for name, rank in sorted(names):
+        now_names = {r.name.lower() for r in candidates}
+        now_keys = {(r.name.lower(), r.rank) for r in candidates}
+        non_mammals_by_name = {}
+        for taxon in taxa:
+            if normalize_taxon_label(taxon.class_name).lower() not in {"", "mammalia"}:
+                non_mammals_by_name.setdefault(normalize_taxon_label(taxon.taxon_name).lower(), []).append(taxon)
+        for name, rank, result in self.gbif.match_many(names):
             try:
-                accepted, synonyms = self.gbif.match(name, rank)
+                if isinstance(result, Exception):
+                    raise result
+                accepted, synonyms = result
                 candidates.extend(accepted)
                 candidates.extend(synonyms)
             except (requests.RequestException, ValueError, KeyError, TypeError) as exc:
                 failed_names.add(name.lower())
-                known_non_mammals = [t for t in taxa
-                    if normalize_taxon_label(t.taxon_name).lower() == name.lower()
-                    and (not rank or normalize_taxon_label(t.taxon_rank).lower() == rank)
-                    and normalize_taxon_label(t.class_name).lower() not in {"", "mammalia"}]
+                known_non_mammals = [t for t in non_mammals_by_name.get(name.lower(), [])
+                                     if not rank or normalize_taxon_label(t.taxon_rank).lower() == rank]
                 blocked_now_keys.update(taxon_identity(t.taxon_name, t.taxon_rank) for t in known_non_mammals)
                 # NOW remains usable for mammals, but an outage must not turn a
                 # known bird/reptile/etc. into a mammalian homonym.
-                if known_non_mammals or not any(r.name.lower() == name.lower() and (not rank or r.rank == rank)
-                           for r in now_accepted + now_synonyms):
+                has_now_match = (name.lower(), rank) in now_keys if rank else name.lower() in now_names
+                if known_non_mammals or not has_now_match:
                     issues.append(SyncIssue("gbif-match", str(exc), {"name": name, "rank": rank}))
 
         # GBIF may resolve a local synonym to a mammal whose accepted name is
@@ -71,7 +77,7 @@ class TaxonomySyncService(NowTaxonomySyncService):
                     isinstance(record, SynonymRecord), record.external_id)
 
         selected = {}
-        by_external = {r.external_id: taxon_identity(r.name, r.rank) for r in candidates}
+        by_external = {(r.external_source, r.external_id): taxon_identity(r.name, r.rank) for r in candidates}
         for record in sorted(candidates, key=priority):
             selected.setdefault(taxon_identity(record.name, record.rank), record)
         accepted, synonyms = [], []
@@ -79,7 +85,7 @@ class TaxonomySyncService(NowTaxonomySyncService):
             if not isinstance(record, SynonymRecord):
                 accepted.append(record)
                 continue
-            target = selected.get(by_external.get(record.accepted_external_id))
+            target = selected.get(by_external.get(record.accepted_key))
             visited = {key}
             while isinstance(target, SynonymRecord):
                 target_key = taxon_identity(target.name, target.rank)
@@ -87,12 +93,13 @@ class TaxonomySyncService(NowTaxonomySyncService):
                     target = None
                     break
                 visited.add(target_key)
-                target = selected.get(by_external.get(target.accepted_external_id))
+                target = selected.get(by_external.get(target.accepted_key))
             if target is None or taxon_identity(target.name, target.rank) == key:
                 issues.append(SyncIssue("source-conflict", "Cannot resolve accepted taxon across sources", {"name": record.name}))
                 failed_names.add(record.name.lower())
                 continue
-            synonyms.append(replace(record, accepted_external_id=target.external_id, accepted_name=target.name))
+            synonyms.append(replace(record, accepted_external_id=target.external_id, accepted_external_source=target.external_source,
+                                    accepted_name=target.name))
         preview = self._build_preview(accepted, synonyms)
         # A missing or failed lookup is not evidence that an existing taxon disappeared.
         preview.to_deactivate = [t for t in preview.to_deactivate

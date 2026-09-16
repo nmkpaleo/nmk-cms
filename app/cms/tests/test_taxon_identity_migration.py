@@ -51,3 +51,28 @@ def test_taxon_identity_migration_preserves_links_and_resolves_ambiguity():
     finally:
         final_executor = MigrationExecutor(connection)
         final_executor.migrate(final_executor.loader.graph.leaf_nodes())
+
+
+@pytest.mark.django_db(transaction=True)
+def test_history_identity_backfill_preserves_recorded_names():
+    before = [("cms", "0089_alter_historicaltaxon_author_year_and_more")]
+    after = [("cms", "0090_backfill_historical_taxon_identity")]
+    executor = MigrationExecutor(connection)
+    executor.migrate(before)
+    try:
+        History = executor.loader.project_state(before).apps.get_model("cms", "HistoricalTaxon")
+        original = History.objects.create(
+            id=123, taxon_name="  Former   name ", taxon_rank=" GENUS ", identity_key="",
+            history_date=timezone.now(), history_type="+",
+            created_on=timezone.now(), modified_on=timezone.now(),
+        )
+        executor = MigrationExecutor(connection)
+        executor.migrate(after)
+        History = executor.loader.project_state(after).apps.get_model("cms", "HistoricalTaxon")
+        saved = History.objects.get(pk=original.pk)
+        assert saved.identity_key == "genus:former name"
+        assert saved.taxon_name == original.taxon_name
+        assert saved.taxon_rank == original.taxon_rank
+    finally:
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())

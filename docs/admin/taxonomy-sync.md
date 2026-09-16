@@ -68,6 +68,7 @@ restoring a backup.
 - `TAXON_GBIF_MATCH_URL`: defaults to `https://api.gbif.org/v2/species/match`.
 - `TAXON_GBIF_CHECKLIST_KEY`: defaults to `7ddf754f-d193-4cc9-b351-99906754a03b` (COL XR).
 - `TAXON_GBIF_TIMEOUT`: per-request timeout in seconds, default 15.
+- `TAXON_GBIF_WORKERS`: concurrent GBIF lookups, default 4 (limited to 1?16). A full batch of connection/HTTP failures stops further requests for that preview; deferred names appear as issues when NOW cannot supply a safe match. Retry after service recovery.
 
 Matches are reused within a preview run. Apply uses the reviewed snapshot without
 repeating NOW or GBIF requests. Previews expire after one hour and are rejected if
@@ -123,7 +124,7 @@ Import logs are managed by `django-simple-history`, allowing auditors to review 
 | Preview raises connection errors | Confirm the NOW URLs are correct and reachable. Retry once connectivity is restored. |
 | Issues reported for missing accepted taxa | Contact the NOW data maintainers or postpone the sync until the dataset includes the referenced taxon. |
 | Sync result shows `ok = False` | Investigate the associated import log. Successful changes may have been committed; inspect the report before retrying. |
-| Need to undo a sync | Locate the relevant `TaxonomyImport`, export the list of affected taxa, and restore them from backups or re-run the sync after correcting the upstream data. Because each sync runs in a single transaction, partial updates do not occur. |
+| Need to undo a sync | Locate the relevant `TaxonomyImport`, export the list of affected taxa, and restore them from backups or re-run the sync after correcting the upstream data. Each dependent group (such as an accepted taxon and its synonyms) is atomic. Failed groups are skipped while successful independent groups are committed; inspect the import report for the changes actually saved. |
 
 ## Identification linkage checks
 
@@ -134,3 +135,18 @@ Import logs are managed by `django-simple-history`, allowing auditors to review 
 ## Security considerations
 
 Only grant `cms.can_sync` to trusted administrators. The sync process has write access to the taxonomy tables and can deactivate taxa when configured to do so.
+
+
+### Follow-up migration and long names
+
+Run migration `0090_backfill_historical_taxon_identity` to populate normalized identity
+keys on history rows created before taxonomy unification. Each key uses that history
+row's recorded name and rank; recorded taxonomy fields are preserved. This migration
+also repairs installations that have already applied 0088 and 0089.
+
+NOW IDs that exceed 191 characters use a SHA-256 digest of the full generated ID.
+Shorter IDs retain their existing format; names remain stored in full.
+
+Generate a fresh preview after deployment; snapshots created before the source-aware
+accepted-target format are rejected. Apply locks existing taxa, identifications, and
+field slips while checking and saving the snapshot on databases with row locking.

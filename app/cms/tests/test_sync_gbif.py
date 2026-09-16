@@ -205,3 +205,50 @@ def test_gbif_outage_does_not_replace_known_bird_with_now_homonym():
     assert preview.counts["updated"] == 0
     assert preview.counts["deactivated"] == 0
     assert preview.issues[0].code == "gbif-match"
+
+
+@override_settings(TAXON_GBIF_WORKERS=2)
+def test_gbif_lookups_run_in_bounded_concurrent_batches():
+    from threading import Barrier, Lock
+    barrier = Barrier(2)
+    lock = Lock()
+    active = peak = 0
+
+    def http_get(url, **kwargs):
+        nonlocal active, peak
+        name = parse_qs(urlparse(url).query)["scientificName"][0]
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        try:
+            barrier.wait(timeout=5)
+            return Response(payload(name))
+        finally:
+            with lock:
+                active -= 1
+
+    names = [(f"Bird{i}", "genus") for i in range(6)]
+    results = list(GbifClient(http_get=http_get).match_many(names))
+    assert peak == 2
+    assert [name for name, rank, result in results] == [name for name, rank in names]
+    assert all(not isinstance(result, Exception) for name, rank, result in results)
+
+
+@override_settings(TAXON_GBIF_WORKERS=2)
+def test_gbif_outage_stops_requests_and_reports_every_deferred_name():
+    from unittest.mock import Mock
+    http_get = Mock(side_effect=requests.Timeout("unavailable"))
+    names = [(f"Bird{i}", "genus") for i in range(20)]
+    results = list(GbifClient(http_get=http_get).match_many(names))
+    assert http_get.call_count == 2
+    assert len(results) == len(names)
+    assert all(isinstance(result, requests.RequestException) for name, rank, result in results)
+
+
+@override_settings(TAXON_GBIF_WORKERS=2)
+def test_gbif_name_misses_do_not_stop_remaining_lookups():
+    from unittest.mock import Mock
+    http_get = Mock(return_value=Response({"diagnostics": {"matchType": "NONE"}}))
+    results = list(GbifClient(http_get=http_get).match_many([(f"Unknown{i}", "") for i in range(5)]))
+    assert http_get.call_count == 5
+    assert all(isinstance(result, ValueError) for name, rank, result in results)

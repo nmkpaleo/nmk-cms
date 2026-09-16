@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Address taxonomy review findings: bounded concurrent GBIF lookups, source-specific IDs, related-record locks, historical identity backfill (migration 0090), and IDs that fit long NOW names.
 - Fix taxonomy sync synonym creation and updates on databases where bulk inserts do not return primary keys.
 - Apply the reviewed taxonomy preview without refetching sources, save valid taxa despite independent data errors, display apply failures, and support long NOW authorship with migration 0089.
 - Limit taxonomy sync to locally recorded taxa, add GBIF with NOW priority for mammals, preserve links across source changes, and consolidate duplicate name/rank records with migration 0088.

@@ -161,3 +161,106 @@ def test_apply_resolves_accepted_taxon_when_bulk_insert_does_not_return_ids(monk
     assert log.counts["created"] == (1 if existing_synonym else 2)
     assert log.counts["updated"] == (1 if existing_synonym else 0)
     assert log.counts["issues"] == 0
+
+
+@pytest.mark.parametrize("existing_synonym", [False, True])
+def test_synonym_target_uses_source_and_id(existing_synonym):
+    target = Taxon.objects.create(taxon_name="Accepted", taxon_rank="genus",
+                                 external_source="NOW", external_id="shared")
+    collision = Taxon.objects.create(taxon_name="Unrelated", taxon_rank="genus",
+                                    external_source="PBDB", external_id="shared")
+    synonym = SynonymRecord("alias", "Alias", "Accepted", "shared", "genus", "", "v1", {},
+                            external_source="GBIF", accepted_external_source="NOW")
+    proposed = preview([], [synonym])
+    if existing_synonym:
+        alias = Taxon.objects.create(taxon_name="Alias", taxon_rank="genus", status="synonym",
+                                     accepted_taxon=collision, external_source="GBIF", external_id="alias")
+        proposed.synonyms_to_create = []
+        proposed.synonyms_to_update = [SynonymUpdate(alias, synonym, {"accepted_taxon": "shared"})]
+    result = apply_signed_preview(sign_preview(proposed, user().pk, catalogue_fingerprint()),
+                                  user().pk, NowTaxonomySyncService())
+    assert Taxon.objects.get(taxon_name="Alias").accepted_taxon_id == target.pk
+    assert result.import_log.counts["issues"] == 0
+
+
+def test_preview_does_not_reuse_another_sources_external_id():
+    from cms.tests.test_sync_now import _field_slip
+    _field_slip("Incoming")
+    other = Taxon.objects.create(taxon_name="Unrelated", taxon_rank="genus",
+                                external_source="PBDB", external_id="shared")
+    incoming = record("Incoming", external_id="shared")
+    proposed = NowTaxonomySyncService()._build_preview([incoming], [])
+    assert proposed.accepted_to_create == [incoming]
+    assert proposed.accepted_to_update == []
+    NowTaxonomySyncService()._apply(proposed)
+    other.refresh_from_db()
+    assert other.taxon_name == "Unrelated"
+    assert other.external_source == "PBDB"
+
+
+def test_snapshot_locks_all_fingerprinted_tables_before_apply(monkeypatch):
+    from django.db.models.query import QuerySet
+    from cms.models import Identification, FieldSlip
+    locked = []
+    original = QuerySet.select_for_update
+
+    def lock(queryset, *args, **kwargs):
+        locked.append(queryset.model)
+        return original(queryset, *args, **kwargs)
+
+    person = user()
+    service = NowTaxonomySyncService()
+    original_apply = service._apply
+
+    def apply(proposed):
+        assert locked == [Taxon, Identification, FieldSlip]
+        return original_apply(proposed)
+
+    monkeypatch.setattr(QuerySet, "select_for_update", lock)
+    monkeypatch.setattr(service, "_apply", apply)
+    token = sign_preview(preview([record()]), person.pk, catalogue_fingerprint())
+    apply_signed_preview(token, person.pk, service)
+
+
+@pytest.mark.parametrize("table", ["identification", "field_slip"])
+def test_snapshot_rejects_changed_related_names(table):
+    from cms.models import Identification
+    from cms.tests.test_sync_now import _field_slip
+    from cms.tests.test_taxon_workflow import make_accession_row
+    person = user()
+    if table == "field_slip":
+        obj = _field_slip("Original")
+        field = "verbatim_taxon"
+    else:
+        from crum import set_current_user
+        row = make_accession_row(person)
+        set_current_user(person)
+        obj = Identification.objects.create(accession_row=row, taxon_verbatim="Original")
+        field = "taxon_verbatim"
+    token = sign_preview(preview([record()]), person.pk, catalogue_fingerprint())
+    type(obj).objects.filter(pk=obj.pk).update(**{field: "Changed"})
+    with pytest.raises(PreviewUnavailable, match="catalogue changed"):
+        apply_signed_preview(token, person.pk, NowTaxonomySyncService())
+    assert Taxon.objects.count() == 0
+
+
+
+def test_long_now_names_have_bounded_stable_ids_and_apply():
+    from cms.taxonomy.sync import build_accepted_external_id, build_synonym_external_id
+    name = "Accepted" + "a" * 247
+    alias = "Alias" + "b" * 250
+    target_id = build_accepted_external_id(name, "genus")
+    alias_id = build_synonym_external_id(alias, name)
+    assert len(target_id) <= 191
+    assert len(alias_id) <= 191
+    assert target_id == build_accepted_external_id(name, "genus")
+    assert target_id != build_accepted_external_id(name[:-1] + "z", "genus")
+    assert alias_id != build_synonym_external_id(alias, name[:-1] + "z")
+    assert build_accepted_external_id("Panthera", "genus") == "NOW:genus:Panthera"
+    assert build_synonym_external_id("Leo", "Panthera") == "NOW:syn:Leo::accepted:Panthera"
+    target = record(name, external_id=target_id)
+    synonym = SynonymRecord(alias_id, alias, name, target_id, "genus", "", "v1", {})
+    log = NowTaxonomySyncService()._apply(preview([target], [synonym]))
+    assert log.counts["created"] == 2
+    assert log.counts["issues"] == 0
+    assert Taxon.objects.get(external_id=alias_id).accepted_taxon_id == Taxon.objects.get(external_id=target_id).pk
