@@ -272,7 +272,7 @@ def _taxonomy_sync_apply_view(request):
         ),
         "preview_url": reverse("taxonomy_sync_preview"),
         "success": bool(import_log and import_log.ok),
-        "has_applied_changes": any(preview.counts[key] for key in ("created", "updated", "deactivated", "identifications_linked")),
+        "has_applied_changes": any(preview.counts.get(key, 0) for key in ("created", "updated", "deactivated", "identifications_linked")),
     }
 
     return TemplateResponse(request, "admin/taxonomy/sync_result.html", context)

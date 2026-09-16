@@ -166,14 +166,16 @@ class SyncPreview:
         created_total = len(self.accepted_to_create) + len(self.synonyms_to_create)
         updated_total = len(self.accepted_to_update) + len(self.synonyms_to_update)
         synonym_links = len(self.synonyms_to_create) + len(self.synonyms_to_update)
-        return {
+        counts = {
             "created": created_total,
             "updated": updated_total,
             "deactivated": len(self.to_deactivate),
             "synonym_links": synonym_links,
-            "identifications_linked": self.identifications_linked,
             "issues": len(self.issues),
         }
+        if self.identifications_linked:
+            counts["identifications_linked"] = self.identifications_linked
+        return counts
 
 
 @dataclass
