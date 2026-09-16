@@ -4,12 +4,12 @@ from unittest.mock import Mock
 
 import pytest
 from django.contrib.auth import get_user_model
-from django.db import OperationalError
+from django.db import OperationalError, connection
 from django.test import RequestFactory
 
 from cms import admin as cms_admin
 from cms.models import Taxon
-from cms.taxonomy.sync import AcceptedRecord, AcceptedUpdate, SynonymRecord, SyncPreview, SyncIssue, NowTaxonomySyncService
+from cms.taxonomy.sync import AcceptedRecord, AcceptedUpdate, SynonymUpdate, SynonymRecord, SyncPreview, SyncIssue, NowTaxonomySyncService
 from cms.taxonomy.snapshot import catalogue_fingerprint, sign_preview, apply_signed_preview, PreviewUnavailable
 from cms.tests.test_sync_now import authenticated_model_user
 
@@ -139,3 +139,25 @@ def test_snapshot_applies_updates_synonyms_and_deactivations():
     assert result.import_log.counts["created"] == 2
     assert result.import_log.counts["updated"] == 1
     assert result.import_log.counts["deactivated"] == 1
+
+
+@pytest.mark.parametrize("existing_synonym", [False, True])
+def test_apply_resolves_accepted_taxon_when_bulk_insert_does_not_return_ids(monkeypatch, existing_synonym):
+    # MySQL inserts rows without populating the bulk-created objects' primary keys.
+    monkeypatch.setattr(type(connection.features), "can_return_rows_from_bulk_insert", False)
+    target = record("Accepted")
+    synonym = SynonymRecord("NOW:syn:Alias", "Alias", target.name, target.external_id,
+                            "genus", "Author", "v1", {"family": "Testidae"})
+    proposed = preview([target], [synonym])
+    if existing_synonym:
+        old_target = Taxon.objects.create(taxon_name="Old", taxon_rank="genus")
+        alias = Taxon.objects.create(taxon_name="Alias", taxon_rank="genus", status="synonym",
+                                     accepted_taxon=old_target, external_source="NOW", external_id=synonym.external_id)
+        proposed.synonyms_to_create = []
+        proposed.synonyms_to_update = [SynonymUpdate(alias, synonym, {"accepted_taxon": target.external_id})]
+    log = NowTaxonomySyncService()._apply(proposed)
+    accepted = Taxon.objects.get(taxon_name="Accepted")
+    assert Taxon.objects.get(taxon_name="Alias").accepted_taxon_id == accepted.pk
+    assert log.counts["created"] == (1 if existing_synonym else 2)
+    assert log.counts["updated"] == (1 if existing_synonym else 0)
+    assert log.counts["issues"] == 0

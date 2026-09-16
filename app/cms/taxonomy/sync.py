@@ -577,28 +577,12 @@ class NowTaxonomySyncService:
         changing_ids = [u.instance.pk for u in preview.accepted_to_update + preview.synonyms_to_update
                         if "external_id" in u.changes or "external_source" in u.changes]
         Taxon.objects.filter(pk__in=changing_ids).update(external_id=None)
-        created_taxa: List[Taxon] = []
         if preview.accepted_to_create:
             accepted_instances = [
                 build_taxon_from_record(record, status=TaxonStatus.ACCEPTED)
                 for record in preview.accepted_to_create
             ]
-            created_taxa.extend(
-                Taxon.objects.bulk_create(accepted_instances, batch_size=500, ignore_conflicts=False)
-            )
-
-        needed_targets = {r.accepted_external_id for r in preview.synonyms_to_create}
-        needed_targets.update(u.record.accepted_external_id for u in preview.synonyms_to_update)
-        accepted_mapping = {
-            taxon.external_id: taxon
-            for taxon in Taxon.objects.filter(
-                status=TaxonStatus.ACCEPTED, external_id__in=needed_targets,
-            )
-        }
-        accepted_mapping.update({taxon.external_id: taxon for taxon in created_taxa if taxon.status == TaxonStatus.ACCEPTED})
-        accepted_mapping.update(
-            {update.record.external_id: update.instance for update in preview.accepted_to_update}
-        )
+            Taxon.objects.bulk_create(accepted_instances, batch_size=500, ignore_conflicts=False)
 
         accepted_updates = [update for update in preview.accepted_to_update if update.changes]
         if accepted_updates:
@@ -631,6 +615,17 @@ class NowTaxonomySyncService:
                 ],
             )
 
+        # Reload after both inserts and updates. Some backends (including MySQL)
+        # do not populate primary keys on objects passed to bulk_create.
+        needed_targets = {r.accepted_external_id for r in preview.synonyms_to_create}
+        needed_targets.update(u.record.accepted_external_id for u in preview.synonyms_to_update)
+        accepted_mapping = {
+            taxon.external_id: taxon
+            for taxon in Taxon.objects.filter(
+                status=TaxonStatus.ACCEPTED, external_id__in=needed_targets,
+            )
+        }
+
         synonym_instances_to_create: List[Taxon] = []
         for record in preview.synonyms_to_create:
             accepted_taxon = accepted_mapping.get(record.accepted_external_id)
@@ -647,9 +642,7 @@ class NowTaxonomySyncService:
             )
             synonym_instances_to_create.append(instance)
         if synonym_instances_to_create:
-            created_taxa.extend(
-                Taxon.objects.bulk_create(synonym_instances_to_create, batch_size=500, ignore_conflicts=False)
-            )
+            Taxon.objects.bulk_create(synonym_instances_to_create, batch_size=500, ignore_conflicts=False)
 
         synonym_updates = [update for update in preview.synonyms_to_update if update.changes]
         if synonym_updates:
