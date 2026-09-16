@@ -470,6 +470,9 @@ class NowTaxonomySyncService:
                 synonyms_to_create.append(record)
                 continue
             matched_taxon_ids.add(existing.pk)
+            if existing.status == TaxonStatus.ACCEPTED and Taxon.objects.filter(accepted_taxon=existing).exists():
+                issues.append(SyncIssue("unsafe-demotion", "Cannot demote an accepted taxon with unscoped dependent synonyms", {"name": existing.taxon_name}))
+                continue
             changes = {}
             if existing.external_source != record.external_source:
                 changes["external_source"] = record.external_source

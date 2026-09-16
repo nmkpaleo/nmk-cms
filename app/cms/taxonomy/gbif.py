@@ -67,8 +67,12 @@ class GbifClient:
         try:
             if not isinstance(payload, dict):
                 raise TypeError("GBIF payload must be a JSON object")
-            usage = payload.get("usage") or {}
-            diagnostics = payload.get("diagnostics") or {}
+            usage = payload.get("usage")
+            diagnostics = payload.get("diagnostics")
+            if usage is None:
+                usage = {}
+            if diagnostics is None:
+                diagnostics = {}
             if not isinstance(usage, dict) or not isinstance(diagnostics, dict):
                 raise TypeError("GBIF usage and diagnostics must be JSON objects")
             raw_canonical = usage.get("canonicalName")
@@ -111,7 +115,9 @@ class GbifClient:
             if not isinstance(raw_rank, str):
                 raise GbifMatchError("GBIF returned an invalid taxon rank")
             item_rank = raw_rank.lower()
-            if not item_name or not item.get("key") or item_rank not in TaxonRank.values:
+            key = item.get("key")
+            if (not item_name or not isinstance(key, (str, int)) or isinstance(key, bool)
+                    or not str(key) or item_rank not in TaxonRank.values):
                 raise GbifMatchError("GBIF returned an unsupported rank or incomplete name")
             def optional_text(field):
                 value = item.get(field)
@@ -136,7 +142,7 @@ class GbifClient:
             if item_rank == "subspecies":
                 taxonomy["infraspecific_epithet"] = optional_text("infraspecificEpithet") or (parts[2] if len(parts) > 2 else "")
             return dict(
-                external_id=f"GBIF:{self.checklist}:{item['key']}", name=item_name, rank=item_rank,
+                external_id=f"GBIF:{self.checklist}:{key}", name=item_name, rank=item_rank,
                 author_year=optional_text("authorship"), source_version=version, taxonomy=taxonomy,
                 external_source=TaxonExternalSource.GBIF,
             )
