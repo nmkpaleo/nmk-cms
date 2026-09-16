@@ -27,8 +27,8 @@ Previewing does not change the database—it is a safe dry-run.
 ## Applying the sync
 
 1. From the preview screen, press **Apply sync**.
-2. Wait for the confirmation screen. The process runs inside a single transaction; if anything fails the database is rolled back automatically.
-3. Review the results. If the run succeeded you will see a green success banner and a link to the Import Log entry.
+2. Wait for the confirmation screen. Each independent taxon group is applied atomically. A failed group is skipped while successful unrelated groups are retained.
+3. Review the results. A green success banner means every group succeeded; otherwise inspect the listed skipped groups and the Import Log entry before retrying.
 4. Return to the taxonomy changelist to continue working, or click **Run preview again** to refresh the summary.
 
 ## After the sync
@@ -50,7 +50,7 @@ Previewing does not change the database—it is a safe dry-run.
 | --- | --- |
 | Network error fetching TSV files | Confirm the NOW repository is reachable and the URLs are configured correctly. Retry once connectivity is restored. |
 | Issues flagged in preview | Review the issue context, fix the underlying data (for example, add the accepted taxon to NOW), then rerun the preview. |
-| Import log shows `ok = false` | Inspect the logged issues, correct them, and re-run the sync. Nothing is applied when the transaction fails. |
+| Import log shows `ok = false` | Inspect the logged issues and applied counts before retrying. Successful independent groups may already have been saved; correct only the skipped groups. |
 | Button missing | Verify that you are a staff user with the `cms.can_sync` permission. |
 
 Contact the technical team if a problem persists or if you need to restore from a previous import log.

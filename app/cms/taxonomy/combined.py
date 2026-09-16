@@ -21,14 +21,21 @@ class TaxonomySyncService(NowTaxonomySyncService):
         full_now_accepted, full_now_synonyms = now_accepted, now_synonyms
         taxa = list(Taxon.objects.all())
         names = {(normalize_taxon_label(t.taxon_name), normalize_taxon_label(t.taxon_rank).lower()) for t in taxa}
-        text_names = [
-            normalize_taxon_label(verbatim) or normalize_taxon_label(legacy)
-            for verbatim, legacy in Identification.objects.order_by().values_list("taxon_verbatim", "taxon")
-        ]
-        text_names.extend(FieldSlip.objects.order_by().values_list("verbatim_taxon", flat=True))
         # Free-text identifications have no known rank; retain that query even
-        # when a catalogue row has the same label at a different rank.
-        names.update((normalize_taxon_label(name), "") for name in text_names)
+        # when a catalogue row has the same label at a different rank. Stream the
+        # values directly into the set to avoid a catalogue-sized temporary list.
+        names.update(
+            (name, "")
+            for verbatim, legacy in Identification.objects.order_by().values_list(
+                "taxon_verbatim", "taxon"
+            ).iterator()
+            if (name := normalize_taxon_label(verbatim) or normalize_taxon_label(legacy))
+        )
+        names.update(
+            (name, "")
+            for verbatim in FieldSlip.objects.order_by().values_list("verbatim_taxon", flat=True).iterator()
+            if (name := normalize_taxon_label(verbatim))
+        )
         names = {(name, rank) for name, rank in names if name}
         now_accepted, now_synonyms = self._scope_records(now_accepted, now_synonyms, taxa)
         candidates = list(now_accepted) + list(now_synonyms)

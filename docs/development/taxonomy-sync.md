@@ -10,7 +10,7 @@ The sync feature ingests two TSV exports from the NOW-Data repository—`latest_
 2. Parses the rows into in-memory records (`AcceptedRecord` / `SynonymRecord`).
 3. Restricts records to normalized local names from `Taxon`, identification text, and field-slip text, plus accepted targets required by matching synonyms. Existing NOW external IDs also retain their matching source records. Drawer links are covered by the existing `Taxon` records.
 4. Compares that subset with existing `Taxon` rows across sources to produce a diff preview. Matched database rows are excluded from deactivation even if their external IDs change.
-5. Applies the diff inside a single transaction, creating a `TaxonomyImport` audit row.
+5. Applies each independent dependency group atomically, retaining successful groups and recording skipped groups in a `TaxonomyImport` audit row.
 
 The UI uses `TaxonomySyncService` in `app/cms/taxonomy/combined.py`. GBIF response
 validation lives in `gbif.py`; the shared diff/apply machinery remains in `sync.py`.

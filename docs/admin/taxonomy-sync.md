@@ -90,8 +90,8 @@ Use the preview to coordinate with data curators before making changes. You can 
 ## Applying the sync
 
 1. Review the preview carefully, especially the Issues section.
-2. Click **Apply sync** to submit the form. The system immediately reuses the preview output, performing the upserts and deactivations in a single database transaction.
-3. Upon completion you are redirected to a results page summarising the applied changes. A green success banner indicates all operations succeeded.
+2. Click **Apply sync** to submit the reviewed snapshot. The system reuses that output without refetching either source and applies each independent dependency group atomically.
+3. The results page reports every applied and skipped group. A green success banner indicates that all groups succeeded; review the report whenever issues are shown.
 4. Follow the **View import log** link to audit the `TaxonomyImport` record. It captures counts, issue context, and the NOW source version that was applied.
 
 Data errors skip the affected taxon and its dependent synonyms while unrelated
@@ -110,7 +110,7 @@ for long authorship values first to avoid truncation.
 The Django admin registers a **Taxonomy Imports** section. Each sync produces a row containing:
 
 * Source (`NOW_GBIF` for the combined sync, or `NOW` for NOW-only runs)
-* Source version (`NOW:<timestamp-or-commit>; GBIF:<checklist-key>` for `NOW_GBIF` runs, or NOW timestamp/commit for `NOW` runs)
+* Source version (`NOW:<timestamp-or-commit>; GBIF:<checklist-key>:<response-hash>` for `NOW_GBIF` runs, or NOW timestamp/commit for `NOW` runs)
 * Started / finished timestamps
 * A boolean `ok` flag
 * JSON summaries of counts and issues

@@ -9,7 +9,7 @@ from django.test import override_settings
 
 from app.cms.models import Taxon, TaxonStatus, Identification, DrawerRegister
 from app.cms.taxonomy.combined import TaxonomySyncService
-from app.cms.taxonomy.gbif import GbifClient
+from app.cms.taxonomy.gbif import GbifClient, GbifMatchError
 from app.cms.tests.test_sync_now import authenticated_model_user, _field_slip, _http_get_factory
 from app.cms.tests.test_taxon_workflow import make_accession_row
 from django.contrib.auth import get_user_model
@@ -130,6 +130,23 @@ def test_unsafe_or_failed_gbif_match_preserves_existing_taxon(problem):
     svc.sync(apply=True)
     taxon.refresh_from_db()
     assert taxon.is_active
+
+
+def test_gbif_rejects_non_string_classification_and_accepted_names():
+    client = GbifClient(lambda url, **kwargs: Response(None))
+    malformed_classification = payload()
+    malformed_classification["classification"][2]["name"] = 42
+    with pytest.raises(GbifMatchError):
+        client.parse(malformed_classification, "Struthio", "genus")
+
+    malformed_accepted = payload("Felis leo", "Mammalia", "SPECIES")
+    malformed_accepted["synonym"] = True
+    malformed_accepted["usage"]["status"] = "SYNONYM"
+    malformed_accepted["acceptedUsage"] = {
+        "key": "lion", "canonicalName": 42, "rank": "SPECIES"
+    }
+    with pytest.raises(GbifMatchError):
+        client.parse(malformed_accepted, "Felis leo", "species")
 
 
 @override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")

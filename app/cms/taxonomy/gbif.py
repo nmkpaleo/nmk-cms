@@ -69,12 +69,24 @@ class GbifClient:
                 raise TypeError("GBIF payload must be a JSON object")
             usage = payload.get("usage") or {}
             diagnostics = payload.get("diagnostics") or {}
-            canonical = normalize_taxon_label(usage.get("canonicalName"))
+            if not isinstance(usage, dict) or not isinstance(diagnostics, dict):
+                raise TypeError("GBIF usage and diagnostics must be JSON objects")
+            raw_canonical = usage.get("canonicalName")
+            if not isinstance(raw_canonical, str):
+                raise TypeError("GBIF canonical name must be a string")
+            canonical = normalize_taxon_label(raw_canonical)
             if (diagnostics.get("matchType") != "EXACT"
                     or canonical.lower() != normalize_taxon_label(name).lower()
                     or (rank and usage.get("rank", "").lower() != rank.lower())):
                 raise GbifMatchError("GBIF did not return an exact name/rank match")
-            classification = {item["rank"].lower(): item["name"] for item in payload.get("classification", [])}
+            classification = {}
+            for item in payload.get("classification", []):
+                if not isinstance(item, dict):
+                    raise TypeError("GBIF classification entries must be JSON objects")
+                raw_class_rank, raw_class_name = item.get("rank"), item.get("name")
+                if not isinstance(raw_class_rank, str) or not isinstance(raw_class_name, str):
+                    raise TypeError("GBIF classification names and ranks must be strings")
+                classification[raw_class_rank.lower()] = normalize_taxon_label(raw_class_name)
             if usage.get("rank") == "CLASS":
                 classification["class"] = canonical
             if not classification.get("class"):
@@ -93,7 +105,10 @@ class GbifClient:
         def record_fields(item):
             if not isinstance(item, dict):
                 raise GbifMatchError("GBIF returned a malformed taxon usage")
-            item_name = normalize_taxon_label(item.get("canonicalName"))
+            raw_name = item.get("canonicalName")
+            if not isinstance(raw_name, str):
+                raise GbifMatchError("GBIF returned an invalid taxon name")
+            item_name = normalize_taxon_label(raw_name)
             raw_rank = item.get("rank") or ""
             if not isinstance(raw_rank, str):
                 raise GbifMatchError("GBIF returned an invalid taxon rank")
