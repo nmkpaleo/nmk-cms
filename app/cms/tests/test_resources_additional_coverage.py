@@ -248,3 +248,6 @@ def test_taxonomy_relation_source_columns_export_related_source():
     assert "accepted_taxon_source" in taxon_resource._meta.fields
     assert "parent_source" in taxon_resource._meta.fields
     assert "taxon_record_source" in identification_resource._meta.fields
+    assert identification_resource._meta.export_order[
+        identification_resource._meta.export_order.index("taxon_record") + 1
+    ] == "taxon_record_source"

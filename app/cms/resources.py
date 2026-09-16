@@ -575,6 +575,7 @@ class IdentificationResource(resources.ModelResource):
             "identified_by",
             "taxon",
             "taxon_record",
+            "taxon_record_source",
             "reference",
             "date_identified",
             "identification_qualifier",
