@@ -80,7 +80,7 @@ All tests should pass with coverage ≥ 90%. Mock external requests in additiona
 * Missing settings raise `RuntimeError` before any network calls.
 * Network or parsing errors bubble up to the admin views; users see a translated error banner.
 * Issues detected during preview are surfaced via `SyncIssue` entries and block automatic synonym creation.
-* The `sync(apply=True)` method always wraps database operations in `transaction.atomic()`; a failure reverts the database.
+* Apply groups connected taxa (synonyms and accepted targets, row identity, and source-ID transfers) into savepoints. Data errors roll back only that group; fatal failures roll back the request. Apply counts include successful groups only.
 
 ## Extending the service
 
@@ -93,3 +93,16 @@ All tests should pass with coverage ≥ 90%. Mock external requests in additiona
 * Standard Django logging captures warnings for malformed rows and unresolved synonyms.
 * Each import is stored in `TaxonomyImport` and viewable via the Django admin.
 * Enable application performance monitoring around the sync views if you need more insight into run times (~100k rows expected to complete within 30 seconds).
+
+
+## Reviewed preview apply
+
+The UI posts a compressed, signed, user-bound snapshot (`taxonomy/snapshot.py`).
+It contains the reviewed records and a hash of the local taxa, identification names
+and links, and field-slip names. Apply verifies the signature, one-hour lifetime,
+user, and current catalogue hash while locking existing taxa. It does not refetch
+external sources. Modified, stale, or expired previews require a new preview.
+Unexpected failures render a dedicated error page and are logged server-side.
+
+Regression tests in `test_taxonomy_apply.py` cover partial success, database failures,
+long authorship, dependent synonyms, snapshot validation, and the POST response.

@@ -1556,8 +1556,7 @@ class Taxon(BaseModel):
         null=True,
         help_text=_("Stable identifier supplied by the external source."),
     )
-    author_year = models.CharField(
-        max_length=255,
+    author_year = models.TextField(
         blank=True,
         help_text=_("Authorship information associated with the name."),
     )

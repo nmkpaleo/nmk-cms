@@ -69,7 +69,9 @@ restoring a backup.
 - `TAXON_GBIF_CHECKLIST_KEY`: defaults to `7ddf754f-d193-4cc9-b351-99906754a03b` (COL XR).
 - `TAXON_GBIF_TIMEOUT`: per-request timeout in seconds, default 15.
 
-Matches are reused within a sync run. Preview and apply each fetch current data.
+Matches are reused within a preview run. Apply uses the reviewed snapshot without
+repeating NOW or GBIF requests. Previews expire after one hour and are rejected if
+the catalogue has changed; generate a new preview in either case.
 See the [GBIF matching documentation](https://techdocs.gbif.org/en/data-processing/taxonomy-interpretation).
 
 ## Understanding the preview
@@ -91,7 +93,16 @@ Use the preview to coordinate with data curators before making changes. You can 
 3. Upon completion you are redirected to a results page summarising the applied changes. A green success banner indicates all operations succeeded.
 4. Follow the **View import log** link to audit the `TaxonomyImport` record. It captures counts, issue context, and the NOW source version that was applied.
 
-If an exception occurs, the transaction is rolled back, a red alert banner is shown, and no data is changed. Re-run the preview once the underlying issue is resolved.
+Data errors skip the affected taxon and its dependent synonyms while unrelated
+valid changes are saved. Counts show only successfully applied changes; skipped
+groups and their error details appear in the results and import log. Fatal database
+or infrastructure failures roll back the request and display an explicit error page
+without redirecting to another slow preview.
+
+Migration 0089 expands current and historical authorship fields to text: real NOW
+exports contain authorship strings longer than the previous 255-character limit.
+Apply this migration before syncing. Reverting that field change requires checking
+for long authorship values first to avoid truncation.
 
 ## Import logs
 

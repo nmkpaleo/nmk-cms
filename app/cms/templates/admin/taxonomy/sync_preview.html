@@ -234,6 +234,7 @@
         {% translate "Issues" %}
       </h2>
     </header>
+    <p>{% translate "Issues are skipped. Valid changes can still be applied." %}</p>
     {% if preview_data.issues %}
     <div class="w3-panel w3-pale-red w3-border w3-border-red" role="alert">
       <ul class="w3-ul w3-small">
@@ -253,8 +254,10 @@
   </section>
 
   <section class="w3-section w3-padding-16">
+    <p>{% translate "Apply saves these reviewed changes without repeating the source lookups. This preview expires after one hour or when catalogue data changes." %}</p>
     <form method="post" action="{{ apply_url }}" class="w3-bar w3-margin-bottom">
       {% csrf_token %}
+      <input type="hidden" name="preview_token" value="{{ preview_token }}">
       <button type="submit" class="w3-button w3-teal w3-margin-right">
         <i class="fa-solid fa-rotate" aria-hidden="true"></i>
         {% translate "Apply sync" %}

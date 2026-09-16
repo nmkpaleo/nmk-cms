@@ -9,7 +9,8 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence
 
 import requests
 from django.conf import settings
-from django.db import transaction
+from django.db import transaction, DataError, IntegrityError
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from ..taxon_identity import taxon_identity
@@ -477,163 +478,229 @@ class NowTaxonomySyncService:
     # Apply Changes
     # ------------------------
     def _apply(self, preview: SyncPreview) -> TaxonomyImport:
-        deactivate_flag = getattr(settings, "TAXON_SYNC_DEACTIVATE_MISSING", True)
+        """Save independent groups even when another group contains invalid data."""
+        categories = ("accepted_to_create", "accepted_to_update", "synonyms_to_create",
+                      "synonyms_to_update", "to_deactivate")
+        successful = {name: [] for name in categories}
         with transaction.atomic():
             import_log = TaxonomyImport.objects.create(
-                source=preview.import_source,
-                source_version=preview.source_version,
+                source=preview.import_source, source_version=preview.source_version,
             )
-
-            # Release changing source IDs before creates: a former accepted
-            # usage can keep its row as a synonym while its old ID moves to the
-            # new accepted name. This is atomic with the remaining changes.
-            changing_ids = [u.instance.pk for u in preview.accepted_to_update + preview.synonyms_to_update
-                            if "external_id" in u.changes or "external_source" in u.changes]
-            Taxon.objects.filter(pk__in=changing_ids).update(external_id=None)
-            created_taxa: List[Taxon] = []
-            if preview.accepted_to_create:
-                accepted_instances = [
-                    build_taxon_from_record(record, status=TaxonStatus.ACCEPTED)
-                    for record in preview.accepted_to_create
-                ]
-                created_taxa.extend(
-                    Taxon.objects.bulk_create(accepted_instances, batch_size=500, ignore_conflicts=False)
-                )
-
-            accepted_mapping = {
-                taxon.external_id: taxon
-                for taxon in Taxon.objects.filter(
-                    status=TaxonStatus.ACCEPTED,
-                )
-            }
-            accepted_mapping.update({taxon.external_id: taxon for taxon in created_taxa if taxon.status == TaxonStatus.ACCEPTED})
-            accepted_mapping.update(
-                {update.record.external_id: update.instance for update in preview.accepted_to_update}
-            )
-
-            accepted_updates = [update for update in preview.accepted_to_update if update.changes]
-            if accepted_updates:
-                for item in accepted_updates:
-                    apply_changes(item.instance, item.changes)
-                Taxon.objects.bulk_update(
-                    [item.instance for item in accepted_updates],
-                    [
-                        "identity_key",
-                        "external_source",
-                        "taxon_name",
-                        "taxon_rank",
-                        "author_year",
-                        "status",
-                        "accepted_taxon",
-                        "is_active",
-                        "source_version",
-                        "external_id",
-                        "kingdom",
-                        "phylum",
-                        "class_name",
-                        "order",
-                        "superfamily",
-                        "family",
-                        "subfamily",
-                        "tribe",
-                        "genus",
-                        "species",
-                        "infraspecific_epithet",
-                    ],
-                )
-
-            synonym_instances_to_create: List[Taxon] = []
-            for record in preview.synonyms_to_create:
-                accepted_taxon = accepted_mapping.get(record.accepted_external_id)
-                if not accepted_taxon:
-                    # Should have been captured as an issue already; skip defensively.
-                    logger.warning(
-                        "Skipping synonym creation because accepted taxon is missing: %s", record.accepted_external_id
-                    )
+            for group in self._apply_groups(preview):
+                try:
+                    with transaction.atomic():
+                        self._apply_changes(group)
+                except (DataError, IntegrityError, ValidationError) as exc:
+                    names = [r.name for r in group.accepted_to_create + group.synonyms_to_create]
+                    names += [u.record.name for u in group.accepted_to_update + group.synonyms_to_update]
+                    names += [t.taxon_name for t in group.to_deactivate]
+                    logger.exception("Skipping taxonomy sync group: %s", names)
+                    preview.issues.append(SyncIssue("apply-failed", str(exc), {"taxa": names}))
                     continue
-                instance = build_taxon_from_record(
-                    record,
-                    status=TaxonStatus.SYNONYM,
-                    accepted_taxon=accepted_taxon,
-                )
-                synonym_instances_to_create.append(instance)
-            if synonym_instances_to_create:
-                created_taxa.extend(
-                    Taxon.objects.bulk_create(synonym_instances_to_create, batch_size=500, ignore_conflicts=False)
-                )
-
-            synonym_updates = [update for update in preview.synonyms_to_update if update.changes]
-            if synonym_updates:
-                for item in synonym_updates:
-                    changes = item.changes.copy()
-                    accepted_external_id = changes.pop("accepted_taxon", None)
-                    if accepted_external_id:
-                        accepted_taxon = accepted_mapping.get(accepted_external_id) or Taxon.objects.filter(
-                            external_id=accepted_external_id,
-                        ).first()
-                        if not accepted_taxon:
-                            logger.warning(
-                                "Unable to resolve accepted taxon %s for synonym update", accepted_external_id
-                            )
-                            continue
-                        item.instance.accepted_taxon = accepted_taxon
-                    apply_changes(item.instance, changes)
-                Taxon.objects.bulk_update(
-                    [item.instance for item in synonym_updates],
-                    [
-                        "identity_key",
-                        "external_source",
-                        "taxon_name",
-                        "taxon_rank",
-                        "author_year",
-                        "status",
-                        "accepted_taxon",
-                        "is_active",
-                        "source_version",
-                        "external_id",
-                        "kingdom",
-                        "phylum",
-                        "class_name",
-                        "order",
-                        "superfamily",
-                        "family",
-                        "subfamily",
-                        "tribe",
-                        "genus",
-                        "species",
-                        "infraspecific_epithet",
-                    ],
-                )
-
-            deactivated_taxa: List[Taxon] = []
-            if deactivate_flag and preview.to_deactivate:
-                for taxon in preview.to_deactivate:
-                    taxon.is_active = False
-                    deactivated_taxa.append(taxon)
-                Taxon.objects.bulk_update(deactivated_taxa, ["is_active"])
-
-            self._link_identifications()
-            counts = preview.counts
+                for category in categories:
+                    successful[category].extend(getattr(group, category))
+            for category in categories:
+                setattr(preview, category, successful[category])
+            try:
+                with transaction.atomic():
+                    self._link_identifications()
+            except (DataError, IntegrityError, ValidationError) as exc:
+                logger.exception("Taxonomy saved but identification linkage failed")
+                preview.issues.append(SyncIssue("identification-link", str(exc)))
             report = {
-                "accepted_created": [record.external_id for record in preview.accepted_to_create],
-                "accepted_updated": [update.instance.external_id for update in preview.accepted_to_update],
-                "synonyms_created": [record.external_id for record in preview.synonyms_to_create],
-                "synonyms_updated": [update.instance.external_id for update in preview.synonyms_to_update],
-                "deactivated": [taxon.external_id for taxon in deactivated_taxa],
-                "issues": [{"code": issue.code, **issue.context} for issue in preview.issues],
+                "accepted_created": [r.external_id for r in preview.accepted_to_create],
+                "accepted_updated": [u.record.external_id for u in preview.accepted_to_update],
+                "synonyms_created": [r.external_id for r in preview.synonyms_to_create],
+                "synonyms_updated": [u.record.external_id for u in preview.synonyms_to_update],
+                "deactivated": [t.external_id for t in preview.to_deactivate],
+                "issues": [{"code": i.code, "message": i.message, **i.context} for i in preview.issues],
                 "sources": sorted({r.external_source for r in preview.accepted_to_create + preview.synonyms_to_create}
                                   | {u.record.external_source for u in preview.accepted_to_update + preview.synonyms_to_update}),
             }
-
-            import_log.mark_finished(
-                ok=len(preview.issues) == 0,
-                counts=counts,
-                report=report,
-            )
-            import_log.finished_at = timezone.now()
-            import_log.save()
-
+            import_log.mark_finished(ok=not preview.issues, counts=preview.counts, report=report)
         return import_log
+
+    def _apply_groups(self, preview):
+        """Keep synonyms, their accepted taxa, and source-ID transfers atomic."""
+        categories = ("accepted_to_create", "accepted_to_update", "synonyms_to_create",
+                      "synonyms_to_update", "to_deactivate")
+        operations = [(category, item) for category in categories for item in getattr(preview, category)]
+        parents = list(range(len(operations)))
+        owners = {}
+
+        def root(index):
+            while parents[index] != index:
+                parents[index] = parents[parents[index]]
+                index = parents[index]
+            return index
+
+        for index, (category, item) in enumerate(operations):
+            record = getattr(item, "record", item)
+            instance = getattr(item, "instance", item if category == "to_deactivate" else None)
+            keys = [("external", record.external_id)]
+            if category != "to_deactivate":
+                keys.append(("identity", taxon_identity(record.name, record.rank)))
+            if isinstance(record, SynonymRecord):
+                keys.append(("external", record.accepted_external_id))
+            if instance is not None:
+                keys.extend([("pk", instance.pk), ("external", instance.external_id)])
+                if instance.accepted_taxon_id:
+                    keys.append(("pk", instance.accepted_taxon_id))
+            for key in keys:
+                if key[1] is None or key[1] == "":
+                    continue
+                if key in owners:
+                    parents[root(index)] = root(owners[key])
+                owners[key] = index
+        groups = {}
+        for index, (category, item) in enumerate(operations):
+            group = groups.setdefault(root(index), {name: [] for name in categories})
+            group[category].append(item)
+        for data in groups.values():
+            yield SyncPreview(**data, issues=[], source_version=preview.source_version,
+                              import_source=preview.import_source)
+
+    def _apply_changes(self, preview):
+        deactivate_flag = getattr(settings, "TAXON_SYNC_DEACTIVATE_MISSING", True)
+        for record in (preview.accepted_to_create + preview.synonyms_to_create
+                       + [u.record for u in preview.accepted_to_update + preview.synonyms_to_update]):
+            values = {"taxon_name": record.name, "taxon_rank": record.rank,
+                      "author_year": record.author_year, "source_version": record.source_version,
+                      "external_id": record.external_id, **record.taxonomy}
+            for name, value in values.items():
+                limit = Taxon._meta.get_field(name).max_length
+                if limit and value and len(value) > limit:
+                    raise ValidationError(f"{record.name}: {name} exceeds {limit} characters")
+        # Release changing source IDs before creates: a former accepted
+        # usage can keep its row as a synonym while its old ID moves to the
+        # new accepted name. This is atomic with the remaining changes.
+        changing_ids = [u.instance.pk for u in preview.accepted_to_update + preview.synonyms_to_update
+                        if "external_id" in u.changes or "external_source" in u.changes]
+        Taxon.objects.filter(pk__in=changing_ids).update(external_id=None)
+        created_taxa: List[Taxon] = []
+        if preview.accepted_to_create:
+            accepted_instances = [
+                build_taxon_from_record(record, status=TaxonStatus.ACCEPTED)
+                for record in preview.accepted_to_create
+            ]
+            created_taxa.extend(
+                Taxon.objects.bulk_create(accepted_instances, batch_size=500, ignore_conflicts=False)
+            )
+
+        needed_targets = {r.accepted_external_id for r in preview.synonyms_to_create}
+        needed_targets.update(u.record.accepted_external_id for u in preview.synonyms_to_update)
+        accepted_mapping = {
+            taxon.external_id: taxon
+            for taxon in Taxon.objects.filter(
+                status=TaxonStatus.ACCEPTED, external_id__in=needed_targets,
+            )
+        }
+        accepted_mapping.update({taxon.external_id: taxon for taxon in created_taxa if taxon.status == TaxonStatus.ACCEPTED})
+        accepted_mapping.update(
+            {update.record.external_id: update.instance for update in preview.accepted_to_update}
+        )
+
+        accepted_updates = [update for update in preview.accepted_to_update if update.changes]
+        if accepted_updates:
+            for item in accepted_updates:
+                apply_changes(item.instance, item.changes)
+            Taxon.objects.bulk_update(
+                [item.instance for item in accepted_updates],
+                [
+                    "identity_key",
+                    "external_source",
+                    "taxon_name",
+                    "taxon_rank",
+                    "author_year",
+                    "status",
+                    "accepted_taxon",
+                    "is_active",
+                    "source_version",
+                    "external_id",
+                    "kingdom",
+                    "phylum",
+                    "class_name",
+                    "order",
+                    "superfamily",
+                    "family",
+                    "subfamily",
+                    "tribe",
+                    "genus",
+                    "species",
+                    "infraspecific_epithet",
+                ],
+            )
+
+        synonym_instances_to_create: List[Taxon] = []
+        for record in preview.synonyms_to_create:
+            accepted_taxon = accepted_mapping.get(record.accepted_external_id)
+            if not accepted_taxon:
+                # Should have been captured as an issue already; skip defensively.
+                logger.warning(
+                    "Skipping synonym creation because accepted taxon is missing: %s", record.accepted_external_id
+                )
+                raise ValidationError("Accepted taxon could not be resolved")
+            instance = build_taxon_from_record(
+                record,
+                status=TaxonStatus.SYNONYM,
+                accepted_taxon=accepted_taxon,
+            )
+            synonym_instances_to_create.append(instance)
+        if synonym_instances_to_create:
+            created_taxa.extend(
+                Taxon.objects.bulk_create(synonym_instances_to_create, batch_size=500, ignore_conflicts=False)
+            )
+
+        synonym_updates = [update for update in preview.synonyms_to_update if update.changes]
+        if synonym_updates:
+            for item in synonym_updates:
+                changes = item.changes.copy()
+                accepted_external_id = changes.pop("accepted_taxon", None)
+                if accepted_external_id:
+                    accepted_taxon = accepted_mapping.get(accepted_external_id) or Taxon.objects.filter(
+                        external_id=accepted_external_id,
+                    ).first()
+                    if not accepted_taxon:
+                        logger.warning(
+                            "Unable to resolve accepted taxon %s for synonym update", accepted_external_id
+                        )
+                        raise ValidationError("Accepted taxon could not be resolved")
+                    item.instance.accepted_taxon = accepted_taxon
+                apply_changes(item.instance, changes)
+            Taxon.objects.bulk_update(
+                [item.instance for item in synonym_updates],
+                [
+                    "identity_key",
+                    "external_source",
+                    "taxon_name",
+                    "taxon_rank",
+                    "author_year",
+                    "status",
+                    "accepted_taxon",
+                    "is_active",
+                    "source_version",
+                    "external_id",
+                    "kingdom",
+                    "phylum",
+                    "class_name",
+                    "order",
+                    "superfamily",
+                    "family",
+                    "subfamily",
+                    "tribe",
+                    "genus",
+                    "species",
+                    "infraspecific_epithet",
+                ],
+            )
+
+        deactivated_taxa: List[Taxon] = []
+        if deactivate_flag and preview.to_deactivate:
+            for taxon in preview.to_deactivate:
+                taxon.is_active = False
+                deactivated_taxa.append(taxon)
+            Taxon.objects.bulk_update(deactivated_taxa, ["is_active"])
+
 
     def _link_identifications(self):
         """Link previously ambiguous or unlinked names without changing recorded text."""

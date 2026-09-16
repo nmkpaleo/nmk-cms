@@ -49,4 +49,5 @@ def test_taxon_identity_migration_preserves_links_and_resolves_ambiguity():
         assert Taxon.objects.get(pk=child.pk).accepted_taxon_id == now.pk
         assert Taxon.objects.get(pk=child.pk).parent_id == now.pk
     finally:
-        MigrationExecutor(connection).migrate(after)
+        final_executor = MigrationExecutor(connection)
+        final_executor.migrate(final_executor.loader.graph.leaf_nodes())

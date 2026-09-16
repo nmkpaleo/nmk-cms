@@ -32,13 +32,17 @@
         {% translate "Taxonomy sync completed successfully." %}
       </p>
       <p class="w3-small">
-        {% translate "All changes were applied in a single transaction." %}
+        {% translate "The listed changes were saved." %}
       </p>
     </div>
     {% else %}
-    <div class="w3-panel w3-pale-red w3-border w3-border-red" role="alert">
+    <div class="w3-panel w3-pale-yellow w3-border w3-border-yellow" role="alert">
       <p class="w3-large">
-        {% translate "The sync completed with issues. Review the details below." %}
+        {% if has_applied_changes %}
+        {% translate "Valid changes were saved. Some taxa or links were skipped; review the issues below." %}
+        {% else %}
+        {% translate "No taxonomy changes were saved. Review the issues below." %}
+        {% endif %}
       </p>
     </div>
     {% endif %}
@@ -258,7 +262,7 @@
       </h2>
     </header>
     {% if preview_data.issues %}
-    <div class="w3-panel w3-pale-red w3-border w3-border-red" role="alert">
+    <div class="w3-panel w3-pale-yellow w3-border w3-border-yellow" role="alert">
       <ul class="w3-ul w3-small">
         {% for issue in preview_data.issues %}
         <li>
