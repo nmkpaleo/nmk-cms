@@ -240,14 +240,10 @@ def _taxonomy_sync_apply_view(request):
         result = apply_signed_preview(request.POST.get("preview_token", ""), request.user.pk, service)
     except Exception as exc:
         logger.exception("Taxonomy sync apply failed for user %s", request.user.pk)
-        preview_error = (
-            str(exc) if isinstance(exc, PreviewUnavailable)
-            else _("An unexpected error occurred while applying the sync. No changes from this request were saved.")
-        )
         return TemplateResponse(request, "admin/taxonomy/sync_error.html", {
             **admin.site.each_context(request),
             "title": _("Taxonomy sync was not applied"),
-            "error": preview_error,
+            "error": str(exc),
             "preview_url": reverse("taxonomy_sync_preview"),
         }, status=400 if isinstance(exc, PreviewUnavailable) else 500)
 
@@ -276,7 +272,7 @@ def _taxonomy_sync_apply_view(request):
         ),
         "preview_url": reverse("taxonomy_sync_preview"),
         "success": bool(import_log and import_log.ok),
-        "has_applied_changes": any(preview.counts[key] for key in ("created", "updated", "deactivated", "synonym_links")),
+        "has_applied_changes": any(preview.counts[key] for key in ("created", "updated", "deactivated")),
     }
 
     return TemplateResponse(request, "admin/taxonomy/sync_result.html", context)

@@ -7,7 +7,7 @@ from uuid import uuid4
 from django.core.cache import cache
 from django.core import signing
 from django.core.serializers.json import DjangoJSONEncoder
-from django.db import connection, transaction
+from django.db import transaction
 
 from ..models import Taxon, Identification, FieldSlip
 from .sync import (AcceptedRecord, AcceptedUpdate, SynonymRecord, SynonymUpdate,
@@ -84,23 +84,12 @@ def apply_signed_preview(token, user_id, service):
     preview_data = cache.get(data["preview_key"]) if "preview_key" in data else data
     if not preview_data:
         raise PreviewUnavailable("This preview is missing, expired, or invalid. Generate a new preview.")
-    lock_key = "taxonomy-sync-apply-lock"
-    use_cache_lock = not connection.features.has_select_for_update
-    if use_cache_lock and not cache.add(lock_key, str(user_id), timeout=MAX_AGE):
-        raise PreviewUnavailable("Another taxonomy sync apply is in progress. Retry in a moment.")
-    try:
-        with transaction.atomic():
-            # Serialize applies and reject changes made since the user reviewed the data.
-            if connection.features.has_select_for_update:
-                for model in (Taxon, Identification, FieldSlip):
-                    lock_rows = model.objects.select_for_update().order_by("pk").values_list("pk", flat=True)
-                    for _ in lock_rows.iterator(chunk_size=2000):
-                        pass
-            if data.get("fingerprint") != catalogue_fingerprint():
-                raise PreviewUnavailable("The catalogue changed after this preview. Generate a new preview before applying.")
-            taxa = {t.pk: t for t in Taxon.objects.select_related("accepted_taxon").all()}
-            preview = _deserialize_preview(preview_data, taxa)
-            return NowTaxonomySyncResult(preview, service._apply(preview))
-    finally:
-        if use_cache_lock:
-            cache.delete(lock_key)
+    with transaction.atomic():
+        # Serialize applies and reject changes made since the user reviewed the data.
+        for model in (Taxon, Identification, FieldSlip):
+            list(model.objects.select_for_update().order_by("pk").values_list("pk", flat=True))
+        if data.get("fingerprint") != catalogue_fingerprint():
+            raise PreviewUnavailable("The catalogue changed after this preview. Generate a new preview before applying.")
+        taxa = {t.pk: t for t in Taxon.objects.select_related("accepted_taxon")}
+        preview = _deserialize_preview(preview_data, taxa)
+        return NowTaxonomySyncResult(preview, service._apply(preview))

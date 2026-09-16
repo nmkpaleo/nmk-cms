@@ -119,8 +119,7 @@ class GbifClient:
             target = payload.get("acceptedUsage") or {}
             accepted = AcceptedRecord(**record_fields(target))
             synonym = SynonymRecord(**record_fields(usage), accepted_name=accepted.name,
-                                    accepted_external_id=accepted.external_id,
-                                    accepted_external_source=accepted.external_source)
+                                    accepted_external_id=accepted.external_id)
             return [accepted], [synonym]
         if usage.get("status") != "ACCEPTED":
             raise GbifMatchError("GBIF usage is not accepted")

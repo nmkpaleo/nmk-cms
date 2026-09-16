@@ -118,16 +118,6 @@ def test_snapshot_token_stores_preview_server_side():
     assert cache.get(payload["preview_key"]) is not None
 
 
-def test_snapshot_apply_rejects_parallel_runs_when_row_locking_is_unavailable(monkeypatch):
-    person = user()
-    token = sign_preview(preview([record()]), person.pk, catalogue_fingerprint())
-    monkeypatch.setattr(type(connection.features), "has_select_for_update", False)
-    assert cache.add("taxonomy-sync-apply-lock", "busy", timeout=MAX_AGE)
-    with pytest.raises(PreviewUnavailable, match="already in progress"):
-        apply_signed_preview(token, person.pk, NowTaxonomySyncService())
-    cache.delete("taxonomy-sync-apply-lock")
-
-
 def test_fatal_apply_error_renders_visible_error_without_redirect(monkeypatch):
     person = user()
     token = sign_preview(preview([record()]), person.pk, catalogue_fingerprint())
@@ -140,8 +130,7 @@ def test_fatal_apply_error_renders_visible_error_without_redirect(monkeypatch):
     response = cms_admin._taxonomy_sync_apply_view(request)
     response.render()
     assert response.status_code == 500
-    assert b"database unavailable" not in response.content
-    assert b"unexpected error occurred while applying the sync" in response.content
+    assert b"database unavailable" in response.content
     assert b"No changes from this request were saved" in response.content
     assert "Location" not in response
 
