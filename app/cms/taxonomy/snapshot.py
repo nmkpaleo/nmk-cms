@@ -56,13 +56,20 @@ def _deserialize_preview(data, taxa):
 
 
 def catalogue_fingerprint():
-    data = {
-        "taxa": list(Taxon.objects.order_by("pk").values()),
-        "identifications": list(Identification.objects.order_by("pk").values_list(
-            "pk", "taxon_verbatim", "taxon", "taxon_record_id")),
-        "field_slips": list(FieldSlip.objects.order_by("pk").values_list("pk", "verbatim_taxon")),
-    }
-    return hashlib.sha256(json.dumps(data, cls=DjangoJSONEncoder, sort_keys=True).encode()).hexdigest()
+    """Hash relevant rows incrementally to avoid materializing the catalogue."""
+    digest = hashlib.sha256()
+    for label, rows in (
+        ("taxa", Taxon.objects.order_by("pk").values().iterator(chunk_size=1000)),
+        ("identifications", Identification.objects.order_by("pk").values_list(
+            "pk", "taxon_verbatim", "taxon", "taxon_record_id").iterator(chunk_size=1000)),
+        ("field_slips", FieldSlip.objects.order_by("pk").values_list(
+            "pk", "verbatim_taxon").iterator(chunk_size=1000)),
+    ):
+        digest.update(label.encode())
+        for row in rows:
+            digest.update(json.dumps(row, cls=DjangoJSONEncoder, sort_keys=True, separators=(",", ":")).encode())
+            digest.update(b"\n")
+    return digest.hexdigest()
 
 
 def sign_preview(preview, user_id, fingerprint):

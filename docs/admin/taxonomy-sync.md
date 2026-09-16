@@ -70,7 +70,7 @@ restoring a backup.
 - `TAXON_GBIF_TIMEOUT`: per-request timeout in seconds, default 15.
 - `TAXON_GBIF_WORKERS`: concurrent GBIF lookups, default 4 (limited to 1-16). A full batch of connection/HTTP failures stops further requests for that preview; deferred names appear as issues when NOW cannot supply a safe match. Retry after service recovery.
 
-Matches are reused within a preview run. Apply uses the reviewed snapshot without
+When `USE_REDIS=true`, reviewed previews use the shared Redis default cache so a subsequent apply can run on another web worker. Matches are reused within a preview run. Apply uses the reviewed snapshot without
 repeating NOW or GBIF requests. Previews expire after one hour and are rejected if
 the catalogue has changed; generate a new preview in either case.
 See the [GBIF matching documentation](https://techdocs.gbif.org/en/data-processing/taxonomy-interpretation).

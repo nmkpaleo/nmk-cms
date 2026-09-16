@@ -258,3 +258,39 @@ def test_gbif_name_misses_do_not_stop_remaining_lookups():
     results = list(GbifClient(http_get=http_get).match_many([(f"Unknown{i}", "") for i in range(5)]))
     assert http_get.call_count == 5
     assert all(isinstance(result, ValueError) for name, rank, result in results)
+
+
+@override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")
+def test_gbif_null_authorship_and_malformed_accepted_usage_are_safe():
+    _field_slip("Struthio")
+    data = payload()
+    data["usage"]["authorship"] = None
+    result = service(data).sync(apply=True)
+    assert result.import_log.counts["created"] == 1
+    assert Taxon.objects.get().author_year == ""
+
+    bad = payload("Felis leo", "Mammalia", "SPECIES")
+    bad["synonym"] = True
+    bad["usage"]["status"] = "SYNONYM"
+    bad["acceptedUsage"] = []
+    preview = service(bad).preview()
+    assert preview.issues[0].code == "gbif-match"
+
+
+@override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")
+def test_whitespace_verbatim_uses_legacy_taxon_for_gbif_lookup():
+    user = get_user_model().objects.get(username="sync-now-user")
+    row = make_accession_row(user)
+    set_current_user(user)
+    identification = Identification.objects.create(accession_row=row, taxon_verbatim="Struthio")
+    Identification.objects.filter(pk=identification.pk).update(taxon_verbatim="   ", taxon="Struthio")
+    preview = service(payload()).preview()
+    assert preview.counts["created"] == 1
+
+
+@override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")
+def test_combined_source_version_includes_gbif_response_hash():
+    _field_slip("Struthio")
+    preview = service(payload()).preview()
+    assert "GBIF:7ddf754f-d193-4cc9-b351-99906754a03b:" in preview.source_version
+    assert not preview.source_version.endswith("7ddf754f-d193-4cc9-b351-99906754a03b")

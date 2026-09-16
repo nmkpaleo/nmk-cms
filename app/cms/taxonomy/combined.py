@@ -1,5 +1,6 @@
 """Collection-scoped synchronization with NOW preference for mammals."""
 from dataclasses import replace
+import hashlib
 
 import requests
 from django.conf import settings
@@ -20,12 +21,14 @@ class TaxonomySyncService(NowTaxonomySyncService):
         full_now_accepted, full_now_synonyms = now_accepted, now_synonyms
         taxa = list(Taxon.objects.all())
         names = {(normalize_taxon_label(t.taxon_name), normalize_taxon_label(t.taxon_rank).lower()) for t in taxa}
-        known_names = {name.lower() for name, _ in names}
-        text_names = [verbatim or legacy for verbatim, legacy in
-                      Identification.objects.order_by().values_list("taxon_verbatim", "taxon")]
+        text_names = [
+            normalize_taxon_label(verbatim) or normalize_taxon_label(legacy)
+            for verbatim, legacy in Identification.objects.order_by().values_list("taxon_verbatim", "taxon")
+        ]
         text_names.extend(FieldSlip.objects.order_by().values_list("verbatim_taxon", flat=True))
-        names.update((normalize_taxon_label(name), "") for name in text_names
-                     if normalize_taxon_label(name).lower() not in known_names)
+        # Free-text identifications have no known rank; retain that query even
+        # when a catalogue row has the same label at a different rank.
+        names.update((normalize_taxon_label(name), "") for name in text_names)
         names = {(name, rank) for name, rank in names if name}
         now_accepted, now_synonyms = self._scope_records(now_accepted, now_synonyms, taxa)
         candidates = list(now_accepted) + list(now_synonyms)
@@ -106,5 +109,8 @@ class TaxonomySyncService(NowTaxonomySyncService):
                                  if normalize_taxon_label(t.taxon_name).lower() not in failed_names]
         preview.issues.extend(issues)
         preview.import_source = TaxonomyImport.Source.COMBINED
-        preview.source_version = f"NOW:{_latest_version(full_now_accepted, full_now_synonyms)}; GBIF:{settings.TAXON_GBIF_CHECKLIST_KEY}"
+        gbif_hashes = sorted({record.source_version for record in candidates
+                              if record.external_source == TaxonExternalSource.GBIF and record.source_version})
+        gbif_version = hashlib.sha256(";".join(gbif_hashes).encode()).hexdigest() if gbif_hashes else "none"
+        preview.source_version = f"NOW:{_latest_version(full_now_accepted, full_now_synonyms)}; GBIF:{settings.TAXON_GBIF_CHECKLIST_KEY}:{gbif_version}"
         return preview

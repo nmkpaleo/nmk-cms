@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Harden taxonomy sync preview handling: normalize blank ranks and legacy names, record identification relinks, retain GBIF response hashes, and tolerate malformed GBIF data.
 - Address taxonomy review findings: source-aware taxonomy import/export relations, bounded concurrent GBIF lookups, source-specific IDs, related-record locks, historical identity backfill (migration 0090), and IDs that fit long NOW names.
 - Fix taxonomy sync synonym creation and updates on databases where bulk inserts do not return primary keys.
 - Apply the reviewed taxonomy preview without refetching sources, save valid taxa despite independent data errors, display apply failures, and support long NOW authorship with migration 0089.

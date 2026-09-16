@@ -240,7 +240,9 @@ USE_REDIS = os.getenv("USE_REDIS", "false").lower() == "true"
 
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'BACKEND': 'django_redis.cache.RedisCache' if USE_REDIS else 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'redis://redis:6379' if USE_REDIS else '',
+        'OPTIONS': {'CLIENT_CLASS': 'django_redis.client.DefaultClient'} if USE_REDIS else {},
     },
     'select2': {
         'BACKEND': 'django_redis.cache.RedisCache' if USE_REDIS else 'django.core.cache.backends.locmem.LocMemCache',

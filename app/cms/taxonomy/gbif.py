@@ -91,8 +91,13 @@ class GbifClient:
             raise GbifMatchError("GBIF returned a malformed match response") from exc
 
         def record_fields(item):
+            if not isinstance(item, dict):
+                raise GbifMatchError("GBIF returned a malformed taxon usage")
             item_name = normalize_taxon_label(item.get("canonicalName"))
-            item_rank = item.get("rank", "").lower()
+            raw_rank = item.get("rank") or ""
+            if not isinstance(raw_rank, str):
+                raise GbifMatchError("GBIF returned an invalid taxon rank")
+            item_rank = raw_rank.lower()
             if not item_name or not item.get("key") or item_rank not in TaxonRank.values:
                 raise GbifMatchError("GBIF returned an unsupported rank or incomplete name")
             taxonomy = {field: "" for field in TAXONOMY_FIELDS}
@@ -111,7 +116,7 @@ class GbifClient:
                 taxonomy["infraspecific_epithet"] = item.get("infraspecificEpithet") or (parts[2] if len(parts) > 2 else "")
             return dict(
                 external_id=f"GBIF:{self.checklist}:{item['key']}", name=item_name, rank=item_rank,
-                author_year=item.get("authorship", ""), source_version=version, taxonomy=taxonomy,
+                author_year=item.get("authorship") or "", source_version=version, taxonomy=taxonomy,
                 external_source=TaxonExternalSource.GBIF,
             )
 

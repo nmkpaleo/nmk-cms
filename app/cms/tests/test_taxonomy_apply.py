@@ -10,7 +10,7 @@ from django.db import OperationalError, connection
 from django.test import RequestFactory
 
 from cms import admin as cms_admin
-from cms.models import Taxon
+from cms.models import Identification, Taxon
 from cms.taxonomy.sync import AcceptedRecord, AcceptedUpdate, SynonymUpdate, SynonymRecord, SyncPreview, SyncIssue, NowTaxonomySyncService
 from cms.taxonomy.snapshot import (
     MAX_AGE,
@@ -281,3 +281,12 @@ def test_long_now_names_have_bounded_stable_ids_and_apply():
     assert log.counts["created"] == 2
     assert log.counts["issues"] == 0
     assert Taxon.objects.get(external_id=alias_id).accepted_taxon_id == Taxon.objects.get(external_id=target_id).pk
+
+
+def test_blank_rank_uses_species_identity():
+    Taxon.objects.create(taxon_name="Blank rank", taxon_rank="species")
+    incoming = AcceptedRecord("NOW:blank", "Blank rank", "", "", "v1", {})
+    proposed = NowTaxonomySyncService()._build_preview([incoming], [])
+    assert proposed.accepted_to_create == []
+    assert len(proposed.accepted_to_update) == 1
+    assert proposed.accepted_to_update[0].changes["external_id"] == "NOW:blank"
