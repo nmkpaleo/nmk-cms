@@ -57,7 +57,8 @@ Alternatively, use the service directly from the shell:
 from cms.taxonomy.combined import TaxonomySyncService
 service = TaxonomySyncService()
 preview = service.preview()
-result = service.sync(apply=True)
+# Review and apply this preview through the Django admin. Its signed snapshot
+# is applied without refetching NOW or GBIF.
 ```
 
 ## Testing

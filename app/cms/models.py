@@ -1454,7 +1454,7 @@ class Identification(BaseModel):
             # Keep legacy column populated for backwards compatibility while it exists.
             self.taxon = self.taxon_verbatim
 
-        matched_taxon = self._match_controlled_taxon(self.taxon_verbatim)
+        matched_taxon = self._match_controlled_taxon(self.taxon_verbatim or self.taxon)
         self.taxon_record = matched_taxon
 
         if (

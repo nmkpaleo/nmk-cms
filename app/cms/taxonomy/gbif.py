@@ -93,10 +93,8 @@ class GbifClient:
                 raise GbifMatchError("GBIF match has no taxonomic class")
             if diagnostics.get("issues"):
                 raise GbifMatchError("GBIF match has diagnostic issues requiring review")
-            version = hashlib.sha256(json.dumps(
-                {"usage": usage, "accepted": payload.get("acceptedUsage"), "classification": classification},
-                sort_keys=True,
-            ).encode()).hexdigest()
+            # Preserve every decision-bearing response field in the audit version.
+            version = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
         except GbifMatchError:
             raise
         except (AttributeError, KeyError, TypeError, ValueError) as exc:
@@ -128,6 +126,8 @@ class GbifClient:
             for field in ("order", "superfamily", "family", "subfamily", "tribe", "genus", "species", "infraspecific_epithet"):
                 if field not in scope:
                     taxonomy[field] = ""
+            if item_rank in {"genus", "species", "subspecies"} and not taxonomy["family"]:
+                raise GbifMatchError("GBIF match is missing the required family")
             parts = item_name.split()
             if item_rank in {"genus", "species", "subspecies"}:
                 taxonomy["genus"] = optional_text("genericName") or parts[0]

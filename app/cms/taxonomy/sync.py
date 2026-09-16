@@ -309,9 +309,13 @@ class NowTaxonomySyncService:
         existing_taxa: Sequence[Taxon],
     ) -> tuple[List[AcceptedRecord], List[SynonymRecord]]:
         """Keep local names and accepted targets needed by their synonyms."""
-        names = {_normalize_label(taxon.taxon_name).lower() for taxon in existing_taxa}
+        taxon_keys = {
+            taxon_identity(taxon.taxon_name, _record_rank(taxon.taxon_rank))
+            for taxon in existing_taxa
+        }
         # DrawerRegister.taxa and Identification.taxon_record already point to
-        # existing_taxa. Free text lets unlinked fossils seed imports as well.
+        # existing_taxa. Free text is unranked and therefore matches by name.
+        names = set()
         for verbatim, legacy in Identification.objects.order_by().values_list(
             "taxon_verbatim", "taxon"
         ).iterator():
@@ -327,12 +331,15 @@ class NowTaxonomySyncService:
         }
         synonyms = [
             record for record in synonym_records
-            if record.name.lower() in names or (record.external_source == TaxonExternalSource.NOW and record.external_id in existing_ids)
+            if taxon_identity(record.name, _record_rank(record.rank)) in taxon_keys
+            or record.name.lower() in names
+            or (record.external_source == TaxonExternalSource.NOW and record.external_id in existing_ids)
         ]
         accepted_ids = {record.accepted_key for record in synonyms}
         accepted = [
             record for record in accepted_records
-            if record.name.lower() in names
+            if taxon_identity(record.name, _record_rank(record.rank)) in taxon_keys
+            or record.name.lower() in names
             or (record.external_source == TaxonExternalSource.NOW and record.external_id in existing_ids)
             or (record.external_source, record.external_id) in accepted_ids
         ]
@@ -572,12 +579,13 @@ class NowTaxonomySyncService:
             except (DataError, IntegrityError, ValidationError) as exc:
                 logger.exception("Taxonomy saved but identification linkage failed")
                 preview.issues.append(SyncIssue("identification-link", str(exc)))
+            source_id = lambda record: f"{record.external_source}:{record.external_id}"
             report = {
-                "accepted_created": [r.external_id for r in preview.accepted_to_create],
-                "accepted_updated": [u.record.external_id for u in preview.accepted_to_update],
-                "synonyms_created": [r.external_id for r in preview.synonyms_to_create],
-                "synonyms_updated": [u.record.external_id for u in preview.synonyms_to_update],
-                "deactivated": [t.external_id for t in preview.to_deactivate],
+                "accepted_created": [source_id(r) for r in preview.accepted_to_create],
+                "accepted_updated": [source_id(u.record) for u in preview.accepted_to_update],
+                "synonyms_created": [source_id(r) for r in preview.synonyms_to_create],
+                "synonyms_updated": [source_id(u.record) for u in preview.synonyms_to_update],
+                "deactivated": [source_id(t) for t in preview.to_deactivate],
                 "identifications_linked": preview.identifications_linked,
                 "issues": [{"code": i.code, "message": i.message, **i.context} for i in preview.issues],
                 "sources": sorted({r.external_source for r in preview.accepted_to_create + preview.synonyms_to_create}
