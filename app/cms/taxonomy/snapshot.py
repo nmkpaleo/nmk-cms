@@ -87,7 +87,9 @@ def apply_signed_preview(token, user_id, service):
     with transaction.atomic():
         # Serialize applies and reject changes made since the user reviewed the data.
         for model in (Taxon, Identification, FieldSlip):
-            list(model.objects.select_for_update().order_by("pk").values_list("pk", flat=True))
+            lock_rows = model.objects.select_for_update().order_by("pk").values_list("pk", flat=True)
+            for _ in lock_rows.iterator(chunk_size=2000):
+                pass
         if data.get("fingerprint") != catalogue_fingerprint():
             raise PreviewUnavailable("The catalogue changed after this preview. Generate a new preview before applying.")
         taxa = {t.pk: t for t in Taxon.objects.select_related("accepted_taxon")}
