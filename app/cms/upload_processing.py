@@ -24,37 +24,42 @@ REJECTED = Path(settings.MEDIA_ROOT) / "uploads" / "rejected"
 
 TIMESTAMP_FORMAT = "%Y-%m-%dT%H%M%S"
 NAME_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{6}\.png$", re.IGNORECASE)
+NUMBERED_SCAN_PATTERN = re.compile(r"[0-9]+[a-z]{2} [0-9]+\.png", re.IGNORECASE)
 MANUAL_QC_PATTERN = re.compile(r"^\d+\.jpe?g$", re.IGNORECASE)
 SPECIMEN_LIST_DPI = getattr(settings, "SPECIMEN_LIST_DPI", 300)
 
 
 def create_media(
-    path: Path, *, scan_timestamp: datetime
+    path: Path, *, scan_timestamp: datetime | None = None
 ) -> None:
     """Create a Media record for a newly accepted scan."""
-    logger.info(
-        "Processing uploaded media %s with filename timestamp %s",
-        path,
-        scan_timestamp.isoformat(),
-    )
-    created = scanning_utils.to_nairobi(scan_timestamp)
-    scanning_utils.auto_complete_scans()
-    scan = scanning_utils.find_scan_for_timestamp(created)
-    if scan:
+    scan = None
+    if scan_timestamp is not None:
         logger.info(
-            "Matched media %s to scanning #%s (%s -> %s) using Nairobi timestamp %s",
+            "Processing uploaded media %s with filename timestamp %s",
             path,
-            scan.pk,
-            scan.start_time,
-            scan.end_time,
-            created.isoformat(),
+            scan_timestamp.isoformat(),
         )
+        created = scanning_utils.to_nairobi(scan_timestamp)
+        scanning_utils.auto_complete_scans()
+        scan = scanning_utils.find_scan_for_timestamp(created)
+        if scan:
+            logger.info(
+                "Matched media %s to scanning #%s (%s -> %s) using Nairobi timestamp %s",
+                path,
+                scan.pk,
+                scan.start_time,
+                scan.end_time,
+                created.isoformat(),
+            )
+        else:
+            logger.warning(
+                "No scanning found for media %s using Nairobi timestamp %s",
+                path,
+                created.isoformat(),
+            )
     else:
-        logger.warning(
-            "No scanning found for media %s using Nairobi timestamp %s",
-            path,
-            created.isoformat(),
-        )
+        logger.info("Processing uploaded media %s without a filename timestamp", path)
     media = Media(
         type="photo",
         license="CC0",
@@ -91,6 +96,11 @@ def process_file(src: Path) -> Path:
         timestamp = timestamp.replace(tzinfo=scanning_utils.NAIROBI_TZ)
         shutil.move(src, dest)
         create_media(dest, scan_timestamp=timestamp)
+    elif NUMBERED_SCAN_PATTERN.fullmatch(src.name):
+        dest = PENDING / src.name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(src, dest)
+        create_media(dest)
     elif MANUAL_QC_PATTERN.match(src.name):
         dest = MANUAL_QC / src.name
         dest.parent.mkdir(parents=True, exist_ok=True)
