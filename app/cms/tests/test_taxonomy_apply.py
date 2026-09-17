@@ -43,15 +43,17 @@ def user():
 
 def test_apply_keeps_valid_records_when_another_group_hits_database_constraint():
     occupied = Taxon.objects.create(taxon_name="Occupied", taxon_rank="genus")
-    proposed = preview([record("Occupied"), record("Good", author_year="A" * 302)])
+    good = record("Good")
+    invalid = record("Too long", taxonomy={"family": "X" * 256})
+    proposed = preview([record("Occupied"), good, invalid])
     log = NowTaxonomySyncService()._apply(proposed)
-    assert Taxon.objects.get(taxon_name="Good").author_year == "A" * 302
+    assert Taxon.objects.get(taxon_name="Good").author_year == "Author"
     assert Taxon.objects.get(pk=occupied.pk).external_source == "LEGACY"
     assert log.counts["created"] == 1
-    assert log.counts["issues"] == 1
+    assert log.counts["issues"] == 2
     assert log.ok is False
-    assert proposed.accepted_to_create == [record("Good", author_year="A" * 302)]
-    assert log.report_json["issues"][0]["taxa"] == ["Occupied"]
+    assert proposed.accepted_to_create == [good]
+    assert {tuple(issue["taxa"]) for issue in log.report_json["issues"]} == {("Occupied",), ("Too long",)}
 
 
 def test_failed_synonym_rolls_back_its_accepted_group_only():
