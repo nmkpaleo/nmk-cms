@@ -13,6 +13,7 @@
     <div id="{{ menu_id }}" class="w3-dropdown-content w3-bar-block w3-card-4 w3-white" role="menu" hidden>
       <a class="w3-bar-item w3-button w3-text-dark-grey w3-hover-text-deep-orange" role="menuitem" href="{% url 'media_report' %}">{% trans "Media Reports" %}</a>
       <a class="w3-bar-item w3-button w3-text-dark-grey w3-hover-text-deep-orange" role="menuitem" href="{% url 'accession_distribution_report' %}">{% trans "Accession Reports" %}</a>
+      <a class="w3-bar-item w3-button w3-text-dark-grey w3-hover-text-deep-orange" role="menuitem" href="{% url 'taxonomy_identification_cleanup_report' %}">{% trans "Taxonomy identification cleanup" %}</a>
     </div>
   </div>
 {% endif %}

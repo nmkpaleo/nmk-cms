@@ -175,7 +175,12 @@ from cms.merge.services import (
 )
 from cms.merge.fuzzy import score_candidates
 from cms.resources import FieldSlipResource
-from .utils import build_accession_identification_maps, build_history_entries
+from .utils import (
+    build_accession_identification_maps,
+    build_history_entries,
+    identification_needs_taxonomy_cleanup,
+    iter_current_identifications,
+)
 from cms.utils import generate_accessions_from_series
 from cms.upload_processing import (
     find_uploaded_scans, process_file, queue_specimen_list_processing, scan_upload_lock,
@@ -320,6 +325,26 @@ def media_report_view(request):
         },
     }
     return render(request, 'reports/media_report.html', context)
+
+@login_required
+@user_passes_test(is_collection_manager)
+def taxonomy_identification_cleanup_report(request):
+    """List current identifications that need taxonomy cleanup."""
+
+    queryset = Identification.objects.select_related(
+        "accession_row__accession__specimen_prefix", "reference"
+    )
+    identifications = [
+        identification
+        for identification in iter_current_identifications(queryset)
+        if identification_needs_taxonomy_cleanup(identification)
+    ]
+    return render(
+        request,
+        "reports/taxonomy_identification_cleanup.html",
+        {"identifications": identifications},
+    )
+
 
 #accession distribution report
 @login_required
