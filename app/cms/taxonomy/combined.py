@@ -5,7 +5,8 @@ import hashlib
 import requests
 from django.conf import settings
 
-from ..models import FieldSlip, Identification, Taxon, TaxonExternalSource, TaxonomyImport
+from ..models import FieldSlip, Taxon, TaxonExternalSource, TaxonomyImport
+from ..utils import iter_current_identifications
 from ..taxon_identity import normalize_taxon_label, taxon_identity
 from .gbif import GbifClient
 from .sync import NowTaxonomySyncService, SynonymRecord, SyncIssue, _latest_version, _record_rank
@@ -26,10 +27,9 @@ class TaxonomySyncService(NowTaxonomySyncService):
         # values directly into the set to avoid a catalogue-sized temporary list.
         names.update(
             (name, "")
-            for verbatim, legacy in Identification.objects.order_by().values_list(
-                "taxon_verbatim", "taxon"
-            ).iterator()
-            if (name := normalize_taxon_label(verbatim) or normalize_taxon_label(legacy))
+            for identification in iter_current_identifications()
+            if (name := normalize_taxon_label(identification.taxon_verbatim)
+                or normalize_taxon_label(identification.taxon))
         )
         names.update(
             (name, "")

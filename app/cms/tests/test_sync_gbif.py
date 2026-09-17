@@ -1,5 +1,6 @@
 """Source precedence, stable links, and strict GBIF matching."""
 import copy
+from datetime import date
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -331,3 +332,26 @@ def test_gbif_outage_does_not_import_unestablished_now_mammal_homonym():
     ).preview()
     assert preview.counts["created"] == 0
     assert preview.issues[0].code == "gbif-match"
+
+
+@override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")
+def test_gbif_sync_uses_only_the_current_identification():
+    user = get_user_model().objects.get(username="sync-now-user")
+    row = make_accession_row(user)
+    set_current_user(user)
+    Identification.objects.create(
+        accession_row=row, taxon_verbatim="Obsolete taxon", date_identified=date(2020, 1, 1)
+    )
+    Identification.objects.create(
+        accession_row=row, taxon_verbatim="Struthio", date_identified=date(2024, 1, 1)
+    )
+    queried_names = []
+
+    def http_get(url, **kwargs):
+        queried_names.append(parse_qs(urlparse(url).query)["scientificName"][0])
+        return Response(payload())
+
+    preview = service(payload(), gbif_get=http_get).preview()
+
+    assert preview.counts["created"] == 1
+    assert queried_names == ["struthio"]

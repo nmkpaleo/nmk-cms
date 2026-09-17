@@ -23,6 +23,7 @@ from ..models import (
     TaxonStatus,
     TaxonomyImport,
 )
+from ..utils import iter_current_identifications
 
 logger = logging.getLogger(__name__)
 
@@ -317,11 +318,11 @@ class NowTaxonomySyncService:
         }
         # DrawerRegister.taxa and Identification.taxon_record already point to
         # existing_taxa. Free text is unranked and therefore matches by name.
-        names = set()
-        for verbatim, legacy in Identification.objects.order_by().values_list(
-            "taxon_verbatim", "taxon"
-        ).iterator():
-            names.add((_normalize_label(verbatim) or _normalize_label(legacy)).lower())
+        names = {
+            (_normalize_label(identification.taxon_verbatim)
+             or _normalize_label(identification.taxon)).lower()
+            for identification in iter_current_identifications()
+        }
         names.update(
             _normalize_label(name).lower()
             for name in FieldSlip.objects.order_by().values_list("verbatim_taxon", flat=True).iterator()
