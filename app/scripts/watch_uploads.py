@@ -11,14 +11,17 @@ from watchdog.observers import Observer
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
 
-from cms.upload_processing import INCOMING, process_file
+from cms.upload_processing import INCOMING, process_file, scan_upload_lock
 
 
 class UploadHandler(FileSystemEventHandler):
     def on_created(self, event):
         if event.is_directory:
             return
-        process_file(Path(event.src_path))
+        with scan_upload_lock():
+            path = Path(event.src_path)
+            if path.is_file():
+                process_file(path)
 
 
 def main():

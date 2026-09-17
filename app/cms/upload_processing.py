@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 import hashlib
 import logging
 import re
@@ -9,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 from django.conf import settings
-from django.core.files import File
+from django.core.files import File, locks
 from django.db import close_old_connections
 
 from .models import Media, SpecimenListPDF, SpecimenListPage
@@ -83,22 +84,40 @@ def create_manual_qc_media(path: Path) -> None:
     media.save()
 
 
-def find_uploaded_scan(filename: str) -> str | None:
-    """Return an existing scan's folder, including files without Media records."""
-    location = (
-        Media.objects.filter(file_name=filename)
+@contextmanager
+def scan_upload_lock():
+    """Serialize web batches and the incoming watcher across worker processes."""
+    root = Path(settings.MEDIA_ROOT)
+    root.mkdir(parents=True, exist_ok=True)
+    # Keep the inode in place: unlinking it would let workers acquire different locks.
+    with (root / ".scan-upload.lock").open("a+b") as handle:
+        if not locks.lock(handle, locks.LOCK_EX):
+            raise RuntimeError("Could not acquire scan upload lock")
+        try:
+            yield
+        finally:
+            locks.unlock(handle)
+
+
+def find_uploaded_scans(filenames) -> dict[str, str]:
+    """Index existing locations once per batch, while holding scan_upload_lock."""
+    names = set(filenames)
+    existing = {}
+    locations = (
+        Media.objects.filter(file_name__in=names)
         .exclude(media_location="")
         .order_by("pk")
-        .values_list("media_location", flat=True)
-        .first()
+        .values_list("file_name", "media_location")
     )
-    if location:
-        return str(Path(location).parent).replace("\\", "/")
+    for name, location in locations:
+        existing.setdefault(name, str(Path(location).parent).replace("\\", "/"))
     uploads = Path(settings.MEDIA_ROOT) / "uploads"
     for path in uploads.rglob("*"):
-        if path.is_file() and path.name == filename:
-            return str(path.parent.relative_to(settings.MEDIA_ROOT)).replace("\\", "/")
-    return None
+        if path.name in names and path.is_file():
+            existing.setdefault(
+                path.name, str(path.parent.relative_to(settings.MEDIA_ROOT)).replace("\\", "/")
+            )
+    return existing
 
 
 def process_file(src: Path) -> Path:

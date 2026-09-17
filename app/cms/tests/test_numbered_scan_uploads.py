@@ -66,9 +66,9 @@ class NumberedScanUploadTests(TestCase):
 
     def test_duplicate_is_skipped_in_each_upload_folder(self):
         self.client.force_login(self.user)
-        for folder in ("pending", "ocr", "incoming", "failed", "rejected", "manual_qc"):
+        for index, folder in enumerate(("pending", "ocr", "incoming", "failed", "rejected", "manual_qc")):
             with self.subTest(folder=folder):
-                filename = f"9LT {len(folder)}123.png"
+                filename = f"9LT {index}123.png"
                 existing = self.uploads_root / folder / filename
                 existing.parent.mkdir(parents=True, exist_ok=True)
                 existing.write_bytes(b"original")
@@ -80,8 +80,8 @@ class NumberedScanUploadTests(TestCase):
                     )
                 count = Media.objects.count()
                 upload = SimpleUploadedFile(filename, b"replacement", content_type="image/png")
-                response = self.client.post(self.url, {"files": upload})
-                self.assertEqual(response.status_code, 302)
+                response = self.client.post(self.url, {"files": upload}, follow=True)
+                self.assertEqual(response.status_code, 200)
                 self.assertEqual(existing.read_bytes(), b"original")
                 self.assertEqual(Media.objects.count(), count)
                 self.assertEqual(
@@ -109,3 +109,53 @@ class NumberedScanUploadTests(TestCase):
              f"Uploaded {new_name} (2 of 3)",
              f"Already uploaded {new_name} into uploads/pending folder (3 of 3)"],
         )
+
+    def test_batch_indexes_files_once_and_stages_outside_incoming(self):
+        from cms.upload_processing import process_file
+
+        self.client.force_login(self.user)
+        uploads = [SimpleUploadedFile(f"{i}LT 123.png", b"scan", content_type="image/png")
+                   for i in (1, 2, 3)]
+        sources = []
+
+        def process_staged(path):
+            self.assertNotIn(self.uploads_root, path.parents)
+            sources.append(path)
+            return process_file(path)
+
+        original_rglob = Path.rglob
+        traversals = []
+
+        def tracked_rglob(path, pattern):
+            traversals.append(path)
+            return original_rglob(path, pattern)
+
+        with patch("cms.views.process_file", side_effect=process_staged):
+            with patch.object(Path, "rglob", tracked_rglob):
+                response = self.client.post(self.url, {"files": uploads})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(traversals, [self.uploads_root])
+        self.assertEqual(len(sources), 3)
+        self.assertTrue(all(not path.parent.exists() for path in sources))
+
+    def test_upload_lock_serializes_workers_and_releases_after_error(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Event
+        from cms.upload_processing import scan_upload_lock
+
+        started, entered = Event(), Event()
+
+        def worker():
+            started.set()
+            with scan_upload_lock():
+                entered.set()
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            with self.assertRaisesRegex(ValueError, "test failure"):
+                with scan_upload_lock():
+                    future = executor.submit(worker)
+                    self.assertTrue(started.wait(5))
+                    self.assertFalse(entered.wait(0.1))
+                    raise ValueError("test failure")
+            future.result(timeout=5)
+        self.assertTrue(entered.is_set())
