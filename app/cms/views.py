@@ -4878,7 +4878,7 @@ def upload_scan(request):
                                 f'into {existing_folder} folder'
                                 if existing_folder else '(folder not recorded)'
                             )
-                            messages.info(
+                            messages.warning(
                                 request,
                                 f'Already uploaded {file.name} {location} '
                                 f'({index} of {total_files})',
