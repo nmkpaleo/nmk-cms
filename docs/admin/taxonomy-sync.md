@@ -83,7 +83,7 @@ The preview page is a dry-run. No records are modified. It displays:
 * **Accepted taxa sections** – tables describing accepted taxa that will be added or updated, including field-by-field changes.
 * **Synonym changes** – highlights synonym creations and updates, and the accepted taxon each will link to.
 * **Deactivations** – lists active records that will be set inactive if they no longer exist upstream (only when deactivation is enabled).
-* **Issues** – any blocking problems such as synonyms referencing missing accepted taxa. Resolve these before applying the sync.
+* **Issues** ? reviewable problems such as synonyms referencing missing accepted taxa. Applying skips the affected group while unrelated valid groups are saved.
 
 Use the preview to coordinate with data curators before making changes. You can close the page without side effects.
 
