@@ -29,7 +29,9 @@ def consolidate_taxa(apps, schema_editor):
             priority = (0 if taxon.external_source == "GBIF" and non_mammal else
                         1 if taxon.external_source == "NOW" else
                         2 if taxon.external_source == "GBIF" else 3)
-            return priority, not taxon.is_active, taxon.status != "accepted", taxon.pk
+            # A synonym cannot safely replace an accepted row: dependent links
+            # require the surviving taxon to remain an accepted target.
+            return taxon.status != "accepted", priority, not taxon.is_active, taxon.pk
         survivor = min(group, key=preference)
         survivors[survivor.pk] = (key, survivor)
         for taxon in group:
