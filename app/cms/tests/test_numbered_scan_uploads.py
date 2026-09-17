@@ -48,7 +48,7 @@ class NumberedScanUploadTests(TestCase):
             with self.subTest(filename=filename):
                 pending = self.uploads_root / "pending" / filename
                 self.assertEqual(pending.read_bytes(), b"scan-data")
-                media = Media.objects.get(media_location=f"uploads/pending/{filename}")
+                media = Media.objects.get(media_location=str(Path("uploads") / "pending" / filename))
                 self.assertIsNone(media.scanning_id)
 
     def test_malformed_numbered_scan_names_are_rejected(self):
