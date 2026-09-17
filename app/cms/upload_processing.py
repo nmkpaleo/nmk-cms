@@ -83,6 +83,24 @@ def create_manual_qc_media(path: Path) -> None:
     media.save()
 
 
+def find_uploaded_scan(filename: str) -> str | None:
+    """Return an existing scan's folder, including files without Media records."""
+    location = (
+        Media.objects.filter(file_name=filename)
+        .exclude(media_location="")
+        .order_by("pk")
+        .values_list("media_location", flat=True)
+        .first()
+    )
+    if location:
+        return str(Path(location).parent).replace("\\", "/")
+    uploads = Path(settings.MEDIA_ROOT) / "uploads"
+    for path in uploads.rglob("*"):
+        if path.is_file() and path.name == filename:
+            return str(path.parent.relative_to(settings.MEDIA_ROOT)).replace("\\", "/")
+    return None
+
+
 def process_file(src: Path) -> Path:
     """Validate ``src`` and move it to ``pending`` or ``rejected``.
 

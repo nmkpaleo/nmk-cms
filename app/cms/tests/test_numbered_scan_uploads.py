@@ -4,6 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
+from django.contrib.messages import get_messages
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
@@ -63,3 +64,48 @@ class NumberedScanUploadTests(TestCase):
                 self.assertTrue((self.uploads_root / "rejected" / filename).exists())
         self.assertFalse(Media.objects.exists())
 
+    def test_duplicate_is_skipped_in_each_upload_folder(self):
+        self.client.force_login(self.user)
+        for folder in ("pending", "ocr", "incoming", "failed", "rejected", "manual_qc"):
+            with self.subTest(folder=folder):
+                filename = f"9LT {len(folder)}123.png"
+                existing = self.uploads_root / folder / filename
+                existing.parent.mkdir(parents=True, exist_ok=True)
+                existing.write_bytes(b"original")
+                media = None
+                if folder in ("pending", "ocr"):
+                    media = Media.objects.create(
+                        media_location=f"uploads/{folder}/{filename}",
+                        ocr_data={"original": True},
+                    )
+                count = Media.objects.count()
+                upload = SimpleUploadedFile(filename, b"replacement", content_type="image/png")
+                response = self.client.post(self.url, {"files": upload})
+                self.assertEqual(response.status_code, 302)
+                self.assertEqual(existing.read_bytes(), b"original")
+                self.assertEqual(Media.objects.count(), count)
+                self.assertEqual(
+                    [str(message) for message in get_messages(response.wsgi_request)],
+                    [f"Already uploaded {filename} into uploads/{folder} folder (1 of 1)"],
+                )
+                if media:
+                    media.refresh_from_db()
+                    self.assertEqual(media.ocr_data, {"original": True})
+
+    def test_mixed_batch_skips_duplicate_and_uploads_new_file(self):
+        self.client.force_login(self.user)
+        old_name, new_name = "9LT 123.png", "10LT 123.png"
+        Media.objects.create(media_location=f"uploads/ocr/{old_name}")
+        uploads = [SimpleUploadedFile(name, b"new", content_type="image/png")
+                   for name in (old_name, new_name, new_name)]
+        response = self.client.post(self.url, {"files": uploads})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Media.objects.count(), 2)
+        self.assertFalse((self.uploads_root / "pending" / old_name).exists())
+        self.assertTrue((self.uploads_root / "pending" / new_name).exists())
+        self.assertEqual(
+            [str(message) for message in get_messages(response.wsgi_request)],
+            [f"Already uploaded {old_name} into uploads/ocr folder (1 of 3)",
+             f"Uploaded {new_name} (2 of 3)",
+             f"Already uploaded {new_name} into uploads/pending folder (3 of 3)"],
+        )

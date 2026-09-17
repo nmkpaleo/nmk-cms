@@ -175,7 +175,7 @@ from cms.merge.fuzzy import score_candidates
 from cms.resources import FieldSlipResource
 from .utils import build_accession_identification_maps, build_history_entries
 from cms.utils import generate_accessions_from_series
-from cms.upload_processing import process_file, queue_specimen_list_processing
+from cms.upload_processing import find_uploaded_scan, process_file, queue_specimen_list_processing
 from cms.ocr_processing import (
     process_pending_scans,
     describe_accession_conflicts,
@@ -4853,8 +4853,7 @@ def chatgpt_usage_report(request):
 def upload_scan(request):
     """Upload one or more scan images to the ``uploads/incoming`` folder.
 
-    The watcher script later validates filenames and moves each file to
-    ``uploads/pending`` or ``uploads/rejected`` as appropriate.
+    Skip previously uploaded filenames; validate and route new scans immediately.
     """
     incoming_dir = Path(settings.MEDIA_ROOT) / 'uploads' / 'incoming'
     os.makedirs(incoming_dir, exist_ok=True)
@@ -4868,12 +4867,26 @@ def upload_scan(request):
             total_files = len(files)
             fs = FileSystemStorage(location=incoming_dir)
             for index, file in enumerate(files, start=1):
+                existing_folder = find_uploaded_scan(file.name)
+                if existing_folder is not None:
+                    messages.info(
+                        request,
+                        f'Already uploaded {file.name} into {existing_folder} folder '
+                        f'({index} of {total_files})',
+                    )
+                    continue
                 saved_name = fs.save(file.name, file)
                 saved_path = incoming_dir / saved_name
                 if saved_name != file.name:
                     desired_path = incoming_dir / file.name
                     if desired_path.exists():
-                        desired_path.unlink()
+                        saved_path.unlink()
+                        messages.info(
+                            request,
+                            f'Already uploaded {file.name} into uploads/incoming folder '
+                            f'({index} of {total_files})',
+                        )
+                        continue
                     saved_path.rename(desired_path)
                     saved_name = file.name
                     saved_path = desired_path

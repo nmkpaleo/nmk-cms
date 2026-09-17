@@ -12,3 +12,7 @@ Collection Managers can submit scanned images for processing.
 4. Submit the form to validate the files and queue them for processing.
 
 The system moves valid OCR files to the pending folder and manual QC files to the manual QC folder, creating matching Media records. See [Scan Uploads (Admin)](../admin/scan-uploads.md) for details.
+
+## Duplicate filenames
+
+Uploading a filename already recorded in Media or present in an uploads folder skips that file without replacing it or creating another Media record. The message identifies the existing folder and batch position, for example: `Already uploaded 9LT 1082726110849.png into uploads/ocr folder (7 of 7)`. Other new files in the batch continue uploading.

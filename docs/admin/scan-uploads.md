@@ -15,3 +15,7 @@ Staff can upload scanned images directly into the CMS for further processing.
 - Valid OCR files are moved to `uploads/pending/` and create a corresponding Media entry.
 - Manual QC JPEGs are moved to `uploads/manual_qc/` and immediately create a Media entry ready for the manual import workflow.
 - Files with other naming patterns are moved to `uploads/rejected/` for manual review.
+
+## Duplicate filenames
+
+Uploading a filename already recorded in Media or present in an uploads folder skips that file without replacing it or creating another Media record. The message identifies the existing folder and batch position, for example: `Already uploaded 9LT 1082726110849.png into uploads/ocr folder (7 of 7)`. Other new files in the batch continue uploading.
