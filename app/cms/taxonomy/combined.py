@@ -84,10 +84,10 @@ class TaxonomySyncService(NowTaxonomySyncService):
         # already in NOW, even though that accepted name was not locally entered.
         candidate_keys = {taxon_identity(r.name, _record_rank(r.rank)) for r in candidates}
         additional_synonyms = [r for r in full_now_synonyms if taxon_identity(r.name, _record_rank(r.rank)) in candidate_keys]
-        dependency_ids = {r.accepted_external_id for r in additional_synonyms}
+        dependency_ids = {r.accepted_key for r in additional_synonyms}
         candidates.extend(additional_synonyms)
         candidates.extend(r for r in full_now_accepted if taxon_identity(r.name, _record_rank(r.rank)) in candidate_keys
-                          or r.external_id in dependency_ids)
+                          or (r.external_source, r.external_id) in dependency_ids)
 
         local_keys = {
             (name, _record_rank(rank)) for name, rank in names if rank
