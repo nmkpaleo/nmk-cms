@@ -10,7 +10,7 @@
     {% translate "Sync Taxa Now" %}
   </h1>
   <p class="w3-text-gray">
-    {% translate "Review the proposed NOW taxonomy changes before applying them." %}
+    {% translate "Review taxonomy changes for names in the catalogue, identifications and field slips. NOW is preferred for mammals; GBIF supplies other classes and mammals missing from NOW." %}
   </p>
   {% if source_version %}
   <p class="w3-small w3-text-gray">
@@ -86,7 +86,7 @@
         <tbody>
           {% for record in preview_data.accepted_creates %}
           <tr>
-            <td>{{ record.name }}</td>
+            <td>{{ record.name }} <span class="w3-tag w3-light-grey">{{ record.source }}</span></td>
             <td>
               {% if record.rank %}
                 {{ record.rank }}
@@ -166,7 +166,7 @@
         <tbody>
           {% for record in preview_data.synonym_creates %}
           <tr>
-            <td>{{ record.name }}</td>
+            <td>{{ record.name }} <span class="w3-tag w3-light-grey">{{ record.source }}</span></td>
             <td>{{ record.accepted_name }}</td>
             <td>{% translate "Create link" %}</td>
           </tr>
@@ -234,6 +234,7 @@
         {% translate "Issues" %}
       </h2>
     </header>
+    <p>{% translate "Issues are skipped. Valid changes can still be applied." %}</p>
     {% if preview_data.issues %}
     <div class="w3-panel w3-pale-red w3-border w3-border-red" role="alert">
       <ul class="w3-ul w3-small">
@@ -253,8 +254,10 @@
   </section>
 
   <section class="w3-section w3-padding-16">
+    <p>{% translate "Apply saves these reviewed changes without repeating the source lookups. This preview expires after one hour or when catalogue data changes." %}</p>
     <form method="post" action="{{ apply_url }}" class="w3-bar w3-margin-bottom">
       {% csrf_token %}
+      <input type="hidden" name="preview_token" value="{{ preview_token }}">
       <button type="submit" class="w3-button w3-teal w3-margin-right">
         <i class="fa-solid fa-rotate" aria-hidden="true"></i>
         {% translate "Apply sync" %}

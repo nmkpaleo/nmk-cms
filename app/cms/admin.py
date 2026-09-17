@@ -1,3 +1,4 @@
+import logging
 from typing import Any, Mapping
 
 from django.contrib import admin, messages
@@ -84,7 +85,10 @@ from django.utils.timezone import now, localtime
 from django.contrib.auth import admin as auth_admin
 from django.contrib.auth import get_user_model
 
-from .taxonomy import NowTaxonomySyncService
+from .taxonomy.combined import TaxonomySyncService
+from .taxonomy.snapshot import catalogue_fingerprint, sign_preview, apply_signed_preview, PreviewUnavailable
+
+logger = logging.getLogger(__name__)
 from cms.upload_processing import queue_specimen_list_processing
 
 # Configure the logger
@@ -109,13 +113,11 @@ def _user_can_sync_taxa(user) -> bool:
 def _serialize_changeset(update) -> list[dict[str, str]]:
     changes = []
     for field, new_value in update.changes.items():
+        old_value = getattr(update, "previous", {}).get(field, getattr(update.instance, field))
         if field == "accepted_taxon":
-            old_value = (
-                update.instance.accepted_taxon.taxon_name if update.instance.accepted_taxon else ""
-            )
+            old_value = old_value.taxon_name if old_value else ""
             new_display = getattr(update.record, "accepted_name", "")
         else:
-            old_value = getattr(update.instance, field, "")
             new_display = new_value
         changes.append(
             {
@@ -135,6 +137,7 @@ def _serialize_preview_for_template(preview):
                 "rank": record.rank,
                 "author_year": record.author_year,
                 "external_id": record.external_id,
+                "source": record.external_source,
             }
             for record in preview.accepted_to_create
         ],
@@ -142,6 +145,7 @@ def _serialize_preview_for_template(preview):
             {
                 "name": update.record.name,
                 "external_id": update.record.external_id,
+                "source": update.record.external_source,
                 "changes": _serialize_changeset(update),
             }
             for update in preview.accepted_to_update
@@ -151,6 +155,7 @@ def _serialize_preview_for_template(preview):
                 "name": record.name,
                 "accepted_name": record.accepted_name,
                 "external_id": record.external_id,
+                "source": record.external_source,
             }
             for record in preview.synonyms_to_create
         ],
@@ -159,6 +164,7 @@ def _serialize_preview_for_template(preview):
                 "name": update.record.name,
                 "accepted_name": update.record.accepted_name,
                 "external_id": update.record.external_id,
+                "source": update.record.external_source,
                 "changes": _serialize_changeset(update),
             }
             for update in preview.synonyms_to_update
@@ -185,10 +191,17 @@ def _taxonomy_sync_preview_view(request):
     if not _user_can_sync_taxa(request.user):
         raise PermissionDenied
 
-    service = NowTaxonomySyncService()
+    service = TaxonomySyncService()
 
     try:
+        fingerprint_before = catalogue_fingerprint()
         preview = service.preview()
+        # Remote previewing can take time. A catalogue edit during that work
+        # invalidates the derived diff, so require a fresh preview.
+        fingerprint = catalogue_fingerprint()
+        if fingerprint != fingerprint_before:
+            raise PreviewUnavailable("The catalogue changed while this preview was generated. Generate a new preview.")
+        preview_token = sign_preview(preview, request.user.pk, fingerprint)
     except Exception as exc:  # pragma: no cover - defensive guard for runtime errors
         messages.error(
             request,
@@ -209,6 +222,7 @@ def _taxonomy_sync_preview_view(request):
         "counts": preview.counts,
         "source_version": preview.source_version,
         "apply_url": reverse("taxonomy_sync_apply"),
+        "preview_token": preview_token,
         "back_url": reverse(
             f"admin:{Taxon._meta.app_label}_{Taxon._meta.model_name}_changelist"
         ),
@@ -223,16 +237,18 @@ def _taxonomy_sync_apply_view(request):
     if request.method != "POST":
         return redirect("taxonomy_sync_preview")
 
-    service = NowTaxonomySyncService()
+    service = TaxonomySyncService()
 
     try:
-        result = service.sync(apply=True)
-    except Exception as exc:  # pragma: no cover - defensive guard for runtime errors
-        messages.error(
-            request,
-            _("Unable to apply taxonomy sync: %(error)s") % {"error": exc},
-        )
-        return redirect("taxonomy_sync_preview")
+        result = apply_signed_preview(request.POST.get("preview_token", ""), request.user.pk, service)
+    except Exception as exc:
+        logger.exception("Taxonomy sync apply failed for user %s", request.user.pk)
+        return TemplateResponse(request, "admin/taxonomy/sync_error.html", {
+            **admin.site.each_context(request),
+            "title": _("Taxonomy sync was not applied"),
+            "error": str(exc),
+            "preview_url": reverse("taxonomy_sync_preview"),
+        }, status=400 if isinstance(exc, PreviewUnavailable) else 500)
 
     import_log = result.import_log
     log_url = None
@@ -259,6 +275,7 @@ def _taxonomy_sync_apply_view(request):
         ),
         "preview_url": reverse("taxonomy_sync_preview"),
         "success": bool(import_log and import_log.ok),
+        "has_applied_changes": any(preview.counts.get(key, 0) for key in ("created", "updated", "deactivated", "identifications_linked")),
     }
 
     return TemplateResponse(request, "admin/taxonomy/sync_result.html", context)

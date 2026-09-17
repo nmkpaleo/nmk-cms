@@ -1,6 +1,12 @@
 # Changelog
 
 ## Unreleased
+
+- Harden taxonomy sync preview handling: normalize blank ranks and legacy names, record identification relinks, retain GBIF response hashes, and tolerate malformed GBIF data.
+- Address taxonomy review findings: source-aware taxonomy import/export relations, bounded concurrent GBIF lookups, source-specific IDs, related-record locks, historical identity backfill (migration 0090), and IDs that fit long NOW names.
+- Fix taxonomy sync synonym creation and updates on databases where bulk inserts do not return primary keys.
+- Apply the reviewed taxonomy preview without refetching sources, save valid taxa despite independent data errors, display apply failures, and support long NOW authorship with migration 0089.
+- Limit taxonomy sync to locally recorded taxa, add GBIF with NOW priority for mammals, preserve links across source changes, and consolidate duplicate name/rank records with migration 0088.
 - Require hash-verified Python dependency locks in CI, staging/production quality checks, and optional CPU inference validation; restore the Torch/Torchvision import and CPU operation smoke check.
 - Add OpenSSF Scorecard analysis and publish maximum-mode provenance and SPDX SBOM attestations with staging and production container images.
 - Remove request-derived post-merge redirects to resolve CodeQL alert #25.

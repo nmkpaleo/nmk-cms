@@ -240,7 +240,9 @@ USE_REDIS = os.getenv("USE_REDIS", "false").lower() == "true"
 
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'BACKEND': 'django_redis.cache.RedisCache' if USE_REDIS else 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'redis://redis:6379' if USE_REDIS else '',
+        'OPTIONS': {'CLIENT_CLASS': 'django_redis.client.DefaultClient'} if USE_REDIS else {},
     },
     'select2': {
         'BACKEND': 'django_redis.cache.RedisCache' if USE_REDIS else 'django.core.cache.backends.locmem.LocMemCache',
@@ -296,3 +298,7 @@ X_FRAME_OPTIONS = 'SAMEORIGIN'
 # TaxonNow integration URLs
 TAXON_NOW_ACCEPTED_URL = get_var("TAXON_NOW_ACCEPTED_URL", "")
 TAXON_NOW_SYNONYMS_URL = get_var("TAXON_NOW_SYNONYMS_URL", "")
+TAXON_GBIF_MATCH_URL = get_var("TAXON_GBIF_MATCH_URL", "https://api.gbif.org/v2/species/match")
+TAXON_GBIF_CHECKLIST_KEY = get_var("TAXON_GBIF_CHECKLIST_KEY", "7ddf754f-d193-4cc9-b351-99906754a03b")
+TAXON_GBIF_TIMEOUT = int(get_var("TAXON_GBIF_TIMEOUT", 15))
+TAXON_GBIF_WORKERS = int(get_var("TAXON_GBIF_WORKERS", 4))

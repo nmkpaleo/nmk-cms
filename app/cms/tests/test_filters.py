@@ -208,19 +208,15 @@ class AccessionFilterTests(TestCase):
         make_taxon(
             "Filtertaxon example",
             external_id="NOW:species:Filtertaxon example",
-            scientific_name_authorship="Author One",
-        )
-        make_taxon(
-            "Filtertaxon example",
-            external_id="NOW:species:Filtertaxon example:dup",
-            scientific_name_authorship="Author Two",
         )
 
-        Identification.objects.create(
+        identification = Identification.objects.create(
             accession_row=accession_row,
             taxon_verbatim="Filtertaxon example",
         )
 
+        # Represent a historical identification awaiting automatic linkage.
+        Identification.objects.filter(pk=identification.pk).update(taxon_record=None)
         set_current_user(previous_user)
 
         qs = Accession.objects.all()
