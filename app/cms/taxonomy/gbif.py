@@ -75,12 +75,13 @@ class GbifClient:
                 diagnostics = {}
             if not isinstance(usage, dict) or not isinstance(diagnostics, dict):
                 raise TypeError("GBIF usage and diagnostics must be JSON objects")
+            if diagnostics.get("matchType") != "EXACT":
+                raise GbifMatchError("GBIF did not return an exact name/rank match")
             raw_canonical = usage.get("canonicalName")
             if not isinstance(raw_canonical, str):
                 raise TypeError("GBIF canonical name must be a string")
             canonical = normalize_taxon_label(raw_canonical)
-            if (diagnostics.get("matchType") != "EXACT"
-                    or canonical.lower() != normalize_taxon_label(name).lower()
+            if (canonical.lower() != normalize_taxon_label(name).lower()
                     or (rank and usage.get("rank", "").lower() != rank.lower())):
                 raise GbifMatchError("GBIF did not return an exact name/rank match")
             classification = {}
