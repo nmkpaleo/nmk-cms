@@ -3,8 +3,11 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from crum import set_current_user
+from django.contrib.auth import get_user_model
 
 from cms import resources as cms_resources
+from cms.models import Taxon, TaxonStatus
 
 
 class _Dataset:
@@ -202,3 +205,49 @@ def test_semicolon_many_to_many_widget_filters_existing_values(monkeypatch):
     monkeypatch.setattr(cms_resources.Locality, "objects", _M2MManager())
     result = widget.clean("A;B")
     assert len(result) == 1
+
+
+@pytest.fixture
+def current_model_user(db):
+    user, _ = get_user_model().objects.get_or_create(username="resource-taxon-user")
+    set_current_user(user)
+    try:
+        yield user
+    finally:
+        set_current_user(None)
+
+
+@pytest.mark.django_db
+def test_taxon_external_id_widget_uses_source_to_disambiguate_ids(current_model_user):
+    now = Taxon.objects.create(
+        taxon_name="Now target", taxon_rank="genus", status=TaxonStatus.ACCEPTED,
+        external_source="NOW", external_id="shared-id",
+    )
+    gbif = Taxon.objects.create(
+        taxon_name="Gbif target", taxon_rank="genus", status=TaxonStatus.ACCEPTED,
+        external_source="GBIF", external_id="shared-id",
+    )
+    widget = cms_resources.TaxonExternalIdWidget("taxon_source")
+
+    assert widget.clean("shared-id", {"taxon_source": "NOW"}) == now
+    assert widget.clean("shared-id", {"taxon_source": "GBIF"}) == gbif
+    with pytest.raises(Taxon.MultipleObjectsReturned):
+        widget.clean("shared-id", {})
+
+
+def test_taxonomy_relation_source_columns_export_related_source():
+    target = SimpleNamespace(external_source="NOW")
+    taxon = SimpleNamespace(accepted_taxon=target, parent=target)
+    identification = SimpleNamespace(taxon_record=target)
+
+    taxon_resource = cms_resources.TaxonResource()
+    identification_resource = cms_resources.IdentificationResource()
+    assert taxon_resource.dehydrate_accepted_taxon_source(taxon) == "NOW"
+    assert taxon_resource.dehydrate_parent_source(taxon) == "NOW"
+    assert identification_resource.dehydrate_taxon_record_source(identification) == "NOW"
+    assert "accepted_taxon_source" in taxon_resource._meta.fields
+    assert "parent_source" in taxon_resource._meta.fields
+    assert "taxon_record_source" in identification_resource._meta.fields
+    assert identification_resource._meta.export_order[
+        identification_resource._meta.export_order.index("taxon_record") + 1
+    ] == "taxon_record_source"
