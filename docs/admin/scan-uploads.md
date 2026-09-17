@@ -21,3 +21,5 @@ Staff can upload scanned images directly into the CMS for further processing.
 Uploading a filename already recorded in Media or present in an uploads folder skips that file without replacing it or creating another Media record. The message identifies the existing folder and batch position, for example: `Already uploaded 9LT 1082726110849.png into uploads/ocr folder (7 of 7)`. Other new files in the batch continue uploading.
 
 Web uploads are staged in a private temporary directory under the media root, then processed by the web request. The incoming-folder watcher remains responsible for files delivered directly to `uploads/incoming/`. Web batches and the watcher share `.scan-upload.lock` under the media root; workers must share this filesystem and support file locking. The existing-file index is built once per web batch.
+
+The watcher checks duplicate filenames too, excluding the incoming source itself. It leaves duplicates in `uploads/incoming/` and logs their existing location for manual review. Media records without a stored path still block duplicate uploads; the web message says `(folder not recorded)` unless an existing file supplies the folder.

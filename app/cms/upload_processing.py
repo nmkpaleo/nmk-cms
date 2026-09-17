@@ -99,24 +99,29 @@ def scan_upload_lock():
             locks.unlock(handle)
 
 
-def find_uploaded_scans(filenames) -> dict[str, str]:
-    """Index existing locations once per batch, while holding scan_upload_lock."""
+def find_uploaded_scans(filenames, *, exclude_path: Path | None = None) -> dict[str, str]:
+    """Index duplicate names while holding scan_upload_lock.
+
+    An empty folder means a Media record exists without a stored location.
+    Watcher callers exclude only their source file, never a matching Media row.
+    """
     names = set(filenames)
+    excluded = exclude_path.resolve() if exclude_path is not None else None
     existing = {}
     locations = (
         Media.objects.filter(file_name__in=names)
-        .exclude(media_location="")
         .order_by("pk")
         .values_list("file_name", "media_location")
     )
     for name, location in locations:
-        existing.setdefault(name, str(Path(location).parent).replace("\\", "/"))
+        folder = str(Path(location).parent).replace("\\", "/") if location else ""
+        if not existing.get(name):
+            existing[name] = folder
     uploads = Path(settings.MEDIA_ROOT) / "uploads"
     for path in uploads.rglob("*"):
-        if path.name in names and path.is_file():
-            existing.setdefault(
-                path.name, str(path.parent.relative_to(settings.MEDIA_ROOT)).replace("\\", "/")
-            )
+        if path.name in names and path.is_file() and path.resolve() != excluded:
+            if not existing.get(path.name):
+                existing[path.name] = str(path.parent.relative_to(settings.MEDIA_ROOT)).replace("\\", "/")
     return existing
 
 

@@ -4874,9 +4874,13 @@ def upload_scan(request):
                     for index, file in enumerate(files, start=1):
                         existing_folder = existing.get(file.name)
                         if existing_folder is not None:
+                            location = (
+                                f'into {existing_folder} folder'
+                                if existing_folder else '(folder not recorded)'
+                            )
                             messages.info(
                                 request,
-                                f'Already uploaded {file.name} into {existing_folder} folder '
+                                f'Already uploaded {file.name} {location} '
                                 f'({index} of {total_files})',
                             )
                             continue

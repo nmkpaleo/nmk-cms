@@ -159,3 +159,84 @@ class NumberedScanUploadTests(TestCase):
                     raise ValueError("test failure")
             future.result(timeout=5)
         self.assertTrue(entered.is_set())
+
+    def test_media_without_location_still_blocks_upload(self):
+        self.client.force_login(self.user)
+        filename = "9LT 123.png"
+        Media.objects.create(file_name=filename, media_location="")
+        upload = SimpleUploadedFile(filename, b"new", content_type="image/png")
+        response = self.client.post(self.url, {"files": upload}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Media.objects.count(), 1)
+        self.assertFalse((self.uploads_root / "pending" / filename).exists())
+        self.assertEqual(
+            [str(message) for message in get_messages(response.wsgi_request)],
+            [f"Already uploaded {filename} (folder not recorded) (1 of 1)"],
+        )
+
+    def test_watcher_preserves_existing_files_and_media(self):
+        from types import SimpleNamespace
+        from scripts.watch_uploads import UploadHandler
+
+        for index, folder in enumerate(("pending", "ocr", "failed", "rejected", "manual_qc")):
+            with self.subTest(folder=folder):
+                filename = f"{index}LT 456.png"
+                existing = self.uploads_root / folder / filename
+                existing.parent.mkdir(parents=True, exist_ok=True)
+                existing.write_bytes(b"original")
+                media = Media.objects.create(
+                    media_location=f"uploads/{folder}/{filename}",
+                    ocr_data={"preserved": True},
+                    ocr_status=Media.OCRStatus.COMPLETED,
+                )
+                incoming = self.uploads_root / "incoming" / filename
+                incoming.parent.mkdir(parents=True, exist_ok=True)
+                incoming.write_bytes(b"duplicate")
+                count = Media.objects.count()
+                with self.assertLogs("scripts.watch_uploads", level="INFO"):
+                    UploadHandler().on_created(SimpleNamespace(is_directory=False, src_path=str(incoming)))
+                self.assertEqual(existing.read_bytes(), b"original")
+                self.assertEqual(incoming.read_bytes(), b"duplicate")
+                self.assertEqual(Media.objects.count(), count)
+                media.refresh_from_db()
+                self.assertEqual(media.ocr_data, {"preserved": True})
+                self.assertEqual(media.ocr_status, Media.OCRStatus.COMPLETED)
+
+    def test_watcher_accepts_new_source_and_ignores_repeat_event(self):
+        from types import SimpleNamespace
+        from scripts.watch_uploads import UploadHandler
+
+        filename = "1LT 456.png"
+        incoming = self.uploads_root / "incoming" / filename
+        incoming.parent.mkdir(parents=True, exist_ok=True)
+        incoming.write_bytes(b"new scan")
+        event = SimpleNamespace(is_directory=False, src_path=str(incoming))
+        handler = UploadHandler()
+        handler.on_created(event)
+        handler.on_created(event)
+        self.assertFalse(incoming.exists())
+        self.assertEqual((self.uploads_root / "pending" / filename).read_bytes(), b"new scan")
+        self.assertEqual(Media.objects.count(), 1)
+
+    def test_watcher_detects_file_without_media_and_media_without_file(self):
+        from types import SimpleNamespace
+        from scripts.watch_uploads import UploadHandler
+
+        for index, record_only in enumerate((True, False)):
+            with self.subTest(record_only=record_only):
+                filename = f"{index}LT 789.png"
+                if record_only:
+                    Media.objects.create(file_name=filename, media_location="")
+                else:
+                    existing = self.uploads_root / "ocr" / filename
+                    existing.parent.mkdir(parents=True, exist_ok=True)
+                    existing.write_bytes(b"original")
+                incoming = self.uploads_root / "incoming" / filename
+                incoming.parent.mkdir(parents=True, exist_ok=True)
+                incoming.write_bytes(b"duplicate")
+                count = Media.objects.count()
+                with patch("scripts.watch_uploads.process_file") as process:
+                    UploadHandler().on_created(SimpleNamespace(is_directory=False, src_path=str(incoming)))
+                process.assert_not_called()
+                self.assertTrue(incoming.exists())
+                self.assertEqual(Media.objects.count(), count)
