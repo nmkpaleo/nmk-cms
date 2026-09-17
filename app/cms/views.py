@@ -4,6 +4,8 @@ Template context inventory and authentication coverage are catalogued in
 ``docs/development/frontend-guidelines.md`` to aid upcoming template refactors.
 """
 
+from tempfile import TemporaryDirectory
+
 import copy
 import csv
 import json
@@ -175,7 +177,9 @@ from cms.merge.fuzzy import score_candidates
 from cms.resources import FieldSlipResource
 from .utils import build_accession_identification_maps, build_history_entries
 from cms.utils import generate_accessions_from_series
-from cms.upload_processing import process_file, queue_specimen_list_processing
+from cms.upload_processing import (
+    find_uploaded_scans, process_file, queue_specimen_list_processing, scan_upload_lock,
+)
 from cms.ocr_processing import (
     process_pending_scans,
     describe_accession_conflicts,
@@ -4851,14 +4855,10 @@ def chatgpt_usage_report(request):
 
 @staff_member_required
 def upload_scan(request):
-    """Upload one or more scan images to the ``uploads/incoming`` folder.
+    """Stage and process a batch of scan images outside the watcher directory.
 
-    The watcher script later validates filenames and moves each file to
-    ``uploads/pending`` or ``uploads/rejected`` as appropriate.
+    Skip previously uploaded filenames; validate and route new scans immediately.
     """
-    incoming_dir = Path(settings.MEDIA_ROOT) / 'uploads' / 'incoming'
-    os.makedirs(incoming_dir, exist_ok=True)
-
     form_kwargs = {"max_upload_bytes": settings.SCAN_UPLOAD_MAX_BYTES}
 
     if request.method == 'POST':
@@ -4866,22 +4866,33 @@ def upload_scan(request):
         if form.is_valid():
             files = form.cleaned_data['files']
             total_files = len(files)
-            fs = FileSystemStorage(location=incoming_dir)
-            for index, file in enumerate(files, start=1):
-                saved_name = fs.save(file.name, file)
-                saved_path = incoming_dir / saved_name
-                if saved_name != file.name:
-                    desired_path = incoming_dir / file.name
-                    if desired_path.exists():
-                        desired_path.unlink()
-                    saved_path.rename(desired_path)
-                    saved_name = file.name
-                    saved_path = desired_path
-                process_file(saved_path)
-                messages.success(
-                    request,
-                    f'Uploaded {file.name} ({index} of {total_files})',
-                )
+            with scan_upload_lock():
+                existing = find_uploaded_scans(file.name for file in files)
+                # The incoming watcher must never see partially saved web uploads.
+                with TemporaryDirectory(prefix=".scan-upload-", dir=settings.MEDIA_ROOT) as staging:
+                    fs = FileSystemStorage(location=staging)
+                    for index, file in enumerate(files, start=1):
+                        existing_folder = existing.get(file.name)
+                        if existing_folder is not None:
+                            location = (
+                                f'into {existing_folder} folder'
+                                if existing_folder else '(folder not recorded)'
+                            )
+                            messages.warning(
+                                request,
+                                f'Already uploaded {file.name} {location} '
+                                f'({index} of {total_files})',
+                            )
+                            continue
+                        saved_name = fs.save(file.name, file)
+                        destination = process_file(Path(staging) / saved_name)
+                        existing[file.name] = str(
+                            destination.parent.relative_to(settings.MEDIA_ROOT)
+                        ).replace("\\", "/")
+                        messages.success(
+                            request,
+                            f'Uploaded {file.name} ({index} of {total_files})',
+                        )
             return redirect('admin-upload-scan')
     else:
         form = ScanUploadForm(**form_kwargs)

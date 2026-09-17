@@ -460,7 +460,7 @@ class UploadProcessingTests(TestCase):
         media = Media.objects.get(media_location=f"uploads/pending/{filename}")
         self.assertEqual(media.scanning, self.scanning)
 
-    def test_upload_scan_restores_original_name_after_storage_collision(self):
+    def test_upload_scan_preserves_existing_incoming_file(self):
         incoming = Path(settings.MEDIA_ROOT) / "uploads" / "incoming"
         incoming.mkdir(parents=True, exist_ok=True)
         filename = self._filename_for(self.scanning.start_time + timedelta(minutes=2))
@@ -494,7 +494,8 @@ class UploadProcessingTests(TestCase):
                 response = self.client.post(url, {"files": [upload]}, follow=True)
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(processed_paths), 1)
+        self.assertEqual(len(processed_paths), 0)
+        self.assertEqual(original.read_bytes(), b"original")
         self.assertTrue((incoming / filename).exists())
         self.assertFalse((incoming / collision_name).exists())
 
