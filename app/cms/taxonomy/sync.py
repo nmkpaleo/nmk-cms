@@ -657,7 +657,7 @@ class NowTaxonomySyncService:
         # usage can keep its row as a synonym while its old ID moves to the
         # new accepted name. This is atomic with the remaining changes.
         changing_ids = [u.instance.pk for u in preview.accepted_to_update + preview.synonyms_to_update
-                        if "external_id" in u.changes or "external_source" in u.changes]
+                        if "external_id" in u.changes]
         Taxon.objects.filter(pk__in=changing_ids).update(external_id=None)
         if preview.accepted_to_create:
             accepted_instances = [
