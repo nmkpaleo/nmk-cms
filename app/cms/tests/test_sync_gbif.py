@@ -10,6 +10,7 @@ from django.db import IntegrityError, transaction
 from django.test import override_settings
 
 from app.cms.models import Taxon, TaxonStatus, Identification, DrawerRegister
+from app.cms.taxonomy import combined
 from app.cms.taxonomy.combined import TaxonomySyncService
 from app.cms.taxonomy.gbif import GbifClient, GbifMatchError
 from app.cms.tests.test_sync_now import authenticated_model_user, _field_slip, _http_get_factory
@@ -357,3 +358,19 @@ def test_gbif_sync_uses_only_the_current_identification():
 
     assert preview.counts["created"] == 1
     assert queried_names == ["struthio"]
+
+
+@override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")
+def test_combined_preview_scans_current_identifications_once(monkeypatch):
+    calls = 0
+
+    def current_identifications():
+        nonlocal calls
+        calls += 1
+        return iter(())
+
+    monkeypatch.setattr(combined, "iter_current_identifications", current_identifications)
+
+    service(payload()).preview()
+
+    assert calls == 1

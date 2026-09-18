@@ -25,19 +25,22 @@ class TaxonomySyncService(NowTaxonomySyncService):
         # Free-text identifications have no known rank; retain that query even
         # when a catalogue row has the same label at a different rank. Stream the
         # values directly into the set to avoid a catalogue-sized temporary list.
-        names.update(
-            (name, "")
+        local_names = {
+            name.lower()
             for identification in iter_current_identifications()
             if (name := normalize_taxon_label(identification.taxon_verbatim)
                 or normalize_taxon_label(identification.taxon))
-        )
-        names.update(
-            (name, "")
+        }
+        local_names.update(
+            name.lower()
             for verbatim in FieldSlip.objects.order_by().values_list("verbatim_taxon", flat=True).iterator()
             if (name := normalize_taxon_label(verbatim))
         )
+        names.update((name, "") for name in local_names)
         names = {(name.lower(), rank) for name, rank in names if name}
-        now_accepted, now_synonyms = self._scope_records(now_accepted, now_synonyms, taxa)
+        now_accepted, now_synonyms = self._scope_records(
+            now_accepted, now_synonyms, taxa, local_names=local_names
+        )
         candidates = list(now_accepted) + list(now_synonyms)
         issues = []
         failed_names = set()

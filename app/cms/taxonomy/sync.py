@@ -310,6 +310,7 @@ class NowTaxonomySyncService:
         accepted_records: Sequence[AcceptedRecord],
         synonym_records: Sequence[SynonymRecord],
         existing_taxa: Sequence[Taxon],
+        local_names: set[str] | None = None,
     ) -> tuple[List[AcceptedRecord], List[SynonymRecord]]:
         """Keep local names and accepted targets needed by their synonyms."""
         taxon_keys = {
@@ -318,15 +319,18 @@ class NowTaxonomySyncService:
         }
         # DrawerRegister.taxa and Identification.taxon_record already point to
         # existing_taxa. Free text is unranked and therefore matches by name.
-        names = {
-            (_normalize_label(identification.taxon_verbatim)
-             or _normalize_label(identification.taxon)).lower()
-            for identification in iter_current_identifications()
-        }
-        names.update(
-            _normalize_label(name).lower()
-            for name in FieldSlip.objects.order_by().values_list("verbatim_taxon", flat=True).iterator()
-        )
+        if local_names is None:
+            names = {
+                (_normalize_label(identification.taxon_verbatim)
+                 or _normalize_label(identification.taxon)).lower()
+                for identification in iter_current_identifications()
+            }
+            names.update(
+                _normalize_label(name).lower()
+                for name in FieldSlip.objects.order_by().values_list("verbatim_taxon", flat=True).iterator()
+            )
+        else:
+            names = set(local_names)
         names.discard("")
         existing_ids = {
             taxon.external_id for taxon in existing_taxa

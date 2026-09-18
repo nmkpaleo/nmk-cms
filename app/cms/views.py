@@ -178,6 +178,7 @@ from cms.resources import FieldSlipResource
 from .utils import (
     build_accession_identification_maps,
     build_history_entries,
+    current_identification_key,
     identification_needs_taxonomy_cleanup,
     iter_current_identifications,
 )
@@ -1979,8 +1980,9 @@ class AccessionRowDetailView(DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['natureofspecimens'] = list(self.object.natureofspecimen_set.all())
-        # Order identifications by date_identified DESC (nulls last), then created_on DESC
-        context['identifications'] = list(self.object.identification_set.all())
+        context['identifications'] = sorted(
+            self.object.identification_set.all(), key=current_identification_key, reverse=True
+        )
         context['can_edit'] = (
             self.request.user.is_superuser or is_collection_manager(self.request.user)
         )
