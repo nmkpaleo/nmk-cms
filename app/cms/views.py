@@ -948,7 +948,7 @@ def prefetch_accession_related(qs):
             ),
             Prefetch(
                 'identification_set',
-                queryset=Identification.objects.select_related('taxon_record').order_by('-date_identified', '-id')
+                queryset=Identification.objects.select_related('taxon_record', 'reference').order_by('-date_identified', '-id')
             ),
         )
     )
@@ -1959,7 +1959,7 @@ class AccessionRowDetailView(DetailView):
                 ),
                 Prefetch(
                     "identification_set",
-                    queryset=Identification.objects.select_related("taxon_record").order_by(
+                    queryset=Identification.objects.select_related("taxon_record", "reference").order_by(
                         "-date_identified",
                         "-created_on",
                     ),
@@ -2074,7 +2074,7 @@ class BaseAccessionRowPrintView(LoginRequiredMixin, UserPassesTestMixin, DetailV
                 ),
                 Prefetch(
                     "identification_set",
-                    queryset=Identification.objects.select_related("taxon_record").order_by(
+                    queryset=Identification.objects.select_related("taxon_record", "reference").order_by(
                         "-date_identified",
                         "-created_on",
                     ),

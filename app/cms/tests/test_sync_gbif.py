@@ -281,7 +281,9 @@ def test_gbif_name_misses_do_not_stop_remaining_lookups():
     http_get = Mock(return_value=Response({"diagnostics": {"matchType": "NONE"}}))
     results = list(GbifClient(http_get=http_get).match_many([(f"Unknown{i}", "") for i in range(5)]))
     assert http_get.call_count == 5
-    assert all(isinstance(result, ValueError) for name, rank, result in results)
+    assert all(isinstance(result, GbifMatchError) for name, rank, result in results)
+    assert all(str(result) == "GBIF did not return an exact name/rank match"
+               for name, rank, result in results)
 
 
 @override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")

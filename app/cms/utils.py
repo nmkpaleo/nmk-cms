@@ -146,7 +146,7 @@ def select_current_identification(identifications: Iterable[Identification]) -> 
 
 
 _TAXONOMY_QUALIFIER_PREFIX = re.compile(
-    r"^\s*(?:cf|aff|indet|sp|spp)\.?\s+|^\s*\?\s*", re.IGNORECASE
+    r"^\s*(?:cf|aff|indet|sp|spp|nr)\.?\s+|^\s*\?\s*", re.IGNORECASE
 )
 
 
@@ -212,7 +212,7 @@ def build_accession_identification_maps(
     pending_taxa: Dict[int, str] = {}
 
     for row in rows:
-        identifications = list(row.identification_set.select_related("reference").all())
+        identifications = list(row.identification_set.all())
         first_identification = select_current_identification(identifications)
         if first_identification is None:
             continue

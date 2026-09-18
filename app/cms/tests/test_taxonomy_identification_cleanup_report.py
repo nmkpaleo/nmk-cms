@@ -41,6 +41,8 @@ def test_cleanup_report_lists_only_current_qualified_identifications(client, dja
         current_qualified = Identification.objects.create(
             accession_row=qualified_row, taxon_verbatim="Struthio", identification_qualifier="cf."
         )
+        nr_row = _accession_row(user, specimen_no=3)
+        current_nr = Identification.objects.create(accession_row=nr_row, taxon_verbatim="nr. Struthio")
     finally:
         set_current_user(None)
 
@@ -49,9 +51,10 @@ def test_cleanup_report_lists_only_current_qualified_identifications(client, dja
 
     assert response.status_code == 200
     shown = list(response.context["identifications"])
-    assert shown == [current_qualified]
+    assert shown == [current_qualified, current_nr]
     assert b"cf. Struthio" not in response.content
     assert reverse("identification_edit", args=[current_qualified.pk]).encode() in response.content
+    assert reverse("identification_edit", args=[current_nr.pk]).encode() in response.content
 
 
 def test_cleanup_report_requires_collection_manager(client, django_user_model):
