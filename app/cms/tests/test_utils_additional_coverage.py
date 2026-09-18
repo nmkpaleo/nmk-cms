@@ -77,3 +77,8 @@ def test_current_identification_uses_reference_year_then_database_recency():
 
     assert select_current_identification([old_reference, newest_database_record, new_reference]) is new_reference
     assert select_current_identification([old_reference, newest_database_record]) is old_reference
+
+    unknown_reference_year = _identification(
+        primary_key=4, created_on=datetime(2024, 1, 1, tzinfo=timezone.utc), reference_year="0000",
+    )
+    assert select_current_identification([unknown_reference_year, newest_database_record]) is newest_database_record

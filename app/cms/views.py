@@ -333,7 +333,9 @@ def taxonomy_identification_cleanup_report(request):
     """List current identifications that need taxonomy cleanup."""
 
     queryset = Identification.objects.select_related(
-        "accession_row__accession__specimen_prefix", "reference"
+        "accession_row__accession__collection",
+        "accession_row__accession__specimen_prefix",
+        "reference",
     )
     identifications = [
         identification

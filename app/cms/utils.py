@@ -134,7 +134,7 @@ def current_identification_key(identification: Identification) -> tuple:
         return (2, identification.date_identified, created_on, primary_key)
 
     reference_year = (getattr(identification.reference, "year", "") or "").strip()
-    if reference_year.isdigit():
+    if reference_year.isdigit() and int(reference_year) > 0:
         return (1, int(reference_year), created_on, primary_key)
     return (0, created_on, primary_key)
 
