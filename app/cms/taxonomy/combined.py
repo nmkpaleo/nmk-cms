@@ -142,7 +142,7 @@ class TaxonomySyncService(NowTaxonomySyncService):
                 continue
             synonyms.append(replace(record, accepted_external_id=target.external_id, accepted_external_source=target.external_source,
                                     accepted_name=target.name))
-        preview = self._build_preview(accepted, synonyms)
+        preview = self._build_preview(accepted, synonyms, local_names=local_names)
         # A missing or failed lookup is not evidence that an existing taxon disappeared.
         preview.to_deactivate = [
             taxon for taxon in preview.to_deactivate

@@ -356,13 +356,14 @@ class NowTaxonomySyncService:
         self,
         accepted_records: Sequence[AcceptedRecord],
         synonym_records: Sequence[SynonymRecord],
+        local_names: set[str] | None = None,
     ) -> SyncPreview:
         accepted_records = _deduplicate_records(accepted_records)
         synonym_records = _deduplicate_records(synonym_records)
         latest_version = _latest_version(accepted_records, synonym_records)
         all_taxa = list(Taxon.objects.select_related("accepted_taxon"))
         accepted_records, synonym_records = self._scope_records(
-            accepted_records, synonym_records, all_taxa
+            accepted_records, synonym_records, all_taxa, local_names=local_names
         )
         existing_taxa = all_taxa
         existing_by_external_id = {(taxon.external_source, taxon.external_id): taxon for taxon in existing_taxa if taxon.external_id}
