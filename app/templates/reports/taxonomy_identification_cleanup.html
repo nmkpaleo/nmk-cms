@@ -7,7 +7,7 @@
 <div class="w3-content w3-padding-32 w3-animate-opacity">
   <h2>{% trans "Taxonomy identification cleanup" %}</h2>
   <p class="w3-text-grey">
-    {% trans "Only the current identification for each specimen is shown. Current means the latest Date identified; when no dates are recorded, the latest reference year; otherwise the newest database entry." %}
+    {% trans "Only the current identification for each specimen is shown. The report lists missing free-text Taxon values and Taxon values that do not resolve to GBIF or NOW taxonomy." %}
   </p>
 
   {% if identifications %}
@@ -18,8 +18,9 @@
           <tr>
             <th>{% trans "Accession" %}</th>
             <th>{% trans "Specimen" %}</th>
-            <th>{% trans "Identification" %}</th>
-            <th>{% trans "Qualifier" %}</th>
+            <th>{% trans "Taxon Verbatim" %}</th>
+            <th>{% trans "Taxon" %}</th>
+            <th>{% trans "Issue" %}</th>
             <th>{% trans "Date identified" %}</th>
             <th>{% trans "Reference year" %}</th>
             <th>{% trans "Action" %}</th>
@@ -30,8 +31,9 @@
             <tr>
               <td><a href="{% url 'accession_detail' identification.accession_row.accession_id %}">{{ identification.accession_row.accession }}</a></td>
               <td><a href="{% url 'accessionrow_detail' identification.accession_row_id %}">{{ identification.accession_row }}</a></td>
-              <td>{{ identification.taxon_verbatim|default:identification.taxon|default:"?" }}</td>
-              <td>{{ identification.identification_qualifier|default:"?" }}</td>
+              <td>{{ identification.taxon_verbatim|default:"?" }}</td>
+              <td>{{ identification.taxon|default:"?" }}</td>
+              <td>{% if identification.cleanup_reason == "missing_taxon" %}{% trans "Taxon is empty" %}{% else %}{% trans "Taxon does not match GBIF/NOW taxonomy" %}{% endif %}</td>
               <td>{{ identification.date_identified|default:"?" }}</td>
               <td>{% if identification.reference %}{{ identification.reference.year }}{% else %}?{% endif %}</td>
               <td><a class="w3-button w3-small w3-deep-orange" href="{% url 'identification_edit' identification.pk %}">{% trans "Edit identification" %}</a></td>

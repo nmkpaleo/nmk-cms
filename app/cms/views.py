@@ -129,6 +129,7 @@ from cms.models import (
     SpecimenGeology,
     Storage,
     Taxon,
+    TaxonExternalSource,
     Locality,
     Place,
     PlaceType,
@@ -179,7 +180,6 @@ from .utils import (
     build_accession_identification_maps,
     build_history_entries,
     current_identification_key,
-    identification_needs_taxonomy_cleanup,
     iter_current_identifications,
 )
 from cms.utils import generate_accessions_from_series
@@ -336,12 +336,32 @@ def taxonomy_identification_cleanup_report(request):
         "accession_row__accession__collection",
         "accession_row__accession__specimen_prefix",
         "reference",
+        "taxon_record",
     )
-    identifications = [
-        identification
-        for identification in iter_current_identifications(queryset)
-        if identification_needs_taxonomy_cleanup(identification)
-    ]
+    taxonomy_sources = [TaxonExternalSource.GBIF, TaxonExternalSource.NOW]
+    valid_taxon_names = {
+        (name or "").strip().lower()
+        for name in Taxon.objects.filter(
+            is_active=True, external_source__in=taxonomy_sources
+        ).values_list("taxon_name", flat=True)
+    }
+    identifications = []
+    for identification in iter_current_identifications(queryset):
+        taxon = (identification.taxon or "").strip()
+        verbatim = (identification.taxon_verbatim or "").strip()
+        linked_taxon = identification.taxon_record
+        linked_to_source = (
+            linked_taxon is not None
+            and linked_taxon.is_active
+            and linked_taxon.external_source in taxonomy_sources
+        )
+        if not taxon and verbatim:
+            identification.cleanup_reason = "missing_taxon"
+        elif taxon and not linked_to_source and taxon.lower() not in valid_taxon_names:
+            identification.cleanup_reason = "unmatched_taxon"
+        else:
+            continue
+        identifications.append(identification)
     return render(
         request,
         "reports/taxonomy_identification_cleanup.html",

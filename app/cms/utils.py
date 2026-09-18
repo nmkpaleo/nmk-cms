@@ -145,22 +145,6 @@ def select_current_identification(identifications: Iterable[Identification]) -> 
     return max(identifications, key=current_identification_key, default=None)
 
 
-_TAXONOMY_QUALIFIER_PREFIX = re.compile(
-    r"^\s*(?:cf|aff|indet|sp|spp|nr)\.?\s+|^\s*\?\s*", re.IGNORECASE
-)
-
-
-def identification_needs_taxonomy_cleanup(identification: Identification) -> bool:
-    """Return whether a current identification needs a manager's taxon review."""
-
-    if coerce_stripped(identification.identification_qualifier):
-        return True
-    return any(
-        _TAXONOMY_QUALIFIER_PREFIX.search(value or "")
-        for value in (identification.taxon_verbatim, identification.taxon)
-    )
-
-
 def iter_current_identifications(
     identifications: models.QuerySet[Identification] | None = None,
 ) -> Iterator[Identification]:
