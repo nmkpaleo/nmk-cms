@@ -5,7 +5,8 @@ import hashlib
 import requests
 from django.conf import settings
 
-from ..models import FieldSlip, Identification, Taxon, TaxonExternalSource, TaxonomyImport
+from ..models import FieldSlip, Taxon, TaxonExternalSource, TaxonomyImport
+from ..utils import iter_current_identifications
 from ..taxon_identity import normalize_taxon_label, taxon_identity
 from .gbif import GbifClient
 from .sync import NowTaxonomySyncService, SynonymRecord, SyncIssue, _latest_version, _record_rank
@@ -24,20 +25,22 @@ class TaxonomySyncService(NowTaxonomySyncService):
         # Free-text identifications have no known rank; retain that query even
         # when a catalogue row has the same label at a different rank. Stream the
         # values directly into the set to avoid a catalogue-sized temporary list.
-        names.update(
-            (name, "")
-            for verbatim, legacy in Identification.objects.order_by().values_list(
-                "taxon_verbatim", "taxon"
-            ).iterator()
-            if (name := normalize_taxon_label(verbatim) or normalize_taxon_label(legacy))
-        )
-        names.update(
-            (name, "")
+        local_names = {
+            name.lower()
+            for identification in iter_current_identifications()
+            if (name := normalize_taxon_label(identification.taxon_verbatim)
+                or normalize_taxon_label(identification.taxon))
+        }
+        local_names.update(
+            name.lower()
             for verbatim in FieldSlip.objects.order_by().values_list("verbatim_taxon", flat=True).iterator()
             if (name := normalize_taxon_label(verbatim))
         )
+        names.update((name, "") for name in local_names)
         names = {(name.lower(), rank) for name, rank in names if name}
-        now_accepted, now_synonyms = self._scope_records(now_accepted, now_synonyms, taxa)
+        now_accepted, now_synonyms = self._scope_records(
+            now_accepted, now_synonyms, taxa, local_names=local_names
+        )
         candidates = list(now_accepted) + list(now_synonyms)
         issues = []
         failed_names = set()
@@ -139,7 +142,7 @@ class TaxonomySyncService(NowTaxonomySyncService):
                 continue
             synonyms.append(replace(record, accepted_external_id=target.external_id, accepted_external_source=target.external_source,
                                     accepted_name=target.name))
-        preview = self._build_preview(accepted, synonyms)
+        preview = self._build_preview(accepted, synonyms, local_names=local_names)
         # A missing or failed lookup is not evidence that an existing taxon disappeared.
         preview.to_deactivate = [
             taxon for taxon in preview.to_deactivate

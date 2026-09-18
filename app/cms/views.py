@@ -129,6 +129,7 @@ from cms.models import (
     SpecimenGeology,
     Storage,
     Taxon,
+    TaxonExternalSource,
     Locality,
     Place,
     PlaceType,
@@ -175,7 +176,12 @@ from cms.merge.services import (
 )
 from cms.merge.fuzzy import score_candidates
 from cms.resources import FieldSlipResource
-from .utils import build_accession_identification_maps, build_history_entries
+from .utils import (
+    build_accession_identification_maps,
+    build_history_entries,
+    current_identification_key,
+    iter_current_identifications,
+)
 from cms.utils import generate_accessions_from_series
 from cms.upload_processing import (
     find_uploaded_scans, process_file, queue_specimen_list_processing, scan_upload_lock,
@@ -320,6 +326,48 @@ def media_report_view(request):
         },
     }
     return render(request, 'reports/media_report.html', context)
+
+@login_required
+@user_passes_test(is_collection_manager)
+def taxonomy_identification_cleanup_report(request):
+    """List current identifications that need taxonomy cleanup."""
+
+    queryset = Identification.objects.select_related(
+        "accession_row__accession__collection",
+        "accession_row__accession__specimen_prefix",
+        "reference",
+        "taxon_record",
+    )
+    taxonomy_sources = [TaxonExternalSource.GBIF, TaxonExternalSource.NOW]
+    valid_taxon_names = {
+        (name or "").strip().lower()
+        for name in Taxon.objects.filter(
+            is_active=True, external_source__in=taxonomy_sources
+        ).values_list("taxon_name", flat=True)
+    }
+    identifications = []
+    for identification in iter_current_identifications(queryset):
+        taxon = (identification.taxon or "").strip()
+        verbatim = (identification.taxon_verbatim or "").strip()
+        linked_taxon = identification.taxon_record
+        linked_to_source = (
+            linked_taxon is not None
+            and linked_taxon.is_active
+            and linked_taxon.external_source in taxonomy_sources
+        )
+        if not taxon and verbatim:
+            identification.cleanup_reason = "missing_taxon"
+        elif taxon and not linked_to_source and taxon.lower() not in valid_taxon_names:
+            identification.cleanup_reason = "unmatched_taxon"
+        else:
+            continue
+        identifications.append(identification)
+    return render(
+        request,
+        "reports/taxonomy_identification_cleanup.html",
+        {"identifications": identifications},
+    )
+
 
 #accession distribution report
 @login_required
@@ -923,7 +971,7 @@ def prefetch_accession_related(qs):
             ),
             Prefetch(
                 'identification_set',
-                queryset=Identification.objects.select_related('taxon_record').order_by('-date_identified', '-id')
+                queryset=Identification.objects.select_related('taxon_record', 'reference').order_by('-date_identified', '-id')
             ),
         )
     )
@@ -1934,7 +1982,7 @@ class AccessionRowDetailView(DetailView):
                 ),
                 Prefetch(
                     "identification_set",
-                    queryset=Identification.objects.select_related("taxon_record").order_by(
+                    queryset=Identification.objects.select_related("taxon_record", "reference").order_by(
                         "-date_identified",
                         "-created_on",
                     ),
@@ -1954,8 +2002,9 @@ class AccessionRowDetailView(DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['natureofspecimens'] = list(self.object.natureofspecimen_set.all())
-        # Order identifications by date_identified DESC (nulls last), then created_on DESC
-        context['identifications'] = list(self.object.identification_set.all())
+        context['identifications'] = sorted(
+            self.object.identification_set.all(), key=current_identification_key, reverse=True
+        )
         context['can_edit'] = (
             self.request.user.is_superuser or is_collection_manager(self.request.user)
         )
@@ -2049,7 +2098,7 @@ class BaseAccessionRowPrintView(LoginRequiredMixin, UserPassesTestMixin, DetailV
                 ),
                 Prefetch(
                     "identification_set",
-                    queryset=Identification.objects.select_related("taxon_record").order_by(
+                    queryset=Identification.objects.select_related("taxon_record", "reference").order_by(
                         "-date_identified",
                         "-created_on",
                     ),

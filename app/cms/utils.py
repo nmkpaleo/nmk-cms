@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, Iterable, Tuple
+from typing import Any, Dict, Iterable, Iterator, Tuple
 
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -120,6 +120,55 @@ def normalise_yes_no(value: Any | None) -> bool:
     return str(value).strip().lower() in {"yes", "true", "1", "y", "t"}
 
 
+def current_identification_key(identification: Identification) -> tuple:
+    """Return the collection's ordering key for an identification.
+
+    A recorded identification date takes precedence over an undated record. If
+    neither record has a date, the reference literature year is used; the
+    database creation time and primary key break ties in either case.
+    """
+
+    created_on = identification.created_on
+    primary_key = identification.pk or 0
+    if identification.date_identified is not None:
+        return (2, identification.date_identified, created_on, primary_key)
+
+    reference_year = (getattr(identification.reference, "year", "") or "").strip()
+    if reference_year.isdigit() and int(reference_year) > 0:
+        return (1, int(reference_year), created_on, primary_key)
+    return (0, created_on, primary_key)
+
+
+def select_current_identification(identifications: Iterable[Identification]) -> Identification | None:
+    """Select the current identification from one accession row's history."""
+
+    return max(identifications, key=current_identification_key, default=None)
+
+
+def iter_current_identifications(
+    identifications: models.QuerySet[Identification] | None = None,
+) -> Iterator[Identification]:
+    """Yield the current identification for every accession row.
+
+    This streams the queryset ordered by row, so taxonomy sync can ignore old
+    identifications without materialising the entire identification table.
+    """
+
+    queryset = (Identification.objects.all() if identifications is None else identifications)
+    queryset = queryset.select_related("reference").order_by("accession_row_id", "pk")
+    current_row_id = None
+    current = None
+    for identification in queryset.iterator():
+        if current is not None and identification.accession_row_id != current_row_id:
+            yield current
+            current = None
+        if current is None or current_identification_key(identification) > current_identification_key(current):
+            current = identification
+        current_row_id = identification.accession_row_id
+    if current is not None:
+        yield current
+
+
 def build_accession_identification_maps(
     rows: Iterable[AccessionRow],
 ) -> Tuple[Dict[int, Identification], Dict[int, int], Dict[int, Taxon]]:
@@ -148,10 +197,10 @@ def build_accession_identification_maps(
 
     for row in rows:
         identifications = list(row.identification_set.all())
-        if not identifications:
+        first_identification = select_current_identification(identifications)
+        if first_identification is None:
             continue
 
-        first_identification = identifications[0]
         first_identifications[row.id] = first_identification
         identification_counts[row.id] = len(identifications)
 

@@ -7,6 +7,7 @@ from cms.models import Accession
 from cms.views import (
     accession_create,
     accession_distribution_report,
+    taxonomy_identification_cleanup_report,
     accession_edit,
     add_accession_row,
     AccessionRowDetailView,
@@ -102,6 +103,7 @@ from .admin import taxonomy_sync_apply_view, taxonomy_sync_preview_view
 urlpatterns = [
     path('reports/accession-distribution/', accession_distribution_report, name='accession_distribution_report'),
     path('reports/media/', media_report_view, name='media_report'),
+    path('reports/taxonomy-identification-cleanup/', taxonomy_identification_cleanup_report, name='taxonomy_identification_cleanup_report'),
     path("specimen-lists/upload/", SpecimenListUploadView.as_view(), name="specimen_list_upload"),
     path("specimen-lists/queue/", SpecimenListQueueView.as_view(), name="specimen_list_queue"),
     path("specimen-lists/queue/ocr/", SpecimenListOCRQueueView.as_view(), name="specimen_list_ocr_queue"),
