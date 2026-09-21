@@ -34,8 +34,17 @@ def test_cleanup_report_lists_missing_and_unmatched_current_taxa(client, django_
             taxon_name="Struthio", taxon_rank="genus", external_source=TaxonExternalSource.GBIF
         )
         valid_row = _accession_row(user)
+        Identification.objects.create(
+            accession_row=valid_row,
+            taxon_verbatim="Old unknown taxon",
+            taxon="Old unknown taxon",
+            date_identified=date(2020, 1, 1),
+        )
         valid_qualified = Identification.objects.create(
-            accession_row=valid_row, taxon_verbatim="Struthio", identification_qualifier="cf."
+            accession_row=valid_row,
+            taxon_verbatim="Struthio",
+            identification_qualifier="cf.",
+            date_identified=date(2024, 1, 1),
         )
         whitespace_row = _accession_row(user, specimen_no=4)
         whitespace_valid = Identification.objects.create(

@@ -21,8 +21,13 @@ from dal import autocomplete
 from django import forms
 from django.apps import apps
 from django.db import models, transaction
-from django.db.models import Value, CharField, Count, Q, Max, Prefetch, OuterRef, Subquery, Sum
-from django.db.models.functions import Concat, Greatest, TruncDate, TruncWeek
+from django.db.models import (
+    Case, CharField, Count, Exists, F, IntegerField, Max, OuterRef, Prefetch,
+    Q, Subquery, Sum, Value, When,
+)
+from django.db.models.expressions import Window
+from django.db.models.functions import Cast, Coalesce, Concat, Greatest, Lower, Replace, TruncDate, TruncWeek, Trim
+from django.db.models.functions.window import RowNumber
 from django.http import JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -333,55 +338,96 @@ def media_report_view(request):
 def taxonomy_identification_cleanup_report(request):
     """List current identifications that need taxonomy cleanup."""
 
-    queryset = Identification.objects.select_related(
+    taxonomy_sources = [TaxonExternalSource.GBIF, TaxonExternalSource.NOW]
+
+    # Keep this expression aligned with ``normalize_taxon_label`` for normal
+    # catalogue values. Repeating Replace collapses runs of spaces without
+    # loading all taxonomy names or identifications into Python.
+    def normalized_name(field_name):
+        expression = Lower(Trim(Coalesce(F(field_name), Value(""))))
+        for _ in range(8):
+            expression = Replace(expression, Value("  "), Value(" "))
+        return expression
+
+    # Select one current identification per accession row in SQL. Dates win;
+    # otherwise a positive numeric reference year wins; creation time and ID
+    # settle ties. This is the same ordering as current_identification_key().
+    positive_year = Q(reference__year__regex=r"^[1-9][0-9]*$")
+    current_identifications = (
+        Identification.objects.annotate(
+            _current_priority=Case(
+                When(date_identified__isnull=False, then=Value(2)),
+                When(positive_year, then=Value(1)),
+                default=Value(0),
+                output_field=IntegerField(),
+            ),
+            _reference_year=Cast(
+                Case(
+                    When(positive_year, then=F("reference__year")),
+                    default=Value("0"),
+                    output_field=CharField(),
+                ),
+                IntegerField(),
+            ),
+        ).annotate(
+            _current_position=Window(
+                expression=RowNumber(),
+                partition_by=[F("accession_row_id")],
+                order_by=[
+                    F("_current_priority").desc(),
+                    F("date_identified").desc(nulls_last=True),
+                    F("_reference_year").desc(),
+                    F("created_on").desc(),
+                    F("pk").desc(),
+                ],
+            )
+        ).filter(_current_position=1)
+    )
+    active_taxa = Taxon.objects.filter(
+        is_active=True,
+        external_source__in=taxonomy_sources,
+    ).annotate(_normalized_name=normalized_name("taxon_name"))
+    queryset = Identification.objects.filter(
+        pk__in=Subquery(current_identifications.values("pk"))
+    ).annotate(
+        _normalized_taxon=normalized_name("taxon"),
+        _normalized_verbatim=normalized_name("taxon_verbatim"),
+    ).annotate(
+        _matches_taxonomy=Exists(
+            active_taxa.filter(_normalized_name=OuterRef("_normalized_taxon"))
+        )
+    ).filter(
+        Q(_normalized_taxon="") & ~Q(_normalized_verbatim="")
+        | ~Q(_normalized_taxon="")
+        & ~Q(
+            taxon_record__is_active=True,
+            taxon_record__external_source__in=taxonomy_sources,
+        )
+        & Q(_matches_taxonomy=False)
+    ).select_related(
         "accession_row__accession__collection",
         "accession_row__accession__specimen_prefix",
         "reference",
         "taxon_record",
-    )
-    taxonomy_sources = [TaxonExternalSource.GBIF, TaxonExternalSource.NOW]
-    valid_taxon_names = {
-        normalize_taxon_label(name).lower()
-        for name in Taxon.objects.filter(
-            is_active=True, external_source__in=taxonomy_sources
-        ).values_list("taxon_name", flat=True)
-        if normalize_taxon_label(name)
-    }
-    try:
-        page_number = max(1, int(request.GET.get("page", 1)))
-    except (TypeError, ValueError):
-        page_number = 1
-    page_size = 100
-    first_index = (page_number - 1) * page_size
-    identifications = []
-    total_count = 0
-    for identification in iter_current_identifications(queryset):
-        taxon = normalize_taxon_label(identification.taxon)
-        verbatim = normalize_taxon_label(identification.taxon_verbatim)
-        linked_taxon = identification.taxon_record
-        linked_to_source = (
-            linked_taxon is not None
-            and linked_taxon.is_active
-            and linked_taxon.external_source in taxonomy_sources
+    ).order_by("accession_row_id", "pk")
+    paginator = Paginator(queryset, 100)
+    page_obj = paginator.get_page(request.GET.get("page", 1))
+    identifications = list(page_obj.object_list)
+    for identification in identifications:
+        identification.cleanup_reason = (
+            "missing_taxon"
+            if not identification._normalized_taxon
+            else "unmatched_taxon"
         )
-        if not taxon and verbatim:
-            identification.cleanup_reason = "missing_taxon"
-        elif taxon and not linked_to_source and taxon.lower() not in valid_taxon_names:
-            identification.cleanup_reason = "unmatched_taxon"
-        else:
-            continue
-        if first_index <= total_count < first_index + page_size:
-            identifications.append(identification)
-        total_count += 1
     return render(
         request,
         "reports/taxonomy_identification_cleanup.html",
         {
             "identifications": identifications,
-            "total_count": total_count,
-            "page_number": page_number,
-            "has_previous": page_number > 1,
-            "has_next": total_count > first_index + page_size,
+            "total_count": paginator.count,
+            "page_number": page_obj.number,
+            "has_previous": page_obj.has_previous(),
+            "has_next": page_obj.has_next(),
         },
     )
 
