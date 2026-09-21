@@ -18,6 +18,10 @@ class GbifMatchError(ValueError):
     pass
 
 
+class GbifNoMatchError(GbifMatchError):
+    """GBIF explicitly found no exact match for the requested name."""
+
+
 class GbifClient:
     def __init__(self, http_get=None):
         self.http_get = http_get or requests.get
@@ -75,6 +79,8 @@ class GbifClient:
                 diagnostics = {}
             if not isinstance(usage, dict) or not isinstance(diagnostics, dict):
                 raise TypeError("GBIF usage and diagnostics must be JSON objects")
+            if diagnostics.get("matchType") == "NONE":
+                raise GbifNoMatchError("GBIF did not return an exact name/rank match")
             if diagnostics.get("matchType") != "EXACT":
                 raise GbifMatchError("GBIF did not return an exact name/rank match")
             raw_canonical = usage.get("canonicalName")

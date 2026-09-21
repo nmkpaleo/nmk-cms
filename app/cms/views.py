@@ -344,7 +344,10 @@ def taxonomy_identification_cleanup_report(request):
     # catalogue values. Repeating Replace collapses runs of spaces without
     # loading all taxonomy names or identifications into Python.
     def normalized_name(field_name):
-        expression = Lower(Trim(Coalesce(F(field_name), Value(""))))
+        expression = Lower(Coalesce(F(field_name), Value("")))
+        for whitespace in ("\t", "\n", "\r", "\v", "\f"):
+            expression = Replace(expression, Value(whitespace), Value(" "))
+        expression = Trim(expression)
         for _ in range(8):
             expression = Replace(expression, Value("  "), Value(" "))
         return expression
@@ -352,7 +355,7 @@ def taxonomy_identification_cleanup_report(request):
     # Select one current identification per accession row in SQL. Dates win;
     # otherwise a positive numeric reference year wins; creation time and ID
     # settle ties. This is the same ordering as current_identification_key().
-    positive_year = Q(reference__year__regex=r"^[1-9][0-9]*$")
+    positive_year = Q(reference__year__regex=r"^0*[1-9][0-9]*$")
     current_identifications = (
         Identification.objects.annotate(
             _current_priority=Case(

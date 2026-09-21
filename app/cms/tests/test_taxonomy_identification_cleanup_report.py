@@ -51,7 +51,7 @@ def test_cleanup_report_lists_missing_and_unmatched_current_taxa(client, django_
             accession_row=whitespace_row, taxon_verbatim="Struthio"
         )
         Identification.objects.filter(pk=whitespace_valid.pk).update(
-            taxon="Struthio  ", taxon_record=None
+            taxon="Struthio\t ", taxon_record=None
         )
         unmatched_row = _accession_row(user, specimen_no=2)
         unmatched = Identification.objects.create(
