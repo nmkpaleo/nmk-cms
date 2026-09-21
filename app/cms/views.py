@@ -175,6 +175,7 @@ from cms.merge.services import (
     merge_accession_reference_candidates,
 )
 from cms.merge.fuzzy import score_candidates
+from cms.taxon_identity import normalize_taxon_label
 from cms.resources import FieldSlipResource
 from .utils import (
     build_accession_identification_maps,
@@ -340,15 +341,23 @@ def taxonomy_identification_cleanup_report(request):
     )
     taxonomy_sources = [TaxonExternalSource.GBIF, TaxonExternalSource.NOW]
     valid_taxon_names = {
-        (name or "").strip().lower()
+        normalize_taxon_label(name).lower()
         for name in Taxon.objects.filter(
             is_active=True, external_source__in=taxonomy_sources
         ).values_list("taxon_name", flat=True)
+        if normalize_taxon_label(name)
     }
+    try:
+        page_number = max(1, int(request.GET.get("page", 1)))
+    except (TypeError, ValueError):
+        page_number = 1
+    page_size = 100
+    first_index = (page_number - 1) * page_size
     identifications = []
+    total_count = 0
     for identification in iter_current_identifications(queryset):
-        taxon = (identification.taxon or "").strip()
-        verbatim = (identification.taxon_verbatim or "").strip()
+        taxon = normalize_taxon_label(identification.taxon)
+        verbatim = normalize_taxon_label(identification.taxon_verbatim)
         linked_taxon = identification.taxon_record
         linked_to_source = (
             linked_taxon is not None
@@ -361,11 +370,19 @@ def taxonomy_identification_cleanup_report(request):
             identification.cleanup_reason = "unmatched_taxon"
         else:
             continue
-        identifications.append(identification)
+        if first_index <= total_count < first_index + page_size:
+            identifications.append(identification)
+        total_count += 1
     return render(
         request,
         "reports/taxonomy_identification_cleanup.html",
-        {"identifications": identifications},
+        {
+            "identifications": identifications,
+            "total_count": total_count,
+            "page_number": page_number,
+            "has_previous": page_number > 1,
+            "has_next": total_count > first_index + page_size,
+        },
     )
 
 

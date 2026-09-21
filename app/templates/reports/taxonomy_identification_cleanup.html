@@ -10,8 +10,8 @@
     {% trans "Only the current identification for each specimen is shown. The report lists missing free-text Taxon values and Taxon values that do not resolve to GBIF or NOW taxonomy." %}
   </p>
 
-  {% if identifications %}
-    <p>{% blocktrans count counter=identifications|length %}{{ counter }} identification needs review.{% plural %}{{ counter }} identifications need review.{% endblocktrans %}</p>
+  {% if total_count %}
+    <p>{% blocktrans count counter=total_count %}{{ counter }} identification needs review.{% plural %}{{ counter }} identifications need review.{% endblocktrans %}</p>
     <div class="w3-responsive w3-card w3-white">
       <table class="w3-table-all w3-hoverable">
         <thead>
@@ -42,6 +42,13 @@
         </tbody>
       </table>
     </div>
+    {% if has_previous or has_next %}
+      <div class="w3-bar w3-margin-top" aria-label="{% trans 'Report pages' %}">
+        {% if has_previous %}<a class="w3-button w3-border" href="?page={{ page_number|add:-1 }}">{% trans "Previous" %}</a>{% endif %}
+        <span class="w3-bar-item">{% blocktrans with page=page_number %}Page {{ page }}{% endblocktrans %}</span>
+        {% if has_next %}<a class="w3-button w3-border" href="?page={{ page_number|add:1 }}">{% trans "Next" %}</a>{% endif %}
+      </div>
+    {% endif %}
   {% else %}
     <p class="w3-panel w3-pale-green w3-leftbar w3-border-green">{% trans "No current identifications need taxonomy cleanup." %}</p>
   {% endif %}

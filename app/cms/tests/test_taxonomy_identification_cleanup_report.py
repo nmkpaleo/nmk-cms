@@ -37,6 +37,13 @@ def test_cleanup_report_lists_missing_and_unmatched_current_taxa(client, django_
         valid_qualified = Identification.objects.create(
             accession_row=valid_row, taxon_verbatim="Struthio", identification_qualifier="cf."
         )
+        whitespace_row = _accession_row(user, specimen_no=4)
+        whitespace_valid = Identification.objects.create(
+            accession_row=whitespace_row, taxon_verbatim="Struthio"
+        )
+        Identification.objects.filter(pk=whitespace_valid.pk).update(
+            taxon="Struthio  ", taxon_record=None
+        )
         unmatched_row = _accession_row(user, specimen_no=2)
         unmatched = Identification.objects.create(
             accession_row=unmatched_row, taxon_verbatim="Unknownus", taxon="Unknownus"
@@ -53,6 +60,7 @@ def test_cleanup_report_lists_missing_and_unmatched_current_taxa(client, django_
     assert response.status_code == 200
     shown = list(response.context["identifications"])
     assert shown == [unmatched, missing]
+    assert whitespace_valid not in shown
     assert b"Struthio" not in response.content
     assert b"Taxon does not match GBIF/NOW taxonomy" in response.content
     assert b"Taxon is empty" in response.content
