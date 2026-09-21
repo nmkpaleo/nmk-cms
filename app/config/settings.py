@@ -60,6 +60,17 @@ def get_positive_int(name, default_value):
     return value
 
 
+def get_nonnegative_int(name, default_value):
+    value = get_var(name, default_value)
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        raise ImproperlyConfigured(f"{name} must be a nonnegative integer.") from None
+    if value < 0:
+        raise ImproperlyConfigured(f"{name} must be a nonnegative integer.")
+    return value
+
+
 OPENAI_DEFAULT_MODEL = get_var("OPENAI_DEFAULT_MODEL", "gpt-5.2")
 LLM_USAGE_MONTHLY_BUDGET_USD = Decimal(str(get_var("LLM_USAGE_MONTHLY_BUDGET_USD", "120")))
 OPENAI_ADMIN_KEY = get_var("OPENAI_ADMIN_KEY", "")
@@ -69,7 +80,7 @@ LLM_BILLING_STALE_HOURS = get_positive_int("LLM_BILLING_STALE_HOURS", 24)
 LLM_BALANCE_STALE_DAYS = get_positive_int("LLM_BALANCE_STALE_DAYS", 30)
 LLM_CREDIT_WARNING_DAYS = get_positive_int("LLM_CREDIT_WARNING_DAYS", 14)
 LLM_CREDIT_URGENT_DAYS = get_positive_int("LLM_CREDIT_URGENT_DAYS", 7)
-LLM_PURCHASE_LEAD_DAYS = get_positive_int("LLM_PURCHASE_LEAD_DAYS", 7)
+LLM_PURCHASE_LEAD_DAYS = get_nonnegative_int("LLM_PURCHASE_LEAD_DAYS", 7)
 if LLM_CREDIT_WARNING_DAYS < LLM_CREDIT_URGENT_DAYS:
     raise ImproperlyConfigured("LLM_CREDIT_WARNING_DAYS must be at least LLM_CREDIT_URGENT_DAYS.")
 OCR_DEFAULT_ENGINE = get_var("OCR_DEFAULT_ENGINE", "chatgpt-vision")
