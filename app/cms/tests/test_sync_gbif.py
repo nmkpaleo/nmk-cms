@@ -238,6 +238,18 @@ def test_gbif_outage_does_not_replace_known_bird_with_now_homonym():
     assert preview.issues[0].code == "gbif-match"
 
 
+@override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")
+def test_gbif_name_miss_keeps_exact_now_mammal_match():
+    _field_slip("Struthio")
+    gbif_miss = {"diagnostics": {"matchType": "NONE"}}
+
+    preview = service(gbif_miss, "Struthio\tgenus\tMammalidae\n").preview()
+
+    assert [record.name for record in preview.accepted_to_create] == ["Struthio"]
+    assert preview.accepted_to_create[0].external_source == "NOW"
+    assert preview.issues[0].code == "gbif-match"
+
+
 @override_settings(TAXON_GBIF_WORKERS=2)
 def test_gbif_lookups_run_in_bounded_concurrent_batches():
     from threading import Barrier, Lock

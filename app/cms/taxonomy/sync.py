@@ -332,6 +332,20 @@ class NowTaxonomySyncService:
         else:
             names = set(local_names)
         names.discard("")
+
+        def matches_local_name(name: str, rank: str) -> bool:
+            normalized = _normalize_label(name).lower()
+            if normalized in names:
+                return True
+            # A current identification may preserve an infraspecific epithet
+            # although NOW only contains the accepted species. Scope that
+            # accepted binomial and its synonyms without broadening genus-level
+            # names into every species in the genus.
+            return (
+                _record_rank(rank) == "species"
+                and any(local_name.startswith(f"{normalized} ") for local_name in names)
+            )
+
         existing_ids = {
             taxon.external_id for taxon in existing_taxa
             if taxon.external_source == TaxonExternalSource.NOW and taxon.external_id
@@ -339,14 +353,14 @@ class NowTaxonomySyncService:
         synonyms = [
             record for record in synonym_records
             if taxon_identity(record.name, _record_rank(record.rank)) in taxon_keys
-            or record.name.lower() in names
+            or matches_local_name(record.name, record.rank)
             or (record.external_source == TaxonExternalSource.NOW and record.external_id in existing_ids)
         ]
         accepted_ids = {record.accepted_key for record in synonyms}
         accepted = [
             record for record in accepted_records
             if taxon_identity(record.name, _record_rank(record.rank)) in taxon_keys
-            or record.name.lower() in names
+            or matches_local_name(record.name, record.rank)
             or (record.external_source == TaxonExternalSource.NOW and record.external_id in existing_ids)
             or (record.external_source, record.external_id) in accepted_ids
         ]
@@ -357,7 +371,7 @@ class NowTaxonomySyncService:
         synonyms = [
             record for record in synonym_records
             if taxon_identity(record.name, _record_rank(record.rank)) in taxon_keys
-            or record.name.lower() in names
+            or matches_local_name(record.name, record.rank)
             or (record.external_source == TaxonExternalSource.NOW and record.external_id in existing_ids)
             or record.accepted_key in accepted_keys
         ]

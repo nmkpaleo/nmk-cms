@@ -8,7 +8,7 @@ from django.conf import settings
 from ..models import FieldSlip, Taxon, TaxonExternalSource, TaxonomyImport
 from ..utils import iter_current_identifications
 from ..taxon_identity import normalize_taxon_label, taxon_identity
-from .gbif import GbifClient
+from .gbif import GbifClient, GbifMatchError
 from .sync import NowTaxonomySyncService, SynonymRecord, SyncIssue, _latest_version, _record_rank
 
 
@@ -68,10 +68,11 @@ class TaxonomySyncService(NowTaxonomySyncService):
                     if normalize_taxon_label(t.class_name).lower() == "mammalia"
                     and (not rank or _record_rank(t.taxon_rank) == _record_rank(rank))
                 ]
-                # A failed class lookup cannot safely turn a new free-text name
-                # into a NOW mammal homonym. NOW is safe only for an established
-                # local mammal at this identity.
-                if not known_mammals:
+                # A transport failure leaves the class unknown, so it cannot
+                # safely turn new free text into a NOW mammal homonym. An exact
+                # NOW record remains usable after a GBIF name miss: NOW itself
+                # establishes that it is a mammal.
+                if not known_mammals and not isinstance(exc, GbifMatchError):
                     blocked_now_keys.update(
                         taxon_identity(candidate.name, _record_rank(candidate.rank))
                         for candidate in candidates
