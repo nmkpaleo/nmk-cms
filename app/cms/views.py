@@ -4839,7 +4839,8 @@ def chatgpt_usage_sync(request):
 
 @staff_member_required
 def chatgpt_usage_report(request):
-    today = timezone.now().astimezone(dt_timezone.utc).date()
+    today = timezone.localdate()
+    billing_today = timezone.now().astimezone(dt_timezone.utc).date()
     default_start = today - timedelta(days=30)
 
     base_qs = LLMUsageRecord.objects.all()
@@ -4922,7 +4923,8 @@ def chatgpt_usage_report(request):
 
     from .openai_billing import billing_summary
 
-    billing = billing_summary(start_date, end_date, model_name=model_name)
+    billing_end_date = min(end_date, billing_today)
+    billing = billing_summary(start_date, billing_end_date, model_name=model_name)
     budget_total = _coerce_decimal(getattr(settings, "LLM_USAGE_MONTHLY_BUDGET_USD", None))
 
     def _prepare_time_series(items, label_key):

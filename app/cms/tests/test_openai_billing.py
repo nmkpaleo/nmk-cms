@@ -383,6 +383,16 @@ class BillingReportTests(TestCase):
         self.assertIsNone(historical.context["billing"]["reported_cost"])
         self.assertEqual(historical.context["billing"]["month_cost"], 14)
 
+    @patch("cms.openai_billing.billing_summary")
+    @patch("cms.views.timezone.localdate", return_value=NOW.date() + timedelta(days=1))
+    @patch("cms.views.timezone.now", return_value=NOW)
+    def test_report_keeps_local_ocr_dates_and_caps_billing_at_utc_today(self, now, localdate, billing):
+        billing.side_effect = billing_summary
+        self.client.force_login(self.staff)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        billing.assert_called_once_with(NOW.date() - timedelta(days=30), NOW.date(), model_name=None)
+
     def test_ledger_admin_requires_permission(self):
         self.client.force_login(self.staff)
         self.assertEqual(self.client.get(reverse("admin:cms_openaicreditentry_add")).status_code, 403)
