@@ -373,13 +373,19 @@ def taxonomy_identification_cleanup_report(request):
                 IntegerField(),
             ),
         ).annotate(
+            _undated_reference_year=Case(
+                When(date_identified__isnull=True, then=F("_reference_year")),
+                default=Value(0),
+                output_field=IntegerField(),
+            ),
+        ).annotate(
             _current_position=Window(
                 expression=RowNumber(),
                 partition_by=[F("accession_row_id")],
                 order_by=[
                     F("_current_priority").desc(),
                     F("date_identified").desc(nulls_last=True),
-                    F("_reference_year").desc(),
+                    F("_undated_reference_year").desc(),
                     F("created_on").desc(),
                     F("pk").desc(),
                 ],

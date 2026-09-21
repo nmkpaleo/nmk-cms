@@ -5,7 +5,7 @@ from crum import set_current_user
 from django.contrib.auth.models import Group
 from django.urls import reverse
 
-from cms.models import Accession, AccessionRow, Collection, Identification, Locality, Taxon, TaxonExternalSource
+from cms.models import Accession, AccessionRow, Collection, Identification, Locality, Reference, Taxon, TaxonExternalSource
 
 
 pytestmark = pytest.mark.django_db
@@ -44,6 +44,26 @@ def test_cleanup_report_lists_missing_and_unmatched_current_taxa(client, django_
             accession_row=valid_row,
             taxon_verbatim="Struthio",
             identification_qualifier="cf.",
+            date_identified=date(2024, 1, 1),
+        )
+        dated_row = _accession_row(user, specimen_no=5)
+        newer_reference = Reference.objects.create(
+            title="Newer reference", first_author="Author", year="2024", citation="Author 2024"
+        )
+        older_reference = Reference.objects.create(
+            title="Older reference", first_author="Author", year="1999", citation="Author 1999"
+        )
+        Identification.objects.create(
+            accession_row=dated_row,
+            taxon_verbatim="Dated unknown taxon",
+            taxon="Dated unknown taxon",
+            reference=newer_reference,
+            date_identified=date(2024, 1, 1),
+        )
+        Identification.objects.create(
+            accession_row=dated_row,
+            taxon_verbatim="Struthio",
+            reference=older_reference,
             date_identified=date(2024, 1, 1),
         )
         whitespace_row = _accession_row(user, specimen_no=4)
