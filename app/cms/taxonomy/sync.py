@@ -350,6 +350,17 @@ class NowTaxonomySyncService:
             or (record.external_source == TaxonExternalSource.NOW and record.external_id in existing_ids)
             or (record.external_source, record.external_id) in accepted_ids
         ]
+        # Once an accepted taxon is in scope, retain all of its NOW synonyms.
+        # This lets historical identifications resolve without importing taxa
+        # unrelated to the collection.
+        accepted_keys = {(record.external_source, record.external_id) for record in accepted}
+        synonyms = [
+            record for record in synonym_records
+            if taxon_identity(record.name, _record_rank(record.rank)) in taxon_keys
+            or record.name.lower() in names
+            or (record.external_source == TaxonExternalSource.NOW and record.external_id in existing_ids)
+            or record.accepted_key in accepted_keys
+        ]
         return accepted, synonyms
 
     def _build_preview(
