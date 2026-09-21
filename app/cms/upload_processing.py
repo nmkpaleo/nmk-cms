@@ -25,6 +25,7 @@ REJECTED = Path(settings.MEDIA_ROOT) / "uploads" / "rejected"
 
 TIMESTAMP_FORMAT = "%Y-%m-%dT%H%M%S"
 NAME_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{6}\.png$", re.IGNORECASE)
+COMPACT_SCAN_PATTERN = re.compile(r"([0-9]{12})[0-9]+\.png", re.IGNORECASE)
 NUMBERED_SCAN_PATTERN = re.compile(r"[0-9]+[a-z]{2} [0-9]+\.png", re.IGNORECASE)
 MANUAL_QC_PATTERN = re.compile(r"^\d+\.jpe?g$", re.IGNORECASE)
 SPECIMEN_LIST_DPI = getattr(settings, "SPECIMEN_LIST_DPI", 300)
@@ -131,7 +132,21 @@ def process_file(src: Path) -> Path:
     Returns the destination path after moving. Creates a ``Media`` row for
     valid files.
     """
-    if NAME_PATTERN.match(src.name):
+    compact_match = COMPACT_SCAN_PATTERN.fullmatch(src.name)
+    if compact_match:
+        try:
+            timestamp = datetime.strptime("20" + compact_match[1], "%Y%m%d%H%M%S")
+        except ValueError:
+            dest = REJECTED / src.name
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(src, dest)
+            return dest
+        timestamp = timestamp.replace(tzinfo=scanning_utils.NAIROBI_TZ)
+        dest = PENDING / src.name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(src, dest)
+        create_media(dest, scan_timestamp=timestamp)
+    elif NAME_PATTERN.match(src.name):
         dest = PENDING / src.name
         dest.parent.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.strptime(src.stem, TIMESTAMP_FORMAT)

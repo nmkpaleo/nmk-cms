@@ -1,5 +1,6 @@
 """Upload regressions for scan filenames without timestamps."""
 
+from datetime import datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
@@ -50,6 +51,44 @@ class NumberedScanUploadTests(TestCase):
                 self.assertEqual(pending.read_bytes(), b"scan-data")
                 media = Media.objects.get(media_location=str(Path("uploads") / "pending" / filename))
                 self.assertIsNone(media.scanning_id)
+
+    def test_compact_timestamp_scans_enter_pending_with_timestamp_lookup(self):
+        from cms.scanning_utils import NAIROBI_TZ
+
+        self.client.force_login(self.user)
+        filenames = [
+            "2609211113551.png", "2609211113553.png",
+            "2609211113551234567890.PNG",
+        ]
+        uploads = [SimpleUploadedFile(name, b"scan-data", content_type="image/png")
+                   for name in filenames]
+        with patch("cms.scanning_utils.auto_complete_scans"), patch(
+            "cms.scanning_utils.find_scan_for_timestamp", return_value=None
+        ) as lookup:
+            response = self.client.post(self.url, {"files": uploads})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(lookup.call_count, len(filenames))
+        for args in lookup.call_args_list:
+            self.assertEqual(args.args, (datetime(2026, 9, 21, 11, 13, 55, tzinfo=NAIROBI_TZ),))
+        for filename in filenames:
+            with self.subTest(filename=filename):
+                self.assertEqual((self.uploads_root / "pending" / filename).read_bytes(), b"scan-data")
+                self.assertTrue(Media.objects.filter(file_name=filename).exists())
+
+    def test_invalid_compact_timestamp_scans_are_rejected(self):
+        self.client.force_login(self.user)
+        filenames = [
+            "260921111355.png", "260921111355x.png",
+            "260921111355-1.png", "2609211113551_extra.png",
+            "2613211113551.png", "2602301113551.png", "2609212513551.png",
+        ]
+        for filename in filenames:
+            with self.subTest(filename=filename):
+                upload = SimpleUploadedFile(filename, b"data", content_type="image/png")
+                response = self.client.post(self.url, {"files": upload})
+                self.assertEqual(response.status_code, 302)
+                self.assertTrue((self.uploads_root / "rejected" / filename).exists())
+        self.assertFalse(Media.objects.exists())
 
     def test_malformed_numbered_scan_names_are_rejected(self):
         self.client.force_login(self.user)
