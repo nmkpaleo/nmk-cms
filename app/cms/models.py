@@ -2365,6 +2365,65 @@ class LLMUsageRecord(models.Model):
         self.save(update_fields=list(defaults.keys()) + ["updated_at"])
 
 
+class OpenAICreditEntry(models.Model):
+    class Kind(models.TextChoices):
+        BALANCE = "balance", "Verified balance"
+        ADJUSTMENT = "adjustment", "Top-up / adjustment"
+
+    organization_id = models.CharField(max_length=255)
+    kind = models.CharField(max_length=16, choices=Kind.choices)
+    amount_usd = models.DecimalField(
+        max_digits=18, decimal_places=6,
+        help_text="Balance, or signed adjustment: positive for top-ups, negative for expired credits.",
+    )
+    effective_at = models.DateTimeField(
+        default=timezone.now,
+        help_text="When the balance was checked or the adjustment took effect.",
+    )
+    note = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-effective_at", "-pk"]
+        verbose_name = "OpenAI credit entry"
+        verbose_name_plural = "OpenAI credit entries"
+        constraints = [models.UniqueConstraint(
+            fields=["organization_id", "effective_at"], name="openai_credit_org_time_unique",
+        )]
+
+    def clean(self):
+        super().clean()
+        if self.effective_at and self.effective_at > timezone.now():
+            raise ValidationError({"effective_at": "Use a time in the past or present."})
+        if self.kind == self.Kind.BALANCE and self.amount_usd is not None and self.amount_usd < 0:
+            raise ValidationError({"amount_usd": "A verified balance cannot be negative."})
+
+    def __str__(self):
+        return f"{self.get_kind_display()}: ${self.amount_usd} ({self.organization_id})"
+
+
+class OpenAIDailyCost(models.Model):
+    organization_id = models.CharField(max_length=255)
+    project_id = models.CharField(max_length=255, blank=True)
+    day = models.DateField()
+    amount_usd = models.DecimalField(max_digits=18, decimal_places=6)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(
+            fields=["organization_id", "project_id", "day"], name="openai_cost_org_project_day",
+        )]
+
+
+class OpenAIBillingSync(models.Model):
+    organization_id = models.CharField(max_length=255, unique=True)
+    coverage_start = models.DateField(null=True)
+    costs_through = models.DateTimeField(null=True)
+    last_success_at = models.DateTimeField(null=True)
+    last_error = models.CharField(max_length=255, blank=True)
+    balance_entry = models.ForeignKey(OpenAICreditEntry, null=True, on_delete=models.SET_NULL)
+    spend_since_balance_usd = models.DecimalField(max_digits=18, decimal_places=6, null=True)
+
+
 class SpecimenGeology(BaseModel):
     # ForeignKey relationships to Accession and GeologicalContext
     accession = models.ForeignKey(

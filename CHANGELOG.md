@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Replace the ChatGPT usage report's primary cost estimate with synchronized OpenAI project costs; add verified credit balances, top-ups, estimated days remaining, and low-credit warnings. Requires migration 0091, billing credentials, and a scheduled cost sync.
+- Require agents to create a feature branch before coding and submit changes through a pull request instead of working directly on `main`.
+
 - Accept scan filenames in YYMMDDHHMMSSN.png format with variable-length numeric suffixes and Nairobi timestamp-based scanning-session lookup.
 
 - Harden taxonomy sync preview handling: normalize blank ranks and legacy names, record identification relinks, retain GBIF response hashes, and tolerate malformed GBIF data.

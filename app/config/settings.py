@@ -32,8 +32,6 @@ OPENAI_PRICING = {
     "gpt-4o-mini": {"prompt": 0.00000015, "completion": 0.0000006},
 }
 
-LLM_USAGE_MONTHLY_BUDGET_USD = Decimal("120")
-
 try:
     with open(os.path.join(BASE_DIR, "config.json")) as config_file:
         config = json.load(config_file)
@@ -51,6 +49,15 @@ def get_var(name, default_value=None):
 
 
 OPENAI_DEFAULT_MODEL = get_var("OPENAI_DEFAULT_MODEL", "gpt-5.2")
+LLM_USAGE_MONTHLY_BUDGET_USD = Decimal(str(get_var("LLM_USAGE_MONTHLY_BUDGET_USD", "120")))
+OPENAI_ADMIN_KEY = get_var("OPENAI_ADMIN_KEY", "")
+OPENAI_ORG_ID = get_var("OPENAI_ORG_ID", "")
+OPENAI_PROJECT_ID = get_var("OPENAI_PROJECT_ID", "")
+LLM_BILLING_STALE_HOURS = int(get_var("LLM_BILLING_STALE_HOURS", 24))
+LLM_BALANCE_STALE_DAYS = int(get_var("LLM_BALANCE_STALE_DAYS", 30))
+LLM_CREDIT_WARNING_DAYS = int(get_var("LLM_CREDIT_WARNING_DAYS", 14))
+LLM_CREDIT_URGENT_DAYS = int(get_var("LLM_CREDIT_URGENT_DAYS", 7))
+LLM_PURCHASE_LEAD_DAYS = int(get_var("LLM_PURCHASE_LEAD_DAYS", 7))
 OCR_DEFAULT_ENGINE = get_var("OCR_DEFAULT_ENGINE", "chatgpt-vision")
 
 
