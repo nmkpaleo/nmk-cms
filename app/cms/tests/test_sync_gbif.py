@@ -1,5 +1,6 @@
 """Source precedence, stable links, and strict GBIF matching."""
 import copy
+from datetime import date
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -9,8 +10,9 @@ from django.db import IntegrityError, transaction
 from django.test import override_settings
 
 from app.cms.models import Taxon, TaxonStatus, Identification, DrawerRegister
+from app.cms.taxonomy import combined, sync
 from app.cms.taxonomy.combined import TaxonomySyncService
-from app.cms.taxonomy.gbif import GbifClient, GbifMatchError
+from app.cms.taxonomy.gbif import GbifClient, GbifMatchError, GbifNoMatchError
 from app.cms.tests.test_sync_now import authenticated_model_user, _field_slip, _http_get_factory
 from app.cms.tests.test_taxon_workflow import make_accession_row
 from django.contrib.auth import get_user_model
@@ -236,6 +238,29 @@ def test_gbif_outage_does_not_replace_known_bird_with_now_homonym():
     assert preview.issues[0].code == "gbif-match"
 
 
+@override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")
+def test_gbif_name_miss_keeps_exact_now_mammal_match():
+    _field_slip("Struthio")
+    gbif_miss = {"diagnostics": {"matchType": "NONE"}}
+
+    preview = service(gbif_miss, "Struthio\tgenus\tMammalidae\n").preview()
+
+    assert [record.name for record in preview.accepted_to_create] == ["Struthio"]
+    assert preview.accepted_to_create[0].external_source == "NOW"
+    assert preview.issues[0].code == "gbif-match"
+
+
+@override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")
+def test_unsafe_gbif_response_does_not_keep_exact_now_mammal_match():
+    _field_slip("Struthio")
+    malformed_gbif = {"diagnostics": {"matchType": "EXACT"}}
+
+    preview = service(malformed_gbif, "Struthio\tgenus\tMammalidae\n").preview()
+
+    assert preview.counts["created"] == 0
+    assert preview.issues[0].code == "gbif-match"
+
+
 @override_settings(TAXON_GBIF_WORKERS=2)
 def test_gbif_lookups_run_in_bounded_concurrent_batches():
     from threading import Barrier, Lock
@@ -280,7 +305,9 @@ def test_gbif_name_misses_do_not_stop_remaining_lookups():
     http_get = Mock(return_value=Response({"diagnostics": {"matchType": "NONE"}}))
     results = list(GbifClient(http_get=http_get).match_many([(f"Unknown{i}", "") for i in range(5)]))
     assert http_get.call_count == 5
-    assert all(isinstance(result, ValueError) for name, rank, result in results)
+    assert all(isinstance(result, GbifNoMatchError) for name, rank, result in results)
+    assert all(str(result) == "GBIF did not return an exact name/rank match"
+               for name, rank, result in results)
 
 
 @override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")
@@ -331,3 +358,49 @@ def test_gbif_outage_does_not_import_unestablished_now_mammal_homonym():
     ).preview()
     assert preview.counts["created"] == 0
     assert preview.issues[0].code == "gbif-match"
+
+
+@override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")
+def test_gbif_sync_uses_only_the_current_identification():
+    user = get_user_model().objects.get(username="sync-now-user")
+    row = make_accession_row(user)
+    set_current_user(user)
+    Identification.objects.create(
+        accession_row=row, taxon_verbatim="Obsolete taxon", date_identified=date(2020, 1, 1)
+    )
+    Identification.objects.create(
+        accession_row=row, taxon_verbatim="Struthio", date_identified=date(2024, 1, 1)
+    )
+    queried_names = []
+
+    def http_get(url, **kwargs):
+        queried_names.append(parse_qs(urlparse(url).query)["scientificName"][0])
+        return Response(payload())
+
+    preview = service(payload(), gbif_get=http_get).preview()
+
+    assert preview.counts["created"] == 1
+    assert queried_names == ["struthio"]
+
+
+@override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")
+def test_combined_preview_scans_current_identifications_once(monkeypatch):
+    combined_calls = sync_calls = 0
+
+    def combined_current_identifications():
+        nonlocal combined_calls
+        combined_calls += 1
+        return iter(())
+
+    def sync_current_identifications():
+        nonlocal sync_calls
+        sync_calls += 1
+        return iter(())
+
+    monkeypatch.setattr(combined, "iter_current_identifications", combined_current_identifications)
+    monkeypatch.setattr(sync, "iter_current_identifications", sync_current_identifications)
+
+    service(payload()).preview()
+
+    assert combined_calls == 1
+    assert sync_calls == 0

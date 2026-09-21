@@ -26,8 +26,9 @@ Sync uses names already present in the CMS:
 
 Names must match the NOW name after ignoring case and normalizing whitespace.
 A matching synonym also brings in its accepted taxon so the link can be stored.
-An order or family entry does not import all of its descendants, and an accepted
-name does not import all of its synonyms. With no local names, nothing is imported.
+Once an accepted species is in scope, its NOW synonyms are also retained so older
+identifications can resolve to the same accepted taxon. An order or family entry
+does not import all of its descendants. With no local names, nothing is imported.
 
 The complete NOW TSV files are still downloaded because they are bulk exports;
 only the relevant records enter the preview and apply steps. Existing NOW records

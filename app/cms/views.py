@@ -21,8 +21,13 @@ from dal import autocomplete
 from django import forms
 from django.apps import apps
 from django.db import models, transaction
-from django.db.models import Value, CharField, Count, Q, Max, Prefetch, OuterRef, Subquery, Sum
-from django.db.models.functions import Concat, Greatest, TruncDate, TruncWeek
+from django.db.models import (
+    Case, CharField, Count, Exists, F, IntegerField, Max, OuterRef, Prefetch,
+    Q, Subquery, Sum, Value, When,
+)
+from django.db.models.expressions import Window
+from django.db.models.functions import Cast, Coalesce, Concat, Greatest, Lower, Replace, TruncDate, TruncWeek, Trim
+from django.db.models.functions.window import RowNumber
 from django.http import JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -129,6 +134,7 @@ from cms.models import (
     SpecimenGeology,
     Storage,
     Taxon,
+    TaxonExternalSource,
     Locality,
     Place,
     PlaceType,
@@ -174,8 +180,14 @@ from cms.merge.services import (
     merge_accession_reference_candidates,
 )
 from cms.merge.fuzzy import score_candidates
+from cms.taxon_identity import normalize_taxon_label
 from cms.resources import FieldSlipResource
-from .utils import build_accession_identification_maps, build_history_entries
+from .utils import (
+    build_accession_identification_maps,
+    build_history_entries,
+    current_identification_key,
+    iter_current_identifications,
+)
 from cms.utils import generate_accessions_from_series
 from cms.upload_processing import (
     find_uploaded_scans, process_file, queue_specimen_list_processing, scan_upload_lock,
@@ -320,6 +332,114 @@ def media_report_view(request):
         },
     }
     return render(request, 'reports/media_report.html', context)
+
+@login_required
+@user_passes_test(is_collection_manager)
+def taxonomy_identification_cleanup_report(request):
+    """List current identifications that need taxonomy cleanup."""
+
+    taxonomy_sources = [TaxonExternalSource.GBIF, TaxonExternalSource.NOW]
+
+    # Keep this expression aligned with ``normalize_taxon_label`` for normal
+    # catalogue values. Repeating Replace collapses runs of spaces without
+    # loading all taxonomy names or identifications into Python.
+    def normalized_name(field_name):
+        expression = Lower(Coalesce(F(field_name), Value("")))
+        for whitespace in ("\t", "\n", "\r", "\v", "\f"):
+            expression = Replace(expression, Value(whitespace), Value(" "))
+        expression = Trim(expression)
+        for _ in range(8):
+            expression = Replace(expression, Value("  "), Value(" "))
+        return expression
+
+    # Select one current identification per accession row in SQL. Dates win;
+    # otherwise a positive numeric reference year wins; creation time and ID
+    # settle ties. This is the same ordering as current_identification_key().
+    positive_year = Q(reference__year__regex=r"^0*[1-9][0-9]*$")
+    current_identifications = (
+        Identification.objects.annotate(
+            _current_priority=Case(
+                When(date_identified__isnull=False, then=Value(2)),
+                When(positive_year, then=Value(1)),
+                default=Value(0),
+                output_field=IntegerField(),
+            ),
+            _reference_year=Cast(
+                Case(
+                    When(positive_year, then=F("reference__year")),
+                    default=Value("0"),
+                    output_field=CharField(),
+                ),
+                IntegerField(),
+            ),
+        ).annotate(
+            _undated_reference_year=Case(
+                When(date_identified__isnull=True, then=F("_reference_year")),
+                default=Value(0),
+                output_field=IntegerField(),
+            ),
+        ).annotate(
+            _current_position=Window(
+                expression=RowNumber(),
+                partition_by=[F("accession_row_id")],
+                order_by=[
+                    F("_current_priority").desc(),
+                    F("date_identified").desc(nulls_last=True),
+                    F("_undated_reference_year").desc(),
+                    F("created_on").desc(),
+                    F("pk").desc(),
+                ],
+            )
+        ).filter(_current_position=1)
+    )
+    active_taxa = Taxon.objects.filter(
+        is_active=True,
+        external_source__in=taxonomy_sources,
+    ).annotate(_normalized_name=normalized_name("taxon_name"))
+    queryset = Identification.objects.filter(
+        pk__in=Subquery(current_identifications.values("pk"))
+    ).annotate(
+        _normalized_taxon=normalized_name("taxon"),
+        _normalized_verbatim=normalized_name("taxon_verbatim"),
+    ).annotate(
+        _matches_taxonomy=Exists(
+            active_taxa.filter(_normalized_name=OuterRef("_normalized_taxon"))
+        )
+    ).filter(
+        Q(_normalized_taxon="") & ~Q(_normalized_verbatim="")
+        | ~Q(_normalized_taxon="")
+        & ~Q(
+            taxon_record__is_active=True,
+            taxon_record__external_source__in=taxonomy_sources,
+        )
+        & Q(_matches_taxonomy=False)
+    ).select_related(
+        "accession_row__accession__collection",
+        "accession_row__accession__specimen_prefix",
+        "reference",
+        "taxon_record",
+    ).order_by("accession_row_id", "pk")
+    paginator = Paginator(queryset, 100)
+    page_obj = paginator.get_page(request.GET.get("page", 1))
+    identifications = list(page_obj.object_list)
+    for identification in identifications:
+        identification.cleanup_reason = (
+            "missing_taxon"
+            if not identification._normalized_taxon
+            else "unmatched_taxon"
+        )
+    return render(
+        request,
+        "reports/taxonomy_identification_cleanup.html",
+        {
+            "identifications": identifications,
+            "total_count": paginator.count,
+            "page_number": page_obj.number,
+            "has_previous": page_obj.has_previous(),
+            "has_next": page_obj.has_next(),
+        },
+    )
+
 
 #accession distribution report
 @login_required
@@ -923,7 +1043,7 @@ def prefetch_accession_related(qs):
             ),
             Prefetch(
                 'identification_set',
-                queryset=Identification.objects.select_related('taxon_record').order_by('-date_identified', '-id')
+                queryset=Identification.objects.select_related('taxon_record', 'reference').order_by('-date_identified', '-id')
             ),
         )
     )
@@ -1934,7 +2054,7 @@ class AccessionRowDetailView(DetailView):
                 ),
                 Prefetch(
                     "identification_set",
-                    queryset=Identification.objects.select_related("taxon_record").order_by(
+                    queryset=Identification.objects.select_related("taxon_record", "reference").order_by(
                         "-date_identified",
                         "-created_on",
                     ),
@@ -1954,8 +2074,9 @@ class AccessionRowDetailView(DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['natureofspecimens'] = list(self.object.natureofspecimen_set.all())
-        # Order identifications by date_identified DESC (nulls last), then created_on DESC
-        context['identifications'] = list(self.object.identification_set.all())
+        context['identifications'] = sorted(
+            self.object.identification_set.all(), key=current_identification_key, reverse=True
+        )
         context['can_edit'] = (
             self.request.user.is_superuser or is_collection_manager(self.request.user)
         )
@@ -2049,7 +2170,7 @@ class BaseAccessionRowPrintView(LoginRequiredMixin, UserPassesTestMixin, DetailV
                 ),
                 Prefetch(
                     "identification_set",
-                    queryset=Identification.objects.select_related("taxon_record").order_by(
+                    queryset=Identification.objects.select_related("taxon_record", "reference").order_by(
                         "-date_identified",
                         "-created_on",
                     ),

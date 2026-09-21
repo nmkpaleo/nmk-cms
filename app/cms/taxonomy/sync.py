@@ -23,6 +23,7 @@ from ..models import (
     TaxonStatus,
     TaxonomyImport,
 )
+from ..utils import iter_current_identifications
 
 logger = logging.getLogger(__name__)
 
@@ -309,6 +310,7 @@ class NowTaxonomySyncService:
         accepted_records: Sequence[AcceptedRecord],
         synonym_records: Sequence[SynonymRecord],
         existing_taxa: Sequence[Taxon],
+        local_names: set[str] | None = None,
     ) -> tuple[List[AcceptedRecord], List[SynonymRecord]]:
         """Keep local names and accepted targets needed by their synonyms."""
         taxon_keys = {
@@ -317,16 +319,33 @@ class NowTaxonomySyncService:
         }
         # DrawerRegister.taxa and Identification.taxon_record already point to
         # existing_taxa. Free text is unranked and therefore matches by name.
-        names = set()
-        for verbatim, legacy in Identification.objects.order_by().values_list(
-            "taxon_verbatim", "taxon"
-        ).iterator():
-            names.add((_normalize_label(verbatim) or _normalize_label(legacy)).lower())
-        names.update(
-            _normalize_label(name).lower()
-            for name in FieldSlip.objects.order_by().values_list("verbatim_taxon", flat=True).iterator()
-        )
+        if local_names is None:
+            names = {
+                (_normalize_label(identification.taxon_verbatim)
+                 or _normalize_label(identification.taxon)).lower()
+                for identification in iter_current_identifications()
+            }
+            names.update(
+                _normalize_label(name).lower()
+                for name in FieldSlip.objects.order_by().values_list("verbatim_taxon", flat=True).iterator()
+            )
+        else:
+            names = set(local_names)
         names.discard("")
+
+        def matches_local_name(name: str, rank: str) -> bool:
+            normalized = _normalize_label(name).lower()
+            if normalized in names:
+                return True
+            # A current identification may preserve an infraspecific epithet
+            # although NOW only contains the accepted species. Scope that
+            # accepted binomial and its synonyms without broadening genus-level
+            # names into every species in the genus.
+            return (
+                _record_rank(rank) == "species"
+                and any(local_name.startswith(f"{normalized} ") for local_name in names)
+            )
+
         existing_ids = {
             taxon.external_id for taxon in existing_taxa
             if taxon.external_source == TaxonExternalSource.NOW and taxon.external_id
@@ -334,16 +353,27 @@ class NowTaxonomySyncService:
         synonyms = [
             record for record in synonym_records
             if taxon_identity(record.name, _record_rank(record.rank)) in taxon_keys
-            or record.name.lower() in names
+            or matches_local_name(record.name, record.rank)
             or (record.external_source == TaxonExternalSource.NOW and record.external_id in existing_ids)
         ]
         accepted_ids = {record.accepted_key for record in synonyms}
         accepted = [
             record for record in accepted_records
             if taxon_identity(record.name, _record_rank(record.rank)) in taxon_keys
-            or record.name.lower() in names
+            or matches_local_name(record.name, record.rank)
             or (record.external_source == TaxonExternalSource.NOW and record.external_id in existing_ids)
             or (record.external_source, record.external_id) in accepted_ids
+        ]
+        # Once an accepted taxon is in scope, retain all of its NOW synonyms.
+        # This lets historical identifications resolve without importing taxa
+        # unrelated to the collection.
+        accepted_keys = {(record.external_source, record.external_id) for record in accepted}
+        synonyms = [
+            record for record in synonym_records
+            if taxon_identity(record.name, _record_rank(record.rank)) in taxon_keys
+            or matches_local_name(record.name, record.rank)
+            or (record.external_source == TaxonExternalSource.NOW and record.external_id in existing_ids)
+            or record.accepted_key in accepted_keys
         ]
         return accepted, synonyms
 
@@ -351,13 +381,14 @@ class NowTaxonomySyncService:
         self,
         accepted_records: Sequence[AcceptedRecord],
         synonym_records: Sequence[SynonymRecord],
+        local_names: set[str] | None = None,
     ) -> SyncPreview:
         accepted_records = _deduplicate_records(accepted_records)
         synonym_records = _deduplicate_records(synonym_records)
         latest_version = _latest_version(accepted_records, synonym_records)
         all_taxa = list(Taxon.objects.select_related("accepted_taxon"))
         accepted_records, synonym_records = self._scope_records(
-            accepted_records, synonym_records, all_taxa
+            accepted_records, synonym_records, all_taxa, local_names=local_names
         )
         existing_taxa = all_taxa
         existing_by_external_id = {(taxon.external_source, taxon.external_id): taxon for taxon in existing_taxa if taxon.external_id}

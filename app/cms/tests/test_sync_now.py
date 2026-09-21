@@ -398,12 +398,13 @@ def test_sync_only_imports_locally_recorded_names(db, source):
         assert Taxon.objects.count() == 1
     else:
         assert {r.name for r in preview.accepted_to_create} == expected
-    assert preview.synonyms_to_create == []
+    expected_synonyms = {"Alpha old", "Alpha unused"} if expected == {"Alpha beta"} else set()
+    assert {record.name for record in preview.synonyms_to_create} == expected_synonyms
     assert preview.to_deactivate == []
     assert preview.issues == []
     if source in {"empty", "field-slip", "identification", "legacy-identification"}:
         service.sync(apply=True)
-        assert set(Taxon.objects.values_list("taxon_name", flat=True)) == expected
+        assert set(Taxon.objects.values_list("taxon_name", flat=True)) == expected | expected_synonyms
         assert service.preview().counts["created"] == 0
 
 
@@ -412,17 +413,45 @@ def test_sync_only_imports_locally_recorded_names(db, source):
     TAXON_NOW_ACCEPTED_URL="https://example.com/accepted.tsv",
     TAXON_NOW_SYNONYMS_URL="https://example.com/synonyms.tsv",
 )
-def test_local_synonym_imports_only_its_required_accepted_name(db):
+def test_local_synonym_imports_all_synonyms_for_its_accepted_name(db):
     _field_slip("Alpha old")
     service = _scope_service()
     preview = service.preview()
     assert [r.name for r in preview.accepted_to_create] == ["Alpha beta"]
-    assert [r.name for r in preview.synonyms_to_create] == ["Alpha old"]
+    assert {record.name for record in preview.synonyms_to_create} == {"Alpha old", "Alpha unused"}
     service.sync(apply=True)
     synonym = Taxon.objects.get(taxon_name="Alpha old")
     assert synonym.accepted_taxon.taxon_name == "Alpha beta"
-    assert set(Taxon.objects.values_list("taxon_name", flat=True)) == {"Alpha old", "Alpha beta"}
+    assert set(Taxon.objects.values_list("taxon_name", flat=True)) == {"Alpha old", "Alpha unused", "Alpha beta"}
     assert service.preview().counts["created"] == 0
+
+
+@pytest.mark.django_db
+@override_settings(
+    TAXON_NOW_ACCEPTED_URL="https://example.com/accepted.tsv",
+    TAXON_NOW_SYNONYMS_URL="https://example.com/synonyms.tsv",
+)
+def test_infraspecific_local_name_scopes_now_accepted_species_and_synonyms(db):
+    _field_slip("Sivachoerus syrticus tulotos")
+    service = NowTaxonomySyncService(http_get=_http_get_factory({
+        "https://example.com/accepted.tsv": (
+            "taxon_name\ttaxon_rank\tclass_name\tfamily\n"
+            "Sivachoerus syrticus\tspecies\tMAMMALIA\tSuidae\n"
+        ),
+        "https://example.com/synonyms.tsv": (
+            "syn_name\ttaxon_name\ttaxon_rank\n"
+            "Nyanzachoerus syrticus\tSivachoerus syrticus\tspecies\n"
+            "Nyanzachoerus tulotos\tSivachoerus syrticus\tspecies\n"
+            "Sivachoerus tulotos\tSivachoerus syrticus\tspecies\n"
+        ),
+    }))
+
+    preview = service.preview()
+
+    assert [record.name for record in preview.accepted_to_create] == ["Sivachoerus syrticus"]
+    assert {record.name for record in preview.synonyms_to_create} == {
+        "Nyanzachoerus syrticus", "Nyanzachoerus tulotos", "Sivachoerus tulotos"
+    }
 
 
 def test_now_synonym_uses_accepted_taxon_with_matching_rank():
