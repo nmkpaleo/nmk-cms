@@ -11,7 +11,7 @@ import csv
 import json
 import logging
 import os
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone as dt_timezone
 import json
 from decimal import Decimal
 from decimal import Decimal
@@ -4839,7 +4839,7 @@ def chatgpt_usage_sync(request):
 
 @staff_member_required
 def chatgpt_usage_report(request):
-    today = timezone.localdate()
+    today = timezone.now().astimezone(dt_timezone.utc).date()
     default_start = today - timedelta(days=30)
 
     base_qs = LLMUsageRecord.objects.all()

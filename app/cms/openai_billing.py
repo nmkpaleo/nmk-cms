@@ -40,7 +40,7 @@ def _fetch_costs(start, end, organization_id, *, deadline=None):
     """Fetch all pages without project filtering; reject invalid financial data."""
     params = {
         "start_time": int(start.timestamp()), "end_time": int(end.timestamp()),
-        "bucket_width": "1d", "group_by": ["project_id"], "limit": 180,
+        "bucket_width": "1d", "group_by[]": ["project_id"], "limit": 180,
     }
     headers = {
         "Authorization": f"Bearer {settings.OPENAI_ADMIN_KEY}",
@@ -105,7 +105,7 @@ def sync_costs(*, start_date=None, timeout_seconds=None):
     organization = settings.OPENAI_ORG_ID
     if not organization or not settings.OPENAI_ADMIN_KEY:
         raise BillingSyncError("Configure OPENAI_ORG_ID and OPENAI_ADMIN_KEY to synchronize costs.")
-    now = timezone.now().astimezone(UTC).replace(microsecond=0)
+    now = timezone.now().astimezone(UTC)
     if start_date and start_date > now.date():
         raise BillingSyncError("The backfill start date cannot be in the future.")
     state, _ = OpenAIBillingSync.objects.get_or_create(organization_id=organization)
@@ -125,7 +125,11 @@ def sync_costs(*, start_date=None, timeout_seconds=None):
             spend_since_balance = sum(balance_costs.values(), ZERO)
         _sync_time_remaining(deadline)
     except BillingSyncError as exc:
-        OpenAIBillingSync.objects.filter(pk=state.pk).update(last_error=str(exc))
+        with transaction.atomic():
+            current_state = OpenAIBillingSync.objects.select_for_update().get(pk=state.pk)
+            if not current_state.costs_through or current_state.costs_through <= now:
+                current_state.last_error = str(exc)
+                current_state.save(update_fields=["last_error"])
         raise
     with transaction.atomic():
         state = OpenAIBillingSync.objects.select_for_update().get(pk=state.pk)

@@ -60,6 +60,7 @@ class CostSyncTests(TestCase):
         self.assertEqual(OpenAIDailyCost.objects.count(), 3)
         self.assertEqual(calls[1]["page"], "next")
         self.assertNotIn("project_ids", calls[0])
+        self.assertEqual(calls[0]["group_by[]"], ["project_id"])
         self.assertEqual(get.call_args.kwargs["headers"]["OpenAI-Organization"], "org-test")
         self.assertEqual(state.costs_through, NOW)
         other = OpenAIDailyCost.objects.create(organization_id="org-other", project_id="proj-app",
@@ -102,6 +103,27 @@ class CostSyncTests(TestCase):
         self.assertEqual(cost.amount_usd, 9)
         self.assertNotIn("test-admin-secret", state.last_error)
         self.assertIn("could not connect", state.last_error)
+
+    @patch("cms.openai_billing.requests.get", side_effect=requests.Timeout("stale run"))
+    def test_failed_older_sync_does_not_clear_newer_success(self, get):
+        newer = NOW + timedelta(microseconds=1)
+        OpenAIBillingSync.objects.create(
+            organization_id="org-test", costs_through=newer, last_success_at=newer,
+            coverage_start=(NOW - timedelta(days=1)).date(),
+        )
+        with self.assertRaises(BillingSyncError):
+            sync_costs()
+        state = OpenAIBillingSync.objects.get(organization_id="org-test")
+        self.assertEqual(state.last_error, "")
+
+    @patch("cms.openai_billing.timezone.now")
+    @patch("cms.openai_billing.requests.get")
+    def test_sync_marker_keeps_microsecond_precision(self, get, now):
+        precise_now = NOW.replace(microsecond=123456)
+        now.return_value = precise_now
+        get.return_value = response({"data": [], "has_more": False, "next_page": None})
+        state = sync_costs()
+        self.assertEqual(state.costs_through, precise_now)
 
     @patch("cms.openai_billing.requests.get")
     def test_invalid_data_is_not_imported(self, get):
