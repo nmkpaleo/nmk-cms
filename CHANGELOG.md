@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Accept scan filenames in YYMMDDHHMMSSN.png format with variable-length numeric suffixes and Nairobi timestamp-based scanning-session lookup.
+
 - Harden taxonomy sync preview handling: normalize blank ranks and legacy names, record identification relinks, retain GBIF response hashes, and tolerate malformed GBIF data.
 - Address taxonomy review findings: source-aware taxonomy import/export relations, bounded concurrent GBIF lookups, source-specific IDs, related-record locks, historical identity backfill (migration 0090), and IDs that fit long NOW names.
 - Fix taxonomy sync synonym creation and updates on databases where bulk inserts do not return primary keys.

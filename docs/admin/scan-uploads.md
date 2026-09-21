@@ -7,6 +7,7 @@ Staff can upload scanned images directly into the CMS for further processing.
 2. Use the **Upload scans** button in the header.
 3. Select one or more files that follow one of the supported naming formats:
    - `YYYY-MM-DDTHHMMSS.png` for standard OCR scans (moved to `uploads/pending/`).
+   - `YYMMDDHHMMSSN.png`, for example `2609211113551.png` or `2609211113553.png`, for OCR processing. The first 12 digits give the Nairobi scan time (years 2000-2099); `N` is one or more digits. The timestamp is used to find the scanning session. The PNG extension is case-insensitive.
    - Digits, two letters, one space, and digits followed by `.png`, for example `4LT 1082726110849.png`. These enter `uploads/pending/` for OCR without a scanning-session link because they have no filename timestamp. Letters and extensions are case-insensitive.
    - `NNN.jpg` (only digits before the extension) for manual QC scans (moved to `uploads/manual_qc/`).
 4. Click **Upload**. Each file is validated and moved to the appropriate folder.
