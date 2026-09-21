@@ -27,6 +27,16 @@ Apply migrations with `python app/manage.py migrate`. Configure these environmen
 Use positive freshness limits, nonnegative lead time, and warning days greater than or equal to urgent days.
 The normal OCR API key is unchanged. Billing credentials are never sent to the browser.
 
+## Synchronize from the report
+
+On `/admin/chatgpt-usage/`, click **Synchronize OpenAI costs**. The page returns with a success or error message and retains your date/model filters. The button disables while the request is running. Opening or refreshing the report alone does not contact OpenAI.
+
+Superusers can use the button automatically. To delegate it, grant an active staff user the Django permission with codename `cms.change_openaibillingsync` (**Can change open ai billing sync**). Viewing the report or adding credit entries alone does not grant sync access.
+
+The button uses the same configured credentials and cost-sync logic as the scheduled command. Missing configuration is reported on the page; no credentials are entered in the browser. UI syncs have a 45-second request budget. If a slow provider or a large historical backfill exceeds it, the previous snapshot is retained; retry or use the command below. The command has no overall UI time budget, but retains per-request timeouts.
+
+## Schedule automatic synchronization
+
 From the repository root, run:
 
 ```sh
@@ -50,7 +60,7 @@ Each run refreshes the entire imported interval, follows pagination, and replace
 1. In OpenAI billing, check the organization's actual prepaid balance.
 2. In the report, select **Record balance or top-up**. This requires the Django **Can add OpenAI credit entry** permission (superusers already have it).
 3. Choose **Verified balance**, enter the dollar balance, the time you checked it, and a note. Verify the organization ID.
-4. Run the cost sync again, or wait for the scheduled run. The sync separately requests organization spending from that verification timestamp, with second precision; it does not prorate a day's spending.
+4. Click **Synchronize OpenAI costs**, run the command, or wait for the scheduled run. The sync separately requests organization spending from that verification timestamp, with second precision; it does not prorate a day's spending.
 5. After buying credits, add a **Top-up / adjustment** with a positive amount and the time it took effect. Use a negative adjustment for expired credits or other reductions. Only adjustments after the latest verified balance and before the sync cutoff are included.
 
 A verified balance already includes earlier top-ups: do not enter them again with later timestamps. Entries are append-only in admin. Correct a mistaken adjustment with an opposite adjustment, or record a new verified balance. An incorrect verified balance should be replaced with a new check. Django's admin log records who added each entry.

@@ -9,6 +9,7 @@ from tempfile import TemporaryDirectory
 import copy
 import csv
 import json
+import logging
 import os
 from datetime import date, datetime, timedelta
 import json
@@ -4807,6 +4808,33 @@ def _coerce_decimal(value: object) -> Decimal:
         return Decimal(str(value))
     except (ValueError, ArithmeticError):
         return Decimal("0")
+
+
+@staff_member_required
+@require_POST
+def chatgpt_usage_sync(request):
+    if not request.user.has_perm("cms.change_openaibillingsync"):
+        raise PermissionDenied
+
+    from .openai_billing import BillingSyncError, sync_costs
+
+    try:
+        sync_costs(timeout_seconds=45)
+    except BillingSyncError as exc:
+        messages.error(request, str(exc))
+    except Exception as exc:
+        # Do not expose provider credentials or raw exceptions in the response/log.
+        logging.getLogger(__name__).error("OpenAI UI cost sync failed (%s).", type(exc).__name__)
+        messages.error(request, "OpenAI costs could not be synchronized. Please retry or contact an administrator.")
+    else:
+        messages.success(request, "OpenAI costs synchronized. The usage report has been updated.")
+
+    # Preserve report filters, but never redirect to a user-supplied URL.
+    filters = {key: request.GET[key] for key in ("start_date", "end_date", "model_name") if key in request.GET}
+    url = reverse("admin-chatgpt-usage")
+    if filters:
+        url += "?" + urlencode(filters)
+    return redirect(url)
 
 
 @staff_member_required

@@ -5,9 +5,10 @@ from unittest.mock import Mock, patch
 
 import requests
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.core.exceptions import ValidationError
 from django.core.management import call_command, CommandError
-from django.test import TestCase, override_settings
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from cms.models import LLMUsageRecord, Media, OpenAIBillingSync, OpenAICreditEntry, OpenAIDailyCost
@@ -167,6 +168,26 @@ class CostSyncTests(TestCase):
         with self.assertRaises(BillingSyncError):
             sync_costs(start_date=(NOW + timedelta(days=1)).date())
         get.assert_not_called()
+
+    @patch("cms.openai_billing.monotonic", side_effect=[0, 0, 46])
+    @patch("cms.openai_billing.requests.get")
+    def test_ui_time_budget_preserves_previous_costs(self, get, clock):
+        old = NOW - timedelta(hours=1)
+        state = OpenAIBillingSync.objects.create(
+            organization_id="org-test", costs_through=old, last_success_at=old, coverage_start=old.date(),
+        )
+        cost = OpenAIDailyCost.objects.create(organization_id="org-test", project_id="proj-app",
+                                             day=old.date(), amount_usd=9)
+        get.return_value = response(page(NOW, [("proj-app", "2")]))
+        with self.assertRaisesMessage(BillingSyncError, "took too long"):
+            sync_costs(timeout_seconds=45)
+        state.refresh_from_db()
+        cost.refresh_from_db()
+        self.assertEqual(state.costs_through, old)
+        self.assertEqual(state.last_success_at, old)
+        self.assertEqual(cost.amount_usd, 9)
+        self.assertIn("took too long", state.last_error)
+        self.assertLessEqual(sum(get.call_args.kwargs["timeout"]), 45)
 
     @patch("cms.openai_billing.requests.get")
     def test_command_backfill(self, get):
@@ -369,3 +390,104 @@ class BillingReportTests(TestCase):
         admin = site._registry[OpenAICreditEntry]
         self.assertFalse(admin.has_change_permission(request, entry))
         self.assertFalse(admin.has_delete_permission(request, entry))
+
+
+@override_settings(**SETTINGS)
+class BillingSyncButtonTests(TestCase):
+    def setUp(self):
+        self.staff = get_user_model().objects.create_user(username="sync-staff", is_staff=True)
+        self.permission = Permission.objects.get(content_type__app_label="cms", codename="change_openaibillingsync")
+        self.url = reverse("admin-chatgpt-usage-sync")
+        self.report_url = reverse("admin-chatgpt-usage")
+        self.client.force_login(self.staff)
+
+    def allow_sync(self):
+        self.staff.user_permissions.add(self.permission)
+
+    @patch("cms.openai_billing.sync_costs")
+    def test_button_and_endpoint_require_billing_permission(self, sync):
+        self.assertNotContains(self.client.get(self.report_url), 'id="billing-sync-button"')
+        self.assertEqual(self.client.post(self.url).status_code, 403)
+        sync.assert_not_called()
+        self.allow_sync()
+        self.assertContains(self.client.get(self.report_url), 'id="billing-sync-button"')
+
+    @patch("cms.openai_billing.sync_costs")
+    def test_superuser_can_sync(self, sync):
+        self.staff.is_superuser = True
+        self.staff.save()
+        response = self.client.post(self.url, follow=True)
+        self.assertContains(response, "OpenAI costs synchronized.")
+        sync.assert_called_once_with(timeout_seconds=45)
+
+    @patch("cms.openai_billing.sync_costs")
+    def test_anonymous_nonstaff_and_inactive_users_cannot_sync(self, sync):
+        self.allow_sync()
+        self.client.logout()
+        self.assertEqual(self.client.post(self.url).status_code, 302)
+        self.staff.is_staff = False
+        self.staff.save()
+        self.client.force_login(self.staff)
+        self.assertEqual(self.client.post(self.url).status_code, 302)
+        self.staff.is_staff = True
+        self.staff.is_active = False
+        self.staff.save()
+        self.client.force_login(self.staff)
+        self.assertEqual(self.client.post(self.url).status_code, 302)
+        sync.assert_not_called()
+
+    @patch("cms.openai_billing.sync_costs")
+    def test_get_never_synchronizes(self, sync):
+        self.allow_sync()
+        self.assertEqual(self.client.get(self.url).status_code, 405)
+        self.assertEqual(self.client.get(self.report_url).status_code, 200)
+        sync.assert_not_called()
+
+    @patch("cms.openai_billing.sync_costs")
+    def test_csrf_is_required_and_form_token_works(self, sync):
+        self.allow_sync()
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.staff)
+        self.assertEqual(client.post(self.url).status_code, 403)
+        sync.assert_not_called()
+        client.get(self.report_url)
+        token = client.cookies["csrftoken"].value
+        response = client.post(self.url, {"csrfmiddlewaretoken": token}, follow=True)
+        self.assertContains(response, "OpenAI costs synchronized.")
+        sync.assert_called_once_with(timeout_seconds=45)
+
+    @patch("cms.openai_billing.sync_costs")
+    def test_success_preserves_only_report_filters_and_avoids_open_redirect(self, sync):
+        self.allow_sync()
+        query = "start_date=2026-09-01&end_date=2026-09-20&model_name=gpt-4o"
+        response = self.client.post(self.url + "?" + query + "&next=https://example.org/", follow=False)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, self.report_url + "?" + query)
+        sync.assert_called_once_with(timeout_seconds=45)
+        report = self.client.get(self.report_url + "?" + query)
+        self.assertContains(report, "start_date=2026-09-01&amp;end_date=2026-09-20&amp;model_name=gpt-4o")
+
+    @override_settings(OPENAI_ADMIN_KEY="")
+    @patch("cms.openai_billing.requests.get")
+    def test_missing_configuration_shows_actionable_message_without_api_call(self, get):
+        self.allow_sync()
+        response = self.client.post(self.url, follow=True)
+        self.assertContains(response, "Configure OPENAI_ORG_ID and OPENAI_ADMIN_KEY")
+        self.assertNotContains(response, "OpenAI costs synchronized.")
+        get.assert_not_called()
+
+    @patch("cms.openai_billing.sync_costs", side_effect=BillingSyncError("OpenAI cost synchronization returned HTTP 403."))
+    def test_provider_error_is_shown(self, sync):
+        self.allow_sync()
+        response = self.client.post(self.url, follow=True)
+        self.assertContains(response, "OpenAI cost synchronization returned HTTP 403.")
+        self.assertNotContains(response, "OpenAI costs synchronized.")
+
+    @patch("cms.openai_billing.sync_costs", side_effect=RuntimeError("sensitive-provider-detail"))
+    def test_unexpected_error_does_not_expose_exception(self, sync):
+        self.allow_sync()
+        with self.assertLogs("cms.views", level="ERROR") as logs:
+            response = self.client.post(self.url, follow=True)
+        self.assertContains(response, "OpenAI costs could not be synchronized.")
+        self.assertNotContains(response, "sensitive-provider-detail")
+        self.assertNotIn("sensitive-provider-detail", " ".join(logs.output))

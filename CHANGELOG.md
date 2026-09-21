@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add a permission-controlled **Synchronize OpenAI costs** button to the usage report, with progress feedback, preserved filters, safe error messages, and a shorter request budget for browser-triggered syncs.
+
 - Replace the ChatGPT usage report's primary cost estimate with synchronized OpenAI project costs; add verified credit balances, top-ups, estimated days remaining, and low-credit warnings. Requires migration 0091, billing credentials, and a scheduled cost sync.
 - Require agents to create a feature branch before coding and submit changes through a pull request instead of working directly on `main`.
 

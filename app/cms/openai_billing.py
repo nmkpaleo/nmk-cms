@@ -1,11 +1,12 @@
 """Provider-reported spending and explicitly estimated prepaid credit.
 
-The report never makes network calls. A scheduled command refreshes a complete
-snapshot, including spending outside this application's project.
+Viewing the report never makes network calls. Explicit UI synchronization and
+the scheduled command refresh costs across all organization projects.
 """
 from collections import defaultdict
 from datetime import datetime, time, timedelta, timezone as dt_timezone
 from decimal import Decimal, InvalidOperation
+from time import monotonic
 
 import requests
 from django.conf import settings
@@ -23,7 +24,19 @@ class BillingSyncError(Exception):
     """Credential-free error suitable for report and command output."""
 
 
-def _fetch_costs(start, end, organization_id):
+def _sync_time_remaining(deadline):
+    if deadline is None:
+        return None
+    remaining = deadline - monotonic()
+    if remaining <= 0:
+        raise BillingSyncError(
+            "OpenAI synchronization took too long; previous data retained. "
+            "Please retry or ask an administrator to run the scheduled sync."
+        )
+    return remaining
+
+
+def _fetch_costs(start, end, organization_id, *, deadline=None):
     """Fetch all pages without project filtering; reject invalid financial data."""
     params = {
         "start_time": int(start.timestamp()), "end_time": int(end.timestamp()),
@@ -37,13 +50,16 @@ def _fetch_costs(start, end, organization_id):
     seen_pages = set()
     seen_buckets = set()
     while True:
+        remaining = _sync_time_remaining(deadline)
+        timeout = (10, 60) if remaining is None else (min(10, remaining / 2), min(60, remaining / 2))
         try:
             response = requests.get(
                 "https://api.openai.com/v1/organization/costs",
-                params=params, headers=headers, timeout=(10, 60), allow_redirects=False,
+                params=params, headers=headers, timeout=timeout, allow_redirects=False,
             )
         except requests.RequestException:
             raise BillingSyncError("OpenAI cost synchronization could not connect. Retry the sync.") from None
+        _sync_time_remaining(deadline)
         if response.status_code != 200:
             raise BillingSyncError(f"OpenAI cost synchronization returned HTTP {response.status_code}.")
         try:
@@ -84,7 +100,8 @@ def _fetch_costs(start, end, organization_id):
     return rows
 
 
-def sync_costs(*, start_date=None):
+def sync_costs(*, start_date=None, timeout_seconds=None):
+    deadline = monotonic() + timeout_seconds if timeout_seconds is not None else None
     organization = settings.OPENAI_ORG_ID
     if not organization or not settings.OPENAI_ADMIN_KEY:
         raise BillingSyncError("Configure OPENAI_ORG_ID and OPENAI_ADMIN_KEY to synchronize costs.")
@@ -100,12 +117,13 @@ def sync_costs(*, start_date=None):
         effective_at__lt=now,
     ).first()
     try:
-        daily = _fetch_costs(start, now, organization)
+        daily = _fetch_costs(start, now, organization, deadline=deadline)
         spend_since_balance = None
         if balance:
             # Query the verification time, rather than prorating a daily bucket.
-            balance_costs = _fetch_costs(balance.effective_at.replace(microsecond=0), now, organization)
+            balance_costs = _fetch_costs(balance.effective_at.replace(microsecond=0), now, organization, deadline=deadline)
             spend_since_balance = sum(balance_costs.values(), ZERO)
+        _sync_time_remaining(deadline)
     except BillingSyncError as exc:
         OpenAIBillingSync.objects.filter(pk=state.pk).update(last_error=str(exc))
         raise

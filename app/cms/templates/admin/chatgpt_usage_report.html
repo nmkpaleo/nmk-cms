@@ -17,11 +17,20 @@
         &middot; <a href="{% url 'admin:cms_openaicreditentry_add' %}">Record balance or top-up</a>
       {% endif %}
     </p>
+    {% if perms.cms.change_openaibillingsync %}
+      <form id="billing-sync-form" method="post" action="{% url 'admin-chatgpt-usage-sync' %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}">
+        {% csrf_token %}
+        <button type="submit" class="button" id="billing-sync-button">Synchronize OpenAI costs</button>
+        <span id="billing-sync-status" role="status" aria-live="polite"></span>
+      </form>
+    {% endif %}
     {% if billing.sync.last_success_at %}
       <p>Last synchronized: {{ billing.sync.last_success_at|date:"Y-m-d H:i T" }}.
         Costs through {{ billing.sync.costs_through|date:"Y-m-d H:i T" }}; recent charges may still be pending.</p>
     {% else %}
-      <p>OpenAI billing data has not been synchronized. Ask an administrator to configure the cost sync.</p>
+      <p>OpenAI billing data has not been synchronized.
+        {% if perms.cms.change_openaibillingsync %}Use the button above to refresh costs.
+        {% else %}Ask an administrator to synchronize costs.{% endif %}</p>
     {% endif %}
     {% if billing.stale %}<p class="billing-notice" role="status">Billing data is stale. Displayed amounts are from the last successful sync.</p>{% endif %}
     {% if billing.sync.last_error %}<p class="billing-notice" role="status">{{ billing.sync.last_error }} Displayed amounts are from the last successful sync.</p>{% endif %}
@@ -338,6 +347,21 @@
 
   <script>
     document.addEventListener('DOMContentLoaded', function () {
+      const syncForm = document.getElementById('billing-sync-form');
+      if (syncForm) {
+        const syncButton = document.getElementById('billing-sync-button');
+        const syncStatus = document.getElementById('billing-sync-status');
+        syncForm.addEventListener('submit', function () {
+          syncButton.disabled = true;
+          syncForm.setAttribute('aria-busy', 'true');
+          syncStatus.textContent = 'Synchronizing costs, please wait...';
+        });
+        window.addEventListener('pageshow', function () {
+          syncButton.disabled = false;
+          syncForm.removeAttribute('aria-busy');
+          syncStatus.textContent = '';
+        });
+      }
       const chartData = JSON.parse('{{ chart_data_json|escapejs }}');
 
       const buildTraces = (series) => {
