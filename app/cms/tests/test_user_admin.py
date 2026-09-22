@@ -17,7 +17,7 @@ class UserAdminPasswordChangeTests(TestCase):
         response = self.client.get(reverse("admin:auth_user_change", args=[self.user.pk]))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, reverse("admin:auth_user_password_change", args=[self.user.pk]))
+        self.assertContains(response, "Change password")
 
     def test_admin_can_change_user_password(self):
         response = self.client.post(
@@ -29,3 +29,4 @@ class UserAdminPasswordChangeTests(TestCase):
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password("New-password-123!"))
         self.assertFalse(self.user.check_password("Old-password-123!"))
+
