@@ -82,7 +82,7 @@
     if (typeof value !== "string") {
       return value;
     }
-    var pattern = new RegExp("^" + prefix + "-\\d+-");
+    var pattern = new RegExp("^" + prefix + "-(?:\\d+|__prefix__)-");
     return value.replace(pattern, prefix + "-" + index + "-");
   }
 
@@ -90,7 +90,7 @@
     if (typeof value !== "string") {
       return value;
     }
-    var pattern = new RegExp("^" + prefix + "-\\d+-");
+    var pattern = new RegExp("^" + prefix + "-(?:\\d+|__prefix__)-");
     return value.replace(pattern, prefix + "-" + index + "-");
   }
 
@@ -602,7 +602,6 @@
       }
       container.appendChild(chip);
       this.initializeChip(chip);
-      this.assignChipToRow(chip, row);
       this.clearDeletionState(chip);
       this.refreshChipSummary(chip);
       this.updateChipIndexes(type);
