@@ -42,6 +42,18 @@ class TaxonomySyncService(NowTaxonomySyncService):
             now_accepted, now_synonyms, taxa, local_names=local_names
         )
         candidates = list(now_accepted) + list(now_synonyms)
+        # A locally scoped NOW mammal is authoritative. Do not ask GBIF to
+        # adjudicate a name that NOW already supplies, including a NOW
+        # synonym whose accepted target is also in the scoped records.
+        now_mammal_names = {
+            normalize_taxon_label(record.name).lower()
+            for record in candidates
+            if normalize_taxon_label(record.taxonomy.get("class_name", "")).lower() == "mammalia"
+        }
+        gbif_names = {
+            (name, rank) for name, rank in names
+            if name not in now_mammal_names
+        }
         issues = []
         failed_names = set()
         blocked_now_keys = set()
@@ -52,7 +64,7 @@ class TaxonomySyncService(NowTaxonomySyncService):
             taxa_by_name.setdefault(normalized_name, []).append(taxon)
             if normalize_taxon_label(taxon.class_name).lower() not in {"", "mammalia"}:
                 non_mammals_by_name.setdefault(normalized_name, []).append(taxon)
-        for name, rank, result in self.gbif.match_many(names):
+        for name, rank, result in self.gbif.match_many(gbif_names):
             try:
                 if isinstance(result, Exception):
                     raise result

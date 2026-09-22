@@ -251,14 +251,15 @@ def test_gbif_name_miss_keeps_exact_now_mammal_match():
 
 
 @override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")
-def test_unsafe_gbif_response_does_not_keep_exact_now_mammal_match():
+def test_unsafe_gbif_response_keeps_exact_now_mammal_match():
     _field_slip("Struthio")
     malformed_gbif = {"diagnostics": {"matchType": "EXACT"}}
 
     preview = service(malformed_gbif, "Struthio\tgenus\tMammalidae\n").preview()
 
-    assert preview.counts["created"] == 0
-    assert preview.issues[0].code == "gbif-match"
+    assert preview.counts["created"] == 1
+    assert preview.accepted_to_create[0].external_source == "NOW"
+    assert preview.issues == []
 
 
 @override_settings(TAXON_GBIF_WORKERS=2)
@@ -347,7 +348,7 @@ def test_combined_source_version_includes_gbif_response_hash():
 
 
 @override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")
-def test_gbif_outage_does_not_import_unestablished_now_mammal_homonym():
+def test_gbif_outage_does_not_block_exact_now_mammal_match():
     _field_slip("Struthio")
 
     def get(url, **kwargs):
@@ -356,8 +357,9 @@ def test_gbif_outage_does_not_import_unestablished_now_mammal_homonym():
     preview = service(
         payload(), "Struthio\tgenus\tMammalidae\n", gbif_get=get
     ).preview()
-    assert preview.counts["created"] == 0
-    assert preview.issues[0].code == "gbif-match"
+    assert preview.counts["created"] == 1
+    assert preview.accepted_to_create[0].external_source == "NOW"
+    assert preview.issues == []
 
 
 @override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")
@@ -404,3 +406,27 @@ def test_combined_preview_scans_current_identifications_once(monkeypatch):
 
     assert combined_calls == 1
     assert sync_calls == 0
+
+@override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")
+def test_now_synonym_skips_gbif_and_replaces_existing_gbif_target():
+    _field_slip("Aepyceros premelampus")
+    existing = Taxon.objects.create(
+        taxon_name="Afrotragus premelampus", taxon_rank="species",
+        class_name="Mammalia", external_source="GBIF", external_id="GBIF:old",
+    )
+    service_instance = TaxonomySyncService(
+        http_get=_http_get_factory({
+            "accepted": "taxon_name\ttaxon_rank\tclass_name\tfamily\nAfrotragus premelampus\tspecies\tMammalia\tBovidae\n",
+            "synonyms": "syn_name\ttaxon_name\ttaxon_rank\tclass_name\tfamily\nAepyceros premelampus\tAfrotragus premelampus\tspecies\tMammalia\tBovidae\n",
+        }),
+        gbif_get=lambda url, **kwargs: (_ for _ in ()).throw(AssertionError("GBIF must not be queried")),
+    )
+    preview = service_instance.preview()
+    assert {update.record.name for update in preview.accepted_to_update} == {"Afrotragus premelampus"}
+    assert {record.name for record in preview.synonyms_to_create} == {"Aepyceros premelampus"}
+    service_instance.sync(apply=True)
+    existing.refresh_from_db()
+    synonym = Taxon.objects.get(taxon_name="Aepyceros premelampus")
+    assert existing.external_source == "NOW"
+    assert synonym.external_source == "NOW"
+    assert synonym.accepted_taxon_id == existing.pk
