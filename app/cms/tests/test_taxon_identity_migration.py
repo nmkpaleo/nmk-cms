@@ -1,0 +1,78 @@
+"""Exercise deduplication with the real pre-constraint database schema."""
+import pytest
+from django.db import connection
+from django.db.migrations.executor import MigrationExecutor
+from django.utils import timezone
+
+
+@pytest.mark.django_db(transaction=True)
+def test_taxon_identity_migration_preserves_links_and_resolves_ambiguity():
+    before = [("cms", "0087_collectionmethod_fossilgroup_grainsize_and_more")]
+    after = [("cms", "0088_remove_taxon_unique_taxon_rank_name_authorship_and_more")]
+    executor = MigrationExecutor(connection)
+    executor.migrate(before)
+    try:
+        apps = executor.loader.project_state(before).apps
+        Taxon = apps.get_model("cms", "Taxon")
+        Collection = apps.get_model("cms", "Collection")
+        Locality = apps.get_model("cms", "Locality")
+        Accession = apps.get_model("cms", "Accession")
+        AccessionRow = apps.get_model("cms", "AccessionRow")
+        Identification = apps.get_model("cms", "Identification")
+        History = apps.get_model("cms", "HistoricalIdentification")
+        Drawer = apps.get_model("cms", "DrawerRegister")
+        legacy = Taxon.objects.create(taxon_name="  Panthera  ", taxon_rank="GENUS", external_source="LEGACY")
+        now = Taxon.objects.create(taxon_name="Panthera", taxon_rank="genus", external_source="NOW", external_id="NOW:genus:Panthera", class_name="Mammalia")
+        child = Taxon.objects.create(taxon_name="Leo", taxon_rank="genus", status="synonym", accepted_taxon=legacy, parent=legacy)
+        collection = Collection.objects.create(abbreviation="MG", description="Migration")
+        locality = Locality.objects.create(abbreviation="ML", name="Migration")
+        accession = Accession.objects.create(collection=collection, specimen_prefix=locality, specimen_no=1)
+        row = AccessionRow.objects.create(accession=accession)
+        linked = Identification.objects.create(accession_row=row, taxon_verbatim="Panthera", taxon_record=legacy)
+        unlinked = Identification.objects.create(accession_row=row, taxon_verbatim="Panthera")
+        history = History.objects.create(id=linked.pk, accession_row_id=row.pk, taxon_verbatim="Panthera",
+                                         taxon_record_id=legacy.pk, history_date=timezone.now(), history_type="+",
+                                         created_on=timezone.now(), modified_on=timezone.now())
+        drawer = Drawer.objects.create(code="MG", description="Migration", estimated_documents=1)
+        drawer.taxa.add(legacy, now)
+        executor = MigrationExecutor(connection)
+        executor.migrate(after)
+        apps = executor.loader.project_state(after).apps
+        Taxon = apps.get_model("cms", "Taxon")
+        Identification = apps.get_model("cms", "Identification")
+        assert not Taxon.objects.filter(pk=legacy.pk).exists()
+        assert Taxon.objects.get(pk=now.pk).identity_key == "genus:panthera"
+        assert Identification.objects.get(pk=linked.pk).taxon_record_id == now.pk
+        assert Identification.objects.get(pk=unlinked.pk).taxon_record_id == now.pk
+        assert apps.get_model("cms", "HistoricalIdentification").objects.get(history_id=history.history_id).taxon_record_id == now.pk
+        assert list(apps.get_model("cms", "DrawerRegister").objects.get(pk=drawer.pk).taxa.values_list("pk", flat=True)) == [now.pk]
+        assert Taxon.objects.get(pk=child.pk).accepted_taxon_id == now.pk
+        assert Taxon.objects.get(pk=child.pk).parent_id == now.pk
+    finally:
+        final_executor = MigrationExecutor(connection)
+        final_executor.migrate(final_executor.loader.graph.leaf_nodes())
+
+
+@pytest.mark.django_db(transaction=True)
+def test_history_identity_backfill_preserves_recorded_names():
+    before = [("cms", "0089_alter_historicaltaxon_author_year_and_more")]
+    after = [("cms", "0090_backfill_historical_taxon_identity")]
+    executor = MigrationExecutor(connection)
+    executor.migrate(before)
+    try:
+        History = executor.loader.project_state(before).apps.get_model("cms", "HistoricalTaxon")
+        original = History.objects.create(
+            id=123, taxon_name="  Former   name ", taxon_rank=" GENUS ", identity_key="",
+            history_date=timezone.now(), history_type="+",
+            created_on=timezone.now(), modified_on=timezone.now(),
+        )
+        executor = MigrationExecutor(connection)
+        executor.migrate(after)
+        History = executor.loader.project_state(after).apps.get_model("cms", "HistoricalTaxon")
+        saved = History.objects.get(pk=original.pk)
+        assert saved.identity_key == "genus:former name"
+        assert saved.taxon_name == original.taxon_name
+        assert saved.taxon_rank == original.taxon_rank
+    finally:
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())

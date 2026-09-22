@@ -460,7 +460,7 @@ class UploadProcessingTests(TestCase):
         media = Media.objects.get(media_location=f"uploads/pending/{filename}")
         self.assertEqual(media.scanning, self.scanning)
 
-    def test_upload_scan_restores_original_name_after_storage_collision(self):
+    def test_upload_scan_preserves_existing_incoming_file(self):
         incoming = Path(settings.MEDIA_ROOT) / "uploads" / "incoming"
         incoming.mkdir(parents=True, exist_ok=True)
         filename = self._filename_for(self.scanning.start_time + timedelta(minutes=2))
@@ -494,7 +494,8 @@ class UploadProcessingTests(TestCase):
                 response = self.client.post(url, {"files": [upload]}, follow=True)
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(processed_paths), 1)
+        self.assertEqual(len(processed_paths), 0)
+        self.assertEqual(original.read_bytes(), b"original")
         self.assertTrue((incoming / filename).exists())
         self.assertFalse((incoming / collision_name).exists())
 
@@ -2604,7 +2605,7 @@ class ChatGPTUsageReportViewTests(TestCase):
         self.addCleanup(patcher.stop)
         self.url = reverse("admin-chatgpt-usage")
 
-    def test_estimated_scans_displayed(self):
+    def test_legacy_response_quota_is_not_used_for_forecasts(self):
         self.client.login(username="staff", password="pass")
         media = Media.objects.create(media_location="uploads/ocr/sample.png")
         LLMUsageRecord.objects.create(
@@ -2620,8 +2621,8 @@ class ChatGPTUsageReportViewTests(TestCase):
 
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "~33 scans")
-        self.assertContains(response, "avg $0.7500")
+        self.assertNotContains(response, "~33 scans")
+        self.assertIsNone(response.context["billing"]["remaining_credit"])
     @patch("cms.ocr_processing.detect_card_type", return_value={"card_type": "accession_card"})
     @patch(
         "cms.ocr_processing.chatgpt_ocr",
@@ -4968,9 +4969,12 @@ class ChatGPTUsageReportViewTests(TestCase):
         self.standard_user = User.objects.create_user(
             username="standard-usage", password="pass", is_staff=False
         )
+        user_patch = patch("cms.models.get_current_user", return_value=self.staff_user)
+        user_patch.start()
+        self.addCleanup(user_patch.stop)
         self.url = reverse("admin-chatgpt-usage")
 
-        older = django_timezone.now() - timedelta(days=7)
+        older = django_timezone.now() - timedelta(days=8)
         newer = django_timezone.now() - timedelta(days=1)
 
         media_one = Media.objects.create(media_location="uploads/ocr/report-one.png")
@@ -5019,25 +5023,25 @@ class ChatGPTUsageReportViewTests(TestCase):
         daily_totals = response.context["daily_totals"]
         weekly_totals = response.context["weekly_totals"]
         cumulative_cost = response.context["cumulative_cost"]
-        budget_progress = response.context["budget_progress"]
+        budget_progress = response.context["billing"]["budget_progress"]
         total_processing_seconds = response.context["total_processing_seconds"]
         avg_processing_seconds = response.context["avg_processing_seconds"]
         scans_processed = response.context["scans_processed"]
-        remaining_quota = response.context["remaining_quota_usd"]
+        remaining_quota = response.context["billing"]["remaining_credit"]
 
         self.assertEqual(len(daily_totals), 2)
         self.assertTrue(any(row["record_count"] == 1 for row in daily_totals))
         self.assertEqual(len(weekly_totals), 2)
         self.assertEqual(cumulative_cost, Decimal("1.15"))
-        self.assertAlmostEqual(float(budget_progress), 11.5)
+        self.assertIsNone(budget_progress)
         self.assertEqual(total_processing_seconds, Decimal("3.75"))
         self.assertAlmostEqual(float(avg_processing_seconds), 1.875)
         self.assertEqual(scans_processed, 2)
-        self.assertEqual(remaining_quota, Decimal("7.50"))
+        self.assertIsNone(remaining_quota)
 
         self.assertContains(response, "Scans processed")
         self.assertContains(response, "Processing time")
-        self.assertContains(response, "Remaining quota")
+        self.assertNotContains(response, "Remaining quota")
 
     def test_hides_remaining_quota_when_unavailable(self):
         LLMUsageRecord.objects.update(remaining_quota_usd=None)
@@ -5047,7 +5051,7 @@ class ChatGPTUsageReportViewTests(TestCase):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
 
-        self.assertIsNone(response.context["remaining_quota_usd"])
+        self.assertIsNone(response.context["billing"]["remaining_credit"])
         self.assertNotContains(response, "Remaining quota")
 
 

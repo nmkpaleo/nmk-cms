@@ -162,7 +162,7 @@ def test_identification_form_does_not_link_inactive_taxa():
     assert form.cleaned_data["taxon_verbatim"] == taxon.taxon_name
 
 
-def test_identification_form_does_not_link_when_multiple_taxa_match():
+def test_identification_form_does_not_link_when_different_ranks_match():
     accession_row = _make_accession_row()
     make_taxon(
         "Ambiguousus example",
@@ -171,7 +171,8 @@ def test_identification_form_does_not_link_when_multiple_taxa_match():
     )
     make_taxon(
         "Ambiguousus example",
-        external_id="NOW:species:Ambiguousus example:dup",
+        external_id="NOW:genus:Ambiguousus example",
+        rank=TaxonRank.GENUS,
         status=TaxonStatus.ACCEPTED,
         scientific_name_authorship="Author Two",
     )

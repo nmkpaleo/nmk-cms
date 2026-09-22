@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 import hashlib
 import logging
 import re
@@ -9,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 from django.conf import settings
-from django.core.files import File
+from django.core.files import File, locks
 from django.db import close_old_connections
 
 from .models import Media, SpecimenListPDF, SpecimenListPage
@@ -24,37 +25,43 @@ REJECTED = Path(settings.MEDIA_ROOT) / "uploads" / "rejected"
 
 TIMESTAMP_FORMAT = "%Y-%m-%dT%H%M%S"
 NAME_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{6}\.png$", re.IGNORECASE)
+COMPACT_SCAN_PATTERN = re.compile(r"([0-9]{12})[0-9]+\.png", re.IGNORECASE)
+NUMBERED_SCAN_PATTERN = re.compile(r"[0-9]+[a-z]{2} [0-9]+\.png", re.IGNORECASE)
 MANUAL_QC_PATTERN = re.compile(r"^\d+\.jpe?g$", re.IGNORECASE)
 SPECIMEN_LIST_DPI = getattr(settings, "SPECIMEN_LIST_DPI", 300)
 
 
 def create_media(
-    path: Path, *, scan_timestamp: datetime
+    path: Path, *, scan_timestamp: datetime | None = None
 ) -> None:
     """Create a Media record for a newly accepted scan."""
-    logger.info(
-        "Processing uploaded media %s with filename timestamp %s",
-        path,
-        scan_timestamp.isoformat(),
-    )
-    created = scanning_utils.to_nairobi(scan_timestamp)
-    scanning_utils.auto_complete_scans()
-    scan = scanning_utils.find_scan_for_timestamp(created)
-    if scan:
+    scan = None
+    if scan_timestamp is not None:
         logger.info(
-            "Matched media %s to scanning #%s (%s -> %s) using Nairobi timestamp %s",
+            "Processing uploaded media %s with filename timestamp %s",
             path,
-            scan.pk,
-            scan.start_time,
-            scan.end_time,
-            created.isoformat(),
+            scan_timestamp.isoformat(),
         )
+        created = scanning_utils.to_nairobi(scan_timestamp)
+        scanning_utils.auto_complete_scans()
+        scan = scanning_utils.find_scan_for_timestamp(created)
+        if scan:
+            logger.info(
+                "Matched media %s to scanning #%s (%s -> %s) using Nairobi timestamp %s",
+                path,
+                scan.pk,
+                scan.start_time,
+                scan.end_time,
+                created.isoformat(),
+            )
+        else:
+            logger.warning(
+                "No scanning found for media %s using Nairobi timestamp %s",
+                path,
+                created.isoformat(),
+            )
     else:
-        logger.warning(
-            "No scanning found for media %s using Nairobi timestamp %s",
-            path,
-            created.isoformat(),
-        )
+        logger.info("Processing uploaded media %s without a filename timestamp", path)
     media = Media(
         type="photo",
         license="CC0",
@@ -78,19 +85,79 @@ def create_manual_qc_media(path: Path) -> None:
     media.save()
 
 
+@contextmanager
+def scan_upload_lock():
+    """Serialize web batches and the incoming watcher across worker processes."""
+    root = Path(settings.MEDIA_ROOT)
+    root.mkdir(parents=True, exist_ok=True)
+    # Keep the inode in place: unlinking it would let workers acquire different locks.
+    with (root / ".scan-upload.lock").open("a+b") as handle:
+        if not locks.lock(handle, locks.LOCK_EX):
+            raise RuntimeError("Could not acquire scan upload lock")
+        try:
+            yield
+        finally:
+            locks.unlock(handle)
+
+
+def find_uploaded_scans(filenames, *, exclude_path: Path | None = None) -> dict[str, str]:
+    """Index duplicate names while holding scan_upload_lock.
+
+    An empty folder means a Media record exists without a stored location.
+    Watcher callers exclude only their source file, never a matching Media row.
+    """
+    names = set(filenames)
+    excluded = exclude_path.resolve() if exclude_path is not None else None
+    existing = {}
+    locations = (
+        Media.objects.filter(file_name__in=names)
+        .order_by("pk")
+        .values_list("file_name", "media_location")
+    )
+    for name, location in locations:
+        folder = str(Path(location).parent).replace("\\", "/") if location else ""
+        if not existing.get(name):
+            existing[name] = folder
+    uploads = Path(settings.MEDIA_ROOT) / "uploads"
+    for path in uploads.rglob("*"):
+        if path.name in names and path.is_file() and path.resolve() != excluded:
+            if not existing.get(path.name):
+                existing[path.name] = str(path.parent.relative_to(settings.MEDIA_ROOT)).replace("\\", "/")
+    return existing
+
+
 def process_file(src: Path) -> Path:
     """Validate ``src`` and move it to ``pending`` or ``rejected``.
 
     Returns the destination path after moving. Creates a ``Media`` row for
     valid files.
     """
-    if NAME_PATTERN.match(src.name):
+    compact_match = COMPACT_SCAN_PATTERN.fullmatch(src.name)
+    if compact_match:
+        try:
+            timestamp = datetime.strptime("20" + compact_match[1], "%Y%m%d%H%M%S")
+        except ValueError:
+            dest = REJECTED / src.name
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(src, dest)
+            return dest
+        timestamp = timestamp.replace(tzinfo=scanning_utils.NAIROBI_TZ)
+        dest = PENDING / src.name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(src, dest)
+        create_media(dest, scan_timestamp=timestamp)
+    elif NAME_PATTERN.match(src.name):
         dest = PENDING / src.name
         dest.parent.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.strptime(src.stem, TIMESTAMP_FORMAT)
         timestamp = timestamp.replace(tzinfo=scanning_utils.NAIROBI_TZ)
         shutil.move(src, dest)
         create_media(dest, scan_timestamp=timestamp)
+    elif NUMBERED_SCAN_PATTERN.fullmatch(src.name):
+        dest = PENDING / src.name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(src, dest)
+        create_media(dest)
     elif MANUAL_QC_PATTERN.match(src.name):
         dest = MANUAL_QC / src.name
         dest.parent.mkdir(parents=True, exist_ok=True)

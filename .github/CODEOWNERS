@@ -1,11 +1,3 @@
-# Repository governance and automation
-/.github/CODEOWNERS @karilint @smaikweki
-/.github/dependabot.yml @karilint @smaikweki
-/.github/workflows/ @karilint @smaikweki
-/SECURITY.md @karilint @smaikweki
-
-# Production and release-sensitive configuration
-/app/Dockerfile @karilint @smaikweki
-/app/config/settings.py @karilint @smaikweki
-/docker-compose.prod.yml @karilint @smaikweki
-/nginx/ @karilint @smaikweki
+# Automatic reviewer assignment is intentionally disabled.
+# Keep this file without ownership entries unless explicit CODEOWNERS review
+# requests are re-enabled as part of a documented governance change.

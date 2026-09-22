@@ -27,6 +27,7 @@ MANUAL_QC_SOURCE = "manual_qc"
 
 from .merge import MergeMixin, MergeStrategy
 from .notifications import notify_media_qc_transition
+from .taxon_identity import normalize_taxon_label, taxon_identity
 
 
 class InventoryStatus(models.TextChoices):
@@ -1453,7 +1454,7 @@ class Identification(BaseModel):
             # Keep legacy column populated for backwards compatibility while it exists.
             self.taxon = self.taxon_verbatim
 
-        matched_taxon = self._match_controlled_taxon(self.taxon_verbatim)
+        matched_taxon = self._match_controlled_taxon(self.taxon_verbatim or self.taxon)
         self.taxon_record = matched_taxon
 
         if (
@@ -1489,23 +1490,22 @@ class Identification(BaseModel):
         if not taxon_name:
             return None
 
-        matches = list(
-            Taxon.objects.filter(
-                taxon_name__iexact=taxon_name,
-                status=TaxonStatus.ACCEPTED,
-                is_active=True,
-            )[:2]
-        )
+        matches = Taxon.objects.filter(
+            taxon_name__iexact=normalize_taxon_label(taxon_name), is_active=True,
+        ).select_related("accepted_taxon")
+        accepted = {}
+        for match in matches:
+            target = match if match.status == TaxonStatus.ACCEPTED else match.accepted_taxon
+            if target and target.status == TaxonStatus.ACCEPTED and target.is_active:
+                accepted[target.pk] = target
+        return next(iter(accepted.values())) if len(accepted) == 1 else None
 
-        if len(matches) == 1:
-            return matches[0]
-
-        return None
 
 
 # Taxon Model
 
 class TaxonExternalSource(models.TextChoices):
+    GBIF = "GBIF", _("GBIF / Catalogue of Life")
     NOW = "NOW", _("NOW")
     PBDB = "PBDB", _("PBDB")
     LEGACY = "LEGACY", _("Legacy")
@@ -1534,6 +1534,16 @@ class TaxonRank(models.TextChoices):
 TAXON_RANK_CHOICES = TaxonRank.choices
 
 class Taxon(BaseModel):
+    identity_key = models.CharField(max_length=320, unique=True, editable=False, default="")
+
+    def save(self, *args, **kwargs):
+        self.taxon_name = normalize_taxon_label(self.taxon_name)
+        self.taxon_rank = normalize_taxon_label(self.taxon_rank).lower() or TaxonRank.SPECIES
+        self.identity_key = taxon_identity(self.taxon_name, self.taxon_rank)
+        if kwargs.get("update_fields") is not None:
+            kwargs["update_fields"] = set(kwargs["update_fields"]) | {"identity_key", "taxon_name", "taxon_rank"}
+        super().save(*args, **kwargs)
+
     external_source = models.CharField(
         max_length=16,
         choices=TaxonExternalSource.choices,
@@ -1546,8 +1556,7 @@ class Taxon(BaseModel):
         null=True,
         help_text=_("Stable identifier supplied by the external source."),
     )
-    author_year = models.CharField(
-        max_length=255,
+    author_year = models.TextField(
         blank=True,
         help_text=_("Authorship information associated with the name."),
     )
@@ -1589,7 +1598,7 @@ class Taxon(BaseModel):
         help_text="Taxonomic rank represented by this record.",
     )
     taxon_name = models.CharField(
-        max_length=50,
+        max_length=255,
         help_text="Primary taxon name for the selected rank.",
     )
     kingdom = models.CharField(
@@ -1661,10 +1670,6 @@ class Taxon(BaseModel):
         verbose_name_plural = "Taxa"
         constraints = [
             models.UniqueConstraint(
-                fields=["taxon_rank", "taxon_name", "scientific_name_authorship"],
-                name="unique_taxon_rank_name_authorship",
-            ),
-            models.UniqueConstraint(
                 fields=["external_source", "external_id"],
                 name="unique_taxon_external_source_id",
                 condition=(
@@ -1693,6 +1698,10 @@ class Taxon(BaseModel):
 
     def clean(self):
         super().clean()
+        identity = taxon_identity(self.taxon_name, self.taxon_rank or TaxonRank.SPECIES)
+        duplicate = Taxon.objects.filter(identity_key=identity).exclude(pk=self.pk).exists()
+        if duplicate:
+            raise ValidationError({"taxon_name": _("A taxon with this normalized name and rank already exists.")})
         if not self.family and (self.genus or self.species):
             raise ValidationError("Genus and species must have a family.")
         if not self.genus and self.species:
@@ -1732,6 +1741,7 @@ class Taxon(BaseModel):
 
 class TaxonomyImport(BaseModel):
     class Source(models.TextChoices):
+        COMBINED = "NOW_GBIF", _("NOW + GBIF")
         NOW = "NOW", _("NOW")
 
     source = models.CharField(
@@ -2353,6 +2363,65 @@ class LLMUsageRecord(models.Model):
         for field, value in defaults.items():
             setattr(self, field, value)
         self.save(update_fields=list(defaults.keys()) + ["updated_at"])
+
+
+class OpenAICreditEntry(models.Model):
+    class Kind(models.TextChoices):
+        BALANCE = "balance", "Verified balance"
+        ADJUSTMENT = "adjustment", "Top-up / adjustment"
+
+    organization_id = models.CharField(max_length=255)
+    kind = models.CharField(max_length=16, choices=Kind.choices)
+    amount_usd = models.DecimalField(
+        max_digits=18, decimal_places=6,
+        help_text="Balance, or signed adjustment: positive for top-ups, negative for expired credits.",
+    )
+    effective_at = models.DateTimeField(
+        default=timezone.now,
+        help_text="When the balance was checked or the adjustment took effect.",
+    )
+    note = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-effective_at", "-pk"]
+        verbose_name = "OpenAI credit entry"
+        verbose_name_plural = "OpenAI credit entries"
+        constraints = [models.UniqueConstraint(
+            fields=["organization_id", "effective_at"], name="openai_credit_org_time_unique",
+        )]
+
+    def clean(self):
+        super().clean()
+        if self.effective_at and self.effective_at > timezone.now():
+            raise ValidationError({"effective_at": "Use a time in the past or present."})
+        if self.kind == self.Kind.BALANCE and self.amount_usd is not None and self.amount_usd < 0:
+            raise ValidationError({"amount_usd": "A verified balance cannot be negative."})
+
+    def __str__(self):
+        return f"{self.get_kind_display()}: ${self.amount_usd} ({self.organization_id})"
+
+
+class OpenAIDailyCost(models.Model):
+    organization_id = models.CharField(max_length=255)
+    project_id = models.CharField(max_length=255, blank=True)
+    day = models.DateField()
+    amount_usd = models.DecimalField(max_digits=18, decimal_places=6)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(
+            fields=["organization_id", "project_id", "day"], name="openai_cost_org_project_day",
+        )]
+
+
+class OpenAIBillingSync(models.Model):
+    organization_id = models.CharField(max_length=255, unique=True)
+    coverage_start = models.DateField(null=True)
+    costs_through = models.DateTimeField(null=True)
+    last_success_at = models.DateTimeField(null=True)
+    last_error = models.CharField(max_length=255, blank=True)
+    balance_entry = models.ForeignKey(OpenAICreditEntry, null=True, on_delete=models.SET_NULL)
+    spend_since_balance_usd = models.DecimalField(max_digits=18, decimal_places=6, null=True)
 
 
 class SpecimenGeology(BaseModel):
