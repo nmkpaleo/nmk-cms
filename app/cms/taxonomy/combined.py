@@ -45,14 +45,19 @@ class TaxonomySyncService(NowTaxonomySyncService):
         # A locally scoped NOW mammal is authoritative. Do not ask GBIF to
         # adjudicate a name that NOW already supplies, including a NOW
         # synonym whose accepted target is also in the scoped records.
-        now_mammal_names = {
-            normalize_taxon_label(record.name).lower()
+        now_mammal_keys = {
+            (normalize_taxon_label(record.name).lower(), _record_rank(record.rank))
             for record in candidates
             if normalize_taxon_label(record.taxonomy.get("class_name", "")).lower() == "mammalia"
         }
+        now_mammal_names = {name for name, _rank in now_mammal_keys}
         gbif_names = {
             (name, rank) for name, rank in names
-            if name not in now_mammal_names
+            if not (
+                name in now_mammal_names
+                if not rank
+                else (name, _record_rank(rank)) in now_mammal_keys
+            )
         }
         issues = []
         failed_names = set()

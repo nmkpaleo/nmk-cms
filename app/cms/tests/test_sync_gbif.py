@@ -247,7 +247,7 @@ def test_gbif_name_miss_keeps_exact_now_mammal_match():
 
     assert [record.name for record in preview.accepted_to_create] == ["Struthio"]
     assert preview.accepted_to_create[0].external_source == "NOW"
-    assert preview.issues[0].code == "gbif-match"
+    assert preview.issues == []
 
 
 @override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")
