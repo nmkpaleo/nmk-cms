@@ -27,11 +27,13 @@ from cms.views import (
     upload_scan,
     do_ocr,
     chatgpt_usage_report,
+    chatgpt_usage_sync,
 )
 
 urlpatterns = [
     path('admin/upload-scan/', upload_scan, name='admin-upload-scan'),
     path('admin/do-ocr/', do_ocr, name='admin-do-ocr'),
+    path('admin/chatgpt-usage/sync/', chatgpt_usage_sync, name='admin-chatgpt-usage-sync'),
     path('admin/chatgpt-usage/', chatgpt_usage_report, name='admin-chatgpt-usage'),
     path('admin/', admin.site.urls),
 

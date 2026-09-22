@@ -9,8 +9,9 @@ from tempfile import TemporaryDirectory
 import copy
 import csv
 import json
+import logging
 import os
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone as dt_timezone
 import json
 from decimal import Decimal
 from decimal import Decimal
@@ -4810,8 +4811,36 @@ def _coerce_decimal(value: object) -> Decimal:
 
 
 @staff_member_required
+@require_POST
+def chatgpt_usage_sync(request):
+    if not request.user.has_perm("cms.change_openaibillingsync"):
+        raise PermissionDenied
+
+    from .openai_billing import BillingSyncError, sync_costs
+
+    try:
+        sync_costs(timeout_seconds=45)
+    except BillingSyncError as exc:
+        messages.error(request, str(exc))
+    except Exception as exc:
+        # Do not expose provider credentials or raw exceptions in the response/log.
+        logging.getLogger(__name__).error("OpenAI UI cost sync failed (%s).", type(exc).__name__)
+        messages.error(request, "OpenAI costs could not be synchronized. Please retry or contact an administrator.")
+    else:
+        messages.success(request, "OpenAI costs synchronized. The usage report has been updated.")
+
+    # Preserve report filters, but never redirect to a user-supplied URL.
+    filters = {key: request.GET[key] for key in ("start_date", "end_date", "model_name") if key in request.GET}
+    url = reverse("admin-chatgpt-usage")
+    if filters:
+        url += "?" + urlencode(filters)
+    return redirect(url)
+
+
+@staff_member_required
 def chatgpt_usage_report(request):
     today = timezone.localdate()
+    billing_today = timezone.now().astimezone(dt_timezone.utc).date()
     default_start = today - timedelta(days=30)
 
     base_qs = LLMUsageRecord.objects.all()
@@ -4892,35 +4921,11 @@ def chatgpt_usage_report(request):
     if scans_processed:
         avg_processing_seconds = total_processing_seconds / Decimal(scans_processed)
 
-    avg_cost_per_scan: Decimal | None = None
-    if scans_processed and cumulative_cost > 0:
-        avg_cost_per_scan = cumulative_cost / Decimal(scans_processed)
+    from .openai_billing import billing_summary
 
-    latest_remaining_quota = (
-        filtered_qs.exclude(remaining_quota_usd__isnull=True)
-        .order_by("-created_at")
-        .values_list("remaining_quota_usd", flat=True)
-        .first()
-    )
-
-    remaining_quota_decimal: Decimal | None = None
-    if latest_remaining_quota is not None:
-        remaining_quota_decimal = _coerce_decimal(latest_remaining_quota)
-
-    estimated_scans_remaining: int | None = None
-    if (
-        remaining_quota_decimal is not None
-        and avg_cost_per_scan is not None
-        and avg_cost_per_scan > 0
-    ):
-        estimated_scans_remaining = int(remaining_quota_decimal / avg_cost_per_scan)
-
-    budget_raw = getattr(settings, "LLM_USAGE_MONTHLY_BUDGET_USD", None)
-    budget_total = _coerce_decimal(budget_raw) if budget_raw is not None else None
-    if budget_total and budget_total > 0:
-        budget_progress = (cumulative_cost / budget_total) * Decimal("100")
-    else:
-        budget_progress = None
+    billing_end_date = min(end_date, billing_today)
+    billing = billing_summary(start_date, billing_end_date, model_name=model_name)
+    budget_total = _coerce_decimal(getattr(settings, "LLM_USAGE_MONTHLY_BUDGET_USD", None))
 
     def _prepare_time_series(items, label_key):
         return {
@@ -4960,15 +4965,12 @@ def chatgpt_usage_report(request):
         "total_processing_seconds": total_processing_seconds,
         "avg_processing_seconds": avg_processing_seconds,
         "scans_processed": scans_processed,
-        "remaining_quota_usd": latest_remaining_quota,
         "budget_total": budget_total,
-        "budget_progress": budget_progress,
+        "billing": billing,
         "chart_data_json": json.dumps(chart_data, cls=DjangoJSONEncoder),
         "start_date": start_date,
         "end_date": end_date,
         "model_name": model_name,
-        "estimated_scans_remaining": estimated_scans_remaining,
-        "avg_cost_per_scan": avg_cost_per_scan,
     }
 
     return render(request, "admin/chatgpt_usage_report.html", context)

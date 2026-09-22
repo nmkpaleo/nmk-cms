@@ -42,6 +42,7 @@ from .models import (
     MediaQCLog,
     MediaQCComment,
     LLMUsageRecord,
+    OpenAICreditEntry,
     SpecimenGeology,
     GeologicalContext,
     AccessionReference,
@@ -1519,6 +1520,25 @@ class MediaQCLogAdmin(admin.ModelAdmin):
         for obj in formset.deleted_objects:
             obj.delete()
         formset.save_m2m()
+
+
+@admin.register(OpenAICreditEntry)
+class OpenAICreditEntryAdmin(admin.ModelAdmin):
+    list_display = ("kind", "amount_usd", "effective_at", "organization_id", "note")
+    list_filter = ("organization_id", "kind")
+    fields = ("organization_id", "kind", "amount_usd", "effective_at", "note", "created_at")
+    readonly_fields = ("created_at",)
+
+    def get_changeform_initial_data(self, request):
+        return {**super().get_changeform_initial_data(request),
+                "organization_id": settings.OPENAI_ORG_ID}
+
+    def has_change_permission(self, request, obj=None):
+        # Preserve a ledger: corrections are a new adjustment or verified balance.
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(LLMUsageRecord)
