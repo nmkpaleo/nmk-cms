@@ -16,6 +16,14 @@ Use the Django administration site to create accounts and control what each pers
 4. Fill in the person’s name and email details. Leave **Active** checked so the account can sign in. Enable **Staff status** only if the user needs access to the admin itself, and reserve **Superuser status** for system maintainers.
 5. Choose **Save** when you are finished.
 
+## Changing a user's password
+
+1. Open the user record in the Django admin.
+2. Select the **change password** link near the password field.
+3. Enter and confirm the new password, then select **Change password**.
+
+The password is validated using the configured Django password validators. The existing user account, groups, permissions, and organisation membership are preserved.
+
 ## Assigning the user to a group
 
 Group membership controls which features appear for the user inside the site.
@@ -33,3 +41,4 @@ Group membership controls which features appear for the user inside the site.
 - **Preparators** – allows preparators to record and update preparation work.
 
 Refer to the [User Rights](../user-rights.md) guide for a complete summary of the capabilities each role provides.
+
