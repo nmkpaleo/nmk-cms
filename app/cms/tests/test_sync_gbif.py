@@ -42,10 +42,11 @@ def payload(name="Struthio", class_name="Aves", rank="GENUS"):
     }
 
 
-def service(data, now="", gbif_get=None):
+def service(data, now="", gbif_get=None, now_class=False):
+    accepted_header = "taxon_name\ttaxon_rank\tclass_name\tfamily\n" if now_class else "taxon_name\ttaxon_rank\tfamily\n"
     return TaxonomySyncService(
         http_get=_http_get_factory({
-            "accepted": "taxon_name\ttaxon_rank\tfamily\n" + now,
+            "accepted": accepted_header + now,
             "synonyms": "syn_name\ttaxon_name\ttaxon_rank\n",
         }),
         gbif_get=gbif_get or (lambda url, **kwargs: Response(copy.deepcopy(data))),
@@ -97,7 +98,7 @@ def test_gbif_import_and_repeat_for_local_name(class_name, name):
 @override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")
 def test_non_mammal_gbif_overrides_now_homonym():
     _field_slip("Struthio")
-    svc = service(payload(), "Struthio\tgenus\tWrongidae\n")
+    svc = service(payload(), "Struthio\tgenus\tAves\tWrongidae\n", now_class=True)
     svc.sync(apply=True)
     assert Taxon.objects.get().external_source == "GBIF"
     assert Taxon.objects.get().class_name == "Aves"
@@ -231,7 +232,7 @@ def test_gbif_outage_does_not_replace_known_bird_with_now_homonym():
                                 external_source="GBIF", external_id="GBIF:bird")
     def get(url, **kwargs):
         raise requests.exceptions.Timeout("unavailable")
-    preview = service(payload(), "Struthio\tgenus\tWrongidae\n", gbif_get=get).preview()
+    preview = service(payload(), "Struthio\tgenus\tAves\tWrongidae\n", gbif_get=get, now_class=True).preview()
     assert preview.counts["created"] == 0
     assert preview.counts["updated"] == 0
     assert preview.counts["deactivated"] == 0
