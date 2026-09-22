@@ -602,6 +602,7 @@
       }
       container.appendChild(chip);
       this.initializeChip(chip);
+      this.assignChipToRow(chip, row);
       this.clearDeletionState(chip);
       this.refreshChipSummary(chip);
       this.updateChipIndexes(type);
