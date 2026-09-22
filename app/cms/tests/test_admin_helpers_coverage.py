@@ -42,21 +42,22 @@ def test_serialize_changeset_handles_regular_and_accepted_taxon_fields():
 
 def test_serialize_preview_for_template_shapes_all_sections():
     update = SimpleNamespace(
-        record=SimpleNamespace(name="Syn", accepted_name="Acc", external_id="ext-2"),
+        record=SimpleNamespace(name="Syn", accepted_name="Acc", external_source="NOW", external_id="ext-2"),
         instance=SimpleNamespace(accepted_taxon=None),
         changes={"accepted_taxon": "x"},
     )
     preview = SimpleNamespace(
-        accepted_to_create=[SimpleNamespace(name="A", rank="species", author_year="1900", external_id="ext-1")],
+        accepted_to_create=[SimpleNamespace(name="A", rank="species", author_year="1900", external_source="NOW", external_id="ext-1")],
         accepted_to_update=[update],
-        synonyms_to_create=[SimpleNamespace(name="S", accepted_name="A", external_id="ext-3")],
+        synonyms_to_create=[SimpleNamespace(name="S", accepted_name="A", external_source="NOW", external_id="ext-3")],
         synonyms_to_update=[update],
-        to_deactivate=[SimpleNamespace(taxon_name="D", external_id="ext-4")],
+        to_deactivate=[SimpleNamespace(taxon_name="D", external_source="NOW", external_id="ext-4")],
         issues=[SimpleNamespace(code="warn", message="msg", context={"k": "v"})],
     )
 
     payload = _serialize_preview_for_template(preview)
     assert payload["accepted_creates"][0]["name"] == "A"
+    assert payload["accepted_creates"][0]["source"] == "NOW"
     assert payload["accepted_updates"][0]["changes"][0]["label"] == "Accepted Taxon"
     assert payload["synonym_creates"][0]["accepted_name"] == "A"
     assert payload["deactivations"][0]["name"] == "D"

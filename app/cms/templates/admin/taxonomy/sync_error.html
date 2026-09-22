@@ -1,0 +1,13 @@
+{% extends "base_generic.html" %}
+{% load i18n %}
+{% block title %}{% translate "Taxonomy sync was not applied" %}{% endblock %}
+{% block content %}
+<section class="w3-container w3-padding-16">
+  <h1>{% translate "Taxonomy sync was not applied" %}</h1>
+  <div class="w3-panel w3-pale-red w3-border w3-border-red" role="alert">
+    <p>{% translate "No changes from this request were saved." %}</p>
+    <p>{{ error }}</p>
+  </div>
+  <a class="w3-button w3-teal" href="{{ preview_url }}">{% translate "Generate a new preview" %}</a>
+</section>
+{% endblock %}

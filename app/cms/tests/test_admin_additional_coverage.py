@@ -61,7 +61,7 @@ def test_taxonomy_sync_preview_success_renders_template(monkeypatch):
     )
 
     monkeypatch.setattr(cms_admin.admin.site, "each_context", lambda _req: {"site_title": "x"})
-    with patch("cms.admin.NowTaxonomySyncService") as service_cls:
+    with patch("cms.admin.TaxonomySyncService") as service_cls:
         service_cls.return_value.preview.return_value = preview
         response = cms_admin._taxonomy_sync_preview_view(request)
 

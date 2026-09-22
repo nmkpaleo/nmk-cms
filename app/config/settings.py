@@ -15,6 +15,7 @@ import sys
 import json
 from decimal import Decimal
 
+from django.core.exceptions import ImproperlyConfigured
 from pathlib import Path
 
 from config.versioning import get_application_version
@@ -32,8 +33,6 @@ OPENAI_PRICING = {
     "gpt-4o-mini": {"prompt": 0.00000015, "completion": 0.0000006},
 }
 
-LLM_USAGE_MONTHLY_BUDGET_USD = Decimal("120")
-
 try:
     with open(os.path.join(BASE_DIR, "config.json")) as config_file:
         config = json.load(config_file)
@@ -50,7 +49,40 @@ def get_var(name, default_value=None):
     return os.environ.get(name, config.get(name, default_value))
 
 
+def get_positive_int(name, default_value):
+    value = get_var(name, default_value)
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        raise ImproperlyConfigured(f"{name} must be a positive integer.") from None
+    if value <= 0:
+        raise ImproperlyConfigured(f"{name} must be a positive integer.")
+    return value
+
+
+def get_nonnegative_int(name, default_value):
+    value = get_var(name, default_value)
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        raise ImproperlyConfigured(f"{name} must be a nonnegative integer.") from None
+    if value < 0:
+        raise ImproperlyConfigured(f"{name} must be a nonnegative integer.")
+    return value
+
+
 OPENAI_DEFAULT_MODEL = get_var("OPENAI_DEFAULT_MODEL", "gpt-5.2")
+LLM_USAGE_MONTHLY_BUDGET_USD = Decimal(str(get_var("LLM_USAGE_MONTHLY_BUDGET_USD", "120")))
+OPENAI_ADMIN_KEY = get_var("OPENAI_ADMIN_KEY", "")
+OPENAI_ORG_ID = get_var("OPENAI_ORG_ID", "")
+OPENAI_PROJECT_ID = get_var("OPENAI_PROJECT_ID", "")
+LLM_BILLING_STALE_HOURS = get_positive_int("LLM_BILLING_STALE_HOURS", 24)
+LLM_BALANCE_STALE_DAYS = get_positive_int("LLM_BALANCE_STALE_DAYS", 30)
+LLM_CREDIT_WARNING_DAYS = get_positive_int("LLM_CREDIT_WARNING_DAYS", 14)
+LLM_CREDIT_URGENT_DAYS = get_positive_int("LLM_CREDIT_URGENT_DAYS", 7)
+LLM_PURCHASE_LEAD_DAYS = get_nonnegative_int("LLM_PURCHASE_LEAD_DAYS", 7)
+if LLM_CREDIT_WARNING_DAYS < LLM_CREDIT_URGENT_DAYS:
+    raise ImproperlyConfigured("LLM_CREDIT_WARNING_DAYS must be at least LLM_CREDIT_URGENT_DAYS.")
 OCR_DEFAULT_ENGINE = get_var("OCR_DEFAULT_ENGINE", "chatgpt-vision")
 
 
@@ -240,7 +272,9 @@ USE_REDIS = os.getenv("USE_REDIS", "false").lower() == "true"
 
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'BACKEND': 'django_redis.cache.RedisCache' if USE_REDIS else 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'redis://redis:6379' if USE_REDIS else '',
+        'OPTIONS': {'CLIENT_CLASS': 'django_redis.client.DefaultClient'} if USE_REDIS else {},
     },
     'select2': {
         'BACKEND': 'django_redis.cache.RedisCache' if USE_REDIS else 'django.core.cache.backends.locmem.LocMemCache',
@@ -296,3 +330,7 @@ X_FRAME_OPTIONS = 'SAMEORIGIN'
 # TaxonNow integration URLs
 TAXON_NOW_ACCEPTED_URL = get_var("TAXON_NOW_ACCEPTED_URL", "")
 TAXON_NOW_SYNONYMS_URL = get_var("TAXON_NOW_SYNONYMS_URL", "")
+TAXON_GBIF_MATCH_URL = get_var("TAXON_GBIF_MATCH_URL", "https://api.gbif.org/v2/species/match")
+TAXON_GBIF_CHECKLIST_KEY = get_var("TAXON_GBIF_CHECKLIST_KEY", "7ddf754f-d193-4cc9-b351-99906754a03b")
+TAXON_GBIF_TIMEOUT = int(get_var("TAXON_GBIF_TIMEOUT", 15))
+TAXON_GBIF_WORKERS = int(get_var("TAXON_GBIF_WORKERS", 4))

@@ -13,6 +13,7 @@ from cms.models import (
     Locality,
     NatureOfSpecimen,
     Person,
+    Reference,
 )
 
 User = get_user_model()
@@ -353,6 +354,30 @@ class TestAccessionRowDetailPageOrdering:
         assert identifications[0].id == id2.id
         assert identifications[1].id == id3.id
         assert identifications[2].id == id1.id
+
+
+    def test_identifications_without_dates_are_ordered_by_reference_year(
+        self, client, accession_row, person
+    ):
+        old_reference = Reference.objects.create(
+            title="Old reference", first_author="Author", year="1999", citation="Author 1999"
+        )
+        new_reference = Reference.objects.create(
+            title="New reference", first_author="Author", year="2024", citation="Author 2024"
+        )
+        old_identification = Identification.objects.create(
+            accession_row=accession_row, identified_by=person, taxon_verbatim="Taxon A",
+            reference=old_reference,
+        )
+        new_identification = Identification.objects.create(
+            accession_row=accession_row, identified_by=person, taxon_verbatim="Taxon B",
+            reference=new_reference,
+        )
+
+        response = client.get(reverse("accessionrow_detail", args=[accession_row.id]))
+
+        assert response.status_code == 200
+        assert list(response.context["identifications"]) == [new_identification, old_identification]
 
 
 class TestIdentificationRowCSSClasses:

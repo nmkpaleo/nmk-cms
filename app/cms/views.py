@@ -4,11 +4,14 @@ Template context inventory and authentication coverage are catalogued in
 ``docs/development/frontend-guidelines.md`` to aid upcoming template refactors.
 """
 
+from tempfile import TemporaryDirectory
+
 import copy
 import csv
 import json
+import logging
 import os
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone as dt_timezone
 import json
 from decimal import Decimal
 from decimal import Decimal
@@ -19,8 +22,13 @@ from dal import autocomplete
 from django import forms
 from django.apps import apps
 from django.db import models, transaction
-from django.db.models import Value, CharField, Count, Q, Max, Prefetch, OuterRef, Subquery, Sum
-from django.db.models.functions import Concat, Greatest, TruncDate, TruncWeek
+from django.db.models import (
+    Case, CharField, Count, Exists, F, IntegerField, Max, OuterRef, Prefetch,
+    Q, Subquery, Sum, Value, When,
+)
+from django.db.models.expressions import Window
+from django.db.models.functions import Cast, Coalesce, Concat, Greatest, Lower, Replace, TruncDate, TruncWeek, Trim
+from django.db.models.functions.window import RowNumber
 from django.http import JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -127,6 +135,7 @@ from cms.models import (
     SpecimenGeology,
     Storage,
     Taxon,
+    TaxonExternalSource,
     Locality,
     Place,
     PlaceType,
@@ -172,10 +181,18 @@ from cms.merge.services import (
     merge_accession_reference_candidates,
 )
 from cms.merge.fuzzy import score_candidates
+from cms.taxon_identity import normalize_taxon_label
 from cms.resources import FieldSlipResource
-from .utils import build_accession_identification_maps, build_history_entries
+from .utils import (
+    build_accession_identification_maps,
+    build_history_entries,
+    current_identification_key,
+    iter_current_identifications,
+)
 from cms.utils import generate_accessions_from_series
-from cms.upload_processing import process_file, queue_specimen_list_processing
+from cms.upload_processing import (
+    find_uploaded_scans, process_file, queue_specimen_list_processing, scan_upload_lock,
+)
 from cms.ocr_processing import (
     process_pending_scans,
     describe_accession_conflicts,
@@ -316,6 +333,114 @@ def media_report_view(request):
         },
     }
     return render(request, 'reports/media_report.html', context)
+
+@login_required
+@user_passes_test(is_collection_manager)
+def taxonomy_identification_cleanup_report(request):
+    """List current identifications that need taxonomy cleanup."""
+
+    taxonomy_sources = [TaxonExternalSource.GBIF, TaxonExternalSource.NOW]
+
+    # Keep this expression aligned with ``normalize_taxon_label`` for normal
+    # catalogue values. Repeating Replace collapses runs of spaces without
+    # loading all taxonomy names or identifications into Python.
+    def normalized_name(field_name):
+        expression = Lower(Coalesce(F(field_name), Value("")))
+        for whitespace in ("\t", "\n", "\r", "\v", "\f"):
+            expression = Replace(expression, Value(whitespace), Value(" "))
+        expression = Trim(expression)
+        for _ in range(8):
+            expression = Replace(expression, Value("  "), Value(" "))
+        return expression
+
+    # Select one current identification per accession row in SQL. Dates win;
+    # otherwise a positive numeric reference year wins; creation time and ID
+    # settle ties. This is the same ordering as current_identification_key().
+    positive_year = Q(reference__year__regex=r"^0*[1-9][0-9]*$")
+    current_identifications = (
+        Identification.objects.annotate(
+            _current_priority=Case(
+                When(date_identified__isnull=False, then=Value(2)),
+                When(positive_year, then=Value(1)),
+                default=Value(0),
+                output_field=IntegerField(),
+            ),
+            _reference_year=Cast(
+                Case(
+                    When(positive_year, then=F("reference__year")),
+                    default=Value("0"),
+                    output_field=CharField(),
+                ),
+                IntegerField(),
+            ),
+        ).annotate(
+            _undated_reference_year=Case(
+                When(date_identified__isnull=True, then=F("_reference_year")),
+                default=Value(0),
+                output_field=IntegerField(),
+            ),
+        ).annotate(
+            _current_position=Window(
+                expression=RowNumber(),
+                partition_by=[F("accession_row_id")],
+                order_by=[
+                    F("_current_priority").desc(),
+                    F("date_identified").desc(nulls_last=True),
+                    F("_undated_reference_year").desc(),
+                    F("created_on").desc(),
+                    F("pk").desc(),
+                ],
+            )
+        ).filter(_current_position=1)
+    )
+    active_taxa = Taxon.objects.filter(
+        is_active=True,
+        external_source__in=taxonomy_sources,
+    ).annotate(_normalized_name=normalized_name("taxon_name"))
+    queryset = Identification.objects.filter(
+        pk__in=Subquery(current_identifications.values("pk"))
+    ).annotate(
+        _normalized_taxon=normalized_name("taxon"),
+        _normalized_verbatim=normalized_name("taxon_verbatim"),
+    ).annotate(
+        _matches_taxonomy=Exists(
+            active_taxa.filter(_normalized_name=OuterRef("_normalized_taxon"))
+        )
+    ).filter(
+        Q(_normalized_taxon="") & ~Q(_normalized_verbatim="")
+        | ~Q(_normalized_taxon="")
+        & ~Q(
+            taxon_record__is_active=True,
+            taxon_record__external_source__in=taxonomy_sources,
+        )
+        & Q(_matches_taxonomy=False)
+    ).select_related(
+        "accession_row__accession__collection",
+        "accession_row__accession__specimen_prefix",
+        "reference",
+        "taxon_record",
+    ).order_by("accession_row_id", "pk")
+    paginator = Paginator(queryset, 100)
+    page_obj = paginator.get_page(request.GET.get("page", 1))
+    identifications = list(page_obj.object_list)
+    for identification in identifications:
+        identification.cleanup_reason = (
+            "missing_taxon"
+            if not identification._normalized_taxon
+            else "unmatched_taxon"
+        )
+    return render(
+        request,
+        "reports/taxonomy_identification_cleanup.html",
+        {
+            "identifications": identifications,
+            "total_count": paginator.count,
+            "page_number": page_obj.number,
+            "has_previous": page_obj.has_previous(),
+            "has_next": page_obj.has_next(),
+        },
+    )
+
 
 #accession distribution report
 @login_required
@@ -919,7 +1044,7 @@ def prefetch_accession_related(qs):
             ),
             Prefetch(
                 'identification_set',
-                queryset=Identification.objects.select_related('taxon_record').order_by('-date_identified', '-id')
+                queryset=Identification.objects.select_related('taxon_record', 'reference').order_by('-date_identified', '-id')
             ),
         )
     )
@@ -1930,7 +2055,7 @@ class AccessionRowDetailView(DetailView):
                 ),
                 Prefetch(
                     "identification_set",
-                    queryset=Identification.objects.select_related("taxon_record").order_by(
+                    queryset=Identification.objects.select_related("taxon_record", "reference").order_by(
                         "-date_identified",
                         "-created_on",
                     ),
@@ -1950,8 +2075,9 @@ class AccessionRowDetailView(DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['natureofspecimens'] = list(self.object.natureofspecimen_set.all())
-        # Order identifications by date_identified DESC (nulls last), then created_on DESC
-        context['identifications'] = list(self.object.identification_set.all())
+        context['identifications'] = sorted(
+            self.object.identification_set.all(), key=current_identification_key, reverse=True
+        )
         context['can_edit'] = (
             self.request.user.is_superuser or is_collection_manager(self.request.user)
         )
@@ -2045,7 +2171,7 @@ class BaseAccessionRowPrintView(LoginRequiredMixin, UserPassesTestMixin, DetailV
                 ),
                 Prefetch(
                     "identification_set",
-                    queryset=Identification.objects.select_related("taxon_record").order_by(
+                    queryset=Identification.objects.select_related("taxon_record", "reference").order_by(
                         "-date_identified",
                         "-created_on",
                     ),
@@ -4685,8 +4811,36 @@ def _coerce_decimal(value: object) -> Decimal:
 
 
 @staff_member_required
+@require_POST
+def chatgpt_usage_sync(request):
+    if not request.user.has_perm("cms.change_openaibillingsync"):
+        raise PermissionDenied
+
+    from .openai_billing import BillingSyncError, sync_costs
+
+    try:
+        sync_costs(timeout_seconds=45)
+    except BillingSyncError as exc:
+        messages.error(request, str(exc))
+    except Exception as exc:
+        # Do not expose provider credentials or raw exceptions in the response/log.
+        logging.getLogger(__name__).error("OpenAI UI cost sync failed (%s).", type(exc).__name__)
+        messages.error(request, "OpenAI costs could not be synchronized. Please retry or contact an administrator.")
+    else:
+        messages.success(request, "OpenAI costs synchronized. The usage report has been updated.")
+
+    # Preserve report filters, but never redirect to a user-supplied URL.
+    filters = {key: request.GET[key] for key in ("start_date", "end_date", "model_name") if key in request.GET}
+    url = reverse("admin-chatgpt-usage")
+    if filters:
+        url += "?" + urlencode(filters)
+    return redirect(url)
+
+
+@staff_member_required
 def chatgpt_usage_report(request):
     today = timezone.localdate()
+    billing_today = timezone.now().astimezone(dt_timezone.utc).date()
     default_start = today - timedelta(days=30)
 
     base_qs = LLMUsageRecord.objects.all()
@@ -4767,35 +4921,11 @@ def chatgpt_usage_report(request):
     if scans_processed:
         avg_processing_seconds = total_processing_seconds / Decimal(scans_processed)
 
-    avg_cost_per_scan: Decimal | None = None
-    if scans_processed and cumulative_cost > 0:
-        avg_cost_per_scan = cumulative_cost / Decimal(scans_processed)
+    from .openai_billing import billing_summary
 
-    latest_remaining_quota = (
-        filtered_qs.exclude(remaining_quota_usd__isnull=True)
-        .order_by("-created_at")
-        .values_list("remaining_quota_usd", flat=True)
-        .first()
-    )
-
-    remaining_quota_decimal: Decimal | None = None
-    if latest_remaining_quota is not None:
-        remaining_quota_decimal = _coerce_decimal(latest_remaining_quota)
-
-    estimated_scans_remaining: int | None = None
-    if (
-        remaining_quota_decimal is not None
-        and avg_cost_per_scan is not None
-        and avg_cost_per_scan > 0
-    ):
-        estimated_scans_remaining = int(remaining_quota_decimal / avg_cost_per_scan)
-
-    budget_raw = getattr(settings, "LLM_USAGE_MONTHLY_BUDGET_USD", None)
-    budget_total = _coerce_decimal(budget_raw) if budget_raw is not None else None
-    if budget_total and budget_total > 0:
-        budget_progress = (cumulative_cost / budget_total) * Decimal("100")
-    else:
-        budget_progress = None
+    billing_end_date = min(end_date, billing_today)
+    billing = billing_summary(start_date, billing_end_date, model_name=model_name)
+    budget_total = _coerce_decimal(getattr(settings, "LLM_USAGE_MONTHLY_BUDGET_USD", None))
 
     def _prepare_time_series(items, label_key):
         return {
@@ -4835,15 +4965,12 @@ def chatgpt_usage_report(request):
         "total_processing_seconds": total_processing_seconds,
         "avg_processing_seconds": avg_processing_seconds,
         "scans_processed": scans_processed,
-        "remaining_quota_usd": latest_remaining_quota,
         "budget_total": budget_total,
-        "budget_progress": budget_progress,
+        "billing": billing,
         "chart_data_json": json.dumps(chart_data, cls=DjangoJSONEncoder),
         "start_date": start_date,
         "end_date": end_date,
         "model_name": model_name,
-        "estimated_scans_remaining": estimated_scans_remaining,
-        "avg_cost_per_scan": avg_cost_per_scan,
     }
 
     return render(request, "admin/chatgpt_usage_report.html", context)
@@ -4851,14 +4978,10 @@ def chatgpt_usage_report(request):
 
 @staff_member_required
 def upload_scan(request):
-    """Upload one or more scan images to the ``uploads/incoming`` folder.
+    """Stage and process a batch of scan images outside the watcher directory.
 
-    The watcher script later validates filenames and moves each file to
-    ``uploads/pending`` or ``uploads/rejected`` as appropriate.
+    Skip previously uploaded filenames; validate and route new scans immediately.
     """
-    incoming_dir = Path(settings.MEDIA_ROOT) / 'uploads' / 'incoming'
-    os.makedirs(incoming_dir, exist_ok=True)
-
     form_kwargs = {"max_upload_bytes": settings.SCAN_UPLOAD_MAX_BYTES}
 
     if request.method == 'POST':
@@ -4866,22 +4989,33 @@ def upload_scan(request):
         if form.is_valid():
             files = form.cleaned_data['files']
             total_files = len(files)
-            fs = FileSystemStorage(location=incoming_dir)
-            for index, file in enumerate(files, start=1):
-                saved_name = fs.save(file.name, file)
-                saved_path = incoming_dir / saved_name
-                if saved_name != file.name:
-                    desired_path = incoming_dir / file.name
-                    if desired_path.exists():
-                        desired_path.unlink()
-                    saved_path.rename(desired_path)
-                    saved_name = file.name
-                    saved_path = desired_path
-                process_file(saved_path)
-                messages.success(
-                    request,
-                    f'Uploaded {file.name} ({index} of {total_files})',
-                )
+            with scan_upload_lock():
+                existing = find_uploaded_scans(file.name for file in files)
+                # The incoming watcher must never see partially saved web uploads.
+                with TemporaryDirectory(prefix=".scan-upload-", dir=settings.MEDIA_ROOT) as staging:
+                    fs = FileSystemStorage(location=staging)
+                    for index, file in enumerate(files, start=1):
+                        existing_folder = existing.get(file.name)
+                        if existing_folder is not None:
+                            location = (
+                                f'into {existing_folder} folder'
+                                if existing_folder else '(folder not recorded)'
+                            )
+                            messages.warning(
+                                request,
+                                f'Already uploaded {file.name} {location} '
+                                f'({index} of {total_files})',
+                            )
+                            continue
+                        saved_name = fs.save(file.name, file)
+                        destination = process_file(Path(staging) / saved_name)
+                        existing[file.name] = str(
+                            destination.parent.relative_to(settings.MEDIA_ROOT)
+                        ).replace("\\", "/")
+                        messages.success(
+                            request,
+                            f'Uploaded {file.name} ({index} of {total_files})',
+                        )
             return redirect('admin-upload-scan')
     else:
         form = ScanUploadForm(**form_kwargs)
