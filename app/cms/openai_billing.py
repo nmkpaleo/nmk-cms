@@ -173,7 +173,7 @@ def billing_summary(start_date, end_date, *, model_name=None, now=None):
     costs = OpenAIDailyCost.objects.filter(organization_id=organization)
 
     def total(first, last, *, project_only=False):
-        if first < state.coverage_start or last > state.costs_through.date():
+        if first > last or first < state.coverage_start or last > state.costs_through.date():
             return None
         qs = costs.filter(day__gte=first, day__lte=last)
         if project_only:

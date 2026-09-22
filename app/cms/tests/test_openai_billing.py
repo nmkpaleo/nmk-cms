@@ -256,6 +256,18 @@ class BillingSummaryTests(TestCase):
         self.assertEqual(summary["purchase_date"], (NOW + timedelta(days=13)).date())
         self.assertEqual(summary["status"], "ok")
 
+    def test_inverted_cost_range_is_unavailable_without_changing_account_status(self):
+        normal = self.summary()
+        for start, end in (
+            (NOW.date() + timedelta(days=1), NOW.date()),
+            (NOW.date(), NOW.date() - timedelta(days=1)),
+        ):
+            with self.subTest(start=start, end=end):
+                summary = billing_summary(start, end, now=NOW)
+                self.assertIsNone(summary["reported_cost"])
+                for key in ("month_cost", "budget_progress", "remaining_credit", "days_remaining"):
+                    self.assertEqual(summary[key], normal[key])
+
     def test_history_and_model_filters_do_not_change_current_status(self):
         normal = self.summary()
         filtered = billing_summary(NOW.date() - timedelta(days=30), NOW.date() - timedelta(days=20),
@@ -391,7 +403,30 @@ class BillingReportTests(TestCase):
         self.client.force_login(self.staff)
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
-        billing.assert_called_once_with(NOW.date() - timedelta(days=30), NOW.date(), model_name=None)
+        local_start = localdate.return_value - timedelta(days=30)
+        self.assertEqual(response.context["start_date"], local_start)
+        self.assertEqual(response.context["end_date"], localdate.return_value)
+        billing.assert_called_once_with(local_start, NOW.date(), model_name=None)
+
+    @override_settings(TIME_ZONE="Europe/Helsinki")
+    @patch("cms.views.timezone.now", return_value=NOW.replace(hour=22, minute=30))
+    def test_future_utc_date_at_local_midnight_is_unavailable(self, now):
+        self.client.force_login(self.staff)
+        OpenAIBillingSync.objects.create(
+            organization_id="org-test", coverage_start=(NOW - timedelta(days=35)).date(),
+            costs_through=now.return_value, last_success_at=now.return_value,
+        )
+        OpenAIDailyCost.objects.create(
+            organization_id="org-test", project_id="proj-app", day=NOW.date(), amount_usd=14,
+        )
+        # Helsinki is already on the next calendar day; UTC billing is not.
+        local_day = (NOW.date() + timedelta(days=1)).isoformat()
+        response = self.client.get(self.url, {"start_date": local_day, "end_date": local_day})
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context["filter_form"].errors)
+        self.assertIsNone(response.context["billing"]["reported_cost"])
+        self.assertEqual(response.context["billing"]["month_cost"], 14)
+        self.assertContains(response, "The selected dates are not fully covered by the cost sync.")
 
     def test_ledger_admin_requires_permission(self):
         self.client.force_login(self.staff)
