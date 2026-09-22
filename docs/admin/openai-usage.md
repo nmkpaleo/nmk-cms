@@ -33,7 +33,7 @@ On `/admin/chatgpt-usage/`, click **Synchronize OpenAI costs**. The page returns
 
 Superusers can use the button automatically. To delegate it, grant an active staff user the Django permission with codename `cms.change_openaibillingsync` (**Can change open ai billing sync**). Viewing the report or adding credit entries alone does not grant sync access.
 
-The button uses the same configured credentials and cost-sync logic as the scheduled command. Missing configuration is reported on the page; no credentials are entered in the browser. UI syncs have a 45-second request budget. If a slow provider or a large historical backfill exceeds it, the previous snapshot is retained; retry or use the command below. The command has no overall UI time budget, but retains per-request timeouts.
+The button uses the same configured credentials and cost-sync logic as the scheduled command. Missing configuration is reported on the page; no credentials are entered in the browser. UI syncs have a cooperative 45-second deadline, checked between provider requests and database operations, including immediately before committing the snapshot. Active database operations may finish after the deadline; the replacement then rolls back. Where supported by the database, UI syncs fail immediately if another sync holds the billing row lock. If a slow provider or a large historical backfill exceeds it, the previous snapshot is retained; retry or use the command below. The command has no overall UI time budget, but retains per-request timeouts.
 
 ## Schedule automatic synchronization
 

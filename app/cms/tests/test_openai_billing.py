@@ -8,6 +8,8 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.core.exceptions import ValidationError
 from django.core.management import call_command, CommandError
+from django.db import OperationalError, connection
+from django.db.models.query import QuerySet
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
@@ -43,6 +45,64 @@ class CostSyncTests(TestCase):
         timer = patch("cms.openai_billing.timezone.now", return_value=NOW)
         timer.start()
         self.addCleanup(timer.stop)
+
+    @patch("cms.openai_billing.monotonic", return_value=0)
+    @patch("cms.openai_billing.requests.get")
+    def test_deadline_during_snapshot_replacement_rolls_back(self, get, clock):
+        old = NOW - timedelta(hours=1)
+        state = OpenAIBillingSync.objects.create(
+            organization_id="org-test", coverage_start=old.date(),
+            costs_through=old, last_success_at=old,
+            spend_since_balance_usd=Decimal("3"),
+        )
+        cost = OpenAIDailyCost.objects.create(
+            organization_id="org-test", project_id="proj-app",
+            day=old.date(), amount_usd=9,
+        )
+        get.return_value = response(page(NOW, [("proj-app", "2")]))
+        for model, method in (
+            (QuerySet, "get"), (QuerySet, "delete"),
+            (QuerySet, "bulk_create"), (OpenAIBillingSync, "save"),
+        ):
+            with self.subTest(operation=method):
+                clock.return_value = 0
+                original = getattr(model, method)
+
+                def expire_after_operation(instance, *args, **kwargs):
+                    result = original(instance, *args, **kwargs)
+                    # Only expire get after the locking query, not get_or_create.
+                    if method != "get" or instance.query.select_for_update:
+                        clock.return_value = 46
+                    return result
+
+                with patch.object(model, method, expire_after_operation):
+                    with self.assertRaisesMessage(BillingSyncError, "took too long"):
+                        sync_costs(timeout_seconds=45)
+                state.refresh_from_db()
+                cost.refresh_from_db()
+                self.assertEqual(cost.amount_usd, Decimal("9"))
+                self.assertEqual(OpenAIDailyCost.objects.count(), 1)
+                self.assertEqual(state.coverage_start, old.date())
+                self.assertEqual(state.costs_through, old)
+                self.assertEqual(state.last_success_at, old)
+                self.assertEqual(state.spend_since_balance_usd, Decimal("3"))
+                self.assertIn("took too long", state.last_error)
+
+    @patch("cms.openai_billing.requests.get")
+    def test_busy_lock_does_not_wait_to_record_error(self, get):
+        state = OpenAIBillingSync.objects.create(organization_id="org-test")
+        get.return_value = response(page(NOW, [("proj-app", "2")]))
+        with patch.object(connection.features, "has_select_for_update_nowait", True):
+            with patch.object(OpenAIBillingSync.objects, "select_for_update") as lock:
+                lock.return_value.get.side_effect = OperationalError("busy")
+                with self.assertRaisesMessage(BillingSyncError, "could not lock"):
+                    sync_costs(timeout_seconds=45)
+                self.assertEqual(lock.call_count, 2)
+                for call in lock.call_args_list:
+                    self.assertEqual(call.kwargs, {"nowait": True})
+        state.refresh_from_db()
+        self.assertIsNone(state.costs_through)
+        self.assertFalse(OpenAIDailyCost.objects.exists())
 
     @patch("cms.openai_billing.requests.get")
     def test_pagination_corrections_and_organization_scope(self, get):

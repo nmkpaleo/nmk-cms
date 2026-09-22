@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Roll back OpenAI billing snapshot replacements when the UI synchronization deadline expires, and avoid waiting for billing row locks where supported.
+
 - Show unavailable billing costs instead of zero when a selected date range falls entirely after the current UTC date.
 
 - Add a permission-controlled **Synchronize OpenAI costs** button to the usage report, with progress feedback, preserved filters, safe error messages, and a shorter request budget for browser-triggered syncs.

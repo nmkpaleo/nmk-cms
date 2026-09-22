@@ -10,7 +10,7 @@ from time import monotonic
 
 import requests
 from django.conf import settings
-from django.db import transaction
+from django.db import DatabaseError, connection, transaction
 from django.db.models import Sum
 from django.utils import timezone
 
@@ -34,6 +34,20 @@ def _sync_time_remaining(deadline):
             "Please retry or ask an administrator to run the scheduled sync."
         )
     return remaining
+
+
+def _lock_sync_state(pk, deadline):
+    # Browser requests must not queue behind another synchronization.
+    nowait = deadline is not None and connection.features.has_select_for_update_nowait
+    try:
+        return OpenAIBillingSync.objects.select_for_update(nowait=nowait).get(pk=pk)
+    except DatabaseError:
+        if not nowait:
+            raise
+        raise BillingSyncError(
+            "OpenAI synchronization could not lock billing data; previous data retained. "
+            "Please retry or ask an administrator to run the scheduled sync."
+        ) from None
 
 
 def _fetch_costs(start, end, organization_id, *, deadline=None):
@@ -124,29 +138,37 @@ def sync_costs(*, start_date=None, timeout_seconds=None):
             balance_costs = _fetch_costs(balance.effective_at.replace(microsecond=0), now, organization, deadline=deadline)
             spend_since_balance = sum(balance_costs.values(), ZERO)
         _sync_time_remaining(deadline)
-    except BillingSyncError as exc:
         with transaction.atomic():
-            current_state = OpenAIBillingSync.objects.select_for_update().get(pk=state.pk)
-            if not current_state.costs_through or current_state.costs_through <= now:
-                current_state.last_error = str(exc)
-                current_state.save(update_fields=["last_error"])
+            state = _lock_sync_state(state.pk, deadline)
+            _sync_time_remaining(deadline)
+            if state.costs_through and state.costs_through > now:
+                return state  # A newer overlapping run already finished.
+            OpenAIDailyCost.objects.filter(organization_id=organization, day__gte=start_day).delete()
+            _sync_time_remaining(deadline)
+            OpenAIDailyCost.objects.bulk_create([
+                OpenAIDailyCost(organization_id=organization, day=day, project_id=project, amount_usd=amount)
+                for (day, project), amount in daily.items()
+            ])
+            _sync_time_remaining(deadline)
+            state.coverage_start = start_day
+            state.costs_through = now
+            state.last_success_at = timezone.now()
+            state.last_error = ""
+            state.balance_entry = balance
+            state.spend_since_balance_usd = spend_since_balance
+            state.save()
+            # Raising inside atomic rolls back the entire replacement.
+            _sync_time_remaining(deadline)
+    except BillingSyncError as exc:
+        try:
+            with transaction.atomic():
+                current_state = _lock_sync_state(state.pk, deadline)
+                if not current_state.costs_through or current_state.costs_through <= now:
+                    current_state.last_error = str(exc)
+                    current_state.save(update_fields=["last_error"])
+        except BillingSyncError:
+            pass  # A busy lock must not delay reporting the original failure.
         raise
-    with transaction.atomic():
-        state = OpenAIBillingSync.objects.select_for_update().get(pk=state.pk)
-        if state.costs_through and state.costs_through > now:
-            return state  # A newer overlapping run already finished.
-        OpenAIDailyCost.objects.filter(organization_id=organization, day__gte=start_day).delete()
-        OpenAIDailyCost.objects.bulk_create([
-            OpenAIDailyCost(organization_id=organization, day=day, project_id=project, amount_usd=amount)
-            for (day, project), amount in daily.items()
-        ])
-        state.coverage_start = start_day
-        state.costs_through = now
-        state.last_success_at = timezone.now()
-        state.last_error = ""
-        state.balance_entry = balance
-        state.spend_since_balance_usd = spend_since_balance
-        state.save()
     return state
 
 
