@@ -71,3 +71,14 @@ class AuthPageTests(TestCase):
 
         self.assertContains(response, "recaptcha/api.js")
         self.assertContains(response, 'id="id_captcha"')
+
+    @override_settings(
+        RECAPTCHA_REQUIRED=True,
+        RECAPTCHA_PUBLIC_KEY="test-public-key",
+        RECAPTCHA_PRIVATE_KEY="test-private-key",
+    )
+    def test_password_reset_page_renders_captcha_media(self):
+        response = self.client.get(reverse("account_reset_password"))
+
+        self.assertContains(response, "recaptcha/api.js")
+        self.assertContains(response, 'id="id_captcha"')

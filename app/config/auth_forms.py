@@ -60,9 +60,9 @@ class CaptchaLoginForm(AbuseProtectionMixin, CaptchaMixin, LoginForm):
     rate_limit_name = "login"
 
     def __init__(self, *args, **kwargs):
-        request = kwargs.pop("request", None)
+        request = kwargs.get("request")
         super().__init__(*args, **kwargs)
-        self.request = request
+        self.request = getattr(self, "request", None) or request
         self._add_captcha()
 
     def clean(self):
@@ -76,7 +76,7 @@ class CaptchaResetPasswordForm(AbuseProtectionMixin, CaptchaMixin, ResetPassword
     def __init__(self, *args, **kwargs):
         request = kwargs.pop("request", None)
         super().__init__(*args, **kwargs)
-        self.request = request
+        self.request = getattr(self, "request", None) or request
         self._add_captcha()
 
     def clean(self):
