@@ -14,4 +14,5 @@ class RestrictedAccountAdapter(DefaultAccountAdapter):
 class OrcidSocialAccountAdapter(DefaultSocialAccountAdapter):
     def is_open_for_signup(self, request, sociallogin):
         # ORCID is the sole supported self-service account-creation path.
-        return True
+        provider = getattr(getattr(sociallogin, "account", None), "provider", None)
+        return getattr(provider, "provider_id", "") == "orcid"

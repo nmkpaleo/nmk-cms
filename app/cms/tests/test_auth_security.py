@@ -32,4 +32,4 @@ class AuthPolicyTests(SimpleTestCase):
         with patch("config.auth_forms.cache.add", return_value=False), patch("config.auth_forms.cache.incr", return_value=2):
             form = CaptchaResetPasswordForm(request=request)
         self.assertFalse(form.is_valid())
-        self.assertIn("Too many attempts", " ".join(form.non_field_errors()))
+        self.assertIn("Too many attempts", form.errors.as_text())
