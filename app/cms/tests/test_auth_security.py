@@ -75,6 +75,16 @@ class AuthPolicyTests(SimpleTestCase):
 
 
 class AuthPageTests(TestCase):
+    @override_settings(RECAPTCHA_REQUIRED=False)
+    def test_login_page_uses_custom_form_without_captcha(self):
+        response = self.client.get(reverse("account_login"), {"next": "/admin/"})
+
+        self.assertIsInstance(response.context["form"], CaptchaLoginForm)
+        self.assertIs(response.context["form"].request, response.wsgi_request)
+        self.assertContains(response, 'name="next"')
+        self.assertContains(response, 'value="/admin/"')
+        self.assertNotContains(response, 'id="id_captcha"')
+
     @override_settings(
         RECAPTCHA_REQUIRED=True,
         RECAPTCHA_PUBLIC_KEY="test-public-key",
@@ -86,6 +96,13 @@ class AuthPageTests(TestCase):
         self.assertIsInstance(response.context["form"], CaptchaLoginForm)
         self.assertContains(response, "recaptcha/api.js")
         self.assertContains(response, 'id="id_captcha"')
+
+    @override_settings(RECAPTCHA_REQUIRED=False)
+    def test_password_reset_page_uses_custom_form_without_captcha(self):
+        response = self.client.get(reverse("account_reset_password"))
+
+        self.assertIsInstance(response.context["form"], CaptchaResetPasswordForm)
+        self.assertNotContains(response, 'id="id_captcha"')
 
     @override_settings(
         RECAPTCHA_REQUIRED=True,

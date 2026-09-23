@@ -2,6 +2,7 @@
 
 import logging
 
+from allauth.account.adapter import get_adapter
 from allauth.account.forms import LoginForm, ResetPasswordForm
 from django import forms
 from django.conf import settings
@@ -41,10 +42,7 @@ class AbuseProtectionMixin:
                     count = cache.incr(key)
         if count > settings.AUTH_RATE_LIMIT_MAX_ATTEMPTS:
             logger.warning("authentication rate limit exceeded", extra={"flow": self.rate_limit_name})
-            raise forms.ValidationError(
-                "Too many attempts. Please wait and try again.",
-                code="rate_limited",
-            )
+            raise get_adapter(self.request).validation_error("too_many_login_attempts")
         if count >= settings.AUTH_RATE_LIMIT_LOG_THRESHOLD:
             logger.warning("repeated authentication attempt", extra={"flow": self.rate_limit_name, "count": count})
 
