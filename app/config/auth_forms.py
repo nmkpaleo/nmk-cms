@@ -31,8 +31,10 @@ class AbuseProtectionMixin:
                 "Too many attempts. Please wait and try again.",
                 code="rate_limited",
             )
-        cache.add(key, 0, settings.AUTH_RATE_LIMIT_WINDOW_SECONDS)
-        count = cache.incr(key)
+        if cache.add(key, 1, settings.AUTH_RATE_LIMIT_WINDOW_SECONDS):
+            count = 1
+        else:
+            count = cache.incr(key)
         if count >= settings.AUTH_RATE_LIMIT_LOG_THRESHOLD:
             logger.warning("repeated authentication attempt", extra={"flow": self.rate_limit_name, "count": count})
 

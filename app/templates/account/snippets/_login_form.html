@@ -6,6 +6,7 @@
           class="w3-container w3-padding-16 w3-animate-opacity"
           aria-labelledby="login-form-heading">
         {% csrf_token %}
+        {{ form.media }}
         <h2 id="login-form-heading" class="w3-large w3-text-brown w3-margin-bottom">
             {% trans "Use your NMK credentials" %}
         </h2>
