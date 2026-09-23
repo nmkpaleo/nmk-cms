@@ -126,7 +126,7 @@ INSTALLED_APPS = [
     "django.contrib.humanize",
     "django.contrib.sites",
     "django.contrib.staticfiles",
-    "captcha",
+    "django_recaptcha",
     "django_filters",
     "qr_code",
     'django_userforeignkey',

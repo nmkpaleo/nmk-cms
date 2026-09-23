@@ -1,5 +1,6 @@
 """Allauth forms with CAPTCHA and abuse-resistance controls."""
 
+import ipaddress
 import logging
 
 from allauth.account.adapter import get_adapter
@@ -8,8 +9,8 @@ from django import forms
 from django.conf import settings
 from django.core.cache import cache
 
-from captcha.fields import ReCaptchaField
-from captcha.widgets import ReCaptchaV2Checkbox
+from django_recaptcha.fields import ReCaptchaField
+from django_recaptcha.widgets import ReCaptchaV2Checkbox
 
 
 logger = logging.getLogger("security.auth")
@@ -24,7 +25,12 @@ class AbuseProtectionMixin:
         trusted_proxies = set(settings.AUTH_RATE_LIMIT_TRUSTED_PROXIES)
         if settings.AUTH_RATE_LIMIT_TRUST_PROXY and client in trusted_proxies:
             forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
-            client = forwarded.split(",", 1)[0].strip() if forwarded else client
+            candidate = forwarded.split(",", 1)[0].strip() if forwarded else ""
+            try:
+                ipaddress.ip_address(candidate)
+            except ValueError:
+                candidate = ""
+            client = candidate or client
         return f"auth-rate:{self.rate_limit_name}:{client}"
 
     def _check_rate_limit(self):
@@ -66,10 +72,11 @@ class CaptchaLoginForm(AbuseProtectionMixin, CaptchaMixin, LoginForm):
         self._add_captcha()
 
     def clean(self):
+        cleaned_data = super().clean()
         if self.errors:
-            return self.cleaned_data
+            return cleaned_data
         self._check_rate_limit()
-        return super().clean()
+        return cleaned_data
 
 
 class CaptchaResetPasswordForm(AbuseProtectionMixin, CaptchaMixin, ResetPasswordForm):
@@ -82,8 +89,8 @@ class CaptchaResetPasswordForm(AbuseProtectionMixin, CaptchaMixin, ResetPassword
         self._add_captcha()
 
     def clean(self):
-        if self.errors:
-            return self.cleaned_data
         cleaned_data = super().clean()
+        if self.errors:
+            return cleaned_data
         self._check_rate_limit()
         return cleaned_data
