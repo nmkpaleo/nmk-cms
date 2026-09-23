@@ -208,6 +208,11 @@ AUTH_RATE_LIMIT_MAX_ATTEMPTS = get_positive_int('AUTH_RATE_LIMIT_MAX_ATTEMPTS', 
 AUTH_RATE_LIMIT_LOG_THRESHOLD = int(get_var('AUTH_RATE_LIMIT_LOG_THRESHOLD', 5))
 AUTH_RATE_LIMIT_WINDOW_SECONDS = get_positive_int('AUTH_RATE_LIMIT_WINDOW_SECONDS', 900)
 AUTH_RATE_LIMIT_TRUST_PROXY = bool(int(get_var('AUTH_RATE_LIMIT_TRUST_PROXY', 0)))
+AUTH_RATE_LIMIT_TRUSTED_PROXIES = tuple(
+    proxy.strip()
+    for proxy in get_var('AUTH_RATE_LIMIT_TRUSTED_PROXIES', '').split(',')
+    if proxy.strip()
+)
 ACCOUNT_ADAPTER = 'config.auth_adapter.RestrictedAccountAdapter'
 SOCIALACCOUNT_ADAPTER = 'config.auth_adapter.OrcidSocialAccountAdapter'
 ACCOUNT_FORMS = {

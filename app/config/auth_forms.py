@@ -20,7 +20,8 @@ class AbuseProtectionMixin:
     def _client_key(self):
         request = self.request
         client = request.META.get("REMOTE_ADDR", "unknown")
-        if settings.AUTH_RATE_LIMIT_TRUST_PROXY:
+        trusted_proxies = set(settings.AUTH_RATE_LIMIT_TRUSTED_PROXIES)
+        if settings.AUTH_RATE_LIMIT_TRUST_PROXY and client in trusted_proxies:
             forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
             client = forwarded.split(",", 1)[0].strip() if forwarded else client
         return f"auth-rate:{self.rate_limit_name}:{client}"
@@ -59,8 +60,9 @@ class CaptchaLoginForm(AbuseProtectionMixin, CaptchaMixin, LoginForm):
     rate_limit_name = "login"
 
     def __init__(self, *args, **kwargs):
-        self.request = kwargs.pop("request", None)
+        request = kwargs.pop("request", None)
         super().__init__(*args, **kwargs)
+        self.request = request
         self._add_captcha()
 
     def clean(self):
@@ -72,8 +74,9 @@ class CaptchaResetPasswordForm(AbuseProtectionMixin, CaptchaMixin, ResetPassword
     rate_limit_name = "password-reset"
 
     def __init__(self, *args, **kwargs):
-        self.request = kwargs.pop("request", None)
+        request = kwargs.pop("request", None)
         super().__init__(*args, **kwargs)
+        self.request = request
         self._add_captcha()
 
     def clean(self):
