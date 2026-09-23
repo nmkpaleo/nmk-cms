@@ -18,10 +18,10 @@ Configure equivalent or stricter rate limits at the production reverse proxy/WAF
 - `POST /accounts/password/reset/`
 - Any login-code or passwordless sign-in request endpoints enabled by allauth
 
-Set AUTH_RATE_LIMIT_TRUST_PROXY=1 only when the trusted proxy overwrites X-Forwarded-For with the client address.
+Set `AUTH_RATE_LIMIT_TRUST_PROXY=1` only when the trusted proxy overwrites `X-Forwarded-For` with the client address.
 
 The Django cache limiter is defense in depth. Use a shared production cache (for example Redis) so limits apply across application workers. Do not trust `X-Forwarded-For` unless the proxy overwrites it and is the only public path to the application.
 
 ## Verification
 
-Unauthenticated password-change requests must be redirected to login and must not change an account. Password-change POSTs must continue to include Djangoâ€™s CSRF token and allauthâ€™s current-password validation.
+Unauthenticated password-change requests must be redirected to login and must not change an account. Password-change POSTs must continue to include Django's CSRF token and allauth's current-password validation.
