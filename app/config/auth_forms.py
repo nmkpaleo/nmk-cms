@@ -72,7 +72,7 @@ class CaptchaLoginForm(AbuseProtectionMixin, CaptchaMixin, LoginForm):
 
     def clean(self):
         cleaned_data = super().clean()
-        if self.errors and "__all__" not in self.errors:
+        if not {"login", "password"}.issubset(self.cleaned_data):
             return cleaned_data
         self._check_rate_limit()
         return cleaned_data
