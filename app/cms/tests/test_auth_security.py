@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from django.core.exceptions import ValidationError
 from django.test import RequestFactory, SimpleTestCase, override_settings
 
 from config.auth_adapter import OrcidSocialAccountAdapter, RestrictedAccountAdapter
@@ -32,5 +33,6 @@ class AuthPolicyTests(SimpleTestCase):
         request = RequestFactory().post("/accounts/password/reset/", data={})
         with patch("config.auth_forms.cache.add", return_value=False), patch("config.auth_forms.cache.incr", return_value=2):
             form = CaptchaResetPasswordForm(request=request)
-        self.assertFalse(form.is_valid())
-        self.assertIn("Too many attempts", form.errors.as_text())
+        with self.assertRaises(ValidationError):
+            form._check_rate_limit()
+

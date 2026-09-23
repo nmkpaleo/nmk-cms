@@ -34,8 +34,10 @@ class AbuseProtectionMixin:
                 count = cache.incr(key)
             except ValueError:
                 # The key can expire between add() and incr(); recreate it.
-                cache.add(key, 1, settings.AUTH_RATE_LIMIT_WINDOW_SECONDS)
-                count = 1
+                if cache.add(key, 1, settings.AUTH_RATE_LIMIT_WINDOW_SECONDS):
+                    count = 1
+                else:
+                    count = cache.incr(key)
         if count > settings.AUTH_RATE_LIMIT_MAX_ATTEMPTS:
             logger.warning("authentication rate limit exceeded", extra={"flow": self.rate_limit_name})
             raise forms.ValidationError(
