@@ -42,7 +42,9 @@ class AbuseProtectionMixin:
                     count = cache.incr(key)
         if count > settings.AUTH_RATE_LIMIT_MAX_ATTEMPTS:
             logger.warning("authentication rate limit exceeded", extra={"flow": self.rate_limit_name})
-            raise get_adapter(self.request).validation_error("too_many_login_attempts")
+            raise get_adapter(self.request).validation_error(
+                "Too many authentication attempts. Please try again later."
+            )
         if count >= settings.AUTH_RATE_LIMIT_LOG_THRESHOLD:
             logger.warning("repeated authentication attempt", extra={"flow": self.rate_limit_name, "count": count})
 
