@@ -126,6 +126,7 @@ INSTALLED_APPS = [
     "django.contrib.humanize",
     "django.contrib.sites",
     "django.contrib.staticfiles",
+    "captcha",
     "django_filters",
     "qr_code",
     'django_userforeignkey',
@@ -197,6 +198,16 @@ SOCIALACCOUNT_PROVIDERS = {
             'key': '',
         }
     }
+}
+
+# Public registration is administered through Django admin. ORCID remains available through the social-account provider above.
+RECAPTCHA_PUBLIC_KEY = get_var('RECAPTCHA_PUBLIC_KEY', '')
+RECAPTCHA_PRIVATE_KEY = get_var('RECAPTCHA_PRIVATE_KEY', '')
+RECAPTCHA_REQUIRED = bool(RECAPTCHA_PUBLIC_KEY and RECAPTCHA_PRIVATE_KEY)
+ACCOUNT_ADAPTER = 'config.auth_adapter.RestrictedAccountAdapter'
+ACCOUNT_FORMS = {
+    'login': 'config.auth_forms.CaptchaLoginForm',
+    'reset_password': 'config.auth_forms.CaptchaResetPasswordForm',
 }
 
 
