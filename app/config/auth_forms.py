@@ -66,9 +66,8 @@ class CaptchaLoginForm(AbuseProtectionMixin, CaptchaMixin, LoginForm):
         self._add_captcha()
 
     def clean(self):
-        cleaned_data = forms.Form.clean(self)
         if self.errors:
-            return cleaned_data
+            return self.cleaned_data
         self._check_rate_limit()
         return super().clean()
 
@@ -83,8 +82,8 @@ class CaptchaResetPasswordForm(AbuseProtectionMixin, CaptchaMixin, ResetPassword
         self._add_captcha()
 
     def clean(self):
-        cleaned_data = super().clean()
         if self.errors:
-            return cleaned_data
+            return self.cleaned_data
+        cleaned_data = super().clean()
         self._check_rate_limit()
         return cleaned_data

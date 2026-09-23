@@ -16,7 +16,6 @@ Configure equivalent or stricter rate limits at the production reverse proxy/WAF
 
 - `POST /accounts/login/`
 - `POST /accounts/password/reset/`
-- Any login-code or passwordless sign-in request endpoints enabled by allauth
 
 Set `AUTH_RATE_LIMIT_TRUST_PROXY=1` only when the trusted proxy overwrites `X-Forwarded-For` with the client address, and configure `AUTH_RATE_LIMIT_TRUSTED_PROXIES` with the proxy source addresses allowed to supply that header.
 
