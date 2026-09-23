@@ -208,6 +208,7 @@ AUTH_RATE_LIMIT_MAX_ATTEMPTS = int(get_var('AUTH_RATE_LIMIT_MAX_ATTEMPTS', 10))
 AUTH_RATE_LIMIT_LOG_THRESHOLD = int(get_var('AUTH_RATE_LIMIT_LOG_THRESHOLD', 5))
 AUTH_RATE_LIMIT_WINDOW_SECONDS = int(get_var('AUTH_RATE_LIMIT_WINDOW_SECONDS', 900))
 ACCOUNT_ADAPTER = 'config.auth_adapter.RestrictedAccountAdapter'
+SOCIALACCOUNT_ADAPTER = 'config.auth_adapter.OrcidSocialAccountAdapter'
 ACCOUNT_FORMS = {
     'login': 'config.auth_forms.CaptchaLoginForm',
     'reset_password': 'config.auth_forms.CaptchaResetPasswordForm',
