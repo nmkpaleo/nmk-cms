@@ -118,10 +118,13 @@ class AuthPageTests(TestCase):
 
     @override_settings(RECAPTCHA_REQUIRED=False)
     def test_password_reset_valid_post_uses_request_aware_form(self):
-        response = self.client.post(
-            reverse("account_reset_password"),
-            data={"email": "unknown@example.com"},
-        )
+        with patch.object(CaptchaResetPasswordForm, "_check_rate_limit", autospec=True) as check_rate_limit:
+            response = self.client.post(
+                reverse("account_reset_password"),
+                data={"email": "unknown@example.com"},
+            )
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response["Location"], reverse("account_reset_password_done"))
+        check_rate_limit.assert_called_once()
+        self.assertIs(check_rate_limit.call_args.args[0].request, response.wsgi_request)
