@@ -8,6 +8,7 @@ from allauth.account.forms import LoginForm, ResetPasswordForm
 from django import forms
 from django.conf import settings
 from django.core.cache import cache
+from django.core.exceptions import ValidationError
 
 from django_recaptcha.fields import ReCaptchaField
 from django_recaptcha.widgets import ReCaptchaV2Checkbox
@@ -48,9 +49,7 @@ class AbuseProtectionMixin:
                     count = cache.incr(key)
         if count > settings.AUTH_RATE_LIMIT_MAX_ATTEMPTS:
             logger.warning("authentication rate limit exceeded", extra={"flow": self.rate_limit_name})
-            raise get_adapter(self.request).validation_error(
-                "Too many authentication attempts. Please try again later."
-            )
+            raise ValidationError("Too many authentication attempts. Please try again later.")
         if count >= settings.AUTH_RATE_LIMIT_LOG_THRESHOLD:
             logger.warning("repeated authentication attempt", extra={"flow": self.rate_limit_name, "count": count})
 
@@ -73,7 +72,7 @@ class CaptchaLoginForm(AbuseProtectionMixin, CaptchaMixin, LoginForm):
 
     def clean(self):
         cleaned_data = super().clean()
-        if self.errors:
+        if self.errors and "__all__" not in self.errors:
             return cleaned_data
         self._check_rate_limit()
         return cleaned_data
@@ -90,7 +89,7 @@ class CaptchaResetPasswordForm(AbuseProtectionMixin, CaptchaMixin, ResetPassword
 
     def clean(self):
         cleaned_data = super().clean()
-        if self.errors:
+        if self.errors and "__all__" not in self.errors:
             return cleaned_data
         self._check_rate_limit()
         return cleaned_data

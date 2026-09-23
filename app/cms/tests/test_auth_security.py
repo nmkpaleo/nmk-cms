@@ -9,7 +9,7 @@ from config.auth_adapter import OrcidSocialAccountAdapter, RestrictedAccountAdap
 from config.auth_forms import CaptchaLoginForm, CaptchaResetPasswordForm
 
 
-class AuthPolicyTests(SimpleTestCase):
+class AuthPolicyTests(TestCase):
     def test_local_signup_is_closed(self):
         self.assertFalse(RestrictedAccountAdapter().is_open_for_signup(None))
 
