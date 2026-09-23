@@ -19,7 +19,7 @@ Configure equivalent or stricter rate limits at the production reverse proxy/WAF
 
 Set `AUTH_RATE_LIMIT_TRUST_PROXY=1` only when the trusted proxy overwrites `X-Forwarded-For` with the client address, and configure `AUTH_RATE_LIMIT_TRUSTED_PROXIES` with the proxy source addresses allowed to supply that header.
 
-The Django cache limiter is defense in depth. Use a shared production cache (for example Redis) so limits apply across application workers. Do not trust `X-Forwarded-For` unless the proxy overwrites it and is the only public path to the application.
+The Django cache limiter is defense in depth. Use a shared production cache (for example Redis) so limits apply across application workers. In staging and production Compose deployments, keep the web container bound to loopback (`127.0.0.1:8000`) so the reverse proxy remains the only public path. Do not trust `X-Forwarded-For` unless the proxy overwrites it and is the only public path to the application.
 
 ## Verification
 
