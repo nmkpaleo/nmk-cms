@@ -71,11 +71,9 @@ class CaptchaLoginForm(AbuseProtectionMixin, CaptchaMixin, LoginForm):
         self._add_captcha()
 
     def clean(self):
-        cleaned_data = super().clean()
-        if not {"login", "password"}.issubset(self.cleaned_data):
-            return cleaned_data
-        self._check_rate_limit()
-        return cleaned_data
+        if self.data.get("login") and self.data.get("password"):
+            self._check_rate_limit()
+        return super().clean()
 
 
 class CaptchaResetPasswordForm(AbuseProtectionMixin, CaptchaMixin, ResetPasswordForm):
