@@ -33,6 +33,5 @@ class AuthPolicyTests(SimpleTestCase):
         request = RequestFactory().post("/accounts/password/reset/", data={})
         with patch("config.auth_forms.cache.add", return_value=False), patch("config.auth_forms.cache.incr", return_value=2):
             form = CaptchaResetPasswordForm(request=request)
-        with self.assertRaises(ValidationError):
-            form._check_rate_limit()
-
+            with self.assertRaises(ValidationError):
+                form._check_rate_limit()
