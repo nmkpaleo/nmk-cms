@@ -126,6 +126,7 @@ INSTALLED_APPS = [
     "django.contrib.humanize",
     "django.contrib.sites",
     "django.contrib.staticfiles",
+    "django_recaptcha",
     "django_filters",
     "qr_code",
     'django_userforeignkey',
@@ -197,6 +198,31 @@ SOCIALACCOUNT_PROVIDERS = {
             'key': '',
         }
     }
+}
+
+# Public registration is administered through Django admin. ORCID remains available through the social-account provider above.
+RECAPTCHA_PUBLIC_KEY = get_var('RECAPTCHA_PUBLIC_KEY', '')
+RECAPTCHA_PRIVATE_KEY = get_var('RECAPTCHA_PRIVATE_KEY', '')
+RECAPTCHA_REQUIRED = bool(RECAPTCHA_PUBLIC_KEY and RECAPTCHA_PRIVATE_KEY)
+AUTH_RATE_LIMIT_MAX_ATTEMPTS = get_positive_int('AUTH_RATE_LIMIT_MAX_ATTEMPTS', 10)
+AUTH_RATE_LIMIT_LOG_THRESHOLD = get_positive_int('AUTH_RATE_LIMIT_LOG_THRESHOLD', 5)
+AUTH_RATE_LIMIT_WINDOW_SECONDS = get_positive_int('AUTH_RATE_LIMIT_WINDOW_SECONDS', 900)
+AUTH_RATE_LIMIT_TRUST_PROXY = str(get_var('AUTH_RATE_LIMIT_TRUST_PROXY', 0)).strip().lower() in {
+    '1',
+    'true',
+    'yes',
+    'on',
+}
+AUTH_RATE_LIMIT_TRUSTED_PROXIES = tuple(
+    proxy.strip()
+    for proxy in get_var('AUTH_RATE_LIMIT_TRUSTED_PROXIES', '').split(',')
+    if proxy.strip()
+)
+ACCOUNT_ADAPTER = 'config.auth_adapter.RestrictedAccountAdapter'
+SOCIALACCOUNT_ADAPTER = 'config.auth_adapter.OrcidSocialAccountAdapter'
+ACCOUNT_FORMS = {
+    'login': 'config.auth_forms.CaptchaLoginForm',
+    'reset_password': 'config.auth_forms.CaptchaResetPasswordForm',
 }
 
 

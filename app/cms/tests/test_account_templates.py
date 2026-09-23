@@ -18,17 +18,10 @@ class AccountTemplateW3Tests(TestCase):
                 self.assertContains(response, token, html=False)
         self.assertNotContains(response, "Login__container", html=False)
 
-    def test_signup_template_uses_w3_components(self):
+    def test_signup_is_closed_for_local_accounts(self):
         response = self.client.get(reverse("account_signup"))
 
         self.assertEqual(response.status_code, 200)
-        expected_tokens = [
-            "w3-container w3-padding-64 w3-sand",
-            "w3-card w3-white",
-            "w3-round-xlarge",
-            "w3-animate-opacity",
-        ]
-        for token in expected_tokens:
-            with self.subTest(token=token):
-                self.assertContains(response, token, html=False)
-        self.assertNotContains(response, "Signup__container", html=False)
+        self.assertContains(response, "Sign Up Closed")
+        self.assertContains(response, "sign up is currently closed")
+        self.assertNotContains(response, "signup-form-heading")
