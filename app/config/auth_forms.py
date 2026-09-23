@@ -19,8 +19,7 @@ class AbuseProtectionMixin:
 
     def _client_key(self):
         request = self.request
-        forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
-        client = forwarded.split(",", 1)[0].strip() if forwarded else request.META.get("REMOTE_ADDR", "unknown")
+        # Use REMOTE_ADDR only; accepting a client-supplied forwarding header would bypass the limiter.`n        client = request.META.get("REMOTE_ADDR", "unknown")
         return f"auth-rate:{self.rate_limit_name}:{client}"
 
     def _check_rate_limit(self):
