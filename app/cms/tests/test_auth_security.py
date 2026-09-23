@@ -37,6 +37,20 @@ class AuthPolicyTests(SimpleTestCase):
             with self.assertRaises(ValidationError):
                 form._check_rate_limit()
 
+    def test_login_rate_limit_skips_requests_with_field_errors(self):
+        request = RequestFactory().post("/accounts/login/", data={})
+        with patch.object(CaptchaLoginForm, "_check_rate_limit") as check_rate_limit:
+            form = CaptchaLoginForm(data={}, request=request)
+            self.assertFalse(form.is_valid())
+        check_rate_limit.assert_not_called()
+
+    def test_password_reset_rate_limit_skips_requests_with_field_errors(self):
+        request = RequestFactory().post("/accounts/password/reset/", data={"email": "not-an-email"})
+        with patch.object(CaptchaResetPasswordForm, "_check_rate_limit") as check_rate_limit:
+            form = CaptchaResetPasswordForm(data={"email": "not-an-email"}, request=request)
+            self.assertFalse(form.is_valid())
+        check_rate_limit.assert_not_called()
+
     @override_settings(AUTH_RATE_LIMIT_TRUST_PROXY=True, AUTH_RATE_LIMIT_TRUSTED_PROXIES=("127.0.0.1",))
     def test_rate_limit_trusts_forwarded_for_from_configured_proxy(self):
         request = RequestFactory().post(
@@ -69,6 +83,7 @@ class AuthPageTests(TestCase):
     def test_login_page_renders_captcha_media(self):
         response = self.client.get(reverse("account_login"))
 
+        self.assertIsInstance(response.context["form"], CaptchaLoginForm)
         self.assertContains(response, "recaptcha/api.js")
         self.assertContains(response, 'id="id_captcha"')
 
@@ -80,5 +95,6 @@ class AuthPageTests(TestCase):
     def test_password_reset_page_renders_captcha_media(self):
         response = self.client.get(reverse("account_reset_password"))
 
+        self.assertIsInstance(response.context["form"], CaptchaResetPasswordForm)
         self.assertContains(response, "recaptcha/api.js")
         self.assertContains(response, 'id="id_captcha"')
