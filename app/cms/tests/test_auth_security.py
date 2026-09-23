@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.test import RequestFactory, SimpleTestCase, override_settings
@@ -11,7 +12,7 @@ class AuthPolicyTests(SimpleTestCase):
         self.assertFalse(RestrictedAccountAdapter().is_open_for_signup(None))
 
     def test_orcid_signup_is_allowed(self):
-        self.assertTrue(OrcidSocialAccountAdapter().is_open_for_signup(None, object()))
+        self.assertTrue(OrcidSocialAccountAdapter().is_open_for_signup(None, SimpleNamespace(account=SimpleNamespace(provider="orcid"))))
 
     @override_settings(RECAPTCHA_REQUIRED=False)
     def test_captcha_is_not_added_without_keys(self):
@@ -28,7 +29,7 @@ class AuthPolicyTests(SimpleTestCase):
 
     @override_settings(RECAPTCHA_REQUIRED=False, AUTH_RATE_LIMIT_MAX_ATTEMPTS=1)
     def test_rate_limit_rejects_after_threshold(self):
-        request = RequestFactory().post("/accounts/password/reset/")
+        request = RequestFactory().post("/accounts/password/reset/", data={})
         with patch("config.auth_forms.cache.add", return_value=False), patch("config.auth_forms.cache.incr", return_value=2):
             form = CaptchaResetPasswordForm(request=request)
         self.assertFalse(form.is_valid())
