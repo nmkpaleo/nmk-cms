@@ -18,6 +18,7 @@ from django.contrib import admin
 from django.conf import settings
 from django.conf.urls.static import static
 from django.urls import include, path
+from config.auth_views import RequestAwarePasswordResetView
 from cms.views import (
     fieldslip_create,
     FieldSlipDetailView,
@@ -37,6 +38,7 @@ urlpatterns = [
     path('admin/chatgpt-usage/', chatgpt_usage_report, name='admin-chatgpt-usage'),
     path('admin/', admin.site.urls),
 
+    path('accounts/password/reset/', RequestAwarePasswordResetView.as_view(), name='account_reset_password'),
     path('', include('cms.urls')),
     path('accounts/', include('allauth.urls')),
     path('', index, name='index'),

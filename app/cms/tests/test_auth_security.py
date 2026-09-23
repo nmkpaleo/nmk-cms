@@ -115,3 +115,13 @@ class AuthPageTests(TestCase):
         self.assertIsInstance(response.context["form"], CaptchaResetPasswordForm)
         self.assertContains(response, "recaptcha/api.js")
         self.assertContains(response, 'id="id_captcha"')
+
+    @override_settings(RECAPTCHA_REQUIRED=False)
+    def test_password_reset_valid_post_uses_request_aware_form(self):
+        response = self.client.post(
+            reverse("account_reset_password"),
+            data={"email": "unknown@example.com"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], reverse("account_reset_password_done"))
