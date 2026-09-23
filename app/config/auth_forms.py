@@ -27,20 +27,18 @@ class AbuseProtectionMixin:
 
     def _check_rate_limit(self):
         key = self._client_key()
-        count = cache.get(key, 0)
-        if count >= settings.AUTH_RATE_LIMIT_MAX_ATTEMPTS:
+        if cache.add(key, 1, settings.AUTH_RATE_LIMIT_WINDOW_SECONDS):
+            count = 1
+        else:
+            count = cache.incr(key)
+        if count > settings.AUTH_RATE_LIMIT_MAX_ATTEMPTS:
             logger.warning("authentication rate limit exceeded", extra={"flow": self.rate_limit_name})
             raise forms.ValidationError(
                 "Too many attempts. Please wait and try again.",
                 code="rate_limited",
             )
-        if cache.add(key, 1, settings.AUTH_RATE_LIMIT_WINDOW_SECONDS):
-            count = 1
-        else:
-            count = cache.incr(key)
         if count >= settings.AUTH_RATE_LIMIT_LOG_THRESHOLD:
             logger.warning("repeated authentication attempt", extra={"flow": self.rate_limit_name, "count": count})
-
 
 class CaptchaMixin:
     """Add a CAPTCHA only when production has configured its credentials."""

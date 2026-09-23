@@ -29,7 +29,7 @@ class AuthPolicyTests(SimpleTestCase):
     @override_settings(RECAPTCHA_REQUIRED=False, AUTH_RATE_LIMIT_MAX_ATTEMPTS=1)
     def test_rate_limit_rejects_after_threshold(self):
         request = RequestFactory().post("/accounts/password/reset/")
-        with patch("config.auth_forms.cache.get", return_value=1):
+        with patch("config.auth_forms.cache.add", return_value=False), patch("config.auth_forms.cache.incr", return_value=2):
             form = CaptchaResetPasswordForm(request=request)
         self.assertFalse(form.is_valid())
         self.assertIn("Too many attempts", " ".join(form.non_field_errors()))
