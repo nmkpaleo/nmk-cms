@@ -29,6 +29,29 @@ class AuthPolicyTests(SimpleTestCase):
             form = CaptchaLoginForm(request=request)
         self.assertIn("captcha", form.fields)
 
+    @override_settings(RECAPTCHA_REQUIRED=True)
+    def test_login_form_rejects_post_without_captcha_token(self):
+        request = RequestFactory().post(
+            "/accounts/login/",
+            data={"login": "user@example.com", "password": "invalid-password"},
+        )
+        form = CaptchaLoginForm(
+            data={"login": "user@example.com", "password": "invalid-password"},
+            request=request,
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn("captcha", form.errors)
+
+    @override_settings(RECAPTCHA_REQUIRED=True)
+    def test_password_reset_form_rejects_post_without_captcha_token(self):
+        request = RequestFactory().post(
+            "/accounts/password/reset/",
+            data={"email": "user@example.com"},
+        )
+        form = CaptchaResetPasswordForm(data={"email": "user@example.com"}, request=request)
+        self.assertFalse(form.is_valid())
+        self.assertIn("captcha", form.errors)
+
     @override_settings(RECAPTCHA_REQUIRED=False, AUTH_RATE_LIMIT_MAX_ATTEMPTS=1)
     def test_rate_limit_rejects_after_threshold(self):
         request = RequestFactory().post("/accounts/password/reset/", data={})
@@ -36,6 +59,18 @@ class AuthPolicyTests(SimpleTestCase):
             form = CaptchaResetPasswordForm(request=request)
             with self.assertRaises(ValidationError):
                 form._check_rate_limit()
+
+    @override_settings(RECAPTCHA_REQUIRED=False, AUTH_RATE_LIMIT_MAX_ATTEMPTS=10)
+    def test_rate_limit_recreates_window_when_key_expires_between_cache_ops(self):
+        request = RequestFactory().post(
+            "/accounts/password/reset/",
+            data={"email": "user@example.com"},
+        )
+        with patch("config.auth_forms.cache.add", side_effect=[False, True]), patch(
+            "config.auth_forms.cache.incr", side_effect=ValueError
+        ):
+            form = CaptchaResetPasswordForm(request=request)
+            form._check_rate_limit()
 
     def test_login_rate_limit_skips_requests_with_field_errors(self):
         request = RequestFactory().post("/accounts/login/", data={})
@@ -128,3 +163,35 @@ class AuthPageTests(TestCase):
         self.assertEqual(response["Location"], reverse("account_reset_password_done"))
         check_rate_limit.assert_called_once()
         self.assertIs(check_rate_limit.call_args.args[0].request, response.wsgi_request)
+
+    @override_settings(RECAPTCHA_REQUIRED=False)
+    def test_login_post_enforces_rate_limit_validation_error(self):
+        with patch.object(
+            CaptchaLoginForm,
+            "_check_rate_limit",
+            autospec=True,
+            side_effect=ValidationError("Too many authentication attempts. Please try again later."),
+        ):
+            response = self.client.post(
+                reverse("account_login"),
+                data={"login": "user@example.com", "password": "invalid-password"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Too many authentication attempts. Please try again later.")
+
+    @override_settings(RECAPTCHA_REQUIRED=False)
+    def test_password_reset_post_enforces_rate_limit_validation_error(self):
+        with patch.object(
+            CaptchaResetPasswordForm,
+            "_check_rate_limit",
+            autospec=True,
+            side_effect=ValidationError("Too many authentication attempts. Please try again later."),
+        ):
+            response = self.client.post(
+                reverse("account_reset_password"),
+                data={"email": "unknown@example.com"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Too many authentication attempts. Please try again later.")
