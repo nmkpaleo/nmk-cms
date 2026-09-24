@@ -1,8 +1,10 @@
 {% load i18n user_tags %}
+{% if user.is_authenticated %}
 <a class="{{ link_class }}" href="{% url 'accession_list' %}">{% trans "Accessions" %}</a>
 <a class="{{ link_class }}" href="{% url 'locality_list' %}">{% trans "Localities" %}</a>
 <a class="{{ link_class }}" href="{% url 'place_list' %}">{% trans "Places" %}</a>
 <a class="{{ link_class }}" href="{% url 'reference_list' %}">{% trans "References" %}</a>
+{% endif %}
 
 {% if user.is_superuser or user|has_group:"Collection Managers" %}
   <div class="{{ dropdown_container_class }}" data-dropdown>

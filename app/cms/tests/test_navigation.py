@@ -24,7 +24,12 @@ class NavigationTemplateTests(TestCase):
 
     def test_navigation_structure_anonymous(self):
         response = self.client.get(reverse("index"))
-        self.assertRedirects(response, f"{reverse('account_login')}?next={reverse('index')}")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, _("Login"))
+        self.assertNotContains(response, _("Accessions"))
+        self.assertNotContains(response, _("Localities"))
+        self.assertNotContains(response, _("Places"))
+        self.assertNotContains(response, _("References"))
 
     def test_navigation_structure_authenticated_regular_user(self):
         user = self._create_user("navtester")
