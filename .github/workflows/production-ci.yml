@@ -2,8 +2,6 @@ name: ci-prod
 
 on:
   push:
-    branches:
-      - 'prod'
     tags:
       - 'v*'
 
@@ -84,7 +82,7 @@ jobs:
           provenance: mode=max
           sbom: true
           build-args: |
-            APP_VERSION=${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
+            APP_VERSION=${{ github.ref_name }}
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_PROJECTNAME }}:latest
             ${{ github.ref_type == 'tag' && format('{0}/{1}:{2}', secrets.DOCKERHUB_USERNAME, secrets.DOCKERHUB_PROJECTNAME, github.ref_name) || '' }}
