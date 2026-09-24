@@ -4,10 +4,13 @@ import ipaddress
 import logging
 
 from allauth.account.adapter import get_adapter
+from allauth.account.internal import flows
+from allauth.account.forms import default_token_generator
 from allauth.account.forms import LoginForm, ResetPasswordForm
 from django import forms
 from django.conf import settings
 from django.core.cache import cache
+from allauth.socialaccount.models import SocialAccount
 from django.core.exceptions import ValidationError
 
 from django_recaptcha.fields import ReCaptchaField
@@ -91,3 +94,24 @@ class CaptchaResetPasswordForm(AbuseProtectionMixin, CaptchaMixin, ResetPassword
             return cleaned_data
         self._check_rate_limit()
         return cleaned_data
+
+    def save(self, request, **kwargs):
+        """Send reset links only to local-password accounts."""
+        orcid_user_ids = set(
+            SocialAccount.objects.filter(provider="orcid", user__in=self.users)
+            .values_list("user_id", flat=True)
+        )
+        local_users = [user for user in self.users if user.pk not in orcid_user_ids]
+        email = self.cleaned_data["email"]
+        token_generator = kwargs.get("token_generator", default_token_generator)
+        if local_users or not self.users:
+            flows.password_reset.request_password_reset(request, email, local_users, token_generator)
+        adapter = get_adapter()
+        for user in self.users:
+            if user.pk in orcid_user_ids:
+                adapter.send_mail(
+                    "account/email/orcid_password_reset_not_applicable",
+                    email,
+                    {"user": user, "request": request},
+                )
+        return email

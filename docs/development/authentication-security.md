@@ -24,3 +24,7 @@ The Django cache limiter is defense in depth. Use a shared production cache (for
 ## Verification
 
 Unauthenticated password-change requests must be redirected to login and must not change an account. Password-change POSTs must continue to include Django's CSRF token and allauth's current-password validation.
+
+### Provider-aware password reset
+
+Password reset requests retain a generic browser response. Local-password accounts receive the normal reset link. Users linked to the ORCID provider receive an explanatory message directing them to ORCID sign-in and recovery, and no reset token is created for them.

@@ -2,6 +2,9 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.core.exceptions import ValidationError
+from django.core import mail
+from django.contrib.auth import get_user_model
+from allauth.socialaccount.models import SocialAccount
 from django.test import RequestFactory, SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 
@@ -15,6 +18,21 @@ class AuthPolicyTests(TestCase):
 
     def test_orcid_signup_is_allowed(self):
         self.assertTrue(OrcidSocialAccountAdapter().is_open_for_signup(None, SimpleNamespace(account=SimpleNamespace(provider="orcid"))))
+
+    @override_settings(RECAPTCHA_REQUIRED=False)
+    def test_orcid_password_reset_sends_explanatory_email_without_reset_link(self):
+        user = get_user_model().objects.create_user(username="orcid-user", email="orcid@example.com")
+        user.set_unusable_password()
+        user.save(update_fields=["password"])
+        SocialAccount.objects.create(user=user, provider="orcid", uid="0000-0000")
+        request = RequestFactory().post("/accounts/password/reset/")
+        form = CaptchaResetPasswordForm(data={"email": "orcid@example.com"}, request=request)
+        self.assertTrue(form.is_valid())
+        form.save(request)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("ORCID", mail.outbox[0].subject)
+        self.assertIn("uses ORCID", mail.outbox[0].body)
+        self.assertNotIn("password-reset/", mail.outbox[0].body)
 
     @override_settings(RECAPTCHA_REQUIRED=False)
     def test_captcha_is_not_added_without_keys(self):
