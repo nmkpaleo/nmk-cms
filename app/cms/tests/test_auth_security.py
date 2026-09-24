@@ -181,6 +181,7 @@ class AuthPageTests(TestCase):
         self.assertEqual(response["Location"], reverse("account_reset_password_done"))
         check_rate_limit.assert_called_once()
         self.assertIs(check_rate_limit.call_args.args[0].request, response.wsgi_request)
+        self.assertEqual(mail.outbox, [])
 
     @override_settings(RECAPTCHA_REQUIRED=False)
     def test_login_post_enforces_rate_limit_validation_error(self):

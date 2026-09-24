@@ -27,4 +27,4 @@ Unauthenticated password-change requests must be redirected to login and must no
 
 ### Provider-aware password reset
 
-Password reset requests retain a generic browser response. Local-password accounts receive the normal reset link. Users linked to the ORCID provider receive an explanatory message directing them to ORCID sign-in and recovery, and no reset token is created for them.
+Password reset requests retain a generic browser response and send no email for unknown addresses. Local-password accounts receive the normal reset link. Users linked to the ORCID provider receive an explanatory message directing them to ORCID sign-in and recovery, and no reset token is created for them.

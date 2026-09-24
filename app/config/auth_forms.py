@@ -104,7 +104,7 @@ class CaptchaResetPasswordForm(AbuseProtectionMixin, CaptchaMixin, ResetPassword
         local_users = [user for user in self.users if user.pk not in orcid_user_ids]
         email = self.cleaned_data["email"]
         token_generator = kwargs.get("token_generator", default_token_generator)
-        if local_users or not self.users:
+        if local_users:
             flows.password_reset.request_password_reset(request, email, local_users, token_generator)
         adapter = get_adapter()
         for user in self.users:

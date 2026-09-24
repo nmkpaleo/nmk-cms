@@ -17,4 +17,4 @@ The public login, signup, and password management screens now share the same W3.
 
 ### Password reset
 
-Password reset applies to local-password accounts. Accounts that sign in with ORCID receive an email explaining that they should use ORCID sign-in and recovery instead; no local password-reset link is generated.
+Password reset applies to local-password accounts. Unknown email addresses receive no email, while the browser response remains generic. Accounts that sign in with ORCID receive an email explaining that they should use ORCID sign-in and recovery instead; no local password-reset link is generated.
