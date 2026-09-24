@@ -15,6 +15,7 @@ Including another URLconf
 """
 
 from django.contrib import admin
+from django.contrib.auth.decorators import login_required
 from django.conf import settings
 from django.conf.urls.static import static
 from django.urls import include, path
@@ -41,7 +42,7 @@ urlpatterns = [
     path('accounts/password/reset/', RequestAwarePasswordResetView.as_view(), name='account_reset_password'),
     path('', include('cms.urls')),
     path('accounts/', include('allauth.urls')),
-    path('', index, name='index'),
+    path('', login_required(index), name='index'),
     path('', base_generic, name='base_generic'),
     
     

@@ -42,3 +42,7 @@ Group membership controls which features appear for the user inside the site.
 
 Refer to the [User Rights](../user-rights.md) guide for a complete summary of the capabilities each role provides.
 
+
+### Researchers
+
+Assign the **Researchers** group manually to users who should be allowed to create accession comments. ORCID authentication does not assign this group automatically.
