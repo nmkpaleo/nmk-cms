@@ -65,10 +65,7 @@ class AccessionDetailTemplateTests(TestCase):
     def test_comments_section_hidden_for_anonymous_users(self):
         response = self.client.get(reverse("accession_detail", args=[self.accession.pk]))
 
-        self.assertEqual(response.status_code, 200)
-        body = response.content.decode()
-        self.assertNotIn("accession-comments-heading", body)
-        self.assertNotIn(self.comment.comment, body)
+        self.assertEqual(response.status_code, 302)
 
     def test_comments_section_visible_for_authenticated_users(self):
         self.client.force_login(self.user)
@@ -81,6 +78,8 @@ class AccessionDetailTemplateTests(TestCase):
         self.assertIn(self.comment.comment, body)
 
     def test_reference_titles_link_to_reference_detail_page(self):
+        self.client.force_login(self.user)
+
         response = self.client.get(reverse("accession_detail", args=[self.accession.pk]))
 
         self.assertEqual(response.status_code, 200)
@@ -116,10 +115,7 @@ class LocalityDetailHeadingTests(TestCase):
     def test_heading_for_anonymous_users(self):
         response = self.client.get(reverse("locality_detail", args=[self.locality.pk]))
 
-        self.assertEqual(response.status_code, 200)
-        body = response.content.decode()
-        self.assertIn("Associated published accessions", body)
-        self.assertNotIn("Associated accessions", body)
+        self.assertEqual(response.status_code, 302)
 
     def test_heading_for_authenticated_users(self):
         self.client.force_login(self.user)

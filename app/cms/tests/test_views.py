@@ -118,6 +118,7 @@ def create_taxon(
 
 
 def test_locality_list_includes_geological_times_and_accession_counts(client):
+    client.force_login(User.objects.create_user(username="catalogue-viewer"))
     miocene = create_locality(
         abbreviation="MI",
         name="Miocene Site",
@@ -189,6 +190,7 @@ def test_locality_list_keeps_multiselect_geological_time_filters_on_pagination(c
 
 
 def test_accession_list_keeps_filters_on_pagination_and_page_two_results(client):
+    client.force_login(User.objects.create_user(username="catalogue-viewer"))
     filtered_locality = create_locality(abbreviation="AF", name="Accession Filtered")
     other_locality = create_locality(abbreviation="AO", name="Accession Other")
 
@@ -243,6 +245,7 @@ def test_locality_print_view_orders_two_columns_and_shows_legend(client):
 
 
 def test_locality_detail_displays_geological_times(client):
+    client.force_login(User.objects.create_user(username="catalogue-viewer"))
     locality = create_locality(
         abbreviation="LP",
         name="Loop",
@@ -464,6 +467,7 @@ def test_accession_row_detail_hides_print_button_for_read_only_users(client):
 
 
 def test_accession_detail_hides_storage_column_for_read_only_users(client):
+    client.force_login(User.objects.create_user(username="catalogue-viewer"))
     locality = create_locality(abbreviation="AD", name="Accession Delta")
     accession = create_accession(locality=locality, specimen_no=107)
     create_accession_row(accession=accession, specimen_suffix="G")
