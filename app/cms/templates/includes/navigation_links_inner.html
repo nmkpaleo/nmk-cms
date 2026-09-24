@@ -3,7 +3,6 @@
 <a class="{{ link_class }}" href="{% url 'locality_list' %}">{% trans "Localities" %}</a>
 <a class="{{ link_class }}" href="{% url 'place_list' %}">{% trans "Places" %}</a>
 <a class="{{ link_class }}" href="{% url 'reference_list' %}">{% trans "References" %}</a>
-<a class="{{ link_class }}" href="{% url 'media_licensing' %}">{% trans "Media licensing" %}</a>
 
 {% if user.is_superuser or user|has_group:"Collection Managers" %}
   <div class="{{ dropdown_container_class }}" data-dropdown>
