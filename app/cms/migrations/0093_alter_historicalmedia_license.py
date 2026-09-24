@@ -1,4 +1,4 @@
-﻿from django.db import migrations, models
+from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
@@ -12,7 +12,7 @@ class Migration(migrations.Migration):
                 max_length=30,
                 choices=[
                     ("CC0", "Public Domain (CC0)"),
-                    ("CC_BY", "Creative Commons Attribution 4.0 International (CC BY 4.0)"),
+                    ("CC_BY", "Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)"),
                     ("CC_BY_SA", "Creative Commons - Attribution-ShareAlike (CC BY-SA)"),
                     ("CC_BY_NC", "Creative Commons - Attribution-NonCommercial (CC BY-NC)"),
                     ("CC_BY_ND", "Creative Commons - Attribution-NoDerivatives (CC BY-ND)"),
@@ -27,7 +27,7 @@ class Migration(migrations.Migration):
                     ("SHAREWARE", "Shareware/Donationware"),
                     ("EULA", "End-User License Agreement (EULA)"),
                 ],
-                default="CC_BY",
+                default="CC_BY_NC",
                 help_text="License information for the media file",
             ),
         ),
