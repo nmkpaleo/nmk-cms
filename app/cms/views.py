@@ -1903,6 +1903,10 @@ class FieldSlipListView(LoginRequiredMixin, UserPassesTestMixin, FilterView):
             name__in=["Collection Managers", "Curators"]
         ).exists()
 
+class MediaLicensingView(TemplateView):
+    template_name = "cms/media_licensing.html"
+
+
 class AccessionDetailView(DetailView):
     model = Accession
     template_name = 'cms/accession_detail.html'
