@@ -18,9 +18,9 @@ class Migration(migrations.Migration):
                 max_length=30,
                 choices=[
                     ("CC0", "Public Domain (CC0)"),
-                    ("CC_BY", "Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)"),
+                    ("CC_BY", "Creative Commons - Attribution (CC BY)"),
                     ("CC_BY_SA", "Creative Commons - Attribution-ShareAlike (CC BY-SA)"),
-                    ("CC_BY_NC", "Creative Commons - Attribution-NonCommercial (CC BY-NC)"),
+                    ("CC_BY_NC", "Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)"),
                     ("CC_BY_ND", "Creative Commons - Attribution-NoDerivatives (CC BY-ND)"),
                     ("CC_BY_NC_SA", "Creative Commons - Attribution-NonCommercial-ShareAlike (CC BY-NC-SA)"),
                     ("CC_BY_NC_ND", "Creative Commons - Attribution-NonCommercial-NoDerivatives (CC BY-NC-ND)"),
