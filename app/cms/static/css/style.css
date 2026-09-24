@@ -16,7 +16,11 @@
 .site-navigation .nav-items {
     display: flex;
     align-items: center;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 0.5rem;
+    min-width: 0;
     margin-left: auto;
 }
 

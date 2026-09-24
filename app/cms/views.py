@@ -1028,9 +1028,19 @@ def can_manage_places(user):
 
 
 def is_public_user(user):
-    if not user.is_authenticated:
-        return True
-    return user.groups.filter(name__iexact="Public").exists()
+    """Return whether a signed-in user has public catalogue visibility."""
+    return bool(getattr(user, "is_authenticated", False)) and not (
+        user.is_superuser or user.groups.filter(
+            name__in=["Collection Managers", "Curators"]
+        ).exists()
+    )
+
+
+def is_researcher(user):
+    """Return whether an administrator assigned the user to Researchers."""
+    return bool(getattr(user, "is_authenticated", False)) and (
+        user.is_superuser or user.groups.filter(name="Researchers").exists()
+    )
 
 
 def prefetch_accession_related(qs):
@@ -1907,6 +1917,7 @@ class MediaLicensingView(TemplateView):
     template_name = "cms/media_licensing.html"
 
 
+@method_decorator(login_required, name="dispatch")
 class AccessionDetailView(DetailView):
     model = Accession
     template_name = 'cms/accession_detail.html'
@@ -2007,6 +2018,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic import ListView
 from django_filters.views import FilterView
 
+@method_decorator(login_required, name="dispatch")
 class AccessionListView(FilterView):
     model = Accession
     context_object_name = 'accessions'
@@ -2462,6 +2474,7 @@ class AccessionWizard(LoginRequiredMixin, CollectionManagerAccessMixin, SessionW
 
         return redirect('accession_detail', pk=accession.pk)
     
+@method_decorator(login_required, name="dispatch")
 class ReferenceDetailView(DetailView):
     model = Reference
     template_name = 'cms/reference_detail.html'
@@ -2520,6 +2533,7 @@ class ReferenceDetailView(DetailView):
         context["accession_entries"] = accession_entries
         return context
 
+@method_decorator(login_required, name="dispatch")
 class ReferenceListView(FilterView):
     model = Reference
     template_name = 'cms/reference_list.html'
@@ -4645,6 +4659,7 @@ def MediaExpertQCWizard(request, pk):
     return render(request, "cms/qc/expert_wizard.html", context)
 
 
+@method_decorator(login_required, name="dispatch")
 class LocalityListView(FilterView):
     model = Locality
     template_name = 'cms/locality_list.html'
@@ -4700,6 +4715,7 @@ class LocalityPrintView(TemplateView):
         return context
 
 
+@method_decorator(login_required, name="dispatch")
 class LocalityDetailView(DetailView):
     model = Locality
     template_name = 'cms/locality_detail.html'
@@ -4737,6 +4753,7 @@ class LocalityDetailView(DetailView):
 
 
 
+@method_decorator(login_required, name="dispatch")
 class PlaceListView(FilterView):
     model = Place
     template_name = 'cms/place_list.html'
@@ -4745,6 +4762,7 @@ class PlaceListView(FilterView):
     filterset_class = PlaceFilter
 
 
+@method_decorator(login_required, name="dispatch")
 class PlaceDetailView(DetailView):
     model = Place
     template_name = 'cms/place_detail.html'
@@ -6006,7 +6024,7 @@ def add_accession_row(request, accession_id):
     return render(request, 'cms/add_accession_row.html', {'form': form, 'accession': accession})
 
 @login_required
-@user_passes_test(is_collection_manager)
+@user_passes_test(lambda user: is_collection_manager(user) or is_researcher(user))
 def add_comment_to_accession(request, accession_id):
     accession = get_object_or_404(Accession, id=accession_id)
 

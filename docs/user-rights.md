@@ -1,3 +1,7 @@
+## Authentication and catalogue visibility
+
+Anonymous visitors can access only authentication-related pages and must sign in before browsing the catalogue. Authenticated users without privileged groups can view published catalogue content. ORCID login does not grant Researcher rights. Researchers are assigned manually by administrators and may create accession comments.
+
 # User Rights
 
 This guide outlines which navigation entries are visible to each role and what create/read/update/delete (CRUD) actions are available in the public site. Superusers can always fall back to the Django admin for operations that are not surfaced in the application UI.
