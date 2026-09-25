@@ -362,11 +362,20 @@ class CollectionResource(resources.ModelResource):
         export_order = ("abbreviation", "description")
 
 
+class CaseSensitiveElementWidget(ForeignKeyWidget):
+    def clean(self, value, row=None, **kwargs):
+        if value in (None, ""):
+            return None
+        matches = [element for element in self.get_queryset(value, row, **kwargs) if element.name == value]
+        if not matches:
+            raise self.model.DoesNotExist
+        return matches[0]
+
 class ElementResource(resources.ModelResource):
     parent_element = fields.Field(
         column_name="parent_element",
         attribute="parent_element",
-        widget=ForeignKeyWidget(Element, "name"),
+        widget=CaseSensitiveElementWidget(Element, "name"),
     )
     name = fields.Field(column_name="name", attribute="name")
 
@@ -377,6 +386,25 @@ class ElementResource(resources.ModelResource):
         fields = ("parent_element", "name")  # Fields to import/export
         import_id_fields = ["name"]  # Use `name` as the unique identifier
 
+    def get_instance(self, instance_loader, row):
+        """Resolve the import id with Python-level case-sensitive matching.
+
+        Some database collations make an ``exact`` query case-insensitive. Do
+        the final comparison in Python so importing ``Femur`` cannot update an
+        existing ``femur`` row.
+        """
+        name = row.get("name")
+        if name is None:
+            return None
+        return next(
+            (
+                element
+                for element in self.get_queryset().filter(name=name)
+                if element.name == name
+            ),
+            None,
+        )
+
     def before_import_row(self, row, **kwargs):
         """
         Ensures the parent_element exists or creates it if not found.
@@ -384,7 +412,14 @@ class ElementResource(resources.ModelResource):
         parent_name = row.get("parent_element")
         if parent_name:
             # Try to find the parent element by name
-            parent_element = Element.objects.filter(name=parent_name).first()
+            parent_element = next(
+                (
+                    element
+                    for element in Element.objects.filter(name=parent_name)
+                    if element.name == parent_name
+                ),
+                None,
+            )
             if not parent_element:
                 # Create a new parent element if not found
                 parent_element = Element.objects.create(name=parent_name)

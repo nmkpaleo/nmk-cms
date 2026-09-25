@@ -14,3 +14,7 @@ The public login, signup, and password management screens now share the same W3.
 1. If the layout looks unstyled, confirm the CDN-hosted W3.CSS stylesheet is reachable from your network. The `<head>` of the page should contain `https://www.w3schools.com/w3css/4/w3.css`.
 2. If the ORCID button is missing, ensure the ORCID provider is enabled in `INSTALLED_APPS` and a Social Application entry is linked to the default Site in Django admin.
 3. When editing templates, rely on the `_auth_layout.html` partial to avoid duplicating markup—only the `auth_layout_title`, `auth_layout_subtitle`, and `auth_layout_body_template` context values should change per view.
+
+### Password reset
+
+Password reset applies to local-password accounts. Unknown email addresses receive no email, while the browser response remains generic. Accounts that sign in with ORCID receive an email explaining that they should use ORCID sign-in and recovery instead; no local password-reset link is generated.

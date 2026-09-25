@@ -35,6 +35,7 @@ from cms.views import (
     GenerateAccessionBatchView,
     AccessionListView,
     AccessionDetailView,
+    MediaLicensingView,
     ReferenceListView,
     ReferenceDetailView,
     reference_create,
@@ -101,6 +102,7 @@ from cms.views import media_report_view
 from .admin import taxonomy_sync_apply_view, taxonomy_sync_preview_view
 
 urlpatterns = [
+    path('media-licensing/', MediaLicensingView.as_view(), name='media_licensing'),
     path('reports/accession-distribution/', accession_distribution_report, name='accession_distribution_report'),
     path('reports/media/', media_report_view, name='media_report'),
     path('reports/taxonomy-identification-cleanup/', taxonomy_identification_cleanup_report, name='taxonomy_identification_cleanup_report'),
