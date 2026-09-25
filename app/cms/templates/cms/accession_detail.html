@@ -33,7 +33,7 @@
             <span class="w3-margin-left">{% trans "Comments" %}</span>
           </h2>
         </div>
-        {% if user|has_group:"Collection Managers" %}
+        {% if user.is_superuser or user|has_group:"Collection Managers" or user|has_group:"Researchers" %}
           <div class="w3-col s12 m6 w3-right-align">
             <a href="{% url 'accession_add_comment' accession.id %}" class="w3-button w3-green w3-round">
               <i class="fa-solid fa-plus" aria-hidden="true"></i>

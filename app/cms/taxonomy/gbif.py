@@ -87,8 +87,13 @@ class GbifClient:
             if not isinstance(raw_canonical, str):
                 raise TypeError("GBIF canonical name must be a string")
             canonical = normalize_taxon_label(raw_canonical)
+            requested_rank = normalize_taxon_label(rank).lower()
+            usage_rank = usage.get("rank", "")
+            if not isinstance(usage_rank, str):
+                raise TypeError("GBIF returned an invalid taxon rank")
+            # A blank source rank is intentionally unranked; GBIF rank is authoritative.
             if (canonical.lower() != normalize_taxon_label(name).lower()
-                    or (rank and usage.get("rank", "").lower() != rank.lower())):
+                    or (requested_rank and usage_rank.lower() != requested_rank)):
                 raise GbifMatchError("GBIF did not return an exact name/rank match")
             classification = {}
             for item in payload.get("classification", []):
@@ -98,7 +103,7 @@ class GbifClient:
                 if not isinstance(raw_class_rank, str) or not isinstance(raw_class_name, str):
                     raise TypeError("GBIF classification names and ranks must be strings")
                 classification[raw_class_rank.lower()] = normalize_taxon_label(raw_class_name)
-            if usage.get("rank") == "CLASS":
+            if usage_rank.lower() == "class":
                 classification["class"] = canonical
             if not classification.get("class"):
                 raise GbifMatchError("GBIF match has no taxonomic class")
