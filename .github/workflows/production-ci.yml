@@ -5,6 +5,8 @@ on:
     tags:
       - 'v*'
 
+  workflow_dispatch:
+
 permissions:
   contents: read
 
@@ -85,4 +87,4 @@ jobs:
             APP_VERSION=${{ github.ref_name }}
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_PROJECTNAME }}:latest
-            ${{ github.ref_type == 'tag' && format('{0}/{1}:{2}', secrets.DOCKERHUB_USERNAME, secrets.DOCKERHUB_PROJECTNAME, github.ref_name) || '' }}
+            ${{ format('{0}/{1}:{2}', secrets.DOCKERHUB_USERNAME, secrets.DOCKERHUB_PROJECTNAME, github.ref_name) }}
