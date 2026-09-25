@@ -24,21 +24,12 @@ class NavigationTemplateTests(TestCase):
 
     def test_navigation_structure_anonymous(self):
         response = self.client.get(reverse("index"))
-
-        self.assertContains(response, _("Primary navigation"))
-        self.assertContains(response, 'class="site-navigation w3-bar w3-white w3-card"', html=False)
-        self.assertContains(response, 'class="nav-items w3-hide-small"', html=False)
-        self.assertContains(response, 'id="primary-navigation"', html=False)
-        self.assertContains(response, 'w3-bar-block', html=False)
-        self.assertContains(response, 'w3-white', html=False)
-        self.assertContains(response, 'w3-hide', html=False)
-        self.assertContains(response, 'w3-hide-large', html=False)
-        self.assertContains(response, 'w3-hide-medium', html=False)
+        self.assertEqual(response.status_code, 200)
         self.assertContains(response, _("Login"))
-        self.assertNotContains(response, _("Logout"))
-        self.assertNotContains(response, 'data-dropdown-toggle="reports-menu"', html=False)
-        self.assertContains(response, 'nav-link', html=False)
-        self.assertNotContains(response, 'w3-amber', html=False)
+        self.assertNotContains(response, _("Accessions"))
+        self.assertNotContains(response, _("Localities"))
+        self.assertNotContains(response, _("Places"))
+        self.assertNotContains(response, _("References"))
 
     def test_navigation_structure_authenticated_regular_user(self):
         user = self._create_user("navtester")

@@ -64,7 +64,7 @@ def create_media(
         logger.info("Processing uploaded media %s without a filename timestamp", path)
     media = Media(
         type="photo",
-        license="CC0",
+        license="CC_BY_NC",
         rights_holder="National Museums of Kenya",
         scanning=scan,
     )
@@ -78,7 +78,7 @@ def create_manual_qc_media(path: Path) -> None:
     logger.info("Processing manual QC media %s", path)
     media = Media(
         type="photo",
-        license="CC0",
+        license="CC_BY_NC",
         rights_holder="National Museums of Kenya",
     )
     media.media_location.name = str(path.relative_to(settings.MEDIA_ROOT))

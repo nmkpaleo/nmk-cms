@@ -567,6 +567,7 @@
             <i class="fa-solid fa-photo-film" aria-hidden="true"></i>
             <span class="w3-margin-left">{% trans "Media" %}</span>
           </h2>
+          <p class="w3-small"><a href="{% url 'media_licensing' %}">{% trans "Learn about NMK media licensing and attribution" %}</a></p>
         </div>
         {% if not preview_mode and user.is_authenticated %}
           {% if user|has_group:"Collection Managers" %}

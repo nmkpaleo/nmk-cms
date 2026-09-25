@@ -1688,7 +1688,8 @@ class TaxonomyImportAdmin(HistoricalImportExportAdmin):
     readonly_fields = ("report_json",)
 
 # User Model
-class UserAdmin(HistoricalImportExportAdmin):
+class UserAdmin(auth_admin.UserAdmin, HistoricalImportExportAdmin):
+    """User administration with Django's built-in password management."""
     resource_class = UserResource
     list_display = (
         "username",
