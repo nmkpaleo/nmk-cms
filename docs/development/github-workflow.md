@@ -6,15 +6,17 @@ compare the live settings with this document.
 
 ## Branch and pull-request workflow
 
-1. Create a focused branch from the latest `main`.
-2. Open a pull request into `main` and complete its risk, validation, and
-   rollback notes.
-3. Keep the branch synchronized with `main` when GitHub reports it as out of
-   date.
-4. Wait for `CI / test` and CodeQL to pass.
-5. Obtain at least one approval from someone other than the author and resolve
+1. Create a focused branch from the latest main.
+2. Open a draft pull request into main or prod and complete its risk,
+   validation, and rollback notes.
+3. Keep the branch synchronized with its target branch when GitHub reports it
+   as out of date.
+4. Wait for CI / test and CodeQL to pass; fix failures and rerun them.
+5. Mark the pull request ready and request reviewers only after the required
+   checks pass.
+6. Obtain at least one approval from someone other than the author and resolve
    every review conversation.
-6. Merge through the normal pull-request path. Do not push directly to `main`
+7. Merge through the normal pull-request path. Do not push directly to main`r
    or use administrator bypass for routine work.
 
 Two approvals are not normally required. CODEOWNER review applies only to the
@@ -26,7 +28,7 @@ pull requests.
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs for pull requests into `main`, pushes to `main`,
+`.github/workflows/ci.yml` runs for pull requests into `main` and `prod`, pushes to `main`,
 and manual dispatches. It uses a read-only token and does not consume repository
 secrets. The `test` job runs:
 

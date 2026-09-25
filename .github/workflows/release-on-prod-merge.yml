@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
   pull-requests: read
 
 jobs:
@@ -79,6 +80,12 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "$NEXT_TAG" -m "Release $NEXT_TAG"
           git push origin "$NEXT_TAG"
+
+      - name: Dispatch production image publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEXT_TAG: ${{ steps.version.outputs.tag }}
+        run: gh workflow run production-ci.yml --ref "$NEXT_TAG"
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3

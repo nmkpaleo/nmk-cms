@@ -1,3 +1,7 @@
+## Review timing
+
+Open new pull requests as drafts. Let the required CI and CodeQL checks finish successfully, fix any failures, then mark the pull request ready and request reviewers. This applies to both main and prod.
+
 ## Summary
 
 Describe the problem and the approach taken.
@@ -14,6 +18,7 @@ change can be reversed.
 ## Checklist
 
 - [ ] The change is focused and contains no unrelated edits.
+- [ ] Required CI and CodeQL checks passed before reviewers were requested.
 - [ ] Tests were added or updated where feasible.
 - [ ] Relevant local tests and checks pass.
 - [ ] User, administrator, or developer documentation was updated if needed.
