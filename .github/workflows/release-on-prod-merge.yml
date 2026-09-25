@@ -85,7 +85,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           NEXT_TAG: ${{ steps.version.outputs.tag }}
-        run: gh workflow run production-ci.yml --ref "$NEXT_TAG"
+        run: gh workflow run production-ci.yml --ref "$NEXT_TAG" -f release_tag="$NEXT_TAG"
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
