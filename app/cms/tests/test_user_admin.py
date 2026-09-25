@@ -29,3 +29,4 @@ class UserAdminPasswordChangeTests(TestCase):
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password("New-password-123!"))
         self.assertFalse(self.user.check_password("Old-password-123!"))
+
