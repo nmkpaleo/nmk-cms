@@ -197,11 +197,14 @@ def test_gbif_request_uses_checklist_rank_and_timeout():
     client = GbifClient(get)
     client.match("Struthio", "genus")
     client.match("STRUTHIO", "GENUS")
-    assert len(calls) == 1
+    client.match("struthio")
+    assert len(calls) == 2
     query = parse_qs(urlparse(calls[0][0]).query)
     assert query["checklistKey"] == ["7ddf754f-d193-4cc9-b351-99906754a03b"]
     assert query["taxonRank"] == ["GENUS"]
     assert calls[0][1]["timeout"] == 15
+    query = parse_qs(urlparse(calls[1][0]).query)
+    assert query["scientificName"] == ["Struthio"]
 
 
 @override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")
@@ -383,7 +386,7 @@ def test_gbif_sync_uses_only_the_current_identification():
     preview = service(payload(), gbif_get=http_get).preview()
 
     assert preview.counts["created"] == 1
-    assert queried_names == ["struthio"]
+    assert queried_names == ["Struthio"]
 
 
 @override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")

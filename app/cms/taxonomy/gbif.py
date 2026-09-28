@@ -56,7 +56,13 @@ class GbifClient:
     def match(self, name, rank=""):
         key = (name.lower(), rank.lower())
         if key not in self.results:
-            params = {"scientificName": name, "checklistKey": self.checklist}
+            # GBIF is case-sensitive for some single-token names such as aves and struthio.
+            # Local taxonomy identity remains case-insensitive, but outbound queries use
+            # conventional scientific-name capitalization.
+            query_name = name
+            if not rank and " " not in name:
+                query_name = name[:1].upper() + name[1:]
+            params = {"scientificName": query_name, "checklistKey": self.checklist}
             if rank:
                 params["taxonRank"] = rank.upper()
             response = self.http_get(
