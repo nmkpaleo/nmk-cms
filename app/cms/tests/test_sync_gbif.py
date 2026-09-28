@@ -386,7 +386,7 @@ def test_gbif_sync_uses_only_the_current_identification():
     preview = service(payload(), gbif_get=http_get).preview()
 
     assert preview.counts["created"] == 1
-    assert queried_names == ["struthio"]
+    assert queried_names == ["Struthio"]
 
 
 @override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")
