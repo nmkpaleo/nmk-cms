@@ -3550,6 +3550,7 @@ class MediaExpertQCWizardTests(TestCase):
         self.assertEqual(self.media.qc_status, Media.QCStatus.APPROVED)
         self.assertIsNotNone(self.media.accession)
         self.assertEqual(Accession.objects.count(), 1)
+        self.assertEqual(self.media.accession.accessioned_by, self.expert)
         comment = MediaQCComment.objects.get()
         self.assertIn("Looks good", comment.comment)
 

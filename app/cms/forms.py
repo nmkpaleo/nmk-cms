@@ -165,8 +165,12 @@ class FieldSlipFilterForm(BaseW3Form):
 
 
 class BaseW3ModelForm(W3StyleMixin, forms.ModelForm):
+    AUDIT_FIELDS = {"created_on", "modified_on", "created_by", "modified_by"}
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        for field_name in self.AUDIT_FIELDS.intersection(self.fields):
+            self.fields[field_name].disabled = True
         self.label_suffix = ""
         self._apply_w3_styles()
 

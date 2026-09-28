@@ -512,12 +512,20 @@ class MergeAdminActionMixin:
     merge_records_action.allowed_permissions = ("change",)
 
 
-class HistoricalImportExportAdmin(SimpleHistoryAdmin, ImportExportModelAdmin):
+class _BaseModelAuditAdminMixin:
+    AUDIT_FIELDS = ("created_on", "modified_on", "created_by", "modified_by")
+
+    def get_readonly_fields(self, request, obj=None):
+        inherited = super().get_readonly_fields(request, obj)
+        return tuple(dict.fromkeys((*inherited, *self.AUDIT_FIELDS)))
+
+
+class HistoricalImportExportAdmin(_BaseModelAuditAdminMixin, SimpleHistoryAdmin, ImportExportModelAdmin):
     """Base admin class combining simple history and import-export."""
     pass
 
 
-class HistoricalAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
+class HistoricalAdmin(_BaseModelAuditAdminMixin, SimpleHistoryAdmin, admin.ModelAdmin):
     """Base admin class for models using simple history."""
     pass
 

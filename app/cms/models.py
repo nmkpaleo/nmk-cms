@@ -2157,6 +2157,16 @@ class Media(BaseModel):
                 exc = ValidationError({"qc_status": summary})
                 setattr(exc, "conflicts", conflicts)
                 raise exc
+            if user and created:
+                accession_ids = [
+                    record.get("accession_id")
+                    for record in created
+                    if record.get("accession_id")
+                ]
+                if accession_ids:
+                    Accession.objects.filter(pk__in=accession_ids).update(
+                        accessioned_by=user
+                    )
 
         if new_status == old_status:
             if note:
