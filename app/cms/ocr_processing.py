@@ -1853,6 +1853,10 @@ def _resolve_nature_element(name: str | None, verbatim: str | None) -> Element |
     if direct:
         return direct
 
+    leaf_matches = list(Element.objects.filter(name__iexact=leaf))
+    if len(leaf_matches) == 1:
+        return leaf_matches[0]
+
     aliases = {
         'md': 'mandible', 'mand.': 'mandible',
         'max': 'maxilla', 'max.': 'maxilla',

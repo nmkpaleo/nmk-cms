@@ -189,7 +189,7 @@ def parse_body_parts(value: Any) -> list[str]:
     text = coerce_stripped(value)
     if not text:
         return []
-    parts = [part.strip() for part in re.split(r"[;,|]\s*|\s+(?:and|&)\s+|\s+\+\s*", text, flags=re.IGNORECASE) if part.strip()]
+    parts = [part.strip() for part in re.split(r"[;,|]\s*|\s+and\s+|\s*&\s*(?!(?:d?[IiCcPpMm][1-4])\b)|\s+\+\s*", text, flags=re.IGNORECASE) if part.strip()]
     return parts or [text]
 
 
@@ -255,7 +255,7 @@ BODY_PART_LABEL_RE = re.compile(r"^(?P<label>[A-Za-z0-9]+)\s*[:\-]\s*(?P<body>.+
 
 INLINE_BODY_PART_LABEL_RE = re.compile(
     r"(?:(?<=^)|(?<=[\s;,|]))"
-    r"(?:\((?P<label1>[A-Za-z0-9]+)\)\s+|(?P<label2>[A-Za-z0-9]+)\s*(?:[:=\-])\s*|(?P<label3>[A-Za-z])\.\s+|(?P<label4>[A-Za-z])\s*,\s+)",
+    r"(?:\((?P<label1>[A-Za-z0-9]+)\)\s+|(?P<label2>[A-Za-z0-9]+)\s*(?:[:=\-])\s*|(?P<label3>[A-KM-QS-Z])\.\s+|(?P<label4>[A-Za-z])\s*,\s+)",
     flags=re.IGNORECASE,
 )
 
