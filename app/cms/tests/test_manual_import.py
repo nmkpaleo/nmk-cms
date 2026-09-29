@@ -12,6 +12,7 @@ from cms.manual_import import (
     build_accession_payload,
     build_reference_entries,
     find_media_for_row,
+    make_identification_entry,
     _split_taxon_and_qualifier,
     import_manual_row,
 )
@@ -865,3 +866,14 @@ def test_import_manual_row_infers_fragment_condition_without_changing_verbatim_e
     assert nature is not None
     assert nature.condition == "Fragment"
     assert nature.verbatim_element == body_part
+
+
+def test_taxon_with_species_novel_and_uncertainty_is_normalized():
+    entry = make_identification_entry(
+        {"taxon": "Pseudotragus ? gentryi sp. nov. | Bovidae | Pseudotragus | ? gentryi"},
+        "Pseudotragus ? gentryi sp. nov. | Bovidae | Pseudotragus | ? gentryi",
+    )
+    assert entry["taxon"]["interpreted"] == "Pseudotragus gentryi"
+    assert entry["taxon_verbatim"]["interpreted"] == "Pseudotragus gentryi"
+    assert entry["identification_qualifier"]["interpreted"] == "sp. nov."
+    assert entry["identification_remarks"]["interpreted"] == "Identification uncertain"

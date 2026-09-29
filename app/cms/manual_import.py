@@ -630,12 +630,21 @@ def _split_taxon_and_qualifier(value: str | None) -> tuple[str | None, str | Non
     tokens = text.split()
     qualifier_tokens: list[str] = []
     base_tokens: list[str] = []
+    index = 0
 
-    for token in tokens:
+    while index < len(tokens):
+        token = tokens[index]
+        if token.lower().rstrip(".") == "sp" and index + 1 < len(tokens) and tokens[index + 1].lower().rstrip(".") == "nov":
+            qualifier_tokens.append("sp. nov.")
+            index += 2
+            continue
         if token.lower() in QUALIFIER_TOKENS:
             qualifier_tokens.append(token if token.endswith(".") else f"{token}.")
+            index += 1
             continue
-        base_tokens.append(token)
+        if token != "?":
+            base_tokens.append(token)
+        index += 1
 
     qualifier = " ".join(qualifier_tokens) or None
     base_taxon = " ".join(base_tokens).strip() or None
@@ -667,6 +676,8 @@ def _extract_lowest_taxon(row: Mapping[str, Any]) -> tuple[str | None, str | Non
         value = coerce_stripped(row.get(key))
         if not value:
             continue
+        if key == "taxon" and "|" in value:
+            value = value.split("|", 1)[0].strip()
         base_taxon, qualifier = _split_taxon_and_qualifier(value)
         base_value = base_taxon or value
         verbatim_identification = " ".join(filter(None, [qualifier, base_value])) if qualifier else base_value
@@ -680,11 +691,14 @@ def make_identification_entry(row: Mapping[str, Any], taxon_value: str | None) -
     resolved_taxon = base_taxon or taxon_value
     resolved_verbatim = taxon_value or verbatim_identification or resolved_taxon
 
+    source_text = " ".join(str(row.get(key) or "") for key in ("taxon", "family", "subfamily", "tribe", "genus", "species"))
+    identification_remarks = "Identification uncertain" if "?" in source_text else None
     return {
         "taxon": make_interpreted_value(resolved_taxon),
         "verbatim_identification": make_interpreted_value(resolved_verbatim),
         "taxon_verbatim": make_interpreted_value(resolved_taxon),
         "identification_qualifier": make_interpreted_value(qualifier),
+        "identification_remarks": make_interpreted_value(identification_remarks),
     }
 
 
