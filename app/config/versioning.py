@@ -17,7 +17,14 @@ def get_application_version() -> str:
     """
 
     configured_version = os.getenv("APP_VERSION", "").strip()
+    commit_hint = (
+        os.getenv("APP_COMMIT", "").strip()
+        or os.getenv("GIT_COMMIT", "").strip()
+        or os.getenv("SOURCE_COMMIT", "").strip()
+    )
     if configured_version:
+        if configured_version.lower() == "dev" and commit_hint:
+            return f"dev-{commit_hint[:12]}"
         return configured_version
 
     for cmd in (
