@@ -249,6 +249,20 @@ def _infer_condition_from_element(value: str | None) -> str | None:
     return None
 
 
+def _infer_portion_from_element(value: str | None) -> str | None:
+    """Infer a canonical portion from common abbreviated wording."""
+
+    text = coerce_stripped(value)
+    if not text:
+        return None
+    matches = re.findall(r"\b(dist(?:al)?\.?|prox(?:imal)?\.?|upper|lower)\b", text, flags=re.IGNORECASE)
+    normalized = {match.lower().rstrip(".") for match in matches}
+    if len(normalized) != 1:
+        return None
+    token = normalized.pop()
+    return {"dist": "Distal", "prox": "Proximal", "upper": "Upper", "lower": "Lower"}.get(token)
+
+
 def _truncate_verbatim_element(
     value: str | None,
     *,
@@ -598,6 +612,9 @@ def build_row_section(
         condition = _infer_condition_from_element(raw_element_value)
         if condition:
             nature_entry["condition"] = make_interpreted_value(condition)
+        portion = _infer_portion_from_element(raw_element_value)
+        if portion:
+            nature_entry["portion"] = make_interpreted_value(portion)
         side_match = None
         if raw_element_value:
             if re.search(r"\b(rt\.?|right)\b", raw_element_value, flags=re.IGNORECASE):

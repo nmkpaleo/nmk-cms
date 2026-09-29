@@ -11,6 +11,7 @@ from cms.manual_import import (
     ManualImportError,
     build_accession_payload,
     build_reference_entries,
+    build_row_section,
     find_media_for_row,
     make_identification_entry,
     _split_taxon_and_qualifier,
@@ -877,3 +878,11 @@ def test_taxon_with_species_novel_and_uncertainty_is_normalized():
     assert entry["taxon_verbatim"]["interpreted"] == "Pseudotragus gentryi"
     assert entry["identification_qualifier"]["interpreted"] == "sp. nov."
     assert entry["identification_remarks"]["interpreted"] == "Identification uncertain"
+@pytest.mark.parametrize(
+    ("body_part", "expected_portion"),
+    [("Lt. dist. h/c frag", "Distal"), ("upper molar", "Upper"), ("lower molar", "Lower")],
+)
+def test_manual_qc_infers_portion_from_element_text(body_part, expected_portion):
+    nature = build_row_section({"body_parts": body_part}, "A")["natures"][0]
+    assert nature["portion"]["interpreted"] == expected_portion
+    assert nature["verbatim_element"]["interpreted"] == body_part
