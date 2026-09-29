@@ -1868,6 +1868,7 @@ def _resolve_nature_element(name: str | None, verbatim: str | None) -> Element |
     words = [aliases.get(word.lower(), word) for word in normalized.split()]
     normalized_text = ' '.join(words).lower()
     candidates: list[tuple[int, Element]] = []
+    anatomical_element_present = bool(re.search(r"\b(?:mandible|md|md\.|maxilla|max\.|skull|cranium)\b", normalized_text, flags=re.IGNORECASE))
     for element in Element.objects.exclude(name='-Undefined'):
         element_leaf = element.name.rsplit('-', 1)[-1].strip()
         element_text_raw = re.sub(r'[^A-Za-z0-9]+', ' ', element_leaf).strip()
@@ -1876,6 +1877,8 @@ def _resolve_nature_element(name: str | None, verbatim: str | None) -> Element |
             continue
         tooth_name = re.fullmatch(r'd?[IiCcPpMm][1-4](?:-[1-4])?', element_text_raw)
         if len(element_text_raw) < 2 and not tooth_name:
+            continue
+        if tooth_name and anatomical_element_present:
             continue
         haystack = normalized if tooth_name else normalized_text
         needle = element_text_raw if tooth_name else element_text
