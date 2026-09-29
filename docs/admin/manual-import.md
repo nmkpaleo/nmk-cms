@@ -2,10 +2,39 @@
 
 Manual QC imports create accessions, identifications, and related records from spreadsheet rows that reference images in `uploads/manual_qc/`.
 
-## Prerequisites
-- Ensure scans were uploaded via **Upload scans** so manual QC JPEGs land in `uploads/manual_qc/` and create corresponding Media entries.
-- Prepare the manual QC spreadsheet with one row per specimen and include the taxonomy columns listed below.
+Manual QC imports create accessions, identifications, and related records from
+spreadsheet rows that reference images in uploads/manual_qc/. The import
+requires two kinds of files: JPEG media files and one tabular QC file. The QC
+file can be a CSV (plain-text file) or an Excel workbook (.xlsx). A plain .txt
+file is not supported unless it is saved as a comma-separated CSV file.
 
+## Prerequisites
+- Complete the manual QC outside the CMS.
+- Name each image with digits only before the extension, for example 1.jpg and 2.jpg.
+- Prepare one CSV or .xlsx file with one row per specimen. Its required id value
+  must match the image filename without the extension: 1 matches 1.jpg.
+- Include the taxonomy columns listed below when creating identifications.
+
+## Upload the media and QC file
+
+1. Log in with an account that has permission to import manual QC.
+2. Open **Upload scans** and select the manually QC-checked JPEG files.
+3. Click **Upload**. Matching files are moved to uploads/manual_qc/ and create Media records.
+4. Open **Manual QC Import**.
+5. In **Manual QC spreadsheet**, choose the CSV or .xlsx file and click **Import data**.
+   For a plain-text source, save it as CSV first; it must have a header row including id.
+6. Check the import summary and download the error report if any rows fail.
+
+Example CSV (save this as a .csv file):
+
+    id,collection_id,genus,species
+    1,KNM,Parapapio,
+    2,KNM,Australopithecus,afarensis
+
+The import finds the JPEG by the id value, marks matched Media records as approved,
+and creates related accession data. Separate 1.txt or 2.txt sidecar files are not
+read by this importer; put the QC results into the CSV/Excel rows or retain the
+text notes outside the CMS according to your record-keeping procedure.
 ## Taxonomy mapping
 Manual imports derive `Identification.taxon_verbatim` from the lowest taxonomic value provided in the spreadsheet. Qualifier tokens are preserved separately in `identification_qualifier` while the verbatim taxon text is stored in `verbatim_identification`.
 
