@@ -1860,7 +1860,7 @@ def _resolve_nature_element(name: str | None, verbatim: str | None) -> Element |
     aliases = {
         'md': 'mandible', 'mand.': 'mandible',
         'max': 'maxilla', 'max.': 'maxilla',
-        'lt': 'left', 'lt.': 'left', 'rt': 'right', 'rt.': 'right',
+        'l': 'left', 'l.': 'left', 'r': 'right', 'r.': 'right', 'lt': 'left', 'lt.': 'left', 'rt': 'right', 'rt.': 'right',
         'prox.': 'proximal', 'dist.': 'distal',
         'wt': 'with', 'wt.': 'with',
     }
