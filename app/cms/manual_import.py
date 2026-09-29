@@ -255,12 +255,12 @@ def _infer_portion_from_element(value: str | None) -> str | None:
     text = coerce_stripped(value)
     if not text:
         return None
-    matches = re.findall(r"\b(dist(?:al)?\.?|prox(?:imal)?\.?|upper|lower)\b", text, flags=re.IGNORECASE)
+    matches = re.findall(r"\b(dist(?:al)?\.?|prox(?:imal)?\.?|upp?(?:er)?\.?|low(?:er)?\.?)\b", text, flags=re.IGNORECASE)
     normalized = {match.lower().rstrip(".") for match in matches}
     if len(normalized) != 1:
         return None
     token = normalized.pop()
-    return {"dist": "Distal", "prox": "Proximal", "upper": "Upper", "lower": "Lower"}.get(token)
+    return {"dist": "Distal", "prox": "Proximal", "upp": "Upper", "upper": "Upper", "low": "Lower", "lower": "Lower"}.get(token)
 
 
 def _truncate_verbatim_element(
