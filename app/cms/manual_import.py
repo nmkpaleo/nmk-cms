@@ -240,6 +240,15 @@ VERBATIM_ELEMENT_MAX_LENGTH = 255
 AERIAL_PHOTO_MAX_LENGTH = 25
 
 
+def _infer_condition_from_element(value: str | None) -> str | None:
+    """Infer a specimen condition from common fragment wording."""
+
+    text = coerce_stripped(value)
+    if text and re.search(r"\bfrag(?:\.|ment(?:s|ed)?)?\b", text, flags=re.IGNORECASE):
+        return "Fragment"
+    return None
+
+
 def _truncate_verbatim_element(
     value: str | None,
     *,
@@ -586,6 +595,9 @@ def build_row_section(
         nature_entry = {
             "verbatim_element": make_interpreted_value(element_value),
         }
+        condition = _infer_condition_from_element(raw_element_value)
+        if condition:
+            nature_entry["condition"] = make_interpreted_value(condition)
         side_match = None
         if raw_element_value:
             if re.search(r"\b(rt\.?|right)\b", raw_element_value, flags=re.IGNORECASE):

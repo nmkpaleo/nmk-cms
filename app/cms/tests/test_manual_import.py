@@ -852,3 +852,16 @@ def test_import_manual_row_uses_placeholder_when_element_missing():
     assert nature is not None
     assert nature.element_id == placeholder.id
     assert nature.verbatim_element == "Novel element description"
+
+@pytest.mark.parametrize("body_part", ["Cranium frag.", "Cranium fragment"])
+def test_import_manual_row_infers_fragment_condition_without_changing_verbatim_element(body_part):
+    media_id = f"manual-fragment-{body_part[-1]}"
+    media = Media.objects.create(media_location=f"uploads/manual_qc/{media_id}.jpg", file_name=f"{media_id}.jpg")
+    Element.objects.get_or_create(name="-Undefined")
+    row = {"id": media_id, "collection_id": "KNM", "accession_number": f"ER {330 if body_part.endswith('.') else 331}", "storage_area": "Drawer 1", "field_number": "FD-302", "body_parts": body_part, "taxon": "Pan troglodytes"}
+    import_manual_row(row, queryset=Media.objects.filter(pk=media.pk))
+    media.refresh_from_db()
+    nature = NatureOfSpecimen.objects.filter(accession_row__accession=media.accession).first()
+    assert nature is not None
+    assert nature.condition == "Fragment"
+    assert nature.verbatim_element == body_part
