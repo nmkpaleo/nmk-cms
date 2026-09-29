@@ -1875,6 +1875,8 @@ def _resolve_nature_element(name: str | None, verbatim: str | None) -> Element |
         if not element_text:
             continue
         tooth_name = re.fullmatch(r'd?[IiCcPpMm][1-4](?:-[1-4])?', element_text_raw)
+        if len(element_text_raw) < 2 and not tooth_name:
+            continue
         haystack = normalized if tooth_name else normalized_text
         needle = element_text_raw if tooth_name else element_text
         if re.search(rf'(?<![A-Za-z0-9]){re.escape(needle)}(?![A-Za-z0-9])', haystack):

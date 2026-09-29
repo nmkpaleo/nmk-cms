@@ -207,6 +207,18 @@ def parse_body_parts(value: Any) -> list[str]:
         if depth == 0:
             if character in ",;|+":
                 delimiter = True
+            elif character == "&":
+                previous = text[:index].rstrip().split()[-1:]
+                following = text[index + 1:].lstrip().split()[:1]
+                side_pair = (
+                    previous and following
+                    and previous[0].rstrip(".").upper() in {"L", "R"}
+                    and following[0].rstrip(".").upper() in {"L", "R"}
+                )
+                tooth_pair = following and re.match(
+                    r"^(?:d?[IiCcPpMm][1-4])(?:\b|\))", following[0], re.IGNORECASE
+                )
+                delimiter = not side_pair and not tooth_pair
             elif text[index:index + 5].lower() == " and ":
                 delimiter = True
                 index += 4
