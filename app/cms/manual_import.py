@@ -189,7 +189,7 @@ def parse_body_parts(value: Any) -> list[str]:
     text = coerce_stripped(value)
     if not text:
         return []
-    parts = [part.strip() for part in re.split(r"[;,]\s*", text) if part.strip()]
+    parts = [part.strip() for part in re.split(r"[;,|]\s*|\s+(?:and|&)\s+|\s+\+\s*", text, flags=re.IGNORECASE) if part.strip()]
     return parts or [text]
 
 
