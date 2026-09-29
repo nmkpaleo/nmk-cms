@@ -298,7 +298,7 @@ BODY_PART_LABEL_RE = re.compile(r"^(?P<label>[A-Za-z0-9]+)\s*[:\-]\s*(?P<body>.+
 
 INLINE_BODY_PART_LABEL_RE = re.compile(
     r"(?:(?<=^)|(?<=[\s;,|]))"
-    r"(?:\((?P<label1>[A-Za-z0-9]+)\)\s+|(?!(?:[dD]?[IiCcPpMm][1-4])\s*-\s*(?:[dD]?[IiCcPpMm][1-4]|[1-4])\b)(?P<label2>[A-Za-z0-9]+)\s*(?:[:=\-])\s*|(?P<label3>[A-KM-QS-Z])\.\s+|(?P<label4>(?!)\b[A-Za-z])\s*,\s+)",
+    r"(?:\((?P<label1>[A-Za-z0-9]+)\)\s+|(?!(?:[dD]?[IiCcPpMm][1-4])\s*-\s*(?:[dD]?[IiCcPpMm][1-4]|[1-4])\b)(?P<label2>[A-Za-z0-9]+)\s*(?:[:=\-])\s*|(?P<label3>[A-KM-QS-Z])\.\s+|(?P<label4>[A-KM-QS-Z])\s*,\s+)",
     flags=re.IGNORECASE,
 )
 
