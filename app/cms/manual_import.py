@@ -189,9 +189,40 @@ def parse_body_parts(value: Any) -> list[str]:
     text = coerce_stripped(value)
     if not text:
         return []
-    parts = [part.strip() for part in re.split(r"[;,|]\s*|\s+and\s+|\s*&\s*(?!(?:d?[IiCcPpMm][1-4])\b)|\s+\+\s*", text, flags=re.IGNORECASE) if part.strip()]
-    return parts or [text]
 
+    # Split only at top-level delimiters. Commas inside parenthesized tooth
+    # descriptions, such as (M1-3, P3-M3), are part of the same description.
+    parts: list[str] = []
+    current: list[str] = []
+    depth = 0
+    index = 0
+    while index < len(text):
+        character = text[index]
+        if character == "(":
+            depth += 1
+        elif character == ")" and depth:
+            depth -= 1
+
+        delimiter = False
+        if depth == 0:
+            if character in ",;|+":
+                delimiter = True
+            elif text[index:index + 5].lower() == " and ":
+                delimiter = True
+                index += 4
+        if delimiter:
+            part = coerce_stripped("".join(current))
+            if part:
+                parts.append(part)
+            current = []
+        else:
+            current.append(character)
+        index += 1
+
+    part = coerce_stripped("".join(current))
+    if part:
+        parts.append(part)
+    return parts or [text]
 
 VERBATIM_ELEMENT_MAX_LENGTH = 255
 AERIAL_PHOTO_MAX_LENGTH = 25
@@ -255,7 +286,7 @@ BODY_PART_LABEL_RE = re.compile(r"^(?P<label>[A-Za-z0-9]+)\s*[:\-]\s*(?P<body>.+
 
 INLINE_BODY_PART_LABEL_RE = re.compile(
     r"(?:(?<=^)|(?<=[\s;,|]))"
-    r"(?:\((?P<label1>[A-Za-z0-9]+)\)\s+|(?!(?:[dD]?[IiCcPpMm][1-4])\s*-\s*(?:[dD]?[IiCcPpMm][1-4]|[1-4])\b)(?P<label2>[A-Za-z0-9]+)\s*(?:[:=\-])\s*|(?P<label3>[A-KM-QS-Z])\.\s+|(?P<label4>[A-Za-z])\s*,\s+)",
+    r"(?:\((?P<label1>[A-Za-z0-9]+)\)\s+|(?!(?:[dD]?[IiCcPpMm][1-4])\s*-\s*(?:[dD]?[IiCcPpMm][1-4]|[1-4])\b)(?P<label2>[A-Za-z0-9]+)\s*(?:[:=\-])\s*|(?P<label3>[A-KM-QS-Z])\.\s+|(?P<label4>(?!)\b[A-Za-z])\s*,\s+)",
     flags=re.IGNORECASE,
 )
 
