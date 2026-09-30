@@ -448,6 +448,11 @@ def _extract_body_parts_from_other(
     remaining: list[str] = []
 
     for comment in comments:
+        # Free-text notes such as "C" or "C- 2014" are collection/catalog
+        # notes, not specimen suffix labels with body-part values.
+        if re.fullmatch(r"[A-Z](?:\s*-\s*\d{4})?", coerce_stripped(comment) or "", flags=re.IGNORECASE):
+            remaining.append(comment)
+            continue
         parsed_labeled, parsed_unlabeled = parse_labeled_body_parts(comment)
         if parsed_labeled:
             for suffix, parts in parsed_labeled.items():
