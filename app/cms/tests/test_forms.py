@@ -127,7 +127,7 @@ def test_identification_form_links_controlled_record_when_taxon_matches():
             "reference": "",
             "date_identified": "",
             "identification_qualifier": "",
-            "verbatim_identification": "",
+            "verbatim_identification": "Homo",
             "identification_remarks": "",
         },
         instance=Identification(accession_row=accession_row),
@@ -151,7 +151,7 @@ def test_identification_form_does_not_link_inactive_taxa():
             "reference": "",
             "date_identified": "",
             "identification_qualifier": "",
-            "verbatim_identification": "",
+            "verbatim_identification": "Homo",
             "identification_remarks": "",
         },
         instance=Identification(accession_row=accession_row),
@@ -184,7 +184,7 @@ def test_identification_form_does_not_link_when_different_ranks_match():
             "reference": "",
             "date_identified": "",
             "identification_qualifier": "",
-            "verbatim_identification": "",
+            "verbatim_identification": "Homo",
             "identification_remarks": "",
         },
         instance=Identification(accession_row=accession_row),
@@ -327,4 +327,23 @@ def test_locality_form_initializes_geological_times(locality_user):
     assert form.initial["geological_times"] == [
         Locality.GeologicalTime.PLIOCENE,
         Locality.GeologicalTime.PLEISTOCENE,
+    ]
+
+
+def test_identification_form_requires_taxon_verbatim():
+    form = AccessionRowIdentificationForm(
+        data={"taxon_verbatim": "Homo", "verbatim_identification": "   "},
+        instance=Identification(),
+    )
+    assert form.fields["verbatim_identification"].required is True
+    assert not form.is_valid()
+    assert "verbatim_identification" in form.errors
+
+def test_identification_form_orders_taxonomy_fields_first():
+    form = AccessionRowIdentificationForm(instance=Identification())
+    assert list(form.fields)[:4] == [
+        "verbatim_identification",
+        "identification_qualifier",
+        "taxon_verbatim",
+        "taxon_record_display",
     ]
