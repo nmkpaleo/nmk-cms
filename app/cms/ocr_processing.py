@@ -1886,7 +1886,7 @@ def _resolve_nature_element(name: str | None, verbatim: str | None) -> Element |
             candidates.append((len(element_text.split()), int(element.parent_element_id is not None), element))
     if not candidates:
         return None
-    candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    candidates.sort(key=lambda item: (item[0], -item[1]), reverse=True)
     if len(candidates) > 1 and candidates[0][:2] == candidates[1][:2]:
         return None
     return candidates[0][2]
