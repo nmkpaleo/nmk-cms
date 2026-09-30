@@ -1298,6 +1298,7 @@ class AccessionRowIdentificationForm(BaseW3ModelForm):
         queryset=Reference.objects.order_by("first_author", "year", "title"),
         required=False,
         widget=ReferenceWidget(),
+    verbatim_identification = forms.CharField(required=True)
     )
 
     class Meta:

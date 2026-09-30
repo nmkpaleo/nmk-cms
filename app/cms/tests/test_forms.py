@@ -328,3 +328,13 @@ def test_locality_form_initializes_geological_times(locality_user):
         Locality.GeologicalTime.PLIOCENE,
         Locality.GeologicalTime.PLEISTOCENE,
     ]
+
+
+def test_identification_form_requires_taxon_verbatim():
+    form = AccessionRowIdentificationForm(
+        data={"taxon_verbatim": "Homo", "verbatim_identification": "   "},
+        instance=Identification(),
+    )
+    assert form.fields["verbatim_identification"].required is True
+    assert not form.is_valid()
+    assert "verbatim_identification" in form.errors
