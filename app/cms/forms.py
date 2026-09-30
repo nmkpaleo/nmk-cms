@@ -1335,13 +1335,13 @@ class AccessionRowIdentificationForm(BaseW3ModelForm):
         self.fields["taxon_record_display"].widget.attrs["readonly"] = True
         self.order_fields(
             [
-                "identified_by",
+                "verbatim_identification",
+                "identification_qualifier",
                 "taxon_verbatim",
                 "taxon_record_display",
+                "identified_by",
                 "reference",
                 "date_identified",
-                "identification_qualifier",
-                "verbatim_identification",
                 "identification_remarks",
             ]
         )

@@ -338,3 +338,12 @@ def test_identification_form_requires_taxon_verbatim():
     assert form.fields["verbatim_identification"].required is True
     assert not form.is_valid()
     assert "verbatim_identification" in form.errors
+
+def test_identification_form_orders_taxonomy_fields_first():
+    form = AccessionRowIdentificationForm(instance=Identification())
+    assert list(form.fields)[:4] == [
+        "verbatim_identification",
+        "identification_qualifier",
+        "taxon_verbatim",
+        "taxon_record_display",
+    ]
