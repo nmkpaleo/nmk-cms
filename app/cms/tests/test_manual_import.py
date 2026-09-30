@@ -857,6 +857,8 @@ def test_import_manual_row_uses_placeholder_when_element_missing():
 
 @pytest.mark.parametrize("body_part", ["Cranium frag.", "Cranium fragment"])
 def test_import_manual_row_infers_fragment_condition_without_changing_verbatim_element(body_part):
+    Collection.objects.get_or_create(abbreviation="KNM", defaults={"description": "Test collection"})
+    Locality.objects.get_or_create(abbreviation="ER", defaults={"name": "East River"})
     media_id = f"manual-fragment-{body_part[-1]}"
     media = Media.objects.create(media_location=f"uploads/manual_qc/{media_id}.jpg", file_name=f"{media_id}.jpg")
     Element.objects.get_or_create(name="-Undefined")
