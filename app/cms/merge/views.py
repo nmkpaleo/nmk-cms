@@ -38,9 +38,10 @@ from cms.models import Element, NatureOfSpecimen
 
 
 def _is_safe_cancel_url(request: HttpRequest, url: str) -> bool:
+    allowed_hosts = {request.get_host(), *getattr(settings, "ALLOWED_HOSTS", [])}
     return url_has_allowed_host_and_scheme(
         url=url,
-        allowed_hosts=None,
+        allowed_hosts=allowed_hosts,
         require_https=request.is_secure(),
     )
 
