@@ -255,12 +255,12 @@ def _infer_portion_from_element(value: str | None) -> str | None:
     text = coerce_stripped(value)
     if not text:
         return None
-    tooth_match = re.search(r"(?:^|(?<![A-Za-z0-9])[lr]\.?)(?:d)?([pm])[1-4]\b", text, flags=re.IGNORECASE)
+    tooth_match = re.search(r"(?:^|(?<![A-Za-z0-9])[lLrR]\.?)(?:d)?([iIcCpPmM])[1-4]\b", text)
     if tooth_match:
-        return "Upper" if tooth_match.group(1).lower() == "p" else "Lower"
-    tooth_token = re.search(r"(?<![A-Za-z0-9])(?:d)?([pm])[1-4]\b", text, flags=re.IGNORECASE)
+        return "Upper" if tooth_match.group(1).isupper() else "Lower"
+    tooth_token = re.search(r"(?<![A-Za-z0-9])(?:d)?([iIcCpPmM])[1-4]\b", text)
     if tooth_token:
-        return "Upper" if tooth_token.group(1).lower() == "p" else "Lower"
+        return "Upper" if tooth_token.group(1).isupper() else "Lower"
     matches = re.findall(r"\b(dist(?:al)?\.?|prox(?:imal)?\.?|upp?(?:er)?\.?|low(?:er)?\.?)\b", text, flags=re.IGNORECASE)
     normalized = {match.lower().rstrip(".") for match in matches}
     if len(normalized) != 1:
