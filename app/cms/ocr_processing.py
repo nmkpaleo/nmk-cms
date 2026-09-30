@@ -1867,7 +1867,8 @@ def _resolve_nature_element(name: str | None, verbatim: str | None) -> Element |
     normalized = re.sub(r'[^A-Za-z0-9]+', ' ', text)
     words = [aliases.get(word.lower(), word) for word in normalized.split()]
     normalized_text = ' '.join(words).lower()
-    candidates: list[tuple[int, Element]] = []
+    candidates: list[tuple[int, int, Element]] = []
+    anatomical_element_present = bool(re.search(r"\b(?:mandible|md|md\.|maxilla|max\.|skull|cranium)\b", normalized_text, flags=re.IGNORECASE))
     for element in Element.objects.exclude(name='-Undefined'):
         element_leaf = element.name.rsplit('-', 1)[-1].strip()
         element_text_raw = re.sub(r'[^A-Za-z0-9]+', ' ', element_leaf).strip()
@@ -1877,16 +1878,18 @@ def _resolve_nature_element(name: str | None, verbatim: str | None) -> Element |
         tooth_name = re.fullmatch(r'd?[IiCcPpMm][1-4](?:-[1-4])?', element_text_raw)
         if len(element_text_raw) < 2 and not tooth_name:
             continue
+        if tooth_name and anatomical_element_present:
+            continue
         haystack = normalized if tooth_name else normalized_text
         needle = element_text_raw if tooth_name else element_text
         if re.search(rf'(?<![A-Za-z0-9]){re.escape(needle)}(?![A-Za-z0-9])', haystack):
-            candidates.append((len(element_text.split()), element))
+            candidates.append((len(element_text.split()), int(element.parent_element_id is not None), element))
     if not candidates:
         return None
-    candidates.sort(key=lambda item: item[0], reverse=True)
-    if len(candidates) > 1 and candidates[0][0] == candidates[1][0]:
+    candidates.sort(key=lambda item: (item[0], -item[1]), reverse=True)
+    if len(candidates) > 1 and candidates[0][:2] == candidates[1][:2]:
         return None
-    return candidates[0][1]
+    return candidates[0][2]
 
 def _serialize_accession(accession: Accession) -> dict[str, object]:
     accession = (

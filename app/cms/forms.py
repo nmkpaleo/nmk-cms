@@ -530,7 +530,7 @@ class ElementWidget(s2forms.ModelSelect2Widget):
     def __init__(self, *args, **kwargs):
         attrs = kwargs.pop("attrs", {})
         attrs.setdefault("data-placeholder", "Search for an element")
-        attrs.setdefault("data-minimum-input-length", 3)
+        attrs.setdefault("data-minimum-input-length", 2)
         attrs.setdefault("data-allow-clear", "true")
         kwargs["attrs"] = attrs
         super().__init__(*args, **kwargs)
@@ -1299,6 +1299,7 @@ class AccessionRowIdentificationForm(BaseW3ModelForm):
         required=False,
         widget=ReferenceWidget(),
     )
+    verbatim_identification = forms.CharField(required=True)
 
     class Meta:
         model = Identification
@@ -1334,13 +1335,13 @@ class AccessionRowIdentificationForm(BaseW3ModelForm):
         self.fields["taxon_record_display"].widget.attrs["readonly"] = True
         self.order_fields(
             [
-                "identified_by",
+                "verbatim_identification",
+                "identification_qualifier",
                 "taxon_verbatim",
                 "taxon_record_display",
+                "identified_by",
                 "reference",
                 "date_identified",
-                "identification_qualifier",
-                "verbatim_identification",
                 "identification_remarks",
             ]
         )

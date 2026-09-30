@@ -26,7 +26,7 @@ class IdentifiedByWidgetTests(TestCase):
                 "reference": "",
                 "date_identified": "",
                 "identification_qualifier": "",
-                "verbatim_identification": "",
+                "verbatim_identification": "Homo",
                 "identification_remarks": "",
             }
         )
