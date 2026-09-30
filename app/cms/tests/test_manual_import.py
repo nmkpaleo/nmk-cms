@@ -886,3 +886,12 @@ def test_manual_qc_infers_portion_from_element_text(body_part, expected_portion)
     nature = build_row_section({"body_parts": body_part}, "A")["natures"][0]
     assert nature["portion"]["interpreted"] == expected_portion
     assert nature["verbatim_element"]["interpreted"] == body_part
+
+@pytest.mark.parametrize(
+    ("body_part", "expected_side"),
+    [("L M3", "Left"), ("R p2", "Right")],
+)
+def test_manual_qc_infers_single_letter_side_for_teeth(body_part, expected_side):
+    nature = build_row_section({"body_parts": body_part}, "A")["natures"][0]
+    assert nature["side"]["interpreted"] == expected_side
+    assert nature["verbatim_element"]["interpreted"] == body_part

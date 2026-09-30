@@ -622,9 +622,9 @@ def build_row_section(
             nature_entry["portion"] = make_interpreted_value(portion)
         side_match = None
         if raw_element_value:
-            if re.search(r"\b(rt\.?|right)\b", raw_element_value, flags=re.IGNORECASE):
+            if re.search(r"\b(?:r|rt\.?|right)\b", raw_element_value, flags=re.IGNORECASE):
                 side_match = "Right"
-            elif re.search(r"\b(lt\.?|left)\b", raw_element_value, flags=re.IGNORECASE):
+            elif re.search(r"\b(?:l|lt\.?|left)\b", raw_element_value, flags=re.IGNORECASE):
                 side_match = "Left"
         if side_match:
             nature_entry["side"] = make_interpreted_value(side_match)
