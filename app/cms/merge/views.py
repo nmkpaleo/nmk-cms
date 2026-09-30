@@ -38,13 +38,15 @@ from cms.models import Element, NatureOfSpecimen
 
 
 def _is_safe_cancel_url(request: HttpRequest, url: str) -> bool:
-    allowed_hosts = {request.get_host(), *getattr(settings, "ALLOWED_HOSTS", [])}
+    # Cancel destinations are intentionally restricted to local relative paths.
+    # This avoids open redirects, including same-host absolute URLs.
+    if not url.startswith("/") or url.startswith("//"):
+        return False
     return url_has_allowed_host_and_scheme(
         url=url,
-        allowed_hosts=allowed_hosts,
+        allowed_hosts=None,
         require_https=request.is_secure(),
     )
-
 
 def _safe_cancel_url(
     request: HttpRequest,
