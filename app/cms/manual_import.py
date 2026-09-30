@@ -255,6 +255,9 @@ def _infer_portion_from_element(value: str | None) -> str | None:
     text = coerce_stripped(value)
     if not text:
         return None
+    tooth_match = re.search(r"(?:^|(?<![A-Za-z0-9])[lr]\.?)(?:d)?([pm])[1-4]\b", text, flags=re.IGNORECASE)
+    if tooth_match:
+        return "Upper" if tooth_match.group(1).lower() == "p" else "Lower"
     matches = re.findall(r"\b(dist(?:al)?\.?|prox(?:imal)?\.?|upp?(?:er)?\.?|low(?:er)?\.?)\b", text, flags=re.IGNORECASE)
     normalized = {match.lower().rstrip(".") for match in matches}
     if len(normalized) != 1:
@@ -622,7 +625,12 @@ def build_row_section(
             nature_entry["portion"] = make_interpreted_value(portion)
         side_match = None
         if raw_element_value:
-            if re.search(r"\b(?:r|rt\.?|right)\b", raw_element_value, flags=re.IGNORECASE):
+            compact_side = re.match(r"^\s*([lr])\.?(?:d?[icpm][1-4])\b", raw_element_value, flags=re.IGNORECASE)
+            if compact_side and compact_side.group(1).lower() == "r":
+                side_match = "Right"
+            elif compact_side and compact_side.group(1).lower() == "l":
+                side_match = "Left"
+            elif re.search(r"\b(?:r|rt\.?|right)\b", raw_element_value, flags=re.IGNORECASE):
                 side_match = "Right"
             elif re.search(r"\b(?:l|lt\.?|left)\b", raw_element_value, flags=re.IGNORECASE):
                 side_match = "Left"
