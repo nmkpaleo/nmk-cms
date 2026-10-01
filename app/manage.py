@@ -3,6 +3,9 @@
 import os
 import sys
 
+# Keep the repository root available for app.* imports when this script is run directly.
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, PROJECT_ROOT)
 
 def main():
     """Run administrative tasks."""

@@ -38,12 +38,15 @@ from cms.models import Element, NatureOfSpecimen
 
 
 def _is_safe_cancel_url(request: HttpRequest, url: str) -> bool:
+    # Cancel destinations are intentionally restricted to local relative paths.
+    # This avoids open redirects, including same-host absolute URLs.
+    if not url.startswith("/") or url.startswith("//"):
+        return False
     return url_has_allowed_host_and_scheme(
         url=url,
         allowed_hosts=None,
         require_https=request.is_secure(),
     )
-
 
 def _safe_cancel_url(
     request: HttpRequest,
@@ -161,7 +164,7 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
             )
         except Exception:  # pragma: no cover - defensive fallback
             change_url = ""
-        return redirect(change_url or "/")
+        return redirect((context.get("cancel_url") if isinstance(target_instance, NatureOfSpecimen) else "") or change_url or "/")
 
     def get_model(self, request: HttpRequest) -> type[MergeMixin]:
         if self.model is not None:

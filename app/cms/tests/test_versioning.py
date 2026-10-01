@@ -16,3 +16,9 @@ def test_base_template_displays_application_version_variable():
 
     assert "Version" in content
     assert "{{ application_version }}" in content
+
+
+def test_dev_version_includes_commit_hint(monkeypatch):
+    monkeypatch.setenv("APP_VERSION", "dev")
+    monkeypatch.setenv("APP_COMMIT", "1d540bdabcdef")
+    assert get_application_version() == "dev-1d540bdabcde"

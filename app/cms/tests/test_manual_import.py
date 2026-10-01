@@ -11,7 +11,9 @@ from cms.manual_import import (
     ManualImportError,
     build_accession_payload,
     build_reference_entries,
+    build_row_section,
     find_media_for_row,
+    make_identification_entry,
     _split_taxon_and_qualifier,
     import_manual_row,
 )
@@ -852,3 +854,46 @@ def test_import_manual_row_uses_placeholder_when_element_missing():
     assert nature is not None
     assert nature.element_id == placeholder.id
     assert nature.verbatim_element == "Novel element description"
+
+@pytest.mark.parametrize("body_part", ["Cranium frag.", "Cranium fragment"])
+def test_import_manual_row_infers_fragment_condition_without_changing_verbatim_element(body_part):
+    Collection.objects.get_or_create(abbreviation="KNM", defaults={"description": "Test collection"})
+    Locality.objects.get_or_create(abbreviation="ER", defaults={"name": "East River"})
+    media_id = f"manual-fragment-{body_part[-1]}"
+    media = Media.objects.create(media_location=f"uploads/manual_qc/{media_id}.jpg", file_name=f"{media_id}.jpg")
+    Element.objects.get_or_create(name="-Undefined")
+    row = {"id": media_id, "collection_id": "KNM", "accession_number": f"ER {330 if body_part.endswith('.') else 331}", "storage_area": "Drawer 1", "field_number": "FD-302", "body_parts": body_part, "taxon": "Pan troglodytes"}
+    import_manual_row(row, queryset=Media.objects.filter(pk=media.pk))
+    media.refresh_from_db()
+    nature = NatureOfSpecimen.objects.filter(accession_row__accession=media.accession).first()
+    assert nature is not None
+    assert nature.condition == "Fragment"
+    assert nature.verbatim_element == body_part
+
+
+def test_taxon_with_species_novel_and_uncertainty_is_normalized():
+    entry = make_identification_entry(
+        {"taxon": "Pseudotragus ? gentryi sp. nov. | Bovidae | Pseudotragus | ? gentryi"},
+        "Pseudotragus ? gentryi sp. nov. | Bovidae | Pseudotragus | ? gentryi",
+    )
+    assert entry["taxon"]["interpreted"] == "Pseudotragus gentryi"
+    assert entry["taxon_verbatim"]["interpreted"] == "Pseudotragus gentryi"
+    assert entry["identification_qualifier"]["interpreted"] == "sp. nov."
+    assert entry["identification_remarks"]["interpreted"] == "Identification uncertain"
+@pytest.mark.parametrize(
+    ("body_part", "expected_portion"),
+    [("Lt. dist. h/c frag", "Distal"), ("upper molar", "Upper"), ("upp. molar", "Upper"), ("low molar", "Lower"), ("low. molar", "Lower"), ("lower molar", "Lower")],
+)
+def test_manual_qc_infers_portion_from_element_text(body_part, expected_portion):
+    nature = build_row_section({"body_parts": body_part}, "A")["natures"][0]
+    assert nature["portion"]["interpreted"] == expected_portion
+    assert nature["verbatim_element"]["interpreted"] == body_part
+
+@pytest.mark.parametrize(
+    ("body_part", "expected_side"),
+    [("L M3", "Left"), ("R p2", "Right")],
+)
+def test_manual_qc_infers_single_letter_side_for_teeth(body_part, expected_side):
+    nature = build_row_section({"body_parts": body_part}, "A")["natures"][0]
+    assert nature["side"]["interpreted"] == expected_side
+    assert nature["verbatim_element"]["interpreted"] == body_part

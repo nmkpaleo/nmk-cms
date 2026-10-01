@@ -8,19 +8,22 @@ on:
       - prod
 
 permissions:
-  contents: write
-  actions: write
+  contents: read
   pull-requests: read
 
 jobs:
   tag-and-release:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Determine release bump
         id: bump
@@ -70,6 +73,7 @@ jobs:
       - name: Create and push tag
         env:
           NEXT_TAG: ${{ steps.version.outputs.tag }}
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
           if git rev-parse "$NEXT_TAG" >/dev/null 2>&1; then
             echo "Tag $NEXT_TAG already exists; skipping."
@@ -79,17 +83,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "$NEXT_TAG" -m "Release $NEXT_TAG"
-          git push origin "$NEXT_TAG"
-
-      - name: Dispatch production image publish
-        env:
-          GH_TOKEN: ${{ github.token }}
-          NEXT_TAG: ${{ steps.version.outputs.tag }}
-        run: gh workflow run production-ci.yml --ref "$NEXT_TAG"
+          git push "https://x-access-token:${RELEASE_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$NEXT_TAG"
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
+          token: ${{ secrets.RELEASE_TOKEN }}
           tag_name: ${{ steps.version.outputs.tag }}
           target_commitish: ${{ github.event.pull_request.merge_commit_sha }}
           generate_release_notes: true

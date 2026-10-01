@@ -189,12 +189,86 @@ def parse_body_parts(value: Any) -> list[str]:
     text = coerce_stripped(value)
     if not text:
         return []
-    parts = [part.strip() for part in re.split(r"[;,]\s*", text) if part.strip()]
-    return parts or [text]
 
+    # Split only at top-level delimiters. Commas inside parenthesized tooth
+    # descriptions, such as (M1-3, P3-M3), are part of the same description.
+    parts: list[str] = []
+    current: list[str] = []
+    depth = 0
+    index = 0
+    while index < len(text):
+        character = text[index]
+        if character == "(":
+            depth += 1
+        elif character == ")" and depth:
+            depth -= 1
+
+        delimiter = False
+        if depth == 0:
+            if character in ",;|+":
+                delimiter = True
+            elif character == "&":
+                previous = text[:index].rstrip().split()[-1:]
+                following = text[index + 1:].lstrip().split()[:1]
+                side_pair = (
+                    previous and following
+                    and previous[0].rstrip(".").upper() in {"L", "R"}
+                    and following[0].rstrip(".").upper() in {"L", "R"}
+                )
+                tooth_pair = following and re.match(
+                    r"^(?:d?[IiCcPpMm][1-4])(?:\b|\))", following[0], re.IGNORECASE
+                )
+                delimiter = not side_pair and not tooth_pair
+            elif text[index:index + 5].lower() == " and ":
+                delimiter = True
+                index += 4
+        if delimiter:
+            part = coerce_stripped("".join(current))
+            if part:
+                parts.append(part)
+            current = []
+        else:
+            current.append(character)
+        index += 1
+
+    part = coerce_stripped("".join(current))
+    if part:
+        parts.append(part)
+    return parts or [text]
 
 VERBATIM_ELEMENT_MAX_LENGTH = 255
 AERIAL_PHOTO_MAX_LENGTH = 25
+
+
+def _infer_condition_from_element(value: str | None) -> str | None:
+    """Infer a specimen condition from common fragment wording."""
+
+    text = coerce_stripped(value)
+    if text and re.search(r"\bfrag(?:\.|ment(?:s|ed)?)?\b", text, flags=re.IGNORECASE):
+        return "Fragment"
+    return None
+
+
+def _infer_portion_from_element(value: str | None) -> str | None:
+    """Infer a canonical portion from common abbreviated wording."""
+
+    text = coerce_stripped(value)
+    if not text:
+        return None
+    anatomical_element_present = re.search(r"\b(?:mandible|md\.?|maxilla|max\.?|skull|cranium)\b", text, flags=re.IGNORECASE)
+    if not anatomical_element_present:
+        tooth_match = re.search(r"(?:^|(?<![A-Za-z0-9])[lLrR]\.?)(?:d)?([iIcCpPmM])[1-4]\b", text)
+        if tooth_match:
+            return "Upper" if tooth_match.group(1).isupper() else "Lower"
+        tooth_token = re.search(r"(?<![A-Za-z0-9])(?:d)?([iIcCpPmM])[1-4]\b", text)
+        if tooth_token:
+            return "Upper" if tooth_token.group(1).isupper() else "Lower"
+    matches = re.findall(r"\b(dist(?:al)?\.?|prox(?:imal)?\.?|upp?(?:er)?\.?|low(?:er)?\.?)\b", text, flags=re.IGNORECASE)
+    normalized = {match.lower().rstrip(".") for match in matches}
+    if len(normalized) != 1:
+        return None
+    token = normalized.pop()
+    return {"dist": "Distal", "prox": "Proximal", "upp": "Upper", "upper": "Upper", "low": "Lower", "lower": "Lower"}.get(token)
 
 
 def _truncate_verbatim_element(
@@ -255,7 +329,7 @@ BODY_PART_LABEL_RE = re.compile(r"^(?P<label>[A-Za-z0-9]+)\s*[:\-]\s*(?P<body>.+
 
 INLINE_BODY_PART_LABEL_RE = re.compile(
     r"(?:(?<=^)|(?<=[\s;,|]))"
-    r"(?:\((?P<label1>[A-Za-z0-9]+)\)\s+|(?P<label2>[A-Za-z0-9]+)\s*(?:[:=\-])\s*|(?P<label3>[A-Za-z])\.\s+|(?P<label4>[A-Za-z])\s*,\s+)",
+    r"(?:\((?P<label1>[A-Za-z0-9]+)\)\s+|(?!(?:[dD]?[IiCcPpMm][1-4])\s*-\s*(?:[dD]?[IiCcPpMm][1-4]|[1-4])\b)(?P<label2>[A-Za-z0-9]+)\s*(?:[:=\-])\s*|(?P<label3>[A-KM-QS-Z])\.\s+|(?P<label4>[A-KM-QS-Z])\s*,\s+)",
     flags=re.IGNORECASE,
 )
 
@@ -382,6 +456,11 @@ def _extract_body_parts_from_other(
     remaining: list[str] = []
 
     for comment in comments:
+        # Free-text notes such as "C" or "C- 2014" are collection/catalog
+        # notes, not specimen suffix labels with body-part values.
+        if re.fullmatch(r"[A-Z](?:\s*-\s*\d{4})?", coerce_stripped(comment) or "", flags=re.IGNORECASE):
+            remaining.append(comment)
+            continue
         parsed_labeled, parsed_unlabeled = parse_labeled_body_parts(comment)
         if parsed_labeled:
             for suffix, parts in parsed_labeled.items():
@@ -543,11 +622,22 @@ def build_row_section(
         nature_entry = {
             "verbatim_element": make_interpreted_value(element_value),
         }
+        condition = _infer_condition_from_element(raw_element_value)
+        if condition:
+            nature_entry["condition"] = make_interpreted_value(condition)
+        portion = _infer_portion_from_element(raw_element_value)
+        if portion:
+            nature_entry["portion"] = make_interpreted_value(portion)
         side_match = None
         if raw_element_value:
-            if re.search(r"\b(rt\.?|right)\b", raw_element_value, flags=re.IGNORECASE):
+            compact_side = re.match(r"^\s*([lr])\.?(?:d?[icpm][1-4])\b", raw_element_value, flags=re.IGNORECASE)
+            if compact_side and compact_side.group(1).lower() == "r":
                 side_match = "Right"
-            elif re.search(r"\b(lt\.?|left)\b", raw_element_value, flags=re.IGNORECASE):
+            elif compact_side and compact_side.group(1).lower() == "l":
+                side_match = "Left"
+            elif re.search(r"\b(?:r|rt\.?|right)\b", raw_element_value, flags=re.IGNORECASE):
+                side_match = "Right"
+            elif re.search(r"\b(?:l|lt\.?|left)\b", raw_element_value, flags=re.IGNORECASE):
                 side_match = "Left"
         if side_match:
             nature_entry["side"] = make_interpreted_value(side_match)
@@ -575,12 +665,21 @@ def _split_taxon_and_qualifier(value: str | None) -> tuple[str | None, str | Non
     tokens = text.split()
     qualifier_tokens: list[str] = []
     base_tokens: list[str] = []
+    index = 0
 
-    for token in tokens:
+    while index < len(tokens):
+        token = tokens[index]
+        if token.lower().rstrip(".") == "sp" and index + 1 < len(tokens) and tokens[index + 1].lower().rstrip(".") == "nov":
+            qualifier_tokens.append("sp. nov.")
+            index += 2
+            continue
         if token.lower() in QUALIFIER_TOKENS:
             qualifier_tokens.append(token if token.endswith(".") else f"{token}.")
+            index += 1
             continue
-        base_tokens.append(token)
+        if token != "?":
+            base_tokens.append(token)
+        index += 1
 
     qualifier = " ".join(qualifier_tokens) or None
     base_taxon = " ".join(base_tokens).strip() or None
@@ -612,6 +711,8 @@ def _extract_lowest_taxon(row: Mapping[str, Any]) -> tuple[str | None, str | Non
         value = coerce_stripped(row.get(key))
         if not value:
             continue
+        if key == "taxon" and "|" in value:
+            value = value.split("|", 1)[0].strip()
         base_taxon, qualifier = _split_taxon_and_qualifier(value)
         base_value = base_taxon or value
         verbatim_identification = " ".join(filter(None, [qualifier, base_value])) if qualifier else base_value
@@ -625,11 +726,14 @@ def make_identification_entry(row: Mapping[str, Any], taxon_value: str | None) -
     resolved_taxon = base_taxon or taxon_value
     resolved_verbatim = taxon_value or verbatim_identification or resolved_taxon
 
+    source_text = " ".join(str(row.get(key) or "") for key in ("taxon", "family", "subfamily", "tribe", "genus", "species"))
+    identification_remarks = "Identification uncertain" if "?" in source_text else None
     return {
         "taxon": make_interpreted_value(resolved_taxon),
         "verbatim_identification": make_interpreted_value(resolved_verbatim),
         "taxon_verbatim": make_interpreted_value(resolved_taxon),
         "identification_qualifier": make_interpreted_value(qualifier),
+        "identification_remarks": make_interpreted_value(identification_remarks),
     }
 
 

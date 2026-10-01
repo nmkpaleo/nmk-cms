@@ -1797,7 +1797,7 @@ def _apply_rows(
                 nature["tooth_marking_detections"] = detections
 
             resolved_name = element_name or corrected_element or verbatim_element
-            element = Element.objects.filter(name=resolved_name).first() if resolved_name else None
+            element = _resolve_nature_element(resolved_name, corrected_element or verbatim_element)
             parent = Element.objects.filter(name="-Undefined").first()
             resolved_element = element or parent
             resolved_name = resolved_name or getattr(resolved_element, "name", None)
@@ -1837,6 +1837,59 @@ def _apply_rows(
             len(truncated_suffixes),
         )
 
+
+def _resolve_nature_element(name: str | None, verbatim: str | None) -> Element | None:
+    """Resolve an element by exact name, hierarchy leaf, or safe word match."""
+    text = (name or verbatim or '').strip()
+    if not text:
+        return None
+
+    direct = Element.objects.filter(name=text).first()
+    if direct:
+        return direct
+
+    leaf = text.rsplit('-', 1)[-1].strip() if '-' in text else text
+    direct = Element.objects.filter(name=leaf).first()
+    if direct:
+        return direct
+
+    leaf_matches = list(Element.objects.filter(name__iexact=leaf))
+    if len(leaf_matches) == 1:
+        return leaf_matches[0]
+
+    aliases = {
+        'md': 'mandible', 'mand.': 'mandible',
+        'max': 'maxilla', 'max.': 'maxilla',
+        'l': 'left', 'l.': 'left', 'r': 'right', 'r.': 'right', 'lt': 'left', 'lt.': 'left', 'rt': 'right', 'rt.': 'right',
+        'prox.': 'proximal', 'dist.': 'distal',
+        'wt': 'with', 'wt.': 'with',
+    }
+    normalized = re.sub(r'[^A-Za-z0-9]+', ' ', text)
+    words = [aliases.get(word.lower(), word) for word in normalized.split()]
+    normalized_text = ' '.join(words).lower()
+    candidates: list[tuple[int, int, Element]] = []
+    anatomical_element_present = bool(re.search(r"\b(?:mandible|md|md\.|maxilla|max\.|skull|cranium)\b", normalized_text, flags=re.IGNORECASE))
+    for element in Element.objects.exclude(name='-Undefined'):
+        element_leaf = element.name.rsplit('-', 1)[-1].strip()
+        element_text_raw = re.sub(r'[^A-Za-z0-9]+', ' ', element_leaf).strip()
+        element_text = element_text_raw.lower()
+        if not element_text:
+            continue
+        tooth_name = re.fullmatch(r'd?[IiCcPpMm][1-4](?:-[1-4])?', element_text_raw)
+        if len(element_text_raw) < 2 and not tooth_name:
+            continue
+        if tooth_name and anatomical_element_present:
+            continue
+        haystack = normalized if tooth_name else normalized_text
+        needle = element_text_raw if tooth_name else element_text
+        if re.search(rf'(?<![A-Za-z0-9]){re.escape(needle)}(?![A-Za-z0-9])', haystack):
+            candidates.append((len(element_text.split()), int(element.parent_element_id is not None), element))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: (item[0], -item[1]), reverse=True)
+    if len(candidates) > 1 and candidates[0][:2] == candidates[1][:2]:
+        return None
+    return candidates[0][2]
 
 def _serialize_accession(accession: Accession) -> dict[str, object]:
     accession = (

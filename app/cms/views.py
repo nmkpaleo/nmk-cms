@@ -5979,9 +5979,7 @@ def accession_create(request):
         form = AccessionForm(request.POST, request.FILES)
         if form.is_valid():
             accession = form.save(commit=False)
-
-            # Safe place to modify the object before saving
-            # e.g., accession.created_by = request.user
+            accession.accessioned_by = request.user
 
             accession.save()  # Now the PK is assigned
             form.save_m2m()   # In case future fields need this
