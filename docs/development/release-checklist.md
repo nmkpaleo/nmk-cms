@@ -11,6 +11,8 @@ This project ships production releases by merging a pull request from `main` int
   - `release:minor` -> minor bump
   - no release label -> patch bump
 
+The release workflow uses the repository `RELEASE_TOKEN` secret for tag and GitHub Release writes. The token should be a narrowly scoped repository token that can push tags and create releases; do not use the default workflow token.
+
 ## Pre-merge checklist
 
 1. Create PR from `main` to `prod`.
