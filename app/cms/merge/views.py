@@ -170,7 +170,15 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
             fallback=change_url,
         )
         allowed_redirects = {change_url} if change_url else set()
-        if cancel_url in allowed_redirects:
+        safe_cancel = (
+            cancel_url in allowed_redirects
+            and url_has_allowed_host_and_scheme(
+                url=cancel_url,
+                allowed_hosts={request.get_host()},
+                require_https=request.is_secure(),
+            )
+        )
+        if safe_cancel:
             return redirect(cancel_url)
         return redirect(change_url or "/")
 
