@@ -18,3 +18,6 @@
 - Push with git push -u origin <feature-branch>.
 - Open the PR with gh pr create --base main --head <feature-branch>, including a concise summary and verification notes.
 - If Git cannot create .git/index.lock, check for an existing lock/process first; do not delete an active lock. Retry after resolving the filesystem permission issue.
+
+## GitHub comments
+- When creating pull request or issue comments through the CLI or API, use actual line breaks in the comment body; do not pass escaped newline sequences that render literally.
