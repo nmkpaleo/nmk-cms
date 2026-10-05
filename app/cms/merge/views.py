@@ -164,7 +164,12 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
             )
         except Exception:  # pragma: no cover - defensive fallback
             change_url = ""
-        return redirect((context.get("cancel_url") if isinstance(target_instance, NatureOfSpecimen) else "") or change_url or "/")
+        cancel_url = _safe_cancel_url(
+            request,
+            context.get("cancel_url") if isinstance(target_instance, NatureOfSpecimen) else "",
+            fallback=change_url,
+        )
+        return redirect(cancel_url or "/")
 
     def get_model(self, request: HttpRequest) -> type[MergeMixin]:
         if self.model is not None:
