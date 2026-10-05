@@ -169,7 +169,10 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
             context.get("cancel_url") if isinstance(target_instance, NatureOfSpecimen) else "",
             fallback=change_url,
         )
-        return redirect(cancel_url or "/")
+        allowed_redirects = {change_url} if change_url else set()
+        if cancel_url in allowed_redirects:
+            return redirect(cancel_url)
+        return redirect(change_url or "/")
 
     def get_model(self, request: HttpRequest) -> type[MergeMixin]:
         if self.model is not None:
