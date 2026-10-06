@@ -2033,7 +2033,9 @@ class AccessionListView(FilterView):
     filterset_class = AccessionFilter
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        # Merged source accessions remain in the database for URL/QR-code
+        # redirects, but must not appear as independent catalogue entries.
+        qs = super().get_queryset().filter(merged_into__isnull=True)
         user = self.request.user
 
         if not (
