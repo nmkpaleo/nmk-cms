@@ -38,9 +38,29 @@ def _merge_accession_rows(*, relation_name, field, source, target, dry_run, opti
         row.specimen_suffix: row
         for row in target.accessionrow_set.select_for_update().all()
     }
+    target_by_manual_key = {}
+    for target_row in target.accessionrow_set.all():
+        for media in target_row.media.all():
+            metadata = media.get_manual_import_metadata() or {}
+            row_id = metadata.get("row_id")
+            if row_id:
+                target_by_manual_key[("row_id", str(row_id))] = target_row
+            if media.file_name:
+                target_by_manual_key[("file_name", media.file_name.strip().lower())] = target_row
     merged = moved = 0
     for row in rows:
-        existing = target_by_suffix.get(row.specimen_suffix)
+        source_keys = []
+        for media in row.media.all():
+            metadata = media.get_manual_import_metadata() or {}
+            row_id = metadata.get("row_id")
+            if row_id:
+                source_keys.append(("row_id", str(row_id)))
+            if media.file_name:
+                source_keys.append(("file_name", media.file_name.strip().lower()))
+        existing = next(
+            (target_by_manual_key[key] for key in source_keys if key in target_by_manual_key),
+            target_by_suffix.get(row.specimen_suffix),
+        )
         if existing is None:
             if not dry_run:
                 type(row).objects.filter(pk=row.pk).update(accession=target)
