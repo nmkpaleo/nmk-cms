@@ -1645,6 +1645,7 @@ class ReferenceAdmin(MergeAdminActionMixin, MergeAdminMixin, HistoricalImportExp
     resource_class = ReferenceResource
     list_display = ('citation', 'doi')
     search_fields = ('citation', 'doi')
+    change_list_template = "admin/cms/reference/change_list.html"
 
     def get_urls(self):
         urls = super().get_urls()
