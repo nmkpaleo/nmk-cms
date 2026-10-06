@@ -1,4 +1,5 @@
 from decimal import Decimal, InvalidOperation
+import json
 import warnings
 
 from crum import get_current_user
@@ -28,6 +29,187 @@ MANUAL_QC_SOURCE = "manual_qc"
 from .merge import MergeMixin, MergeStrategy
 from .notifications import notify_media_qc_transition
 from .taxon_identity import normalize_taxon_label, taxon_identity
+
+
+def _merge_accession_rows(*, relation_name, field, source, target, dry_run, options):
+    """Merge rows by suffix while preserving their dependent records."""
+    rows = list(source.accessionrow_set.select_for_update().all())
+    target_by_suffix = {
+        row.specimen_suffix: row
+        for row in target.accessionrow_set.select_for_update().all()
+    }
+    target_by_manual_key = {}
+    for target_row in target.accessionrow_set.all():
+        for media in target_row.media.all():
+            metadata = media.get_manual_import_metadata() or {}
+            row_id = metadata.get("row_id")
+            if row_id:
+                target_by_manual_key[("row_id", str(row_id))] = target_row
+            if media.file_name:
+                target_by_manual_key[("file_name", media.file_name.strip().lower())] = target_row
+    merged = moved = 0
+    for row in rows:
+        source_keys = []
+        for media in row.media.all():
+            metadata = media.get_manual_import_metadata() or {}
+            row_id = metadata.get("row_id")
+            if row_id:
+                source_keys.append(("row_id", str(row_id)))
+            if media.file_name:
+                source_keys.append(("file_name", media.file_name.strip().lower()))
+        existing = next(
+            (target_by_manual_key[key] for key in source_keys if key in target_by_manual_key),
+            target_by_suffix.get(row.specimen_suffix),
+        )
+        if existing is None:
+            if not dry_run:
+                type(row).objects.filter(pk=row.pk).update(accession=target)
+            moved += 1
+            target_by_suffix[row.specimen_suffix] = row
+            continue
+        if not dry_run:
+            Identification.objects.filter(accession_row=row).update(accession_row=existing)
+            NatureOfSpecimen.objects.filter(accession_row=row).update(accession_row=existing)
+            Media.objects.filter(accession_row=row).update(accession_row=existing)
+            type(row).objects.filter(pk=row.pk).delete()
+        merged += 1
+
+    # Once source rows have been folded into target rows, collapse identical
+    # NatureOfSpecimen records. IDs and audit fields are intentionally excluded
+    # from the identity key; the descriptive specimen data determines equality.
+    specimen_fields = (
+        "element_id",
+        "side",
+        "condition",
+        "verbatim_element",
+        "verbatim_element_raw",
+        "tooth_marking_detections",
+        "portion",
+        "fragments",
+    )
+    duplicate_ids = []
+    seen_specimens = set()
+    for specimen in NatureOfSpecimen.objects.filter(
+        accession_row__accession=target
+    ).select_related("element").order_by("pk"):
+        key = tuple(
+            specimen.element.name if name == "element_id" and specimen.element_id else
+            json.dumps(getattr(specimen, name), sort_keys=True, default=str)
+            if isinstance(getattr(specimen, name), (dict, list))
+            else getattr(specimen, name)
+            for name in specimen_fields
+        )
+        if key in seen_specimens:
+            duplicate_ids.append(specimen.pk)
+        else:
+            seen_specimens.add(key)
+    if not dry_run and duplicate_ids:
+        NatureOfSpecimen.objects.filter(pk__in=duplicate_ids).delete()
+    identification_fields = (
+        "identified_by_id", "taxon_verbatim", "taxon", "taxon_record_id",
+        "reference_id", "date_identified", "identification_qualifier",
+        "verbatim_identification", "identification_remarks",
+    )
+    identification_ids = []
+    seen_identifications = set()
+    for identification in Identification.objects.filter(
+        accession_row__accession=target
+    ).order_by("pk"):
+        key = tuple(getattr(identification, name) for name in identification_fields)
+        if key in seen_identifications:
+            identification_ids.append(identification.pk)
+        else:
+            seen_identifications.add(key)
+    if not dry_run and identification_ids:
+        Identification.objects.filter(pk__in=identification_ids).delete()
+
+    return {
+        "action": "custom",
+        "moved": moved,
+        "merged": merged,
+        "specimens_deduplicated": len(duplicate_ids),
+        "identifications_deduplicated": len(identification_ids),
+    }
+
+
+def _merge_accession_references(*, relation_name, field, source, target, dry_run, options):
+    """Move accession-reference links and remove exact duplicate links."""
+    links = list(source.accessionreference_set.select_for_update().all())
+    existing = {
+        (link.reference_id, link.page): link
+        for link in target.accessionreference_set.select_for_update().all()
+    }
+    moved = deduplicated = 0
+    for link in links:
+        key = (link.reference_id, link.page)
+        if key in existing:
+            if not dry_run:
+                type(link).objects.filter(pk=link.pk).delete()
+            deduplicated += 1
+            continue
+        if not dry_run:
+            type(link).objects.filter(pk=link.pk).update(accession=target)
+        existing[key] = link
+        moved += 1
+    reference_fields = (
+        "title", "first_author", "year", "journal", "volume", "issue",
+        "pages", "doi", "citation",
+    )
+    global_deduplicated = 0
+    involved_ids = set(
+        AccessionReference.objects.filter(accession=target)
+        .values_list("reference_id", flat=True)
+    )
+    for reference in Reference.objects.filter(pk__in=involved_ids).order_by("pk"):
+        lookup = {name: getattr(reference, name) for name in reference_fields}
+        canonical = Reference.objects.filter(**lookup).order_by("pk").first()
+        if canonical is None or canonical.pk == reference.pk:
+            continue
+        if not dry_run:
+            for duplicate_link in AccessionReference.objects.filter(reference=reference):
+                collision = AccessionReference.objects.filter(
+                    accession=duplicate_link.accession,
+                    reference=canonical,
+                ).exclude(pk=duplicate_link.pk).first()
+                if collision:
+                    duplicate_link.delete()
+                else:
+                    duplicate_link.reference = canonical
+                    duplicate_link.save(update_fields=["reference"])
+            Identification.objects.filter(reference=reference).update(reference=canonical)
+            reference.delete()
+        global_deduplicated += 1
+    return {
+        "action": "custom",
+        "moved": moved,
+        "deduplicated": deduplicated,
+        "references_globally_deduplicated": global_deduplicated,
+    }
+
+
+def _merge_accession_fieldslips(*, relation_name, field, source, target, dry_run, options):
+    """Move Field Slip links and combine distinct notes on collisions."""
+    links = list(source.fieldslip_links.select_for_update().all())
+    existing = {
+        link.fieldslip_id: link
+        for link in target.fieldslip_links.select_for_update().all()
+    }
+    moved = deduplicated = 0
+    for link in links:
+        current = existing.get(link.fieldslip_id)
+        if current is not None:
+            if not dry_run and link.notes and link.notes != current.notes:
+                notes = "\n".join(filter(None, (current.notes, link.notes)))
+                type(current).objects.filter(pk=current.pk).update(notes=notes)
+            if not dry_run:
+                type(link).objects.filter(pk=link.pk).delete()
+            deduplicated += 1
+            continue
+        if not dry_run:
+            type(link).objects.filter(pk=link.pk).update(accession=target)
+        existing[link.fieldslip_id] = link
+        moved += 1
+    return {"action": "custom", "moved": moved, "deduplicated": deduplicated}
 
 
 class InventoryStatus(models.TextChoices):
@@ -478,7 +660,7 @@ class Collection(BaseModel):
 
 
 # Accession Model
-class Accession(BaseModel):
+class Accession(MergeMixin, BaseModel):
     """
     Represents an accessioned specimen linked to a collection and locality.
     """
@@ -498,6 +680,22 @@ class Accession(BaseModel):
     instance_number = models.PositiveIntegerField(
         default=1,
         help_text="Instance of the specimen number for handling known duplicates."
+    )
+    merged_into = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="merged_accessions",
+        help_text="Canonical accession retained after this accession was merged.",
+    )
+    merged_on = models.DateTimeField(null=True, blank=True)
+    merged_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="accessions_merged",
     )
     accessioned_by = models.ForeignKey(
         User,
@@ -537,6 +735,26 @@ class Accession(BaseModel):
     )
     history = HistoricalRecords()
 
+    merge_fields = {
+        # The selected target accession is authoritative for identity fields.
+        # Accession has a dedicated merge action, so it must not route through
+        # the generic field-selection screen used by other models.
+        "collection": MergeStrategy.PREFER_NON_NULL,
+        "specimen_prefix": MergeStrategy.PREFER_NON_NULL,
+        "specimen_no": MergeStrategy.PREFER_NON_NULL,
+        "instance_number": MergeStrategy.PREFER_NON_NULL,
+        "accessioned_by": MergeStrategy.PREFER_NON_NULL,
+        "type_status": MergeStrategy.PREFER_NON_NULL,
+        "comment": MergeStrategy.PREFER_NON_NULL,
+        "is_published": MergeStrategy.PREFER_NON_NULL,
+    }
+    relation_strategies = {
+        "accessionrow_set": {"action": "custom", "callback": _merge_accession_rows},
+        "accessionreference_set": {"action": "custom", "callback": _merge_accession_references},
+        "fieldslip_links": {"action": "custom", "callback": _merge_accession_fieldslips},
+        "media": {"action": "reassign"},
+    }
+
     @property
     def manual_import_media(self):
         """Return the first related media item originating from a manual QC import."""
@@ -574,6 +792,24 @@ class Accession(BaseModel):
     def get_absolute_url(self):
         return reverse('accession_detail', args=[str(self.id)])
 
+    @property
+    def is_merged(self):
+        return self.merged_into_id is not None
+
+    def get_canonical(self):
+        accession = self
+        seen = set()
+        while accession.merged_into_id and accession.pk not in seen:
+            seen.add(accession.pk)
+            accession = accession.merged_into
+        return accession
+
+    def archive_source_instance(self, source_instance):
+        source_instance.merged_into = self
+        source_instance.merged_on = timezone.now()
+        source_instance.merged_by = get_current_user()
+        source_instance.save(update_fields=["merged_into", "merged_on", "merged_by", "modified_on", "modified_by"])
+
     def __str__(self):
         collection_abbr = self.collection.abbreviation if self.collection else "N/A"
         prefix_abbr = self.specimen_prefix.abbreviation if self.specimen_prefix else "N/A"
@@ -584,6 +820,7 @@ class Accession(BaseModel):
         ordering = ["collection", "specimen_prefix", "specimen_no"]
         verbose_name = "Accession"
         verbose_name_plural = "Accessions"
+        permissions = [("can_merge", "Can merge accession records")]
         constraints = [
             models.UniqueConstraint(
                 fields=["specimen_no", "specimen_prefix", "instance_number"],

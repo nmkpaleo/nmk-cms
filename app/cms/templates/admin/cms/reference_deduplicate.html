@@ -1,0 +1,22 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% block content %}
+<h1>{{ title }}</h1>
+<p>{% blocktrans with count=duplicate_count relations=relation_count %}This will delete {{ count }} duplicate Reference record(s) and repoint {{ relations }} accession-reference relation(s).{% endblocktrans %}</p>
+{% if duplicate_groups %}
+<ul>
+  {% for group in duplicate_groups %}
+  <li>{% trans "Keep" %}: {{ group.0 }}; {% trans "delete" %}: {{ group|slice:"1:"|join:", " }}</li>
+  {% endfor %}
+</ul>
+<form method="post">
+  {% csrf_token %}
+  <input type="hidden" name="confirm" value="yes">
+  <button type="submit" class="button default">{% trans "Delete duplicates and repoint relations" %}</button>
+  <a href="{% url 'admin:cms_reference_changelist' %}" class="button">{% trans "Cancel" %}</a>
+</form>
+{% else %}
+<p>{% trans "No exact duplicate References were found." %}</p>
+<a href="{% url 'admin:cms_reference_changelist' %}" class="button">{% trans "Back to References" %}</a>
+{% endif %}
+{% endblock %}
