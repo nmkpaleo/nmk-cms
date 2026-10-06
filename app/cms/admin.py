@@ -1652,7 +1652,7 @@ class ReferenceAdmin(MergeAdminActionMixin, MergeAdminMixin, HistoricalImportExp
         return custom + urls
 
     def has_deduplicate_permission(self, request):
-        return request.user.is_superuser or request.user.has_perm("cms.can_merge_reference")
+        return request.user.is_superuser or request.user.has_perm("cms.can_merge")
 
     def changelist_view(self, request, extra_context=None):
         extra_context = extra_context or {}
