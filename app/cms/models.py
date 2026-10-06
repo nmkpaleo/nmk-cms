@@ -82,12 +82,111 @@ def _merge_accession_rows(*, relation_name, field, source, target, dry_run, opti
             seen_specimens.add(key)
     if not dry_run and duplicate_ids:
         NatureOfSpecimen.objects.filter(pk__in=duplicate_ids).delete()
+    identification_fields = (
+        "identified_by_id", "taxon_verbatim", "taxon", "taxon_record_id",
+        "reference_id", "date_identified", "identification_qualifier",
+        "verbatim_identification", "identification_remarks",
+    )
+    identification_ids = []
+    seen_identifications = set()
+    for identification in Identification.objects.filter(
+        accession_row__accession=target
+    ).order_by("pk"):
+        key = tuple(getattr(identification, name) for name in identification_fields)
+        if key in seen_identifications:
+            identification_ids.append(identification.pk)
+        else:
+            seen_identifications.add(key)
+    if not dry_run and identification_ids:
+        Identification.objects.filter(pk__in=identification_ids).delete()
+
     return {
         "action": "custom",
         "moved": moved,
         "merged": merged,
         "specimens_deduplicated": len(duplicate_ids),
+        "identifications_deduplicated": len(identification_ids),
     }
+
+
+def _merge_accession_references(*, relation_name, field, source, target, dry_run, options):
+    """Move accession-reference links and remove exact duplicate links."""
+    links = list(source.accessionreference_set.select_for_update().all())
+    existing = {
+        (link.reference_id, link.page): link
+        for link in target.accessionreference_set.select_for_update().all()
+    }
+    moved = deduplicated = 0
+    for link in links:
+        key = (link.reference_id, link.page)
+        if key in existing:
+            if not dry_run:
+                type(link).objects.filter(pk=link.pk).delete()
+            deduplicated += 1
+            continue
+        if not dry_run:
+            type(link).objects.filter(pk=link.pk).update(accession=target)
+        existing[key] = link
+        moved += 1
+    reference_fields = (
+        "title", "first_author", "year", "journal", "volume", "issue",
+        "pages", "doi", "citation",
+    )
+    global_deduplicated = 0
+    involved_ids = set(
+        AccessionReference.objects.filter(accession=target)
+        .values_list("reference_id", flat=True)
+    )
+    for reference in Reference.objects.filter(pk__in=involved_ids).order_by("pk"):
+        lookup = {name: getattr(reference, name) for name in reference_fields}
+        canonical = Reference.objects.filter(**lookup).order_by("pk").first()
+        if canonical is None or canonical.pk == reference.pk:
+            continue
+        if not dry_run:
+            for duplicate_link in AccessionReference.objects.filter(reference=reference):
+                collision = AccessionReference.objects.filter(
+                    accession=duplicate_link.accession,
+                    reference=canonical,
+                ).exclude(pk=duplicate_link.pk).first()
+                if collision:
+                    duplicate_link.delete()
+                else:
+                    duplicate_link.reference = canonical
+                    duplicate_link.save(update_fields=["reference"])
+            Identification.objects.filter(reference=reference).update(reference=canonical)
+            reference.delete()
+        global_deduplicated += 1
+    return {
+        "action": "custom",
+        "moved": moved,
+        "deduplicated": deduplicated,
+        "references_globally_deduplicated": global_deduplicated,
+    }
+
+
+def _merge_accession_fieldslips(*, relation_name, field, source, target, dry_run, options):
+    """Move Field Slip links and combine distinct notes on collisions."""
+    links = list(source.fieldslip_links.select_for_update().all())
+    existing = {
+        link.fieldslip_id: link
+        for link in target.fieldslip_links.select_for_update().all()
+    }
+    moved = deduplicated = 0
+    for link in links:
+        current = existing.get(link.fieldslip_id)
+        if current is not None:
+            if not dry_run and link.notes and link.notes != current.notes:
+                notes = "\n".join(filter(None, (current.notes, link.notes)))
+                type(current).objects.filter(pk=current.pk).update(notes=notes)
+            if not dry_run:
+                type(link).objects.filter(pk=link.pk).delete()
+            deduplicated += 1
+            continue
+        if not dry_run:
+            type(link).objects.filter(pk=link.pk).update(accession=target)
+        existing[link.fieldslip_id] = link
+        moved += 1
+    return {"action": "custom", "moved": moved, "deduplicated": deduplicated}
 
 
 class InventoryStatus(models.TextChoices):
@@ -628,8 +727,8 @@ class Accession(MergeMixin, BaseModel):
     }
     relation_strategies = {
         "accessionrow_set": {"action": "custom", "callback": _merge_accession_rows},
-        "accessionreference_set": {"action": "reassign", "deduplicate": True},
-        "fieldslip_links": {"action": "reassign", "deduplicate": True},
+        "accessionreference_set": {"action": "custom", "callback": _merge_accession_references},
+        "fieldslip_links": {"action": "custom", "callback": _merge_accession_fieldslips},
         "media": {"action": "reassign"},
     }
 
