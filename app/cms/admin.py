@@ -755,6 +755,7 @@ class DuplicateFilter(admin.SimpleListFilter):
         duplicate_subquery = (
             Accession.objects
             .filter(
+                merged_into__isnull=True,
                 specimen_no=OuterRef('specimen_no'),
                 specimen_prefix=OuterRef('specimen_prefix')
             )
@@ -857,6 +858,7 @@ class AccessionAdmin(MergeAdminActionMixin, HistoricalImportExportAdmin):
 
     def is_duplicate_display(self, obj):
         count = Accession.objects.filter(
+            merged_into__isnull=True,
             specimen_no=obj.specimen_no,
             specimen_prefix=obj.specimen_prefix
         ).count()
