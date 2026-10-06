@@ -579,10 +579,13 @@ class Accession(MergeMixin, BaseModel):
     history = HistoricalRecords()
 
     merge_fields = {
-        "collection": MergeStrategy.FIELD_SELECTION,
-        "specimen_prefix": MergeStrategy.FIELD_SELECTION,
-        "specimen_no": MergeStrategy.FIELD_SELECTION,
-        "instance_number": MergeStrategy.FIELD_SELECTION,
+        # The selected target accession is authoritative for identity fields.
+        # Accession has a dedicated merge action, so it must not route through
+        # the generic field-selection screen used by other models.
+        "collection": MergeStrategy.PREFER_NON_NULL,
+        "specimen_prefix": MergeStrategy.PREFER_NON_NULL,
+        "specimen_no": MergeStrategy.PREFER_NON_NULL,
+        "instance_number": MergeStrategy.PREFER_NON_NULL,
         "accessioned_by": MergeStrategy.PREFER_NON_NULL,
         "type_status": MergeStrategy.PREFER_NON_NULL,
         "comment": MergeStrategy.PREFER_NON_NULL,
