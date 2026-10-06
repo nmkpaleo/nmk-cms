@@ -1646,6 +1646,59 @@ class ReferenceAdmin(MergeAdminActionMixin, MergeAdminMixin, HistoricalImportExp
     list_display = ('citation', 'doi')
     search_fields = ('citation', 'doi')
 
+    def get_urls(self):
+        urls = super().get_urls()
+        custom = [path("deduplicate-exact/", self.admin_site.admin_view(self.deduplicate_exact_view), name="cms_reference_deduplicate_exact")]
+        return custom + urls
+
+    def has_deduplicate_permission(self, request):
+        return request.user.is_superuser or request.user.has_perm("cms.can_merge_reference")
+
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        if self.has_deduplicate_permission(request):
+            extra_context["exact_deduplicate_url"] = reverse("admin:cms_reference_deduplicate_exact")
+        return super().changelist_view(request, extra_context=extra_context)
+
+    def deduplicate_exact_view(self, request):
+        if not self.has_deduplicate_permission(request):
+            raise PermissionDenied
+        from .management.commands.deduplicate_references import reference_key
+
+        groups = {}
+        for reference in Reference.objects.order_by("pk"):
+            groups.setdefault(reference_key(reference), []).append(reference)
+        duplicate_groups = [items for items in groups.values() if len(items) > 1]
+        relation_count = sum(
+            AccessionReference.objects.filter(reference__in=items[1:]).count()
+            for items in duplicate_groups
+        )
+        if request.method == "POST" and request.POST.get("confirm") == "yes":
+            deleted = 0
+            for items in duplicate_groups:
+                canonical, duplicates = items[0], items[1:]
+                for duplicate in duplicates:
+                    for link in list(AccessionReference.objects.filter(reference=duplicate)):
+                        collision = AccessionReference.objects.filter(
+                            accession=link.accession, reference=canonical
+                        ).exclude(pk=link.pk).first()
+                        if collision:
+                            AccessionReference.objects.filter(pk=link.pk).delete()
+                        else:
+                            AccessionReference.objects.filter(pk=link.pk).update(reference=canonical)
+                    Identification.objects.filter(reference=duplicate).update(reference=canonical)
+                    Reference.objects.filter(pk=duplicate.pk).delete()
+                    deleted += 1
+            self.message_user(request, _("Deleted %(count)d duplicate Reference records.") % {"count": deleted}, messages.SUCCESS)
+            return redirect(reverse("admin:cms_reference_changelist"))
+        return TemplateResponse(request, "admin/cms/reference_deduplicate.html", {
+            "opts": self.model._meta,
+            "duplicate_groups": duplicate_groups,
+            "duplicate_count": sum(len(items) - 1 for items in duplicate_groups),
+            "relation_count": relation_count,
+            "title": _("Deduplicate exact References"),
+        })
+
 # SpecimenGeology
 class SpecimenGeologyAdmin(HistoricalImportExportAdmin):
     list_display = ('accession', 'earliest_geological_context', 'latest_geological_context')
