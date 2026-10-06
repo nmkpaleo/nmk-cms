@@ -1,4 +1,5 @@
 from decimal import Decimal, InvalidOperation
+import json
 import warnings
 
 from crum import get_current_user
@@ -52,7 +53,41 @@ def _merge_accession_rows(*, relation_name, field, source, target, dry_run, opti
             Media.objects.filter(accession_row=row).update(accession_row=existing)
             type(row).objects.filter(pk=row.pk).delete()
         merged += 1
-    return {"action": "custom", "moved": moved, "merged": merged}
+
+    # Once source rows have been folded into target rows, collapse identical
+    # NatureOfSpecimen records. IDs and audit fields are intentionally excluded
+    # from the identity key; the descriptive specimen data determines equality.
+    specimen_fields = (
+        "element_id",
+        "side",
+        "condition",
+        "verbatim_element",
+        "verbatim_element_raw",
+        "tooth_marking_detections",
+        "portion",
+        "fragments",
+    )
+    duplicate_ids = []
+    seen_specimens = set()
+    for specimen in NatureOfSpecimen.objects.filter(accession_row__accession=target).order_by("pk"):
+        key = tuple(
+            json.dumps(getattr(specimen, name), sort_keys=True, default=str)
+            if isinstance(getattr(specimen, name), (dict, list))
+            else getattr(specimen, name)
+            for name in specimen_fields
+        )
+        if key in seen_specimens:
+            duplicate_ids.append(specimen.pk)
+        else:
+            seen_specimens.add(key)
+    if not dry_run and duplicate_ids:
+        NatureOfSpecimen.objects.filter(pk__in=duplicate_ids).delete()
+    return {
+        "action": "custom",
+        "moved": moved,
+        "merged": merged,
+        "specimens_deduplicated": len(duplicate_ids),
+    }
 
 
 class InventoryStatus(models.TextChoices):
