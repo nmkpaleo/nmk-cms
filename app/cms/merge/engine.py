@@ -705,7 +705,7 @@ def merge_records(
         if not dry_run:
             if archive:
                 target.archive_source_instance(source)
-            if source.pk:
+            if source.pk and not getattr(source, "is_merged", False):
                 source.delete()
 
         target_after = serialize_model_state(target if dry_run else model_cls.objects.get(pk=target.pk))

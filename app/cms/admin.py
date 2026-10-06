@@ -826,7 +826,7 @@ class AccessionManualImportFilter(admin.SimpleListFilter):
         return queryset
 
 # Accession Model
-class AccessionAdmin(HistoricalImportExportAdmin):
+class AccessionAdmin(MergeAdminActionMixin, HistoricalImportExportAdmin):
     resource_class = AccessionResource
     list_display = (
         'collection_abbreviation',
@@ -884,7 +884,10 @@ class AccessionAdmin(HistoricalImportExportAdmin):
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        return queryset.prefetch_related("media")
+        return queryset.filter(merged_into__isnull=True).prefetch_related("media")
+
+    def has_merge_permission(self, request):
+        return request.user.is_superuser or request.user.has_perm("cms.can_merge_accession")
 
     def get_list_display(self, request):
         columns = list(super().get_list_display(request))

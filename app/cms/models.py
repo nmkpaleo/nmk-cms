@@ -30,6 +30,31 @@ from .notifications import notify_media_qc_transition
 from .taxon_identity import normalize_taxon_label, taxon_identity
 
 
+def _merge_accession_rows(*, relation_name, field, source, target, dry_run, options):
+    """Merge rows by suffix while preserving their dependent records."""
+    rows = list(source.accessionrow_set.select_for_update().all())
+    target_by_suffix = {
+        row.specimen_suffix: row
+        for row in target.accessionrow_set.select_for_update().all()
+    }
+    merged = moved = 0
+    for row in rows:
+        existing = target_by_suffix.get(row.specimen_suffix)
+        if existing is None:
+            if not dry_run:
+                type(row).objects.filter(pk=row.pk).update(accession=target)
+            moved += 1
+            target_by_suffix[row.specimen_suffix] = row
+            continue
+        if not dry_run:
+            Identification.objects.filter(accession_row=row).update(accession_row=existing)
+            NatureOfSpecimen.objects.filter(accession_row=row).update(accession_row=existing)
+            Media.objects.filter(accession_row=row).update(accession_row=existing)
+            type(row).objects.filter(pk=row.pk).delete()
+        merged += 1
+    return {"action": "custom", "moved": moved, "merged": merged}
+
+
 class InventoryStatus(models.TextChoices):
     """Status options for inventory sessions."""
     PRESENT = "present", "Present"
@@ -478,7 +503,7 @@ class Collection(BaseModel):
 
 
 # Accession Model
-class Accession(BaseModel):
+class Accession(MergeMixin, BaseModel):
     """
     Represents an accessioned specimen linked to a collection and locality.
     """
@@ -498,6 +523,22 @@ class Accession(BaseModel):
     instance_number = models.PositiveIntegerField(
         default=1,
         help_text="Instance of the specimen number for handling known duplicates."
+    )
+    merged_into = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="merged_accessions",
+        help_text="Canonical accession retained after this accession was merged.",
+    )
+    merged_on = models.DateTimeField(null=True, blank=True)
+    merged_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="accessions_merged",
     )
     accessioned_by = models.ForeignKey(
         User,
@@ -537,6 +578,23 @@ class Accession(BaseModel):
     )
     history = HistoricalRecords()
 
+    merge_fields = {
+        "collection": MergeStrategy.FIELD_SELECTION,
+        "specimen_prefix": MergeStrategy.FIELD_SELECTION,
+        "specimen_no": MergeStrategy.FIELD_SELECTION,
+        "instance_number": MergeStrategy.FIELD_SELECTION,
+        "accessioned_by": MergeStrategy.PREFER_NON_NULL,
+        "type_status": MergeStrategy.PREFER_NON_NULL,
+        "comment": MergeStrategy.PREFER_NON_NULL,
+        "is_published": MergeStrategy.PREFER_NON_NULL,
+    }
+    relation_strategies = {
+        "accessionrow_set": {"action": "custom", "callback": _merge_accession_rows},
+        "accessionreference_set": {"action": "reassign", "deduplicate": True},
+        "fieldslip_links": {"action": "reassign", "deduplicate": True},
+        "media": {"action": "reassign"},
+    }
+
     @property
     def manual_import_media(self):
         """Return the first related media item originating from a manual QC import."""
@@ -574,6 +632,24 @@ class Accession(BaseModel):
     def get_absolute_url(self):
         return reverse('accession_detail', args=[str(self.id)])
 
+    @property
+    def is_merged(self):
+        return self.merged_into_id is not None
+
+    def get_canonical(self):
+        accession = self
+        seen = set()
+        while accession.merged_into_id and accession.pk not in seen:
+            seen.add(accession.pk)
+            accession = accession.merged_into
+        return accession
+
+    def archive_source_instance(self, source_instance):
+        source_instance.merged_into = self
+        source_instance.merged_on = timezone.now()
+        source_instance.merged_by = get_current_user()
+        source_instance.save(update_fields=["merged_into", "merged_on", "merged_by", "modified_on", "modified_by"])
+
     def __str__(self):
         collection_abbr = self.collection.abbreviation if self.collection else "N/A"
         prefix_abbr = self.specimen_prefix.abbreviation if self.specimen_prefix else "N/A"
@@ -584,6 +660,7 @@ class Accession(BaseModel):
         ordering = ["collection", "specimen_prefix", "specimen_no"]
         verbose_name = "Accession"
         verbose_name_plural = "Accessions"
+        permissions = [("can_merge", "Can merge accession records")]
         constraints = [
             models.UniqueConstraint(
                 fields=["specimen_no", "specimen_prefix", "instance_number"],

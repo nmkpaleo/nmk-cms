@@ -1923,6 +1923,12 @@ class AccessionDetailView(DetailView):
     template_name = 'cms/accession_detail.html'
     context_object_name = 'accession'
 
+    def get(self, request, *args, **kwargs):
+        requested = get_object_or_404(Accession.objects.select_related("merged_into"), pk=kwargs["pk"])
+        if requested.merged_into_id:
+            return redirect("accession_detail", pk=requested.get_canonical().pk)
+        return super().get(request, *args, **kwargs)
+
     def get_queryset(self):
         qs = super().get_queryset().select_related(
             'collection',
