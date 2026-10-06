@@ -69,8 +69,11 @@ def _merge_accession_rows(*, relation_name, field, source, target, dry_run, opti
     )
     duplicate_ids = []
     seen_specimens = set()
-    for specimen in NatureOfSpecimen.objects.filter(accession_row__accession=target).order_by("pk"):
+    for specimen in NatureOfSpecimen.objects.filter(
+        accession_row__accession=target
+    ).select_related("element").order_by("pk"):
         key = tuple(
+            specimen.element.name if name == "element_id" and specimen.element_id else
             json.dumps(getattr(specimen, name), sort_keys=True, default=str)
             if isinstance(getattr(specimen, name), (dict, list))
             else getattr(specimen, name)
