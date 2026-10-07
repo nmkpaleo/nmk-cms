@@ -584,6 +584,13 @@
             </div>
           </div>
           <div class="qc-field">
+            <label class="qc-label" for="qc-site-area">Site / collecting area:</label>
+            <div class="qc-control">
+              <input id="qc-site-area" class="w3-input" type="text" value="{{ qc_preview.accession.site_area|default:'' }}" readonly>
+              <span class="qc-inline-note">OCR candidate; the Place is resolved when the accession is approved.</span>
+            </div>
+          </div>
+          <div class="qc-field">
             <label class="qc-label" for="{{ accession_form.type_status.id_for_label }}">{{ accession_form.type_status.label }}:</label>
             <div class="qc-control">
               {{ accession_form.type_status }}

@@ -84,6 +84,7 @@ class PreviewAccession:
         collection_abbr: Optional[str],
         prefix_obj: Optional[Locality | str],
         specimen_no: Optional[int | str],
+        site_area: Optional[str],
         type_status: Optional[str],
         comment: Optional[str],
         accessioned_by: Optional[User],
@@ -91,6 +92,7 @@ class PreviewAccession:
         self.collection_abbr = collection_abbr or ""
         self.specimen_prefix = prefix_obj
         self.specimen_no = specimen_no
+        self.site_area = site_area or ""
         self.type_status = type_status
         self.comment = comment
         self.accessioned_by = accessioned_by
@@ -279,6 +281,7 @@ def build_preview_accession(
     collection_abbr = interpreted_value(accession_payload.get("collection_abbreviation"))
     prefix_abbr = interpreted_value(accession_payload.get("specimen_prefix_abbreviation"))
     specimen_no = interpreted_value(accession_payload.get("specimen_no"))
+    site_area = interpreted_value(accession_payload.get("site_area"))
     type_status = interpreted_value(accession_payload.get("type_status"))
     comment = interpreted_value(accession_payload.get("comment"))
 
@@ -293,6 +296,7 @@ def build_preview_accession(
         collection_abbr=_resolve_collection_abbr(collection_abbr),
         prefix_obj=_resolve_prefix(prefix_abbr),
         specimen_no=specimen_no_display,
+        site_area=site_area,
         type_status=type_status,
         comment=comment,
         accessioned_by=accessioned_by,

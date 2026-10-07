@@ -611,6 +611,7 @@ JSON schema:
       "collection_abbreviation": { "raw": string|null, "interpreted": string|null, "confidence": number},      // First part of the Accession, one of "KNM", "KNMI", "KNMP". Default is "KNM" if none shown
       "specimen_prefix_abbreviation": { "raw": string|null, "interpreted": string|null, "confidence": number}, // Second part of the Accession, two capital letters. e.g., "AB", "ER"; should always be present
       "specimen_no": { "raw": integer|null, "interpreted": integer|null, "confidence": number},                // Third part of the Accession, full numeric part as written, (e.g., "1234")
+      "site_area": { "raw": string|null, "interpreted": string|null, "confidence": number},                  // Collecting site or area for the accession event only; exclude formation, member, bed, horizon, and comments
       "type_status": { "raw": string|null, "interpreted": string|null, "confidence": number},                  // Usually handwritten with red (e.g., "Type", "Holotype),
       "published":  { "raw": string|null, "interpreted": string|null, "confidence": number},                   // is there a red forward slash on the top left corner of the card? Yes or No.
       "additional_notes": [                                                                                    // all additional extracted data from OCR
@@ -702,6 +703,7 @@ Schema (structure only):
     "collection_abbreviation":{r,i,c},
     "specimen_prefix_abbreviation":{r,i,c},
     "specimen_no":{r,i,c},
+    "site_area":{r,i,c},
     "type_status":{r,i,c},
     "published":{r,i,c},
     "additional_notes":[{"heading":{r,i,c},"value":{r,i,c}}],
