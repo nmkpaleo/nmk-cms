@@ -893,7 +893,10 @@
         });
       }
       if (window.jQuery) {
-        window.jQuery(siteInput).on('change.select2', function () {
+        window.jQuery(document).on('select2:select', '#id_accession-site_area', function (event) {
+          updateSitePreview(event.params && event.params.data ? event.params.data.text : '');
+        });
+        window.jQuery(document).on('select2:unselect', '#id_accession-site_area', function () {
           updateSitePreview('');
         });
       }
