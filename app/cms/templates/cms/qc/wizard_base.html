@@ -502,7 +502,7 @@
         {% endif %}
       </div>
       {% if media.media_location %}
-        <img src="{{ media.media_location.url }}" alt="{{ media.file_name|default:'Media preview' }}" />
+        <img src="{% url 'media_qc_preview_image' media.uuid %}" alt="{{ media.file_name|default:'Media preview' }}" />
       {% else %}
         <div class="w3-padding qc-media-fallback w3-small w3-text-grey">
           No media preview is available for this record.

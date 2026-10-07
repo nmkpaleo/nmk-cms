@@ -100,7 +100,10 @@ class PreviewAccession:
         self.instance_number = 1
 
     def __str__(self) -> str:
-        prefix_display = str(self.specimen_prefix or "")
+        prefix_display = (
+            getattr(self.specimen_prefix, "abbreviation", None)
+            or str(self.specimen_prefix or "")
+        )
         specimen_value = self.specimen_no or ""
         base = f"{self.collection_abbr}-{prefix_display} {specimen_value}".strip()
         return base or "Preview accession"

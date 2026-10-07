@@ -5,6 +5,7 @@ Template context inventory and authentication coverage are catalogued in
 """
 
 from tempfile import TemporaryDirectory
+from io import BytesIO
 
 import copy
 import csv
@@ -74,6 +75,7 @@ from django.utils.translation import gettext_lazy as _, ngettext
 from django.utils.dateparse import parse_date, parse_datetime
 from django.utils.timezone import now
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, FormView, TemplateView
+from PIL import Image, ImageOps
 from django.core.serializers.json import DjangoJSONEncoder
 from django.core.exceptions import PermissionDenied
 
@@ -1915,6 +1917,24 @@ class FieldSlipListView(LoginRequiredMixin, UserPassesTestMixin, FilterView):
 
 class MediaLicensingView(TemplateView):
     template_name = "cms/media_licensing.html"
+
+
+@login_required
+def media_qc_preview_image(request, uuid):
+    media = get_object_or_404(Media, uuid=uuid)
+    try:
+        with media.media_location.open("rb") as source:
+            image = ImageOps.exif_transpose(Image.open(source))
+            image.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
+            if image.mode not in ("RGB", "L"):
+                image = image.convert("RGB")
+            output = BytesIO()
+            image.save(output, format="JPEG", quality=82, optimize=True)
+    except (OSError, ValueError):
+        return HttpResponse(status=404)
+    response = HttpResponse(output.getvalue(), content_type="image/jpeg")
+    response["Cache-Control"] = "private, max-age=3600"
+    return response
 
 
 @method_decorator(login_required, name="dispatch")
