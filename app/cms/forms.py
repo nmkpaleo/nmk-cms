@@ -686,6 +686,8 @@ class IdentifiedByWidget(s2forms.ModelSelect2TagWidget):
 
 
 class AccessionForm(BaseW3ModelForm):
+    site_area = forms.CharField(required=False, label="Site / collecting area", max_length=255)
+
     class Meta:
         model = Accession
         fields = [
@@ -702,7 +704,12 @@ class AccessionForm(BaseW3ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        qc_mode = kwargs.pop("qc_mode", False)
         super().__init__(*args, **kwargs)
+        if not qc_mode:
+            self.fields.pop("site_area", None)
+        elif self.instance and self.instance.site_id:
+            self.fields["site_area"].initial = self.instance.site.name
 
         # Custom label for Locality field in dropdown
         self.fields["specimen_prefix"].label_from_instance = (

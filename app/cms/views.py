@@ -3416,6 +3416,7 @@ class MediaQCFormManager:
             "specimen_no": specimen_no_initial,
             "type_status": type_status_initial,
             "comment": comment_initial,
+            "site_area": self._payload_text(self.accession_payload.get("site_area")),
             "accessioned_by": accessioned_by_user,
         }
         self.accession_instance = accession_instance
@@ -3435,6 +3436,7 @@ class MediaQCFormManager:
                 self.request.POST,
                 prefix="accession",
                 instance=self.accession_instance,
+                qc_mode=True,
             )
             self.row_formset = AccessionRowFormSet(self.request.POST, prefix="row")
             self.ident_formset = IdentificationQCFormSet(
@@ -3454,6 +3456,7 @@ class MediaQCFormManager:
                 prefix="accession",
                 instance=self.accession_instance,
                 initial=self.acc_initial,
+                qc_mode=True,
             )
             self.row_formset = AccessionRowFormSet(
                 prefix="row", initial=self.row_initial
@@ -3675,6 +3678,7 @@ class MediaQCFormManager:
         specimen_no_cleaned = cleaned_accession.get("specimen_no")
         type_status_cleaned = cleaned_accession.get("type_status")
         comment_cleaned = cleaned_accession.get("comment")
+        site_area_cleaned = cleaned_accession.get("site_area")
 
         storage_cache: dict[str, Storage] = {}
 
@@ -3710,6 +3714,11 @@ class MediaQCFormManager:
                 self.accession_payload,
                 "comment",
                 comment_cleaned,
+            )
+            _set_interpreted(
+                self.accession_payload,
+                "site_area",
+                site_area_cleaned,
             )
 
             updated_rows = []
