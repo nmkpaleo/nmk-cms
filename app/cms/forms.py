@@ -602,6 +602,26 @@ class TaxonWidget(s2forms.ModelSelect2Widget):
         return base_name
 
 
+class PlaceWidget(s2forms.ModelSelect2Widget):
+    model = Place
+    search_fields = ["name__icontains", "locality__name__icontains"]
+
+    def __init__(self, *args, **kwargs):
+        attrs = kwargs.setdefault("attrs", {})
+        attrs.setdefault("data-placeholder", "Search for a site or collecting area")
+        attrs.setdefault("data-minimum-input-length", 2)
+        attrs.setdefault("data-allow-clear", "true")
+        super().__init__(*args, **kwargs)
+
+    def get_queryset(self):
+        return Place.objects.filter(
+            place_type__in=["Site", "CollectingArea"]
+        ).select_related("locality").order_by("name")
+
+    def label_from_instance(self, obj):
+        return f"{obj.name} ({obj.locality.abbreviation})"
+
+
 class IdentifiedByWidget(s2forms.ModelSelect2TagWidget):
     allow_multiple_selected = False
     model = Person
@@ -701,6 +721,7 @@ class AccessionForm(BaseW3ModelForm):
         ]
         widgets = {
             "accessioned_by": forms.HiddenInput(),
+            "site": PlaceWidget,
         }
 
     def __init__(self, *args, **kwargs):
