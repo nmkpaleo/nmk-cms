@@ -9,6 +9,10 @@
     {% endfor %}
   </div>
   <p class="qc-inline-note" data-qc-rows-target="emptyMessage"{% if row_contexts %} hidden{% endif %}>No specimen rows were detected in the OCR results.</p>
+  <button type="button" class="w3-button w3-blue w3-round" data-action="click->qc-rows#insertRow">
+    <i class="fa-solid fa-plus" aria-hidden="true"></i>
+    <span class="w3-margin-left">Add specimen row</span>
+  </button>
 </section>
 <template data-qc-rows-target="rowTemplate">
   {% include "cms/qc/partials/row_card.html" with row_form=row_formset.empty_form ident_forms='' specimen_forms='' row_id='' display_index='' is_template=True %}

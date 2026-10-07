@@ -84,6 +84,7 @@ class PreviewAccession:
         collection_abbr: Optional[str],
         prefix_obj: Optional[Locality | str],
         specimen_no: Optional[int | str],
+        site_area: Optional[str],
         type_status: Optional[str],
         comment: Optional[str],
         accessioned_by: Optional[User],
@@ -91,6 +92,7 @@ class PreviewAccession:
         self.collection_abbr = collection_abbr or ""
         self.specimen_prefix = prefix_obj
         self.specimen_no = specimen_no
+        self.site_area = site_area or ""
         self.type_status = type_status
         self.comment = comment
         self.accessioned_by = accessioned_by
@@ -98,7 +100,10 @@ class PreviewAccession:
         self.instance_number = 1
 
     def __str__(self) -> str:
-        prefix_display = str(self.specimen_prefix or "")
+        prefix_display = (
+            getattr(self.specimen_prefix, "abbreviation", None)
+            or str(self.specimen_prefix or "")
+        )
         specimen_value = self.specimen_no or ""
         base = f"{self.collection_abbr}-{prefix_display} {specimen_value}".strip()
         return base or "Preview accession"
@@ -279,8 +284,26 @@ def build_preview_accession(
     collection_abbr = interpreted_value(accession_payload.get("collection_abbreviation"))
     prefix_abbr = interpreted_value(accession_payload.get("specimen_prefix_abbreviation"))
     specimen_no = interpreted_value(accession_payload.get("specimen_no"))
+    site_area = interpreted_value(accession_payload.get("site_area"))
     type_status = interpreted_value(accession_payload.get("type_status"))
     comment = interpreted_value(accession_payload.get("comment"))
+
+    if accession_form is not None:
+        site_area_field = accession_form.fields.get("site_area")
+        if site_area_field is not None:
+            form_site_area = accession_form["site_area"].value()
+            if "site_area" in getattr(accession_form, "cleaned_data", {}):
+                form_site_area = accession_form.cleaned_data.get("site_area")
+            if form_site_area is not None:
+                site_area = form_site_area
+        try:
+            form_site = accession_form.cleaned_data.get("site")
+        except AttributeError:
+            form_site = None
+        if form_site is None:
+            form_site = accession_form.fields.get("site").initial if accession_form.fields.get("site") else None
+        if form_site is not None:
+            site_area = str(form_site)
 
     try:
         specimen_no_display = int(specimen_no)
@@ -293,6 +316,7 @@ def build_preview_accession(
         collection_abbr=_resolve_collection_abbr(collection_abbr),
         prefix_obj=_resolve_prefix(prefix_abbr),
         specimen_no=specimen_no_display,
+        site_area=site_area,
         type_status=type_status,
         comment=comment,
         accessioned_by=accessioned_by,

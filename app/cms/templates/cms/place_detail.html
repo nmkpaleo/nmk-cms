@@ -93,5 +93,62 @@
       {% endif %}
     </div>
   </section>
+
+  <section class="w3-margin-top" aria-labelledby="place-accessions-heading">
+    <header class="w3-row w3-padding-16">
+      <div class="w3-col s12 m8">
+        <h2 id="place-accessions-heading" class="w3-margin-0">{% trans "Accessions" %}</h2>
+        <p class="w3-text-gray">
+          {% if include_lower_geography %}
+            {% trans "Including accessions from lower geography." %}
+          {% else %}
+            {% trans "Directly linked to this Place." %}
+          {% endif %}
+        </p>
+      </div>
+      <div class="w3-col s12 m4 w3-right-align w3-margin-top">
+        {% if children %}
+          {% if include_lower_geography %}
+            <a class="w3-button w3-light-grey w3-round" href="{% url 'place_detail' place.pk %}">{% trans "Direct only" %}</a>
+          {% else %}
+            <a class="w3-button w3-light-grey w3-round" href="?lower_geography=1">{% trans "Include lower geography" %}</a>
+          {% endif %}
+        {% endif %}
+      </div>
+    </header>
+    <div class="w3-responsive">
+      <table class="w3-table-all w3-hoverable">
+        <thead>
+          <tr>
+            <th scope="col">{% trans "Accession" %}</th>
+            <th scope="col">{% trans "Collection" %}</th>
+            <th scope="col">{% trans "Specimen Prefix" %}</th>
+            <th scope="col">{% trans "Specimen Number" %}</th>
+            <th scope="col">{% trans "Site" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for accession in accessions %}
+            <tr>
+              <td><a href="{% url 'accession_detail' accession.pk %}">{{ accession }}</a></td>
+              <td>{{ accession.collection.abbreviation }}</td>
+              <td>{{ accession.specimen_prefix.abbreviation }}</td>
+              <td>{{ accession.specimen_no }}</td>
+              <td>{{ accession.site }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5" class="w3-center">{% trans "No accessions found." %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if accessions.has_other_pages %}
+      <div class="w3-bar w3-margin-top" aria-label="{% trans 'Accession pagination' %}">
+        {% if accessions.has_previous %}<a class="w3-button" href="?{% if include_lower_geography %}lower_geography=1&amp;{% endif %}page={{ accessions.previous_page_number }}">&laquo;</a>{% endif %}
+        <span class="w3-button w3-light-grey">{{ accessions.number }} / {{ accessions.paginator.num_pages }}</span>
+        {% if accessions.has_next %}<a class="w3-button" href="?{% if include_lower_geography %}lower_geography=1&amp;{% endif %}page={{ accessions.next_page_number }}">&raquo;</a>{% endif %}
+      </div>
+    {% endif %}
+  </section>
 </main>
 {% endblock %}

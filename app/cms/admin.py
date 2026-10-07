@@ -1282,11 +1282,12 @@ class LocalityAdmin(HistoricalImportExportAdmin):
         return queryset, use_distinct
 
 
-class PlaceAdmin(HistoricalImportExportAdmin):
+class PlaceAdmin(MergeAdminActionMixin, MergeAdminMixin, HistoricalImportExportAdmin):
     resource_class = PlaceResource
     list_display = ('name', 'place_type', 'locality', 'relation_type', 'related_place')
     list_filter = ('place_type', 'relation_type', 'locality')
     search_fields = ('name', 'locality__name')
+    merge_form_class = MergeAdminMixin.merge_form_class
 
 # Media
 

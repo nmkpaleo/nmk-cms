@@ -10,9 +10,9 @@ from .models import (
     FossilGroup,
     GrainSize,
     Locality,
-    Organisation,
     Place,
     PlaceType,
+    Organisation,
     Preparation,
     PreservationState,
     Reference,
@@ -66,6 +66,13 @@ class AccessionFilter(django_filters.FilterSet):
     specimen_prefix = django_filters.ModelChoiceFilter(
         queryset=Locality.objects.all(),
         label="Prefix",
+        widget=forms.Select(attrs={"class": "w3-select"}),
+    )
+    site = django_filters.ModelChoiceFilter(
+        queryset=Place.objects.filter(
+            place_type__in=[PlaceType.SITE, PlaceType.COLLECTING_AREA]
+        ).order_by("name"),
+        label="Site / Collecting Area",
         widget=forms.Select(attrs={"class": "w3-select"}),
     )
     specimen_suffix = django_filters.CharFilter(
@@ -126,6 +133,7 @@ class AccessionFilter(django_filters.FilterSet):
         fields = [
             "specimen_no",
             "specimen_prefix",
+            "site",
             "specimen_suffix",
             "comment",
             "taxon",
