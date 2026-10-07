@@ -904,6 +904,16 @@
           subtree: true
         });
       }
+      var syncAttempts = 0;
+      var syncTimer = window.setInterval(function () {
+        rendered = document.getElementById('select2-id_accession-site_area-container') || document.querySelector('.select2-selection__rendered');
+        searchInput = document.querySelector('.select2-search__field');
+        updateSitePreview(searchInput && searchInput.value ? searchInput.value : '');
+        syncAttempts += 1;
+        if (syncAttempts >= 50) {
+          window.clearInterval(syncTimer);
+        }
+      }, 200);
     })();
   </script>
   {{ block.super }}
