@@ -1060,7 +1060,7 @@ def prefetch_accession_related(qs):
     )
 
     return (
-        qs.select_related('collection', 'specimen_prefix')
+        qs.select_related('collection', 'specimen_prefix', 'site')
         .prefetch_related(accession_row_prefetch)
         .distinct()
     )
@@ -1933,6 +1933,7 @@ class AccessionDetailView(DetailView):
         qs = super().get_queryset().select_related(
             'collection',
             'specimen_prefix',
+            'site',
             'accessioned_by',
         )
         user = self.request.user

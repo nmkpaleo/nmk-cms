@@ -39,6 +39,10 @@
                     {{ filter.form.specimen_prefix }}
                 </div>
                 <div class="w3-col s12 m6 l3 w3-margin-bottom">
+                    <label class="w3-text-grey" for="id_site">{% trans "Site / Collecting Area" %}</label>
+                    {{ filter.form.site }}
+                </div>
+                <div class="w3-col s12 m6 l3 w3-margin-bottom">
                     <label class="w3-text-grey" for="id_specimen_suffix">{% trans "Specimen Suffix" %}</label>
                     {{ filter.form.specimen_suffix }}
                 </div>
@@ -104,6 +108,7 @@
                     <th scope="col">{% trans "Collection" %}</th>
                     <th scope="col">{% trans "Specimen Prefix" %}</th>
                     <th scope="col">{% trans "Specimen Number" %}</th>
+                    <th scope="col">{% trans "Site / Collecting Area" %}</th>
                     <th scope="col">{% trans "Taxon" %}</th>
                     <th scope="col">{% trans "Element" %}</th>
                     {% if user.is_superuser or user|has_group:"Collection Managers" %}
@@ -119,6 +124,7 @@
                         </td>
                         <td>{{ accession.specimen_prefix.abbreviation }}</td>
                         <td>{{ accession.specimen_no }}</td>
+                        <td>{{ accession.site|default:"—" }}</td>
                         <td>
                             {% if accession.taxa_list %}
                                 {{ accession.taxa_list|join:", " }}
@@ -139,7 +145,7 @@
                     </tr>
                 {% empty %}
                     <tr>
-                        <td colspan="{% if user.is_superuser or user|has_group:"Collection Managers" %}6{% else %}5{% endif %}" class="w3-center">
+                        <td colspan="{% if user.is_superuser or user|has_group:"Collection Managers" %}7{% else %}6{% endif %}" class="w3-center">
                             {% trans "No accessions found." %}
                         </td>
                     </tr>

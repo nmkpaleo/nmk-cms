@@ -15,6 +15,10 @@
             <dd class="w3-margin-0">{{ accession.specimen_prefix }}</dd>
           </div>
           <div class="w3-margin-bottom">
+            <dt class="w3-text-gray">{% trans "Site / Collecting Area" %}</dt>
+            <dd class="w3-margin-0">{{ accession.site|default:"—" }}</dd>
+          </div>
+          <div class="w3-margin-bottom">
             <dt class="w3-text-gray">{% trans "Type specimen" %}</dt>
             <dd class="w3-margin-0">{{ accession.type_status|default:"—" }}</dd>
           </div>

@@ -692,6 +692,7 @@ class AccessionForm(BaseW3ModelForm):
             "collection",
             "specimen_prefix",
             "specimen_no",
+            "site",
             "accessioned_by",
             "type_status",
             "comment",
@@ -706,6 +707,9 @@ class AccessionForm(BaseW3ModelForm):
         # Custom label for Locality field in dropdown
         self.fields["specimen_prefix"].label_from_instance = (
             lambda obj: f"{obj.abbreviation} - {obj.name}"
+        )
+        self.fields["site"].label_from_instance = (
+            lambda obj: f"{obj.name} ({obj.get_place_type_display()})"
         )
 
 
