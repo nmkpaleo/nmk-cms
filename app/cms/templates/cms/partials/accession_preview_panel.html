@@ -16,7 +16,15 @@
           </div>
           <div class="w3-margin-bottom">
             <dt class="w3-text-gray">{% trans "Site / Collecting Area" %}</dt>
-            <dd class="w3-margin-0">{{ accession.site|default:"—" }}</dd>
+            <dd class="w3-margin-0">
+              {% if accession.site_area %}
+                {{ accession.site_area }}
+              {% elif accession.site %}
+                {{ accession.site }}
+              {% else %}
+                —
+              {% endif %}
+            </dd>
           </div>
           <div class="w3-margin-bottom">
             <dt class="w3-text-gray">{% trans "Type specimen" %}</dt>
