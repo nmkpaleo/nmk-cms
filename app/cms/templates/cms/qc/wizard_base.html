@@ -853,14 +853,14 @@
 {% block extra_scripts %}
   <script>
     (function () {
-      var siteInput = document.querySelector('[name="accession-site_area"]');
+      var siteInput = document.getElementById('id_accession-site_area') || document.querySelector('[name="accession-site_area"]');
       var sitePreview = document.getElementById('accession-preview-site-area');
       if (!siteInput || !sitePreview) {
         return;
       }
       var container = siteInput.closest('.django-select2') || siteInput.parentElement;
-      var rendered = container && container.querySelector('.select2-selection__rendered');
-      var searchInput = container && container.querySelector('.select2-search__field');
+      var rendered = document.getElementById('select2-id_accession-site_area-container') || (container && container.querySelector('.select2-selection__rendered'));
+      var searchInput = document.querySelector('.select2-search__field');
 
       function updateSitePreview(value) {
         var text = (value || '').trim();
@@ -872,6 +872,11 @@
 
       siteInput.addEventListener('change', function () {
         updateSitePreview('');
+      });
+      document.addEventListener('change', function (event) {
+        if (event.target === siteInput || event.target.closest && event.target.closest('#select2-id_accession-site_area-container')) {
+          updateSitePreview('');
+        }
       });
       siteInput.addEventListener('input', function () {
         updateSitePreview(siteInput.value);
@@ -890,6 +895,13 @@
       if (window.jQuery) {
         window.jQuery(siteInput).on('change.select2', function () {
           updateSitePreview('');
+        });
+      }
+      if (rendered && window.MutationObserver) {
+        new MutationObserver(function () { updateSitePreview(''); }).observe(rendered, {
+          childList: true,
+          characterData: true,
+          subtree: true
         });
       }
     })();
