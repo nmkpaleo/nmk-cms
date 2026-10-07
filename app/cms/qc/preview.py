@@ -285,6 +285,19 @@ def build_preview_accession(
     type_status = interpreted_value(accession_payload.get("type_status"))
     comment = interpreted_value(accession_payload.get("comment"))
 
+    if accession_form is not None:
+        site_area_field = accession_form.fields.get("site_area")
+        if site_area_field is not None:
+            form_site_area = accession_form["site_area"].value()
+            if form_site_area is not None:
+                site_area = form_site_area
+        try:
+            form_site = accession_form.cleaned_data.get("site")
+        except AttributeError:
+            form_site = None
+        if form_site is not None:
+            site_area = str(form_site)
+
     try:
         specimen_no_display = int(specimen_no)
     except (TypeError, ValueError):
