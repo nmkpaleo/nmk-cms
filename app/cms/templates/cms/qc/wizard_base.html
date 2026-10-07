@@ -851,6 +851,21 @@
 {% endblock %}
 
 {% block extra_scripts %}
+  <script>
+    (function () {
+      var siteInput = document.querySelector('input[name="accession-site_area"]');
+      var sitePreview = document.getElementById('accession-preview-site-area');
+      if (!siteInput || !sitePreview) {
+        return;
+      }
+      siteInput.addEventListener('input', function () {
+        sitePreview.textContent = siteInput.value.trim() || '—';
+      });
+      siteInput.addEventListener('blur', function () {
+        sitePreview.textContent = siteInput.value.trim() || '—';
+      });
+    })();
+  </script>
   {{ block.super }}
   <script src="https://unpkg.com/@hotwired/stimulus/dist/stimulus.umd.js"></script>
   <script src="{% static 'cms/js/controllers/qc_rows_controller.js' %}"></script>
