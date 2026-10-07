@@ -602,6 +602,52 @@ class TaxonWidget(s2forms.ModelSelect2Widget):
         return base_name
 
 
+class PlaceWidget(s2forms.ModelSelect2Widget):
+    model = Place
+    search_fields = ["name__icontains", "locality__name__icontains"]
+
+    def __init__(self, *args, **kwargs):
+        attrs = kwargs.setdefault("attrs", {})
+        attrs.setdefault("data-placeholder", "Search for a site or collecting area")
+        attrs.setdefault("data-minimum-input-length", 2)
+        attrs.setdefault("data-allow-clear", "true")
+        super().__init__(*args, **kwargs)
+
+    def get_queryset(self):
+        return Place.objects.filter(
+            place_type__in=["Site", "CollectingArea"]
+        ).select_related("locality").order_by("name")
+
+    def label_from_instance(self, obj):
+        return f"{obj.name} ({obj.locality.abbreviation})"
+
+
+class PlaceCandidateWidget(s2forms.ModelSelect2TagWidget):
+    model = Place
+    allow_multiple_selected = False
+    search_fields = PlaceWidget.search_fields
+
+    def __init__(self, *args, **kwargs):
+        attrs = kwargs.setdefault("attrs", {})
+        attrs.setdefault("data-placeholder", "Search or add a site or collecting area")
+        attrs.setdefault("data-minimum-input-length", 2)
+        attrs.setdefault("data-tags", "true")
+        attrs.setdefault("data-allow-clear", "true")
+        super().__init__(*args, **kwargs)
+
+    def get_queryset(self):
+        return PlaceWidget().get_queryset()
+
+    def label_from_instance(self, obj):
+        return PlaceWidget().label_from_instance(obj)
+
+    def value_from_datadict(self, data, files, name):
+        values = data.getlist(name) if hasattr(data, "getlist") else data.get(name)
+        if isinstance(values, (list, tuple)):
+            return next((value for value in values if value not in (None, "")), "")
+        return values or ""
+
+
 class IdentifiedByWidget(s2forms.ModelSelect2TagWidget):
     allow_multiple_selected = False
     model = Person
@@ -686,26 +732,54 @@ class IdentifiedByWidget(s2forms.ModelSelect2TagWidget):
 
 
 class AccessionForm(BaseW3ModelForm):
+    site_area = forms.CharField(
+        required=False,
+        label="Site / collecting area",
+        max_length=255,
+        widget=PlaceCandidateWidget,
+    )
+
     class Meta:
         model = Accession
         fields = [
             "collection",
             "specimen_prefix",
             "specimen_no",
+            "site",
             "accessioned_by",
             "type_status",
             "comment",
         ]
         widgets = {
             "accessioned_by": forms.HiddenInput(),
+            "site": PlaceWidget,
         }
 
     def __init__(self, *args, **kwargs):
+        qc_mode = kwargs.pop("qc_mode", False)
         super().__init__(*args, **kwargs)
+        if not qc_mode:
+            self.fields.pop("site_area", None)
+        elif self.instance and self.instance.site_id:
+            self.fields["site_area"].initial = self.instance.site.name
+
+    def clean_site_area(self):
+        value = (self.cleaned_data.get("site_area") or "").strip()
+        if value.isdigit():
+            place = Place.objects.filter(
+                pk=value,
+                place_type__in=["Site", "CollectingArea"],
+            ).first()
+            if place:
+                return place.name
+        return value
 
         # Custom label for Locality field in dropdown
         self.fields["specimen_prefix"].label_from_instance = (
             lambda obj: f"{obj.abbreviation} - {obj.name}"
+        )
+        self.fields["site"].label_from_instance = (
+            lambda obj: f"{obj.name} ({obj.get_place_type_display()})"
         )
 
 
@@ -1681,6 +1755,7 @@ class ManualImportSummary:
     total_rows: int
     success_count: int = 0
     created_count: int = 0
+    created_places: List[dict[str, Any]] = field(default_factory=list)
     failures: List[ManualImportFailure] = field(default_factory=list)
 
     @property
@@ -1872,6 +1947,9 @@ def run_manual_qc_import(
             created_records = result.get("created")
             if isinstance(created_records, list):
                 summary.created_count += len(created_records)
+            places_created = result.get("places_created")
+            if isinstance(places_created, list):
+                summary.created_places.extend(places_created)
 
         row_number += len(group)
 

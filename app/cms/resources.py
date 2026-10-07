@@ -96,6 +96,11 @@ class AccessionResource(resources.ModelResource):
         widget=ForeignKeyWidget(Locality, "abbreviation"),
     )
     specimen_no = fields.Field(column_name="specimen_no", attribute="specimen_no")
+    site = fields.Field(
+        column_name="site",
+        attribute="site",
+        widget=ForeignKeyWidget(Place, "name"),
+    )
     accessioned_by = fields.Field(
         column_name="accessioned_by",
         attribute="accessioned_by",
@@ -117,12 +122,14 @@ class AccessionResource(resources.ModelResource):
             "collection",
             "specimen_prefix",
             "specimen_no",
+            "site",
             "instance_number",
         )
         fields = (
             "collection",
             "specimen_prefix",
             "specimen_no",
+            "site",
             "instance_number",
             "accessioned_by",
             "accession",

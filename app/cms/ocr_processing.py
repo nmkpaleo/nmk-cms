@@ -63,6 +63,7 @@ from .models import (
     SpecimenListPageOCR,
     SpecimenListRowCandidate,
 )
+from .site_resolution import resolve_site_area
 from .utils import apply_ditto_marks
 from .tooth_markings.integration import apply_tooth_marking_correction
 
@@ -610,6 +611,7 @@ JSON schema:
       "collection_abbreviation": { "raw": string|null, "interpreted": string|null, "confidence": number},      // First part of the Accession, one of "KNM", "KNMI", "KNMP". Default is "KNM" if none shown
       "specimen_prefix_abbreviation": { "raw": string|null, "interpreted": string|null, "confidence": number}, // Second part of the Accession, two capital letters. e.g., "AB", "ER"; should always be present
       "specimen_no": { "raw": integer|null, "interpreted": integer|null, "confidence": number},                // Third part of the Accession, full numeric part as written, (e.g., "1234")
+      "site_area": { "raw": string|null, "interpreted": string|null, "confidence": number},                  // Collecting site or area for the accession event only; exclude formation, member, bed, horizon, and comments
       "type_status": { "raw": string|null, "interpreted": string|null, "confidence": number},                  // Usually handwritten with red (e.g., "Type", "Holotype),
       "published":  { "raw": string|null, "interpreted": string|null, "confidence": number},                   // is there a red forward slash on the top left corner of the card? Yes or No.
       "additional_notes": [                                                                                    // all additional extracted data from OCR
@@ -701,6 +703,7 @@ Schema (structure only):
     "collection_abbreviation":{r,i,c},
     "specimen_prefix_abbreviation":{r,i,c},
     "specimen_no":{r,i,c},
+    "site_area":{r,i,c},
     "type_status":{r,i,c},
     "published":{r,i,c},
     "additional_notes":[{"heading":{r,i,c},"value":{r,i,c}}],
@@ -1361,6 +1364,22 @@ def _extract_entry_components(entry: dict) -> dict[str, object]:
         "field_slips": field_slips,
         "rows": rows,
     }
+
+
+def _apply_accession_site(
+    accession: Accession,
+    entry: dict,
+    locality: Locality,
+    *,
+    created_places: list[dict[str, object]] | None = None,
+) -> None:
+    site_value = _value_interpreted(entry.get("site_area"))
+    if not site_value:
+        return
+    site = resolve_site_area(site_value, locality, created_places=created_places)
+    if site is not None and accession.site_id != site.pk:
+        accession.site = site
+        accession.save(update_fields=["site", "modified_on"])
 
 
 def _make_html_key(value: str, used: set[str]) -> str:
@@ -2240,6 +2259,7 @@ def create_accessions_from_media(
     created_records: list[dict[str, object]] = []
     conflicts: list[dict[str, object]] = []
     first_accession: Optional[Accession] = None
+    created_places: list[dict[str, object]] = []
 
     for entry in accessions:
         raw_coll_abbr = (entry.get("collection_abbreviation") or {}).get("interpreted")
@@ -2303,6 +2323,7 @@ def create_accessions_from_media(
             else:
                 if first_accession is None:
                     first_accession = accession
+                _apply_accession_site(accession, entry, specimen_prefix, created_places=created_places)
             continue
 
         components = _extract_entry_components(entry)
@@ -2351,6 +2372,7 @@ def create_accessions_from_media(
                 _apply_references(accession, components.get("references", []))
                 _apply_field_slips(accession, components.get("field_slips", []))
                 _apply_rows(accession, components.get("rows", []), page_image=_get_media_image_for_correction(media))
+                _apply_accession_site(accession, entry, specimen_prefix, created_places=created_places)
             elif action == "update_existing":
                 accession = existing_qs.filter(pk=resolution_entry.get("accession_id")).first() or existing_qs.first()
                 fields = resolution_entry.get("fields") or {}
@@ -2363,6 +2385,7 @@ def create_accessions_from_media(
                     update_fields.append("comment")
                 if update_fields:
                     accession.save(update_fields=update_fields)
+                _apply_accession_site(accession, entry, specimen_prefix, created_places=created_places)
 
                 reference_selection = {
                     int(idx)
@@ -2427,6 +2450,7 @@ def create_accessions_from_media(
             _apply_references(accession, components.get("references", []))
             _apply_field_slips(accession, components.get("field_slips", []))
             _apply_rows(accession, components.get("rows", []), page_image=_get_media_image_for_correction(media))
+            _apply_accession_site(accession, entry, specimen_prefix, created_places=created_places)
 
         if first_accession is None:
             first_accession = accession
@@ -2463,7 +2487,11 @@ def create_accessions_from_media(
     if updates:
         media.save(update_fields=updates)
 
-    return {"created": created_records, "conflicts": conflicts}
+    return {
+        "created": created_records,
+        "conflicts": conflicts,
+        "places_created": created_places,
+    }
 
 
 

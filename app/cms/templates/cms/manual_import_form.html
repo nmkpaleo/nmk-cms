@@ -65,6 +65,14 @@
             {% endblocktrans %}
           </p>
         {% endif %}
+        {% if result.created_places %}
+          <p>{% trans "Created Places:" %}</p>
+          <ul class="w3-ul w3-border w3-round">
+            {% for place in result.created_places %}
+              <li>{{ place.name }} ({{ place.place_type }})</li>
+            {% endfor %}
+          </ul>
+        {% endif %}
         {% if result.error_count %}
           <p>
             <a class="w3-button w3-red w3-round-large" href="?download=errors">

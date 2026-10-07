@@ -36,6 +36,7 @@ from cms.views import (
     AccessionListView,
     AccessionDetailView,
     MediaLicensingView,
+    media_qc_preview_image,
     ReferenceListView,
     ReferenceDetailView,
     reference_create,
@@ -102,6 +103,7 @@ from cms.views import media_report_view
 from .admin import taxonomy_sync_apply_view, taxonomy_sync_preview_view
 
 urlpatterns = [
+    path('qc/media/<uuid:uuid>/preview/', media_qc_preview_image, name='media_qc_preview_image'),
     path('media-licensing/', MediaLicensingView.as_view(), name='media_licensing'),
     path('reports/accession-distribution/', accession_distribution_report, name='accession_distribution_report'),
     path('reports/media/', media_report_view, name='media_report'),

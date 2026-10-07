@@ -502,7 +502,7 @@
         {% endif %}
       </div>
       {% if media.media_location %}
-        <img src="{{ media.media_location.url }}" alt="{{ media.file_name|default:'Media preview' }}" />
+        <img src="{% url 'media_qc_preview_image' media.uuid %}" alt="{{ media.file_name|default:'Media preview' }}" />
       {% else %}
         <div class="w3-padding qc-media-fallback w3-small w3-text-grey">
           No media preview is available for this record.
@@ -581,6 +581,14 @@
             <div class="qc-control">
               {{ accession_form.specimen_no }}
               {{ accession_form.specimen_no.errors }}
+            </div>
+          </div>
+          <div class="qc-field">
+            <label class="qc-label" for="{{ accession_form.site_area.id_for_label }}">{{ accession_form.site_area.label }}:</label>
+            <div class="qc-control">
+              {{ accession_form.site_area }}
+              {{ accession_form.site_area.errors }}
+              <span class="qc-inline-note">Edit the OCR candidate before approval; the Place is resolved from this value.</span>
             </div>
           </div>
           <div class="qc-field">
@@ -843,6 +851,74 @@
 {% endblock %}
 
 {% block extra_scripts %}
+  <script>
+    (function () {
+      var siteInput = document.getElementById('id_accession-site_area') || document.querySelector('[name="accession-site_area"]');
+      var sitePreview = document.getElementById('accession-preview-site-area');
+      if (!siteInput || !sitePreview) {
+        return;
+      }
+      var container = siteInput.closest('.django-select2') || siteInput.parentElement;
+      var rendered = document.getElementById('select2-id_accession-site_area-container') || (container && container.querySelector('.select2-selection__rendered'));
+      var searchInput = document.querySelector('.select2-search__field');
+
+      function updateSitePreview(value) {
+        var text = (value || '').trim();
+        if (!text && rendered) {
+          text = (rendered.textContent || '').trim();
+        }
+        sitePreview.textContent = text || '—';
+      }
+
+      siteInput.addEventListener('change', function () {
+        updateSitePreview('');
+      });
+      document.addEventListener('change', function (event) {
+        if (event.target === siteInput || event.target.closest && event.target.closest('#select2-id_accession-site_area-container')) {
+          updateSitePreview('');
+        }
+      });
+      siteInput.addEventListener('input', function () {
+        updateSitePreview(siteInput.value);
+      });
+      siteInput.addEventListener('blur', function () {
+        updateSitePreview(siteInput.value);
+      });
+      if (searchInput) {
+        searchInput.addEventListener('input', function () {
+          updateSitePreview(searchInput.value);
+        });
+        searchInput.addEventListener('blur', function () {
+          updateSitePreview(searchInput.value);
+        });
+      }
+      if (window.jQuery) {
+        window.jQuery(document).on('select2:select', '#id_accession-site_area', function (event) {
+          updateSitePreview(event.params && event.params.data ? event.params.data.text : '');
+        });
+        window.jQuery(document).on('select2:unselect', '#id_accession-site_area', function () {
+          updateSitePreview('');
+        });
+      }
+      if (rendered && window.MutationObserver) {
+        new MutationObserver(function () { updateSitePreview(''); }).observe(rendered, {
+          childList: true,
+          characterData: true,
+          subtree: true
+        });
+      }
+      var syncAttempts = 0;
+      var syncTimer = window.setInterval(function () {
+        rendered = document.getElementById('select2-id_accession-site_area-container') || document.querySelector('.select2-selection__rendered');
+        searchInput = document.querySelector('.select2-search__field');
+        updateSitePreview(searchInput && searchInput.value ? searchInput.value : '');
+        syncAttempts += 1;
+        if (syncAttempts >= 50) {
+          window.clearInterval(syncTimer);
+        }
+      }, 200);
+    })();
+  </script>
   {{ block.super }}
   <script src="https://unpkg.com/@hotwired/stimulus/dist/stimulus.umd.js"></script>
   <script src="{% static 'cms/js/controllers/qc_rows_controller.js' %}"></script>

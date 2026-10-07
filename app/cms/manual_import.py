@@ -17,6 +17,7 @@ from django.utils.translation import gettext as _
 
 from .models import Accession, Media
 from .ocr_processing import create_accessions_from_media, make_interpreted_value
+from .site_resolution import clean_site_area
 from .utils import coerce_stripped, normalise_yes_no
 
 
@@ -1048,6 +1049,7 @@ def build_accession_payload(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]
         "collection_abbreviation": make_interpreted_value(collection_value),
         "specimen_prefix_abbreviation": make_interpreted_value(prefix_value),
         "specimen_no": make_interpreted_value(number_value),
+        "site_area": make_interpreted_value(clean_site_area(aggregated_row.get("site_area"))),
         "specimen_suffix": make_interpreted_value(suffix_display),
         "type_status": make_interpreted_value("Type" if is_type else None),
         "published": make_interpreted_value("Yes" if is_published else "No"),

@@ -5,6 +5,7 @@ Template context inventory and authentication coverage are catalogued in
 """
 
 from tempfile import TemporaryDirectory
+from io import BytesIO
 
 import copy
 import csv
@@ -74,6 +75,7 @@ from django.utils.translation import gettext_lazy as _, ngettext
 from django.utils.dateparse import parse_date, parse_datetime
 from django.utils.timezone import now
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, FormView, TemplateView
+from PIL import Image, ImageOps
 from django.core.serializers.json import DjangoJSONEncoder
 from django.core.exceptions import PermissionDenied
 
@@ -1060,7 +1062,7 @@ def prefetch_accession_related(qs):
     )
 
     return (
-        qs.select_related('collection', 'specimen_prefix')
+        qs.select_related('collection', 'specimen_prefix', 'site')
         .prefetch_related(accession_row_prefetch)
         .distinct()
     )
@@ -1917,6 +1919,24 @@ class MediaLicensingView(TemplateView):
     template_name = "cms/media_licensing.html"
 
 
+@login_required
+def media_qc_preview_image(request, uuid):
+    media = get_object_or_404(Media, uuid=uuid)
+    try:
+        with media.media_location.open("rb") as source:
+            image = ImageOps.exif_transpose(Image.open(source))
+            image.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
+            if image.mode not in ("RGB", "L"):
+                image = image.convert("RGB")
+            output = BytesIO()
+            image.save(output, format="JPEG", quality=82, optimize=True)
+    except (OSError, ValueError):
+        return HttpResponse(status=404)
+    response = HttpResponse(output.getvalue(), content_type="image/jpeg")
+    response["Cache-Control"] = "private, max-age=3600"
+    return response
+
+
 @method_decorator(login_required, name="dispatch")
 class AccessionDetailView(DetailView):
     model = Accession
@@ -1933,6 +1953,7 @@ class AccessionDetailView(DetailView):
         qs = super().get_queryset().select_related(
             'collection',
             'specimen_prefix',
+            'site',
             'accessioned_by',
         )
         user = self.request.user
@@ -3413,8 +3434,10 @@ class MediaQCFormManager:
             "collection": collection_obj,
             "specimen_prefix": prefix_obj,
             "specimen_no": specimen_no_initial,
+            "site": getattr(accession_instance, "site", None),
             "type_status": type_status_initial,
             "comment": comment_initial,
+            "site_area": self._payload_text(self.accession_payload.get("site_area")),
             "accessioned_by": accessioned_by_user,
         }
         self.accession_instance = accession_instance
@@ -3434,6 +3457,7 @@ class MediaQCFormManager:
                 self.request.POST,
                 prefix="accession",
                 instance=self.accession_instance,
+                qc_mode=True,
             )
             self.row_formset = AccessionRowFormSet(self.request.POST, prefix="row")
             self.ident_formset = IdentificationQCFormSet(
@@ -3453,6 +3477,7 @@ class MediaQCFormManager:
                 prefix="accession",
                 instance=self.accession_instance,
                 initial=self.acc_initial,
+                qc_mode=True,
             )
             self.row_formset = AccessionRowFormSet(
                 prefix="row", initial=self.row_initial
@@ -3674,6 +3699,7 @@ class MediaQCFormManager:
         specimen_no_cleaned = cleaned_accession.get("specimen_no")
         type_status_cleaned = cleaned_accession.get("type_status")
         comment_cleaned = cleaned_accession.get("comment")
+        site_area_cleaned = cleaned_accession.get("site_area")
 
         storage_cache: dict[str, Storage] = {}
 
@@ -3709,6 +3735,11 @@ class MediaQCFormManager:
                 self.accession_payload,
                 "comment",
                 comment_cleaned,
+            )
+            _set_interpreted(
+                self.accession_payload,
+                "site_area",
+                site_area_cleaned,
             )
 
             updated_rows = []
@@ -4778,9 +4809,40 @@ class PlaceDetailView(DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['children'] = Place.objects.filter(
+        children = Place.objects.filter(
             related_place=self.object, relation_type=PlaceRelation.PART_OF
         )
+        context['children'] = children
+
+        include_lower = self.request.GET.get("lower_geography") in {"1", "true", "on"}
+        place_ids = {self.object.pk}
+        frontier = {self.object.pk}
+        while include_lower and frontier:
+            child_ids = set(
+                Place.objects.filter(
+                    related_place_id__in=frontier,
+                    relation_type=PlaceRelation.PART_OF,
+                ).values_list("pk", flat=True)
+            ) - place_ids
+            place_ids.update(child_ids)
+            frontier = child_ids
+
+        accessions = Accession.objects.filter(site_id__in=place_ids)
+        can_view_restricted = self.request.user.is_authenticated and (
+            self.request.user.is_superuser
+            or self.request.user.groups.filter(name__in=["Collection Managers", "Curators"]).exists()
+        )
+        if not can_view_restricted:
+            accessions = accessions.filter(is_published=True)
+        accessions = prefetch_accession_related(accessions).order_by(
+            "collection__abbreviation", "specimen_prefix__abbreviation", "specimen_no"
+        )
+        paginator = Paginator(accessions, 10)
+        accession_page = paginator.get_page(self.request.GET.get("page"))
+        attach_accession_summaries(accession_page)
+        context["accessions"] = accession_page
+        context["include_lower_geography"] = include_lower
+        context["accession_place_count"] = len(place_ids)
         return context
 
 
