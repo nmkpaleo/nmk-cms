@@ -3414,6 +3414,7 @@ class MediaQCFormManager:
             "collection": collection_obj,
             "specimen_prefix": prefix_obj,
             "specimen_no": specimen_no_initial,
+            "site": getattr(accession_instance, "site", None),
             "type_status": type_status_initial,
             "comment": comment_initial,
             "site_area": self._payload_text(self.accession_payload.get("site_area")),

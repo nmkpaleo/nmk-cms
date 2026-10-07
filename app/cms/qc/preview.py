@@ -295,6 +295,8 @@ def build_preview_accession(
             form_site = accession_form.cleaned_data.get("site")
         except AttributeError:
             form_site = None
+        if form_site is None:
+            form_site = accession_form.fields.get("site").initial if accession_form.fields.get("site") else None
         if form_site is not None:
             site_area = str(form_site)
 
