@@ -4779,9 +4779,40 @@ class PlaceDetailView(DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['children'] = Place.objects.filter(
+        children = Place.objects.filter(
             related_place=self.object, relation_type=PlaceRelation.PART_OF
         )
+        context['children'] = children
+
+        include_lower = self.request.GET.get("lower_geography") in {"1", "true", "on"}
+        place_ids = {self.object.pk}
+        frontier = {self.object.pk}
+        while include_lower and frontier:
+            child_ids = set(
+                Place.objects.filter(
+                    related_place_id__in=frontier,
+                    relation_type=PlaceRelation.PART_OF,
+                ).values_list("pk", flat=True)
+            ) - place_ids
+            place_ids.update(child_ids)
+            frontier = child_ids
+
+        accessions = Accession.objects.filter(site_id__in=place_ids)
+        can_view_restricted = self.request.user.is_authenticated and (
+            self.request.user.is_superuser
+            or self.request.user.groups.filter(name__in=["Collection Managers", "Curators"]).exists()
+        )
+        if not can_view_restricted:
+            accessions = accessions.filter(is_published=True)
+        accessions = prefetch_accession_related(accessions).order_by(
+            "collection__abbreviation", "specimen_prefix__abbreviation", "specimen_no"
+        )
+        paginator = Paginator(accessions, 10)
+        accession_page = paginator.get_page(self.request.GET.get("page"))
+        attach_accession_summaries(accession_page)
+        context["accessions"] = accession_page
+        context["include_lower_geography"] = include_lower
+        context["accession_place_count"] = len(place_ids)
         return context
 
 
