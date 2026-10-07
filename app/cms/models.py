@@ -553,7 +553,17 @@ class Locality(BaseModel):
         return "/".join(self.geological_times)
 
 
-class Place(BaseModel):
+class Place(MergeMixin, BaseModel):
+    merge_fields = {
+        "name": MergeStrategy.FIELD_SELECTION,
+        "place_type": MergeStrategy.FIELD_SELECTION,
+        "description": MergeStrategy.FIELD_SELECTION,
+        "comment": MergeStrategy.FIELD_SELECTION,
+    }
+    relation_strategies = {
+        "accessions": {"action": "reassign", "deduplicate": True},
+        "related_places": {"action": "reassign", "deduplicate": True},
+    }
     locality = models.ForeignKey(
         "Locality",
         on_delete=models.CASCADE,
