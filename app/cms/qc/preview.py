@@ -289,6 +289,8 @@ def build_preview_accession(
         site_area_field = accession_form.fields.get("site_area")
         if site_area_field is not None:
             form_site_area = accession_form["site_area"].value()
+            if "site_area" in getattr(accession_form, "cleaned_data", {}):
+                form_site_area = accession_form.cleaned_data.get("site_area")
             if form_site_area is not None:
                 site_area = form_site_area
         try:
