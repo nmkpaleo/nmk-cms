@@ -677,6 +677,15 @@ class Accession(MergeMixin, BaseModel):
     specimen_no = models.PositiveIntegerField(
         help_text="Enter the specimen number."
     )
+    site = models.ForeignKey(
+        "Place",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="accessions",
+        limit_choices_to={"place_type__in": [PlaceType.SITE, PlaceType.COLLECTING_AREA]},
+        help_text="Site or collecting area for this collecting event.",
+    )
     instance_number = models.PositiveIntegerField(
         default=1,
         help_text="Instance of the specimen number for handling known duplicates."
@@ -742,6 +751,7 @@ class Accession(MergeMixin, BaseModel):
         "collection": MergeStrategy.PREFER_NON_NULL,
         "specimen_prefix": MergeStrategy.PREFER_NON_NULL,
         "specimen_no": MergeStrategy.PREFER_NON_NULL,
+        "site": MergeStrategy.PREFER_NON_NULL,
         "instance_number": MergeStrategy.PREFER_NON_NULL,
         "accessioned_by": MergeStrategy.PREFER_NON_NULL,
         "type_status": MergeStrategy.PREFER_NON_NULL,
