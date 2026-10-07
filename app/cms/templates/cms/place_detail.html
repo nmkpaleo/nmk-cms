@@ -107,10 +107,12 @@
         </p>
       </div>
       <div class="w3-col s12 m4 w3-right-align w3-margin-top">
-        {% if include_lower_geography %}
-          <a class="w3-button w3-light-grey w3-round" href="{% url 'place_detail' place.pk %}">{% trans "Direct only" %}</a>
-        {% else %}
-          <a class="w3-button w3-light-grey w3-round" href="?lower_geography=1">{% trans "Include lower geography" %}</a>
+        {% if children %}
+          {% if include_lower_geography %}
+            <a class="w3-button w3-light-grey w3-round" href="{% url 'place_detail' place.pk %}">{% trans "Direct only" %}</a>
+          {% else %}
+            <a class="w3-button w3-light-grey w3-round" href="?lower_geography=1">{% trans "Include lower geography" %}</a>
+          {% endif %}
         {% endif %}
       </div>
     </header>
