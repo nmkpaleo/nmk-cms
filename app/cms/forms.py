@@ -1685,6 +1685,7 @@ class ManualImportSummary:
     total_rows: int
     success_count: int = 0
     created_count: int = 0
+    created_places: List[dict[str, Any]] = field(default_factory=list)
     failures: List[ManualImportFailure] = field(default_factory=list)
 
     @property
@@ -1876,6 +1877,9 @@ def run_manual_qc_import(
             created_records = result.get("created")
             if isinstance(created_records, list):
                 summary.created_count += len(created_records)
+            places_created = result.get("places_created")
+            if isinstance(places_created, list):
+                summary.created_places.extend(places_created)
 
         row_number += len(group)
 

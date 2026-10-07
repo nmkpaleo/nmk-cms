@@ -43,11 +43,17 @@ def _depth(place: Place) -> int:
     return depth
 
 
-def resolve_site_area(value, locality: Locality | None = None) -> Place | None:
+def resolve_site_area(
+    value,
+    locality: Locality | None = None,
+    *,
+    created_places: list[dict[str, object]] | None = None,
+) -> Place | None:
     cleaned = clean_site_area(value)
     if not cleaned:
         return None
     names = [_key(part) for part in cleaned.split("|") if _key(part)]
+    names.append(_key(cleaned))
     queryset = Place.objects.filter(
         place_type__in=[PlaceType.SITE, PlaceType.COLLECTING_AREA]
     ).select_related("related_place")
@@ -58,8 +64,11 @@ def resolve_site_area(value, locality: Locality | None = None) -> Place | None:
         return max(candidates, key=_depth)
     if locality is None:
         return None
-    return Place.objects.create(
+    place = Place.objects.create(
         locality=locality,
         name=cleaned[:100],
         place_type=PlaceType.SITE,
     )
+    if created_places is not None:
+        created_places.append({"name": place.name, "place_type": place.get_place_type_display()})
+    return place

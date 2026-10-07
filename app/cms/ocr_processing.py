@@ -1364,11 +1364,17 @@ def _extract_entry_components(entry: dict) -> dict[str, object]:
     }
 
 
-def _apply_accession_site(accession: Accession, entry: dict, locality: Locality) -> None:
+def _apply_accession_site(
+    accession: Accession,
+    entry: dict,
+    locality: Locality,
+    *,
+    created_places: list[dict[str, object]] | None = None,
+) -> None:
     site_value = _value_interpreted(entry.get("site_area"))
     if not site_value:
         return
-    site = resolve_site_area(site_value, locality)
+    site = resolve_site_area(site_value, locality, created_places=created_places)
     if site is not None and accession.site_id != site.pk:
         accession.site = site
         accession.save(update_fields=["site", "modified_on"])
@@ -2251,6 +2257,7 @@ def create_accessions_from_media(
     created_records: list[dict[str, object]] = []
     conflicts: list[dict[str, object]] = []
     first_accession: Optional[Accession] = None
+    created_places: list[dict[str, object]] = []
 
     for entry in accessions:
         raw_coll_abbr = (entry.get("collection_abbreviation") or {}).get("interpreted")
@@ -2314,7 +2321,7 @@ def create_accessions_from_media(
             else:
                 if first_accession is None:
                     first_accession = accession
-                _apply_accession_site(accession, entry, specimen_prefix)
+                _apply_accession_site(accession, entry, specimen_prefix, created_places=created_places)
             continue
 
         components = _extract_entry_components(entry)
@@ -2363,7 +2370,7 @@ def create_accessions_from_media(
                 _apply_references(accession, components.get("references", []))
                 _apply_field_slips(accession, components.get("field_slips", []))
                 _apply_rows(accession, components.get("rows", []), page_image=_get_media_image_for_correction(media))
-                _apply_accession_site(accession, entry, specimen_prefix)
+                _apply_accession_site(accession, entry, specimen_prefix, created_places=created_places)
             elif action == "update_existing":
                 accession = existing_qs.filter(pk=resolution_entry.get("accession_id")).first() or existing_qs.first()
                 fields = resolution_entry.get("fields") or {}
@@ -2376,7 +2383,7 @@ def create_accessions_from_media(
                     update_fields.append("comment")
                 if update_fields:
                     accession.save(update_fields=update_fields)
-                _apply_accession_site(accession, entry, specimen_prefix)
+                _apply_accession_site(accession, entry, specimen_prefix, created_places=created_places)
 
                 reference_selection = {
                     int(idx)
@@ -2441,7 +2448,7 @@ def create_accessions_from_media(
             _apply_references(accession, components.get("references", []))
             _apply_field_slips(accession, components.get("field_slips", []))
             _apply_rows(accession, components.get("rows", []), page_image=_get_media_image_for_correction(media))
-            _apply_accession_site(accession, entry, specimen_prefix)
+            _apply_accession_site(accession, entry, specimen_prefix, created_places=created_places)
 
         if first_accession is None:
             first_accession = accession
@@ -2478,7 +2485,11 @@ def create_accessions_from_media(
     if updates:
         media.save(update_fields=updates)
 
-    return {"created": created_records, "conflicts": conflicts}
+    return {
+        "created": created_records,
+        "conflicts": conflicts,
+        "places_created": created_places,
+    }
 
 
 
