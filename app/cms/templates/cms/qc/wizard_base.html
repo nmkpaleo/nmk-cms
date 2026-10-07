@@ -853,17 +853,45 @@
 {% block extra_scripts %}
   <script>
     (function () {
-      var siteInput = document.querySelector('input[name="accession-site_area"]');
+      var siteInput = document.querySelector('[name="accession-site_area"]');
       var sitePreview = document.getElementById('accession-preview-site-area');
       if (!siteInput || !sitePreview) {
         return;
       }
+      var container = siteInput.closest('.django-select2') || siteInput.parentElement;
+      var rendered = container && container.querySelector('.select2-selection__rendered');
+      var searchInput = container && container.querySelector('.select2-search__field');
+
+      function updateSitePreview(value) {
+        var text = (value || '').trim();
+        if (!text && rendered) {
+          text = (rendered.textContent || '').trim();
+        }
+        sitePreview.textContent = text || '—';
+      }
+
+      siteInput.addEventListener('change', function () {
+        updateSitePreview('');
+      });
       siteInput.addEventListener('input', function () {
-        sitePreview.textContent = siteInput.value.trim() || '—';
+        updateSitePreview(siteInput.value);
       });
       siteInput.addEventListener('blur', function () {
-        sitePreview.textContent = siteInput.value.trim() || '—';
+        updateSitePreview(siteInput.value);
       });
+      if (searchInput) {
+        searchInput.addEventListener('input', function () {
+          updateSitePreview(searchInput.value);
+        });
+        searchInput.addEventListener('blur', function () {
+          updateSitePreview(searchInput.value);
+        });
+      }
+      if (window.jQuery) {
+        window.jQuery(siteInput).on('change.select2', function () {
+          updateSitePreview('');
+        });
+      }
     })();
   </script>
   {{ block.super }}
