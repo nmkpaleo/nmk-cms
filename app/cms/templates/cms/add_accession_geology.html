@@ -7,12 +7,7 @@
   {% trans "Save horizon" as save_horizon_label %}
   {% trans "Horizon to accession:" as horizon_to_accession_label %}
   <main class="w3-container w3-margin-top w3-margin-bottom" role="main">
-    {% include "includes/base_form.html" with form=form submit_label=save_horizon_label submit_icon="fa-layer-group" method="post" action=request.path title=horizon_to_accession_label access=accession heading_id="accession-horizon-form" %}
-    <div class="w3-margin-top">
-      <a href="{% url 'accession_detail' accession.id %}" class="w3-button w3-white w3-border w3-round-large w3-hover-light-grey">
-        <i class="fa-solid fa-arrow-left-long" aria-hidden="true"></i>
-        <span class="w3-margin-left">{% trans "Back to accession" %}</span>
-      </a>
-    </div>
+    {% url 'accession_detail' accession.id as cancel_url %}
+    {% include "includes/base_form.html" with form=form submit_label=save_horizon_label submit_icon="fa-layer-group" method="post" action=request.path title=horizon_to_accession_label access=accession heading_id="accession-horizon-form" cancel_url=cancel_url %}
   </main>
 {% endblock %}
