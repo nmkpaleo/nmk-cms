@@ -265,7 +265,7 @@ def _infer_portion_from_element(value: str | None) -> str | None:
         if tooth_token:
             return "Upper" if tooth_token.group(1).isupper() else "Lower"
     matches = re.findall(
-        r"\b(dist(?:al)?|prox(?:imal)?|upp?(?:er)?|low(?:er)?)\.?\b",
+        r"(?<![A-Za-z])(dist(?:al)?|prox(?:imal)?|upp?(?:er)?|low(?:er)?)(?:\.?)(?![A-Za-z])",
         text,
         flags=re.IGNORECASE,
     )
@@ -273,7 +273,16 @@ def _infer_portion_from_element(value: str | None) -> str | None:
     if len(normalized) != 1:
         return None
     token = normalized.pop()
-    return {"dist": "Distal", "prox": "Proximal", "upp": "Upper", "upper": "Upper", "low": "Lower", "lower": "Lower"}.get(token)
+    return {
+        "dist": "Distal",
+        "distal": "Distal",
+        "prox": "Proximal",
+        "proximal": "Proximal",
+        "upp": "Upper",
+        "upper": "Upper",
+        "low": "Lower",
+        "lower": "Lower",
+    }.get(token)
 
 
 def _truncate_verbatim_element(
