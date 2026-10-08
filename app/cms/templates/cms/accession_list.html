@@ -39,12 +39,16 @@
                     {{ filter.form.specimen_prefix }}
                 </div>
                 <div class="w3-col s12 m6 l3 w3-margin-bottom">
+                    <label class="w3-text-grey" for="id_specimen_suffix">{% trans "Specimen Suffix" %}</label>
+                    {{ filter.form.specimen_suffix }}
+                </div>
+                <div class="w3-col s12 m6 l3 w3-margin-bottom">
                     <label class="w3-text-grey" for="id_site">{% trans "Site / Collecting Area" %}</label>
                     {{ filter.form.site }}
                 </div>
                 <div class="w3-col s12 m6 l3 w3-margin-bottom">
-                    <label class="w3-text-grey" for="id_specimen_suffix">{% trans "Specimen Suffix" %}</label>
-                    {{ filter.form.specimen_suffix }}
+                    <label class="w3-text-grey" for="id_accessioned_by">{% trans "Accessioned By" %}</label>
+                    {{ filter.form.accessioned_by }}
                 </div>
                 <div class="w3-col s12 m6 l3 w3-margin-bottom">
                     <label class="w3-text-grey" for="id_comment">{% trans "Comment" %}</label>
@@ -58,10 +62,6 @@
                     {{ filter.form.taxon }}
                 </div>
                 <div class="w3-col s12 m6 l3 w3-margin-bottom">
-                    <label class="w3-text-grey" for="id_element">{% trans "Element" %}</label>
-                    {{ filter.form.element }}
-                </div>
-                <div class="w3-col s12 m6 l3 w3-margin-bottom">
                     <label class="w3-text-grey" for="id_family">{% trans "Family" %}</label>
                     {{ filter.form.family }}
                 </div>
@@ -73,6 +73,10 @@
 
             <div class="w3-row-padding">
                 <div class="w3-col s12 m6 l3 w3-margin-bottom">
+                    <label class="w3-text-grey" for="id_species">{% trans "Species" %}</label>
+                    {{ filter.form.species }}
+                </div>
+                <div class="w3-col s12 m6 l3 w3-margin-bottom">
                     <label class="w3-text-grey" for="id_tribe">{% trans "Tribe" %}</label>
                     {{ filter.form.tribe }}
                 </div>
@@ -81,8 +85,8 @@
                     {{ filter.form.genus }}
                 </div>
                 <div class="w3-col s12 m6 l3 w3-margin-bottom">
-                    <label class="w3-text-grey" for="id_species">{% trans "Species" %}</label>
-                    {{ filter.form.species }}
+                    <label class="w3-text-grey" for="id_element">{% trans "Element" %}</label>
+                    {{ filter.form.element }}
                 </div>
             </div>
 
