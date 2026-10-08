@@ -47,6 +47,10 @@
                     {{ filter.form.specimen_suffix }}
                 </div>
                 <div class="w3-col s12 m6 l3 w3-margin-bottom">
+                    <label class="w3-text-grey" for="id_accessioned_by">{% trans "Accessioned By" %}</label>
+                    {{ filter.form.accessioned_by }}
+                </div>
+                <div class="w3-col s12 m6 l3 w3-margin-bottom">
                     <label class="w3-text-grey" for="id_comment">{% trans "Comment" %}</label>
                     {{ filter.form.comment }}
                 </div>
@@ -56,10 +60,6 @@
                 <div class="w3-col s12 m6 l3 w3-margin-bottom">
                     <label class="w3-text-grey" for="id_taxon">{% trans "Taxon" %}</label>
                     {{ filter.form.taxon }}
-                </div>
-                <div class="w3-col s12 m6 l3 w3-margin-bottom">
-                    <label class="w3-text-grey" for="id_element">{% trans "Element" %}</label>
-                    {{ filter.form.element }}
                 </div>
                 <div class="w3-col s12 m6 l3 w3-margin-bottom">
                     <label class="w3-text-grey" for="id_family">{% trans "Family" %}</label>
@@ -72,6 +72,10 @@
             </div>
 
             <div class="w3-row-padding">
+                <div class="w3-col s12 m6 l3 w3-margin-bottom">
+                    <label class="w3-text-grey" for="id_element">{% trans "Element" %}</label>
+                    {{ filter.form.element }}
+                </div>
                 <div class="w3-col s12 m6 l3 w3-margin-bottom">
                     <label class="w3-text-grey" for="id_tribe">{% trans "Tribe" %}</label>
                     {{ filter.form.tribe }}

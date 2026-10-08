@@ -75,6 +75,11 @@ class AccessionFilter(django_filters.FilterSet):
         label="Site / Collecting Area",
         widget=forms.Select(attrs={"class": "w3-select"}),
     )
+    accessioned_by = django_filters.ModelChoiceFilter(
+        queryset=User.objects.filter(is_active=True).order_by("last_name", "first_name", "username"),
+        label="Accessioned By",
+        widget=forms.Select(attrs={"class": "w3-select"}),
+    )
     specimen_suffix = django_filters.CharFilter(
         lookup_expr="icontains",
         label="Suffix",
@@ -134,6 +139,7 @@ class AccessionFilter(django_filters.FilterSet):
             "specimen_no",
             "specimen_prefix",
             "site",
+            "accessioned_by",
             "specimen_suffix",
             "comment",
             "taxon",
