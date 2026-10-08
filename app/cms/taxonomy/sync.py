@@ -10,6 +10,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence
 
 import requests
 from django.conf import settings
+from django.core.cache import cache
 from django.db import transaction, DataError, IntegrityError
 from django.core.exceptions import ValidationError
 from django.utils import timezone
@@ -192,6 +193,10 @@ class NowTaxonomySyncService:
 
     def __init__(self, http_get: Optional[HttpGetter] = None) -> None:
         self.http_get: HttpGetter = http_get or requests.get
+        # Injected HTTP clients are used by tests and callers that provide
+        # their own source transport; do not let those synthetic responses
+        # leak into the shared cache.
+        self._cache_remote = http_get is None
 
     # ------------------------
     # Public API
@@ -223,10 +228,18 @@ class NowTaxonomySyncService:
         return accepted_records, synonyms_records
 
     def _fetch_text(self, url: str) -> str:
+        cache_key = "taxonomy-now-export:" + hashlib.sha256(url.encode("utf-8")).hexdigest()
+        if self._cache_remote:
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return cached
         response = self.http_get(url)
         response.raise_for_status()
         response.encoding = response.encoding or "utf-8"
-        return response.text
+        text = response.text
+        if self._cache_remote:
+            cache.set(cache_key, text, timeout=getattr(settings, "TAXON_NOW_CACHE_TIMEOUT", 3600))
+        return text
 
     def _parse_accepted(self, stream: io.StringIO) -> Iterable[AcceptedRecord]:
         reader = csv.DictReader(stream, delimiter="\t")

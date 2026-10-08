@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add a per-identification **Try taxonomy sync** action to the taxonomy cleanup report, with targeted NOW/GBIF matching, global linkage for the normalized taxon name, and visible success/failure messages.
+- Cache successful NOW taxonomy exports through Django's configured cache backend, with a configurable one-hour default TTL, to reduce repeated downloads during targeted syncs.
+
 - Roll back OpenAI billing snapshot replacements when the UI synchronization deadline expires, and avoid waiting for billing row locks where supported.
 
 - Show unavailable billing costs instead of zero when a selected date range falls entirely after the current UTC date.

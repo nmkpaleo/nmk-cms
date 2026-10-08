@@ -6,6 +6,11 @@
 {% block content %}
 <div class="w3-content w3-padding-32 w3-animate-opacity">
   <h2>{% trans "Taxonomy identification cleanup" %}</h2>
+  {% if messages %}
+    {% for message in messages %}
+      <p class="w3-panel {% if message.tags == 'success' %}w3-pale-green w3-border-green{% elif message.tags == 'error' %}w3-pale-red w3-border-red{% else %}w3-pale-yellow w3-border-yellow{% endif %} w3-leftbar">{{ message }}</p>
+    {% endfor %}
+  {% endif %}
   <p class="w3-text-grey">
     {% trans "Only the current identification for each specimen is shown. The report lists missing free-text Taxon values and Taxon values that do not resolve to GBIF or NOW taxonomy." %}
   </p>
@@ -36,7 +41,16 @@
               <td>{% if identification.cleanup_reason == "missing_taxon" %}{% trans "Taxon is empty" %}{% else %}{% trans "Taxon does not match GBIF/NOW taxonomy" %}{% endif %}</td>
               <td>{{ identification.date_identified|default:"?" }}</td>
               <td>{% if identification.reference %}{{ identification.reference.year }}{% else %}?{% endif %}</td>
-              <td><a class="w3-button w3-small w3-deep-orange" href="{% url 'identification_edit' identification.pk %}">{% trans "Edit identification" %}</a></td>
+              <td>
+                <a class="w3-button w3-small w3-deep-orange" href="{% url 'identification_edit' identification.pk %}">{% trans "Edit identification" %}</a>
+                {% if identification.cleanup_reason == "unmatched_taxon" %}
+                  <form method="post" class="w3-margin-top">
+                    {% csrf_token %}
+                    <input type="hidden" name="identification_id" value="{{ identification.pk }}">
+                    <button type="submit" class="w3-button w3-small w3-blue" aria-label="{% trans 'Try taxonomy sync' %}">{% trans "Try taxonomy sync" %}</button>
+                  </form>
+                {% endif %}
+              </td>
             </tr>
           {% endfor %}
         </tbody>
