@@ -75,6 +75,11 @@ class AccessionFilter(django_filters.FilterSet):
         label="Site / Collecting Area",
         widget=forms.Select(attrs={"class": "w3-select"}),
     )
+    accessioned_by = django_filters.ModelChoiceFilter(
+        queryset=User.objects.order_by("last_name", "first_name", "username"),
+        label="Accessioned By",
+        widget=forms.Select(attrs={"class": "w3-select"}),
+    )
     specimen_suffix = django_filters.CharFilter(
         lookup_expr="icontains",
         label="Suffix",
@@ -134,6 +139,7 @@ class AccessionFilter(django_filters.FilterSet):
             "specimen_no",
             "specimen_prefix",
             "site",
+            "accessioned_by",
             "specimen_suffix",
             "comment",
             "taxon",
@@ -148,6 +154,18 @@ class AccessionFilter(django_filters.FilterSet):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        accession_queryset = self.queryset
+        site_ids = accession_queryset.filter(site__isnull=False).values("site_id")
+        accessioned_by_ids = accession_queryset.filter(
+            accessioned_by__isnull=False
+        ).values("accessioned_by_id")
+        self.filters["site"].queryset = self.filters["site"].queryset.filter(
+            pk__in=site_ids
+        )
+        self.filters["accessioned_by"].queryset = self.filters[
+            "accessioned_by"
+        ].queryset.filter(pk__in=accessioned_by_ids)
+
         organisation_filter = self.filters["organisation"]
         organisation_filter.queryset = Organisation.objects.filter(is_active=True).order_by(
             "name"

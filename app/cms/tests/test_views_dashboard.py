@@ -39,7 +39,7 @@ def test_dashboard_displays_preparator_card(client):
     content = response.content.decode()
 
     assert '<main class="w3-container' in content
-    assert "fa-vials" in content
+    assert "fa-bone" in content
     assert "My active preparations" in content
     assert "w3-card-4" in content
 

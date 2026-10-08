@@ -882,7 +882,16 @@ def test_taxon_with_species_novel_and_uncertainty_is_normalized():
     assert entry["identification_remarks"]["interpreted"] == "Identification uncertain"
 @pytest.mark.parametrize(
     ("body_part", "expected_portion"),
-    [("Lt. dist. h/c frag", "Distal"), ("upper molar", "Upper"), ("upp. molar", "Upper"), ("low molar", "Lower"), ("low. molar", "Lower"), ("lower molar", "Lower")],
+    [
+        ("Lt. dist. h/c frag", "Distal"),
+        ("L distal humerus", "Distal"),
+        ("limb bone (distal end of humerus fragment)", "Distal"),
+        ("upper molar", "Upper"),
+        ("upp. molar", "Upper"),
+        ("low molar", "Lower"),
+        ("low. molar", "Lower"),
+        ("lower molar", "Lower"),
+    ],
 )
 def test_manual_qc_infers_portion_from_element_text(body_part, expected_portion):
     nature = build_row_section({"body_parts": body_part}, "A")["natures"][0]

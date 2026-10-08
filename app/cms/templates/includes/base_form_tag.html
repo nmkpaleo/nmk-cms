@@ -45,6 +45,12 @@
   </div>
 
   <div class="w3-margin-top w3-right-align">
+    {% if cancel_url %}
+      <a href="{{ cancel_url }}" class="w3-button w3-white w3-border w3-round-large w3-hover-light-grey w3-margin-right" aria-label="{% trans 'Cancel' %}">
+        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% if cancel_label %}{{ cancel_label }}{% else %}{% trans "Cancel" %}{% endif %}</span>
+      </a>
+    {% endif %}
     <button type="submit" class="w3-button w3-blue w3-round-large w3-padding-large w3-hover-indigo">
       <span class="w3-margin-right">
         <i class="fa-solid {{ submit_icon|default:'fa-floppy-disk' }}" aria-hidden="true"></i>
