@@ -264,8 +264,12 @@ def _infer_portion_from_element(value: str | None) -> str | None:
         tooth_token = re.search(r"(?<![A-Za-z0-9])(?:d)?([iIcCpPmM])[1-4]\b", text)
         if tooth_token:
             return "Upper" if tooth_token.group(1).isupper() else "Lower"
-    matches = re.findall(r"\b(dist(?:al)?\.?|prox(?:imal)?\.?|upp?(?:er)?\.?|low(?:er)?\.?)\b", text, flags=re.IGNORECASE)
-    normalized = {match.lower().rstrip(".") for match in matches}
+    matches = re.findall(
+        r"\b(dist(?:al)?|prox(?:imal)?|upp?(?:er)?|low(?:er)?)\.?\b",
+        text,
+        flags=re.IGNORECASE,
+    )
+    normalized = {match.lower() for match in matches}
     if len(normalized) != 1:
         return None
     token = normalized.pop()
