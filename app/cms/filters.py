@@ -76,7 +76,7 @@ class AccessionFilter(django_filters.FilterSet):
         widget=forms.Select(attrs={"class": "w3-select"}),
     )
     accessioned_by = django_filters.ModelChoiceFilter(
-        queryset=User.objects.filter(is_active=True).order_by("last_name", "first_name", "username"),
+        queryset=User.objects.order_by("last_name", "first_name", "username"),
         label="Accessioned By",
         widget=forms.Select(attrs={"class": "w3-select"}),
     )

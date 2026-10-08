@@ -55,13 +55,15 @@
               <span class="w3-margin-left">{% trans "Specimen details" %}</span>
             </h2>
           </div>
-          {% if not preview_mode and user.is_authenticated and user.is_superuser or user|has_group:"Collection Managers" %}
+          {% if not preview_mode and user.is_authenticated %}
+            {% if user.is_superuser or user|has_group:"Collection Managers" %}
             <div class="w3-col s12 m6 w3-right-align">
               <a href="{% url 'accession_add_row' accession.id %}" class="w3-button w3-green w3-round" aria-label="{% trans 'Add specimen' %}">
                 <i class="fa-solid fa-bone" aria-hidden="true"></i>
                 <span class="w3-hide-small w3-margin-left">{% trans "Add specimen" %}</span>
               </a>
             </div>
+            {% endif %}
           {% endif %}
         </header>
         <div class="w3-responsive">
@@ -393,13 +395,15 @@
             <span class="w3-margin-left">{% trans "References" %}</span>
           </h2>
         </div>
-        {% if not preview_mode and user.is_authenticated and user.is_superuser or user|has_group:"Collection Managers" %}
+        {% if not preview_mode and user.is_authenticated %}
+          {% if user.is_superuser or user|has_group:"Collection Managers" %}
           <div class="w3-col s12 m6 w3-right-align">
-            <a href="{% url 'accession_add_reference' accession.id %}" class="w3-button w3-green w3-round">
+            <a href="{% url 'accession_add_reference' accession.id %}" class="w3-button w3-green w3-round" aria-label="{% trans 'Add reference' %}">
               <i class="fa-solid fa-book" aria-hidden="true"></i>
               <span class="w3-hide-small w3-margin-left">{% trans "Add reference" %}</span>
             </a>
           </div>
+          {% endif %}
         {% endif %}
         {% if not preview_mode and user.is_authenticated %}
           {% if user|has_group:"Collection Managers" %}
