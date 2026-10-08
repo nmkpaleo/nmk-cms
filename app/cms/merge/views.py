@@ -169,9 +169,8 @@ class FieldSelectionMergeView(LoginRequiredMixin, View):
             context.get("cancel_url") if isinstance(target_instance, NatureOfSpecimen) else "",
             fallback=change_url,
         )
-        allowed_redirects = {change_url} if change_url else set()
         safe_cancel = (
-            cancel_url in allowed_redirects
+            bool(cancel_url)
             and url_has_allowed_host_and_scheme(
                 url=cancel_url,
                 allowed_hosts={request.get_host()},
