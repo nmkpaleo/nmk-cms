@@ -12,6 +12,12 @@ USER user
 COPY requirements-ci.lock .
 RUN python -m pip install --require-hashes -r requirements-ci.lock
 
+# Tooth-marking inference is enabled in production and uses the CPU-only,
+# hash-verified dependency set. Installing it in the compile stage makes the
+# packages available in the final image via the copied user site-packages.
+COPY requirements-tooth-marking-cpu.lock .
+RUN python -m pip install --require-hashes -r requirements-tooth-marking-cpu.lock
+
 # ---------------------------------
 
 FROM python:3.10-slim@sha256:c1aaf3d03e14944a039a1647e0b3f6f34c6bee517bac6ff380215ee099c4e808 AS torch-cpu-compat-check
