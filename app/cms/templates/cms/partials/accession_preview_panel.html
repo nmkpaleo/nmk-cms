@@ -55,7 +55,7 @@
               <span class="w3-margin-left">{% trans "Specimen details" %}</span>
             </h2>
           </div>
-          {% if not preview_mode and user.is_authenticated and user|has_group:"Collection Managers" %}
+          {% if not preview_mode and user.is_authenticated and user.is_superuser or user|has_group:"Collection Managers" %}
             <div class="w3-col s12 m6 w3-right-align">
               <a href="{% url 'accession_add_row' accession.id %}" class="w3-button w3-green w3-round" aria-label="{% trans 'Add specimen' %}">
                 <i class="fa-solid fa-vial" aria-hidden="true"></i>
@@ -337,7 +337,7 @@
               </div>
             {% endif %}
           </div>
-          {% if not preview_mode and user.is_authenticated and user|has_group:"Collection Managers" %}
+          {% if not preview_mode and user.is_authenticated and user.is_superuser or user|has_group:"Collection Managers" %}
             <div class="w3-col s12 m6 w3-right-align">
               <a href="{% url 'accession_add_geology' accession.id %}" class="w3-button w3-green w3-round">
                 <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
@@ -395,7 +395,7 @@
             <span class="w3-margin-left">{% trans "References" %}</span>
           </h2>
         </div>
-        {% if not preview_mode and user.is_authenticated and user|has_group:"Collection Managers" %}
+        {% if not preview_mode and user.is_authenticated and user.is_superuser or user|has_group:"Collection Managers" %}
           <div class="w3-col s12 m6 w3-right-align">
             <a href="{% url 'accession_add_reference' accession.id %}" class="w3-button w3-green w3-round">
               <i class="fa-solid fa-book" aria-hidden="true"></i>
