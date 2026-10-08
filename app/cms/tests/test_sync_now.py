@@ -3,6 +3,7 @@ import io
 import pytest
 from crum import set_current_user
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import override_settings
 
 from app.cms.models import (
@@ -10,6 +11,30 @@ from app.cms.models import (
     Identification, Locality, Taxon, TaxonExternalSource, TaxonStatus, TaxonomyImport,
 )
 from app.cms.taxonomy.sync import NowTaxonomySyncService, build_taxon_from_record
+
+
+@override_settings(TAXON_NOW_CACHE_TIMEOUT=3600)
+def test_now_export_downloads_are_cached(monkeypatch):
+    calls = []
+
+    class Response:
+        encoding = "utf-8"
+        text = "taxon_name\ttaxon_rank\nStruthio\tgenus\n"
+
+        def raise_for_status(self):
+            pass
+
+    def http_get(url):
+        calls.append(url)
+        return Response()
+
+    cache.clear()
+    monkeypatch.setattr("cms.taxonomy.sync.requests.get", http_get)
+    service = NowTaxonomySyncService()
+    service._fetch_text("https://example.com/now.tsv")
+    service._fetch_text("https://example.com/now.tsv")
+
+    assert calls == ["https://example.com/now.tsv"]
 
 
 @pytest.fixture(autouse=True)

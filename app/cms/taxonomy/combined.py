@@ -174,3 +174,45 @@ class TaxonomySyncService(NowTaxonomySyncService):
         gbif_version = hashlib.sha256(";".join(gbif_hashes).encode()).hexdigest() if gbif_hashes else "none"
         preview.source_version = f"NOW:{_latest_version(full_now_accepted, full_now_synonyms)}; GBIF:{settings.TAXON_GBIF_CHECKLIST_KEY}:{gbif_version}"
         return preview
+
+    def preview_for_name(self, name):
+        """Build a small preview for one locally recorded taxon name.
+
+        NOW is a bulk export, so it is still downloaded in full, but only the
+        requested name is sent through GBIF and only its records are applied.
+        """
+        requested = normalize_taxon_label(name)
+        if not requested:
+            raise ValueError("A taxon name is required")
+        now_accepted, now_synonyms = self._load_remote_records()
+        key = requested.lower()
+        accepted = [r for r in now_accepted if normalize_taxon_label(r.name).lower() == key]
+        synonyms = [r for r in now_synonyms if normalize_taxon_label(r.name).lower() == key]
+
+        now_mammal = any(
+            normalize_taxon_label(r.taxonomy.get("class_name", "")).lower() == "mammalia"
+            for r in accepted + synonyms
+        )
+        if not now_mammal:
+            result = self.gbif.match(requested)
+            gbif_accepted, gbif_synonyms = result
+            accepted.extend(gbif_accepted)
+            synonyms.extend(gbif_synonyms)
+
+        # A synonym requires its accepted NOW target to be present in the
+        # preview, even when the target was not itself entered locally.
+        accepted_keys = {taxon_identity(r.name, _record_rank(r.rank)) for r in accepted}
+        dependency_keys = {r.accepted_key for r in synonyms}
+        accepted.extend(
+            r for r in now_accepted
+            if taxon_identity(r.name, _record_rank(r.rank)) in accepted_keys
+            or (r.external_source, r.external_id) in dependency_keys
+        )
+        preview = self._build_preview(
+            accepted,
+            synonyms,
+            local_names={key},
+        )
+        preview.import_source = TaxonomyImport.Source.COMBINED
+        preview.source_version = f"NOW:{_latest_version(now_accepted, now_synonyms)}; GBIF:single-name"
+        return preview

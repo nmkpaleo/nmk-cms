@@ -78,6 +78,8 @@ from django.views.generic import ListView, DetailView, CreateView, UpdateView, D
 from PIL import Image, ImageOps
 from django.core.serializers.json import DjangoJSONEncoder
 from django.core.exceptions import PermissionDenied
+from .taxonomy.combined import TaxonomySyncService
+from .taxon_identity import normalize_taxon_label
 
 User = get_user_model()
 
@@ -340,6 +342,29 @@ def media_report_view(request):
 @user_passes_test(is_collection_manager)
 def taxonomy_identification_cleanup_report(request):
     """List current identifications that need taxonomy cleanup."""
+
+    if request.method == "POST":
+        identification = get_object_or_404(Identification, pk=request.POST.get("identification_id"))
+        name = normalize_taxon_label(identification.taxon_verbatim or identification.taxon)
+        if not name:
+            messages.error(request, _("This identification has no taxon value to synchronize."))
+        else:
+            try:
+                service = TaxonomySyncService()
+                preview = service.preview_for_name(name)
+                result = service._apply(preview)
+                if result.import_log and result.import_log.ok:
+                    messages.success(request, _("Taxon '%(name)s' was synchronized.") % {"name": name})
+                else:
+                    messages.warning(request, _("Taxon '%(name)s' could not be synchronized: %(issues)s") % {
+                        "name": name,
+                        "issues": "; ".join(issue.message for issue in preview.issues) or _("no exact match"),
+                    })
+            except Exception as exc:
+                messages.error(request, _("Taxon '%(name)s' could not be synchronized: %(error)s") % {
+                    "name": name, "error": exc,
+                })
+        return redirect("taxonomy_identification_cleanup_report")
 
     taxonomy_sources = [TaxonExternalSource.GBIF, TaxonExternalSource.NOW]
 
