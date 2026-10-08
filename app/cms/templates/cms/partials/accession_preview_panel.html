@@ -340,12 +340,6 @@
             </div>
             {% if not preview_mode and user.is_authenticated %}
               {% if user|has_group:"Collection Managers" %}
-                <div class="w3-col s12 m6 w3-right-align w3-margin-top">
-                  <a href="{% url 'accession_add_geology' accession.id %}" class="w3-button w3-green w3-round">
-                    <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
-                    <span class="w3-hide-small w3-margin-left">{% trans "Add horizon" %}</span>
-                  </a>
-                </div>
               {% endif %}
             {% endif %}
           </div>
