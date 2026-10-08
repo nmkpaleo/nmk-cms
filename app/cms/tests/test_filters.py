@@ -284,6 +284,36 @@ class AccessionFilterTests(TestCase):
 
         self.assertEqual(list(filterset.qs), [nmk_accession])
 
+    def test_accession_filter_by_accessioned_by(self):
+        user_model = get_user_model()
+        accessioned_by = user_model.objects.create_user(username="accession-owner")
+        other_user = user_model.objects.create_user(username="other-owner")
+        matching = make_accession(accessioned_by=accessioned_by)
+        make_accession(accessioned_by=other_user)
+
+        filterset = AccessionFilter(
+            data={"accessioned_by": accessioned_by.pk},
+            queryset=Accession.objects.all(),
+        )
+
+        self.assertEqual(list(filterset.qs), [matching])
+
+    def test_accession_filter_includes_inactive_historical_accessioners(self):
+        user_model = get_user_model()
+        historical_user = user_model.objects.create_user(
+            username="historical-accession-owner", is_active=False
+        )
+        make_accession(accessioned_by=historical_user)
+
+        filterset = AccessionFilter(
+            data={}, queryset=Accession.objects.all()
+        )
+
+        self.assertIn(
+            historical_user,
+            filterset.form.fields["accessioned_by"].queryset,
+        )
+
     def test_accession_list_view_paginates_with_organisation_filter(self):
         organisation, _ = Organisation.objects.get_or_create(code="nmk", defaults={"name": "NMK"})
         user_model = get_user_model()

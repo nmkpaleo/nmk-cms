@@ -51,18 +51,18 @@
         <header class="w3-row w3-padding-16">
           <div class="w3-col s12 m6">
             <h2 id="accession-specimens-heading" class="w3-margin-0">
-              <i class="fa-solid fa-vial" aria-hidden="true"></i>
+              <i class="fa-solid fa-bone" aria-hidden="true"></i>
               <span class="w3-margin-left">{% trans "Specimen details" %}</span>
             </h2>
           </div>
           {% if not preview_mode and user.is_authenticated %}
-            {% if user|has_group:"Collection Managers" %}
-              <div class="w3-col s12 m6 w3-right-align">
-                <a href="{% url 'accession_add_row' accession.id %}" class="w3-button w3-green w3-round">
-                  <i class="fa-solid fa-plus" aria-hidden="true"></i>
-                  <span class="w3-hide-small w3-margin-left">{% trans "Add specimen" %}</span>
-                </a>
-              </div>
+            {% if user.is_superuser or user|has_group:"Collection Managers" %}
+            <div class="w3-col s12 m6 w3-right-align">
+              <a href="{% url 'accession_add_row' accession.id %}" class="w3-button w3-green w3-round" aria-label="{% trans 'Add specimen' %}">
+                <i class="fa-solid fa-bone" aria-hidden="true"></i>
+                <span class="w3-hide-small w3-margin-left">{% trans "Add specimen" %}</span>
+              </a>
+            </div>
             {% endif %}
           {% endif %}
         </header>
@@ -349,8 +349,8 @@
               <h2 id="accession-horizon-heading" class="w3-margin-0">{% trans "Horizon" %}</h2>
             </div>
             {% if not preview_mode and user.is_authenticated %}
-              {% if user|has_group:"Collection Managers" %}
-                <div class="w3-col s12 m6 w3-right-align w3-margin-top">
+              {% if user.is_superuser or user|has_group:"Collection Managers" %}
+                <div class="w3-col s12 m6 w3-right-align">
                   <a href="{% url 'accession_add_geology' accession.id %}" class="w3-button w3-green w3-round">
                     <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
                     <span class="w3-hide-small w3-margin-left">{% trans "Add horizon" %}</span>
@@ -396,13 +396,19 @@
           </h2>
         </div>
         {% if not preview_mode and user.is_authenticated %}
+          {% if user.is_superuser or user|has_group:"Collection Managers" %}
+          <div class="w3-col s12 m6 w3-right-align">
+            <a href="{% url 'accession_add_reference' accession.id %}" class="w3-button w3-green w3-round" aria-label="{% trans 'Add reference' %}">
+              <i class="fa-solid fa-book" aria-hidden="true"></i>
+              <span class="w3-hide-small w3-margin-left">{% trans "Add reference" %}</span>
+            </a>
+          </div>
+          {% endif %}
+        {% endif %}
+        {% if not preview_mode and user.is_authenticated %}
           {% if user|has_group:"Collection Managers" %}
             <div class="w3-col s12 m6 w3-right-align">
               <div class="w3-bar w3-margin-top-small" role="group" aria-label="{% trans 'Reference actions' %}">
-                <a href="{% url 'accession_add_reference' accession.id %}" class="w3-button w3-green w3-round w3-bar-item">
-                  <i class="fa-solid fa-plus" aria-hidden="true"></i>
-                  <span class="w3-hide-small w3-margin-left">{% trans "Add reference" %}</span>
-                </a>
                 {% if reference_merge_form %}
                   <button
                     type="button"
