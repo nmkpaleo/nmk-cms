@@ -12,6 +12,7 @@ import csv
 import json
 import logging
 import os
+from collections import Counter
 from datetime import date, datetime, timedelta, timezone as dt_timezone
 import json
 from decimal import Decimal
@@ -366,8 +367,6 @@ def taxonomy_identification_cleanup_report(request):
                 })
         return redirect("taxonomy_identification_cleanup_report")
 
-    taxonomy_sources = [TaxonExternalSource.GBIF, TaxonExternalSource.NOW]
-
     # Keep this expression aligned with ``normalize_taxon_label`` for normal
     # catalogue values. Repeating Replace collapses runs of spaces without
     # loading all taxonomy names or identifications into Python.
@@ -420,10 +419,9 @@ def taxonomy_identification_cleanup_report(request):
             )
         ).filter(_current_position=1)
     )
-    active_taxa = Taxon.objects.filter(
-        is_active=True,
-        external_source__in=taxonomy_sources,
-    ).annotate(_normalized_name=normalized_name("taxon_name"))
+    active_taxa = Taxon.objects.filter(is_active=True).annotate(
+        _normalized_name=normalized_name("taxon_name")
+    )
     queryset = Identification.objects.filter(
         pk__in=Subquery(current_identifications.values("pk"))
     ).annotate(
@@ -435,18 +433,60 @@ def taxonomy_identification_cleanup_report(request):
         )
     ).filter(
         Q(_normalized_taxon="") & ~Q(_normalized_verbatim="")
-        | ~Q(_normalized_taxon="")
-        & ~Q(
-            taxon_record__is_active=True,
-            taxon_record__external_source__in=taxonomy_sources,
+        | (
+            ~Q(_normalized_taxon="")
+            & Q(taxon_record__isnull=True)
+            & Q(_matches_taxonomy=False)
         )
-        & Q(_matches_taxonomy=False)
     ).select_related(
         "accession_row__accession__collection",
         "accession_row__accession__specimen_prefix",
         "reference",
         "taxon_record",
     ).order_by("accession_row_id", "pk")
+    taxon_filter = request.GET.get("taxon", "").strip()
+    verbatim_filter = request.GET.get("taxon_verbatim", "").strip()
+    issue_filter = request.GET.get("issue", "").strip()
+    if taxon_filter:
+        queryset = queryset.filter(taxon__icontains=taxon_filter)
+    if verbatim_filter:
+        queryset = queryset.filter(taxon_verbatim__icontains=verbatim_filter)
+    if issue_filter == "missing":
+        queryset = queryset.filter(_normalized_taxon="")
+    elif issue_filter == "unmatched":
+        queryset = queryset.exclude(_normalized_taxon="")
+
+    filtered_taxa = [
+        value.strip().casefold()
+        for value in queryset.values_list("taxon", flat=True)
+        if value and value.strip()
+    ]
+    distinct_source_taxa = set(filtered_taxa)
+    bulk_source_taxon = next(iter(distinct_source_taxa), "") if len(distinct_source_taxa) == 1 else ""
+    bulk_edit_enabled = bool(bulk_source_taxon and filtered_taxa)
+
+    if request.method == "POST":
+        selected = list(queryset) if bulk_edit_enabled else []
+        target_taxon = request.POST.get("target_taxon", "").strip()
+        target_qualifier = request.POST.get("target_qualifier", "").strip()
+        if not selected:
+            messages.error(request, _("Bulk replacement requires a filtered list with one source Taxon value."))
+        elif not target_taxon:
+            messages.error(request, _("Enter a replacement Taxon value."))
+        else:
+            for item in selected:
+                item.taxon_verbatim = target_taxon
+                if target_qualifier:
+                    item.identification_qualifier = target_qualifier
+                item.save()
+            messages.success(request, _("Updated %(count)d identification(s).") % {"count": len(selected)})
+        return redirect("taxonomy_identification_cleanup_report")
+
+    taxon_counts = Counter(
+        row["_normalized_taxon"]
+        for row in queryset.values("_normalized_taxon")
+        if row["_normalized_taxon"]
+    )
     paginator = Paginator(queryset, 100)
     page_obj = paginator.get_page(request.GET.get("page", 1))
     identifications = list(page_obj.object_list)
@@ -456,6 +496,7 @@ def taxonomy_identification_cleanup_report(request):
             if not identification._normalized_taxon
             else "unmatched_taxon"
         )
+        identification.same_taxon_count = taxon_counts.get(identification._normalized_taxon, 0)
     return render(
         request,
         "reports/taxonomy_identification_cleanup.html",
@@ -465,6 +506,14 @@ def taxonomy_identification_cleanup_report(request):
             "page_number": page_obj.number,
             "has_previous": page_obj.has_previous(),
             "has_next": page_obj.has_next(),
+            "page_obj": page_obj,
+            "is_paginated": page_obj.paginator.num_pages > 1,
+            "taxon_filter": taxon_filter,
+            "verbatim_filter": verbatim_filter,
+            "issue_filter": issue_filter,
+            "bulk_source_taxon": bulk_source_taxon,
+            "bulk_edit_enabled": bulk_edit_enabled,
+            "bulk_count": len(filtered_taxa),
         },
     )
 
@@ -2571,11 +2620,15 @@ class ReferenceDetailView(DetailView):
             )
             attach_accession_summaries(accessions)
             accession_map = {accession.id: accession for accession in accessions}
+            seen_accession_ids = set()
 
             for accession_reference in accession_references:
+                if accession_reference.accession_id in seen_accession_ids:
+                    continue
                 accession = accession_map.get(accession_reference.accession_id)
                 if accession is not None:
                     accession_entries.append((accession, accession_reference.page))
+                    seen_accession_ids.add(accession_reference.accession_id)
 
         doi_value = (self.object.doi or "").strip()
         if doi_value:

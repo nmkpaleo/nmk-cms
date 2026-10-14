@@ -22,3 +22,11 @@ def querystring_replace(context, **kwargs):
         else:
             query[key] = value
     return query.urlencode()
+
+
+@register.simple_tag
+def page_range(page_obj):
+    """Return up to two nearby page numbers on each side of the current page."""
+    start = max(1, page_obj.number - 2)
+    end = min(page_obj.paginator.num_pages, page_obj.number + 2)
+    return range(start, end + 1)

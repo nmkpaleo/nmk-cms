@@ -89,9 +89,10 @@ def test_cleanup_report_lists_missing_and_unmatched_current_taxa(client, django_
     assert response.status_code == 200
     shown = list(response.context["identifications"])
     assert shown == [unmatched, missing]
+    assert valid_qualified not in shown
     assert whitespace_valid not in shown
     assert b"Struthio" not in response.content
-    assert b"Taxon does not match GBIF/NOW taxonomy" in response.content
+    assert b"Taxon does not match active controlled taxonomy" in response.content
     assert b"Taxon is empty" in response.content
     assert reverse("identification_edit", args=[unmatched.pk]).encode() in response.content
     assert reverse("identification_edit", args=[missing.pk]).encode() in response.content
@@ -104,3 +105,49 @@ def test_cleanup_report_requires_collection_manager(client, django_user_model):
     response = client.get(reverse("taxonomy_identification_cleanup_report"))
 
     assert response.status_code == 302
+
+
+def test_cleanup_report_filters_and_bulk_updates_case_insensitive_source(client, django_user_model):
+    user = django_user_model.objects.create_user(username="bulk-manager", password="testpass123")
+    managers, _ = Group.objects.get_or_create(name="Collection Managers")
+    user.groups.add(managers)
+    set_current_user(user)
+    try:
+        first = Identification.objects.create(
+            accession_row=_accession_row(user, specimen_no=10),
+            taxon_verbatim="Parapapio lothagamensis | lothagamensis",
+            taxon="Parapapio lothagamensis | lothagamensis",
+            identification_qualifier="cf.",
+        )
+        second = Identification.objects.create(
+            accession_row=_accession_row(user, specimen_no=11),
+            taxon_verbatim="PARAPAPIO LOTHAGAMENSIS | LOTHAGAMENSIS",
+            taxon="PARAPAPIO LOTHAGAMENSIS | LOTHAGAMENSIS",
+            identification_qualifier="aff.",
+        )
+    finally:
+        set_current_user(None)
+    client.force_login(user)
+
+    response = client.get(
+        reverse("taxonomy_identification_cleanup_report"),
+        {"taxon": "lothagamensis"},
+    )
+    assert response.status_code == 200
+    assert {item.pk for item in response.context["identifications"]} == {first.pk, second.pk}
+    assert response.context["identifications"][0].same_taxon_count == 2
+
+    response = client.post(
+        reverse("taxonomy_identification_cleanup_report") + "?taxon=lothagamensis",
+        {
+            "target_taxon": "Parapapio lothagamensis",
+            "target_qualifier": "cf.",
+        },
+    )
+    assert response.status_code == 302
+    first.refresh_from_db()
+    second.refresh_from_db()
+    assert first.taxon == "Parapapio lothagamensis"
+    assert second.taxon == "Parapapio lothagamensis"
+    assert first.identification_qualifier == "cf."
+    assert second.identification_qualifier == "cf."
