@@ -438,6 +438,7 @@ def taxonomy_identification_cleanup_report(request):
     if request.method == "POST":
         selected = list(queryset.filter(pk__in=request.POST.getlist("identification_ids")))
         target_taxon = request.POST.get("target_taxon", "").strip()
+        target_qualifier = request.POST.get("target_qualifier", "").strip()
         source_values = {(item.taxon or "").strip().casefold() for item in selected}
         if not selected:
             messages.error(request, _("Select at least one identification."))
@@ -448,6 +449,8 @@ def taxonomy_identification_cleanup_report(request):
         else:
             for item in selected:
                 item.taxon_verbatim = target_taxon
+                if target_qualifier:
+                    item.identification_qualifier = target_qualifier
                 item.save()
             messages.success(request, _("Updated %(count)d identification(s).") % {"count": len(selected)})
         return redirect("taxonomy_identification_cleanup_report")

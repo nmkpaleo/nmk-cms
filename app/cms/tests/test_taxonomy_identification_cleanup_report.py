@@ -116,11 +116,13 @@ def test_cleanup_report_filters_and_bulk_updates_case_insensitive_source(client,
             accession_row=_accession_row(user, specimen_no=10),
             taxon_verbatim="Parapapio lothagamensis | lothagamensis",
             taxon="Parapapio lothagamensis | lothagamensis",
+            identification_qualifier="cf.",
         )
         second = Identification.objects.create(
             accession_row=_accession_row(user, specimen_no=11),
             taxon_verbatim="PARAPAPIO LOTHAGAMENSIS | LOTHAGAMENSIS",
             taxon="PARAPAPIO LOTHAGAMENSIS | LOTHAGAMENSIS",
+            identification_qualifier="aff.",
         )
     finally:
         set_current_user(None)
@@ -139,6 +141,7 @@ def test_cleanup_report_filters_and_bulk_updates_case_insensitive_source(client,
         {
             "identification_ids": [first.pk, second.pk],
             "target_taxon": "Parapapio lothagamensis",
+            "target_qualifier": "cf.",
         },
     )
     assert response.status_code == 302
@@ -146,3 +149,5 @@ def test_cleanup_report_filters_and_bulk_updates_case_insensitive_source(client,
     second.refresh_from_db()
     assert first.taxon == "Parapapio lothagamensis"
     assert second.taxon == "Parapapio lothagamensis"
+    assert first.identification_qualifier == "cf."
+    assert second.identification_qualifier == "cf."
