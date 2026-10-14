@@ -293,21 +293,35 @@ USE_I18N = True
 USE_TZ = True
 USE_DEPRECATED_PYTZ = False
 
-# Set false for Pythonanywhere and similar non-Docker environments
+# Redis is preferred in Docker. On deployments without Redis, use
+# CACHE_BACKEND=file so all web workers share previews through the filesystem.
 USE_REDIS = os.getenv("USE_REDIS", "false").lower() == "true"
+CACHE_BACKEND = os.getenv("CACHE_BACKEND", "locmem").lower()
+REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379")
+
+if USE_REDIS:
+    CACHE_ENGINE = "django_redis.cache.RedisCache"
+    CACHE_LOCATION = REDIS_URL
+    CACHE_OPTIONS = {"CLIENT_CLASS": "django_redis.client.DefaultClient"}
+elif CACHE_BACKEND == "file":
+    CACHE_ENGINE = "django.core.cache.backends.filebased.FileBasedCache"
+    CACHE_LOCATION = os.getenv("CACHE_LOCATION", str(BASE_DIR / ".cache"))
+    CACHE_OPTIONS = {}
+else:
+    CACHE_ENGINE = "django.core.cache.backends.locmem.LocMemCache"
+    CACHE_LOCATION = ""
+    CACHE_OPTIONS = {}
 
 CACHES = {
     'default': {
-        'BACKEND': 'django_redis.cache.RedisCache' if USE_REDIS else 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'redis://redis:6379' if USE_REDIS else '',
-        'OPTIONS': {'CLIENT_CLASS': 'django_redis.client.DefaultClient'} if USE_REDIS else {},
+        'BACKEND': CACHE_ENGINE,
+        'LOCATION': CACHE_LOCATION,
+        'OPTIONS': CACHE_OPTIONS,
     },
     'select2': {
-        'BACKEND': 'django_redis.cache.RedisCache' if USE_REDIS else 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'redis://redis:6379' if USE_REDIS else '',
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-        } if USE_REDIS else {},
+        'BACKEND': CACHE_ENGINE,
+        'LOCATION': CACHE_LOCATION,
+        'OPTIONS': CACHE_OPTIONS,
     }
 }
 
