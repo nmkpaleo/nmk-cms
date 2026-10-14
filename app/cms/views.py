@@ -342,8 +342,6 @@ def media_report_view(request):
 def taxonomy_identification_cleanup_report(request):
     """List current identifications that need taxonomy cleanup."""
 
-    taxonomy_sources = [TaxonExternalSource.GBIF, TaxonExternalSource.NOW]
-
     # Keep this expression aligned with ``normalize_taxon_label`` for normal
     # catalogue values. Repeating Replace collapses runs of spaces without
     # loading all taxonomy names or identifications into Python.
@@ -396,10 +394,9 @@ def taxonomy_identification_cleanup_report(request):
             )
         ).filter(_current_position=1)
     )
-    active_taxa = Taxon.objects.filter(
-        is_active=True,
-        external_source__in=taxonomy_sources,
-    ).annotate(_normalized_name=normalized_name("taxon_name"))
+    active_taxa = Taxon.objects.filter(is_active=True).annotate(
+        _normalized_name=normalized_name("taxon_name")
+    )
     queryset = Identification.objects.filter(
         pk__in=Subquery(current_identifications.values("pk"))
     ).annotate(
@@ -411,12 +408,7 @@ def taxonomy_identification_cleanup_report(request):
         )
     ).filter(
         Q(_normalized_taxon="") & ~Q(_normalized_verbatim="")
-        | ~Q(_normalized_taxon="")
-        & ~Q(
-            taxon_record__is_active=True,
-            taxon_record__external_source__in=taxonomy_sources,
-        )
-        & Q(_matches_taxonomy=False)
+        | (~Q(_normalized_taxon="") & Q(_matches_taxonomy=False))
     ).select_related(
         "accession_row__accession__collection",
         "accession_row__accession__specimen_prefix",
@@ -435,17 +427,23 @@ def taxonomy_identification_cleanup_report(request):
     elif issue_filter == "unmatched":
         queryset = queryset.exclude(_normalized_taxon="")
 
+    filtered_taxa = [
+        value.strip().casefold()
+        for value in queryset.values_list("taxon", flat=True)
+        if value and value.strip()
+    ]
+    distinct_source_taxa = set(filtered_taxa)
+    bulk_source_taxon = next(iter(distinct_source_taxa), "") if len(distinct_source_taxa) == 1 else ""
+    bulk_edit_enabled = bool(bulk_source_taxon and filtered_taxa)
+
     if request.method == "POST":
-        selected = list(queryset.filter(pk__in=request.POST.getlist("identification_ids")))
+        selected = list(queryset) if bulk_edit_enabled else []
         target_taxon = request.POST.get("target_taxon", "").strip()
         target_qualifier = request.POST.get("target_qualifier", "").strip()
-        source_values = {(item.taxon or "").strip().casefold() for item in selected}
         if not selected:
-            messages.error(request, _("Select at least one identification."))
+            messages.error(request, _("Bulk replacement requires a filtered list with one source Taxon value."))
         elif not target_taxon:
             messages.error(request, _("Enter a replacement Taxon value."))
-        elif len(source_values) != 1:
-            messages.error(request, _("Selected identifications must have the same source Taxon value, apart from capitalization."))
         else:
             for item in selected:
                 item.taxon_verbatim = target_taxon
@@ -484,6 +482,9 @@ def taxonomy_identification_cleanup_report(request):
             "taxon_filter": taxon_filter,
             "verbatim_filter": verbatim_filter,
             "issue_filter": issue_filter,
+            "bulk_source_taxon": bulk_source_taxon,
+            "bulk_edit_enabled": bulk_edit_enabled,
+            "bulk_count": len(filtered_taxa),
         },
     )
 

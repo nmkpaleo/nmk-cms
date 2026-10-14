@@ -91,7 +91,7 @@ def test_cleanup_report_lists_missing_and_unmatched_current_taxa(client, django_
     assert shown == [unmatched, missing]
     assert whitespace_valid not in shown
     assert b"Struthio" not in response.content
-    assert b"Taxon does not match GBIF/NOW taxonomy" in response.content
+    assert b"Taxon does not match active controlled taxonomy" in response.content
     assert b"Taxon is empty" in response.content
     assert reverse("identification_edit", args=[unmatched.pk]).encode() in response.content
     assert reverse("identification_edit", args=[missing.pk]).encode() in response.content
@@ -139,7 +139,6 @@ def test_cleanup_report_filters_and_bulk_updates_case_insensitive_source(client,
     response = client.post(
         reverse("taxonomy_identification_cleanup_report") + "?taxon=lothagamensis",
         {
-            "identification_ids": [first.pk, second.pk],
             "target_taxon": "Parapapio lothagamensis",
             "target_qualifier": "cf.",
         },

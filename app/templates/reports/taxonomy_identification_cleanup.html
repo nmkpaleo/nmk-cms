@@ -7,7 +7,7 @@
 <div class="w3-content w3-padding-32 w3-animate-opacity">
   <h2>{% trans "Taxonomy identification cleanup" %}</h2>
   <p class="w3-text-grey">
-    {% trans "Only the current identification for each specimen is shown. The report lists missing free-text Taxon values and Taxon values that do not resolve to GBIF or NOW taxonomy." %}
+    {% trans "Only the current identification for each specimen is shown. The report lists missing free-text Taxon values and Taxon values that do not resolve to an active controlled Taxon." %}
   </p>
 
   <form method="get" class="w3-panel w3-light-grey w3-padding">
@@ -30,7 +30,6 @@
       <table class="w3-table-all w3-hoverable">
         <thead>
           <tr>
-            <th>{% trans "Select" %}</th>
             <th>{% trans "Accession" %}</th>
             <th>{% trans "Specimen" %}</th>
             <th>{% trans "Taxon Verbatim" %}</th>
@@ -45,13 +44,12 @@
         <tbody>
           {% for identification in identifications %}
             <tr>
-              <td><input type="checkbox" name="identification_ids" value="{{ identification.pk }}" aria-label="{% trans 'Select identification' %}"></td>
               <td><a href="{% url 'accession_detail' identification.accession_row.accession_id %}">{{ identification.accession_row.accession }}</a></td>
               <td><a href="{% url 'accessionrow_detail' identification.accession_row_id %}">{{ identification.accession_row }}</a></td>
               <td>{{ identification.taxon_verbatim|default:"?" }}</td>
               <td>{{ identification.taxon|default:"?" }}</td>
               <td>{{ identification.same_taxon_count }}</td>
-              <td>{% if identification.cleanup_reason == "missing_taxon" %}{% trans "Taxon is empty" %}{% else %}{% trans "Taxon does not match GBIF/NOW taxonomy" %}{% endif %}</td>
+              <td>{% if identification.cleanup_reason == "missing_taxon" %}{% trans "Taxon is empty" %}{% else %}{% trans "Taxon does not match active controlled taxonomy" %}{% endif %}</td>
               <td>{{ identification.date_identified|default:"?" }}</td>
               <td>{% if identification.reference %}{{ identification.reference.year }}{% else %}?{% endif %}</td>
               <td><a class="w3-button w3-small w3-deep-orange" href="{% url 'identification_edit' identification.pk %}">{% trans "Edit identification" %}</a></td>
@@ -61,9 +59,14 @@
       </table>
     </div>
     <div class="w3-panel w3-pale-yellow w3-padding">
+      {% if bulk_edit_enabled %}
+      <p>{% blocktrans with source=bulk_source_taxon count=bulk_count %}Replace all {{ count }} identifications with source Taxon “{{ source }}”.{% plural %}Replace all {{ count }} identifications with source Taxon “{{ source }}”.{% endblocktrans %}</p>
       <label>{% trans "Replacement Taxon" %}<input class="w3-input w3-border" type="text" name="target_taxon" maxlength="255" required></label>
       <label>{% trans "Replacement Qualifier" %}<input class="w3-input w3-border" type="text" name="target_qualifier" maxlength="255"></label>
       <button class="w3-button w3-deep-orange w3-margin-top" type="submit">{% trans "Update selected" %}</button>
+      {% else %}
+      <p>{% trans "Bulk replacement is available only when the filtered list contains one Taxon value (apart from capitalization)." %}</p>
+      {% endif %}
     </div>
     </form>
     {% if is_paginated %}
