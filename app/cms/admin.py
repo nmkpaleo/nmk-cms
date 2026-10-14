@@ -1713,6 +1713,31 @@ class StorageAdmin(MergeAdminActionMixin, MergeAdminMixin, HistoricalImportExpor
     list_display = ('area', 'parent_area')
     search_fields = ('area', 'parent_area__area')
     ordering = ('area',)
+    change_list_template = "admin/cms/storage/change_list.html"
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom = [path("clean-and-merge/", self.admin_site.admin_view(self.clean_and_merge_view), name="cms_storage_clean_and_merge")]
+        return custom + urls
+
+    def clean_and_merge_view(self, request):
+        if not request.user.has_perm("cms.change_storage"):
+            raise PermissionDenied
+        from .storage_cleaner import apply_storage_clean, build_storage_clean_groups
+        groups, omitted = build_storage_clean_groups()
+        conflicts = [group for group in groups if len(group.meaningful_parents) > 1]
+        if request.method == "POST" and request.POST.get("confirm") == "yes":
+            choices = {
+                group.normalized: request.POST.get(f"parent__{group.normalized}")
+                or (str(group.meaningful_parents[0].pk) if group.meaningful_parents else "")
+                for group in groups
+            }
+            if any(not choices.get(group.normalized) for group in conflicts):
+                self.message_user(request, "Choose a parent for every conflicting group.", messages.ERROR)
+            else:
+                stats = apply_storage_clean(groups, choices, request.user)
+                return TemplateResponse(request, "admin/cms/storage_clean_result.html", {"opts": self.model._meta, "title": "Storage clean and merge complete", "stats": stats, "groups": groups, "omitted": omitted})
+        return TemplateResponse(request, "admin/cms/storage_clean_and_merge.html", {"opts": self.model._meta, "title": "Clean and merge Storage values", "groups": groups, "omitted": omitted})
 
 # Subject Model
 class SubjectAdmin(HistoricalAdmin):
