@@ -2546,11 +2546,15 @@ class ReferenceDetailView(DetailView):
             )
             attach_accession_summaries(accessions)
             accession_map = {accession.id: accession for accession in accessions}
+            seen_accession_ids = set()
 
             for accession_reference in accession_references:
+                if accession_reference.accession_id in seen_accession_ids:
+                    continue
                 accession = accession_map.get(accession_reference.accession_id)
                 if accession is not None:
                     accession_entries.append((accession, accession_reference.page))
+                    seen_accession_ids.add(accession_reference.accession_id)
 
         doi_value = (self.object.doi or "").strip()
         if doi_value:
