@@ -344,7 +344,7 @@ def media_report_view(request):
 def taxonomy_identification_cleanup_report(request):
     """List current identifications that need taxonomy cleanup."""
 
-    if request.method == "POST":
+    if request.method == "POST" and request.POST.get("identification_id"):
         identification = get_object_or_404(Identification, pk=request.POST.get("identification_id"))
         name = normalize_taxon_label(identification.taxon_verbatim or identification.taxon)
         if not name:
