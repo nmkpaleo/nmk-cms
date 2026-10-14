@@ -25,6 +25,7 @@ from cms.models import (
     Identification,
     Locality,
     Organisation,
+    Storage,
     Taxon,
     TaxonExternalSource,
     TaxonRank,
@@ -297,6 +298,20 @@ class AccessionFilterTests(TestCase):
         )
 
         self.assertEqual(list(filterset.qs), [matching])
+
+    def test_accession_filter_by_storage(self):
+        storage = Storage.objects.create(area="Cabinet A")
+        matching = make_accession()
+        AccessionRow.objects.create(accession=matching, storage=storage)
+        other = make_accession()
+        AccessionRow.objects.create(accession=other)
+
+        filterset = AccessionFilter(
+            data={"storage": storage.pk}, queryset=Accession.objects.all()
+        )
+
+        self.assertEqual(list(filterset.qs), [matching])
+        self.assertEqual(list(filterset.form.fields["storage"].queryset), [storage])
 
     def test_accession_filter_includes_inactive_historical_accessioners(self):
         user_model = get_user_model()
