@@ -450,8 +450,7 @@ def taxonomy_identification_cleanup_report(request):
                 item.taxon_verbatim = target_taxon
                 item.save()
             messages.success(request, _("Updated %(count)d identification(s).") % {"count": len(selected)})
-        query = request.GET.copy()
-        return redirect(f"{request.path}?{query.urlencode()}" if query else request.path)
+        return redirect("taxonomy_identification_cleanup_report")
 
     taxon_counts = Counter(
         row["_normalized_taxon"]

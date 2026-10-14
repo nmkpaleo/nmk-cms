@@ -110,16 +110,20 @@ def test_cleanup_report_filters_and_bulk_updates_case_insensitive_source(client,
     user = django_user_model.objects.create_user(username="bulk-manager", password="testpass123")
     managers, _ = Group.objects.get_or_create(name="Collection Managers")
     user.groups.add(managers)
-    first = Identification.objects.create(
-        accession_row=_accession_row(user, specimen_no=10),
-        taxon_verbatim="Parapapio lothagamensis | lothagamensis",
-        taxon="Parapapio lothagamensis | lothagamensis",
-    )
-    second = Identification.objects.create(
-        accession_row=_accession_row(user, specimen_no=11),
-        taxon_verbatim="PARAPAPIO LOTHAGAMENSIS | LOTHAGAMENSIS",
-        taxon="PARAPAPIO LOTHAGAMENSIS | LOTHAGAMENSIS",
-    )
+    set_current_user(user)
+    try:
+        first = Identification.objects.create(
+            accession_row=_accession_row(user, specimen_no=10),
+            taxon_verbatim="Parapapio lothagamensis | lothagamensis",
+            taxon="Parapapio lothagamensis | lothagamensis",
+        )
+        second = Identification.objects.create(
+            accession_row=_accession_row(user, specimen_no=11),
+            taxon_verbatim="PARAPAPIO LOTHAGAMENSIS | LOTHAGAMENSIS",
+            taxon="PARAPAPIO LOTHAGAMENSIS | LOTHAGAMENSIS",
+        )
+    finally:
+        set_current_user(None)
     client.force_login(user)
 
     response = client.get(
