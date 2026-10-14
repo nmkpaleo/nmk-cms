@@ -1721,7 +1721,7 @@ class StorageAdmin(MergeAdminActionMixin, MergeAdminMixin, HistoricalImportExpor
         return custom + urls
 
     def clean_and_merge_view(self, request):
-        if not request.user.has_perm("cms.change_storage"):
+        if not (request.user.is_superuser or request.user.has_perm("cms.change_storage")):
             raise PermissionDenied
         from .storage_cleaner import apply_storage_clean, build_storage_clean_groups
         groups, omitted = build_storage_clean_groups()
