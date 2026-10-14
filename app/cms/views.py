@@ -354,7 +354,7 @@ def taxonomy_identification_cleanup_report(request):
                 service = TaxonomySyncService()
                 preview = service.preview_for_name(name)
                 result = service._apply(preview)
-                if result.import_log and result.import_log.ok:
+                if result.ok:
                     messages.success(request, _("Taxon '%(name)s' was synchronized.") % {"name": name})
                 else:
                     messages.warning(request, _("Taxon '%(name)s' could not be synchronized: %(issues)s") % {
