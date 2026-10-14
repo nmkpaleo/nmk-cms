@@ -12,6 +12,7 @@ import csv
 import json
 import logging
 import os
+from collections import Counter
 from datetime import date, datetime, timedelta, timezone as dt_timezone
 import json
 from decimal import Decimal
@@ -422,6 +423,41 @@ def taxonomy_identification_cleanup_report(request):
         "reference",
         "taxon_record",
     ).order_by("accession_row_id", "pk")
+    taxon_filter = request.GET.get("taxon", "").strip()
+    verbatim_filter = request.GET.get("taxon_verbatim", "").strip()
+    issue_filter = request.GET.get("issue", "").strip()
+    if taxon_filter:
+        queryset = queryset.filter(taxon__icontains=taxon_filter)
+    if verbatim_filter:
+        queryset = queryset.filter(taxon_verbatim__icontains=verbatim_filter)
+    if issue_filter == "missing":
+        queryset = queryset.filter(_normalized_taxon="")
+    elif issue_filter == "unmatched":
+        queryset = queryset.exclude(_normalized_taxon="")
+
+    if request.method == "POST":
+        selected = list(queryset.filter(pk__in=request.POST.getlist("identification_ids")))
+        target_taxon = request.POST.get("target_taxon", "").strip()
+        source_values = {(item.taxon or "").strip().casefold() for item in selected}
+        if not selected:
+            messages.error(request, _("Select at least one identification."))
+        elif not target_taxon:
+            messages.error(request, _("Enter a replacement Taxon value."))
+        elif len(source_values) != 1:
+            messages.error(request, _("Selected identifications must have the same source Taxon value, apart from capitalization."))
+        else:
+            for item in selected:
+                item.taxon_verbatim = target_taxon
+                item.save()
+            messages.success(request, _("Updated %(count)d identification(s).") % {"count": len(selected)})
+        query = request.GET.copy()
+        return redirect(f"{request.path}?{query.urlencode()}" if query else request.path)
+
+    taxon_counts = Counter(
+        row["_normalized_taxon"]
+        for row in queryset.values("_normalized_taxon")
+        if row["_normalized_taxon"]
+    )
     paginator = Paginator(queryset, 100)
     page_obj = paginator.get_page(request.GET.get("page", 1))
     identifications = list(page_obj.object_list)
@@ -431,6 +467,7 @@ def taxonomy_identification_cleanup_report(request):
             if not identification._normalized_taxon
             else "unmatched_taxon"
         )
+        identification.same_taxon_count = taxon_counts.get(identification._normalized_taxon, 0)
     return render(
         request,
         "reports/taxonomy_identification_cleanup.html",
@@ -440,6 +477,11 @@ def taxonomy_identification_cleanup_report(request):
             "page_number": page_obj.number,
             "has_previous": page_obj.has_previous(),
             "has_next": page_obj.has_next(),
+            "page_obj": page_obj,
+            "is_paginated": page_obj.paginator.num_pages > 1,
+            "taxon_filter": taxon_filter,
+            "verbatim_filter": verbatim_filter,
+            "issue_filter": issue_filter,
         },
     )
 

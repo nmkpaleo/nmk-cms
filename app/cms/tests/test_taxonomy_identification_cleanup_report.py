@@ -104,3 +104,41 @@ def test_cleanup_report_requires_collection_manager(client, django_user_model):
     response = client.get(reverse("taxonomy_identification_cleanup_report"))
 
     assert response.status_code == 302
+
+
+def test_cleanup_report_filters_and_bulk_updates_case_insensitive_source(client, django_user_model):
+    user = django_user_model.objects.create_user(username="bulk-manager", password="testpass123")
+    managers, _ = Group.objects.get_or_create(name="Collection Managers")
+    user.groups.add(managers)
+    first = Identification.objects.create(
+        accession_row=_accession_row(user, specimen_no=10),
+        taxon_verbatim="Parapapio lothagamensis | lothagamensis",
+        taxon="Parapapio lothagamensis | lothagamensis",
+    )
+    second = Identification.objects.create(
+        accession_row=_accession_row(user, specimen_no=11),
+        taxon_verbatim="PARAPAPIO LOTHAGAMENSIS | LOTHAGAMENSIS",
+        taxon="PARAPAPIO LOTHAGAMENSIS | LOTHAGAMENSIS",
+    )
+    client.force_login(user)
+
+    response = client.get(
+        reverse("taxonomy_identification_cleanup_report"),
+        {"taxon": "lothagamensis"},
+    )
+    assert response.status_code == 200
+    assert {item.pk for item in response.context["identifications"]} == {first.pk, second.pk}
+    assert response.context["identifications"][0].same_taxon_count == 2
+
+    response = client.post(
+        reverse("taxonomy_identification_cleanup_report") + "?taxon=lothagamensis",
+        {
+            "identification_ids": [first.pk, second.pk],
+            "target_taxon": "Parapapio lothagamensis",
+        },
+    )
+    assert response.status_code == 302
+    first.refresh_from_db()
+    second.refresh_from_db()
+    assert first.taxon == "Parapapio lothagamensis"
+    assert second.taxon == "Parapapio lothagamensis"

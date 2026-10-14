@@ -1,5 +1,5 @@
 {% extends "base_generic.html" %}
-{% load i18n %}
+{% load i18n custom_filters %}
 
 {% block title %}{% trans "Taxonomy identification cleanup" %}{% endblock %}
 
@@ -10,16 +10,32 @@
     {% trans "Only the current identification for each specimen is shown. The report lists missing free-text Taxon values and Taxon values that do not resolve to GBIF or NOW taxonomy." %}
   </p>
 
+  <form method="get" class="w3-panel w3-light-grey w3-padding">
+    <label>{% trans "Taxon" %}<input class="w3-input w3-border" type="text" name="taxon" value="{{ taxon_filter }}"></label>
+    <label>{% trans "Taxon Verbatim" %}<input class="w3-input w3-border" type="text" name="taxon_verbatim" value="{{ verbatim_filter }}"></label>
+    <label>{% trans "Issue" %}<select class="w3-select w3-border" name="issue">
+      <option value="">{% trans "All issues" %}</option>
+      <option value="missing" {% if issue_filter == "missing" %}selected{% endif %}>{% trans "Taxon is empty" %}</option>
+      <option value="unmatched" {% if issue_filter == "unmatched" %}selected{% endif %}>{% trans "Taxon is unmatched" %}</option>
+    </select></label>
+    <button class="w3-button w3-deep-orange w3-margin-top" type="submit">{% trans "Filter" %}</button>
+    <a class="w3-button w3-margin-top" href="{% url 'taxonomy_identification_cleanup_report' %}">{% trans "Clear" %}</a>
+  </form>
+
   {% if total_count %}
     <p>{% blocktrans count counter=total_count %}{{ counter }} identification needs review.{% plural %}{{ counter }} identifications need review.{% endblocktrans %}</p>
+    <form method="post">
+      {% csrf_token %}
     <div class="w3-responsive w3-card w3-white">
       <table class="w3-table-all w3-hoverable">
         <thead>
           <tr>
+            <th>{% trans "Select" %}</th>
             <th>{% trans "Accession" %}</th>
             <th>{% trans "Specimen" %}</th>
             <th>{% trans "Taxon Verbatim" %}</th>
             <th>{% trans "Taxon" %}</th>
+            <th>{% trans "Same Taxon count" %}</th>
             <th>{% trans "Issue" %}</th>
             <th>{% trans "Date identified" %}</th>
             <th>{% trans "Reference year" %}</th>
@@ -29,10 +45,12 @@
         <tbody>
           {% for identification in identifications %}
             <tr>
+              <td><input type="checkbox" name="identification_ids" value="{{ identification.pk }}" aria-label="{% trans 'Select identification' %}"></td>
               <td><a href="{% url 'accession_detail' identification.accession_row.accession_id %}">{{ identification.accession_row.accession }}</a></td>
               <td><a href="{% url 'accessionrow_detail' identification.accession_row_id %}">{{ identification.accession_row }}</a></td>
               <td>{{ identification.taxon_verbatim|default:"?" }}</td>
               <td>{{ identification.taxon|default:"?" }}</td>
+              <td>{{ identification.same_taxon_count }}</td>
               <td>{% if identification.cleanup_reason == "missing_taxon" %}{% trans "Taxon is empty" %}{% else %}{% trans "Taxon does not match GBIF/NOW taxonomy" %}{% endif %}</td>
               <td>{{ identification.date_identified|default:"?" }}</td>
               <td>{% if identification.reference %}{{ identification.reference.year }}{% else %}?{% endif %}</td>
@@ -42,11 +60,23 @@
         </tbody>
       </table>
     </div>
-    {% if has_previous or has_next %}
+    <div class="w3-panel w3-pale-yellow w3-padding">
+      <label>{% trans "Replacement Taxon" %}<input class="w3-input w3-border" type="text" name="target_taxon" maxlength="255" required></label>
+      <button class="w3-button w3-deep-orange w3-margin-top" type="submit">{% trans "Update selected" %}</button>
+    </div>
+    </form>
+    {% if is_paginated %}
       <div class="w3-bar w3-margin-top" aria-label="{% trans 'Report pages' %}">
-        {% if has_previous %}<a class="w3-button w3-border" href="?page={{ page_number|add:-1 }}">{% trans "Previous" %}</a>{% endif %}
-        <span class="w3-bar-item">{% blocktrans with page=page_number %}Page {{ page }}{% endblocktrans %}</span>
-        {% if has_next %}<a class="w3-button w3-border" href="?page={{ page_number|add:1 }}">{% trans "Next" %}</a>{% endif %}
+        {% if page_obj.has_previous %}<a class="w3-button w3-border" href="?{% querystring_replace page=1 %}">{% trans "First" %}</a>{% endif %}
+        {% if page_obj.has_previous %}<a class="w3-button w3-border" href="?{% querystring_replace page=page_obj.previous_page_number %}">{% trans "Previous" %}</a>{% endif %}
+        {% page_range page_obj as page_numbers %}
+        {% for number in page_numbers %}
+          {% if number == page_obj.number %}<span class="w3-button w3-light-grey">{{ number }}</span>
+          {% elif number == '…' %}<span class="w3-button">{{ number }}</span>
+          {% else %}<a class="w3-button w3-border" href="?{% querystring_replace page=number %}">{{ number }}</a>{% endif %}
+        {% endfor %}
+        {% if page_obj.has_next %}<a class="w3-button w3-border" href="?{% querystring_replace page=page_obj.next_page_number %}">{% trans "Next" %}</a>{% endif %}
+        {% if page_obj.has_next %}<a class="w3-button w3-border" href="?{% querystring_replace page=page_obj.paginator.num_pages %}">{% trans "Last" %}</a>{% endif %}
       </div>
     {% endif %}
   {% else %}

@@ -26,9 +26,7 @@ def querystring_replace(context, **kwargs):
 
 @register.simple_tag
 def page_range(page_obj):
-    """Return a compact, elided page range for a paginated page object."""
-    return page_obj.paginator.get_elided_page_range(
-        number=page_obj.number,
-        on_each_side=2,
-        on_ends=1,
-    )
+    """Return up to two nearby page numbers on each side of the current page."""
+    start = max(1, page_obj.number - 2)
+    end = min(page_obj.paginator.num_pages, page_obj.number + 2)
+    return range(start, end + 1)
