@@ -89,6 +89,7 @@ def test_cleanup_report_lists_missing_and_unmatched_current_taxa(client, django_
     assert response.status_code == 200
     shown = list(response.context["identifications"])
     assert shown == [unmatched, missing]
+    assert valid_qualified not in shown
     assert whitespace_valid not in shown
     assert b"Struthio" not in response.content
     assert b"Taxon does not match active controlled taxonomy" in response.content

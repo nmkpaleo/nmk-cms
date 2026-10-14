@@ -408,7 +408,11 @@ def taxonomy_identification_cleanup_report(request):
         )
     ).filter(
         Q(_normalized_taxon="") & ~Q(_normalized_verbatim="")
-        | (~Q(_normalized_taxon="") & Q(_matches_taxonomy=False))
+        | (
+            ~Q(_normalized_taxon="")
+            & ~Q(taxon_record__is_active=True)
+            & Q(_matches_taxonomy=False)
+        )
     ).select_related(
         "accession_row__accession__collection",
         "accession_row__accession__specimen_prefix",
