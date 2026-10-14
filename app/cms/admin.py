@@ -1737,7 +1737,7 @@ class StorageAdmin(MergeAdminActionMixin, MergeAdminMixin, HistoricalImportExpor
             else:
                 stats = apply_storage_clean(groups, choices, request.user)
                 return TemplateResponse(request, "admin/cms/storage_clean_result.html", {"opts": self.model._meta, "title": "Storage clean and merge complete", "stats": stats, "groups": groups, "omitted": omitted})
-        return TemplateResponse(request, "admin/cms/storage_clean_and_merge.html", {"opts": self.model._meta, "title": "Clean and merge Storage values", "groups": groups, "omitted": omitted})
+        return TemplateResponse(request, "admin/cms/storage/clean_and_merge.html", {"opts": self.model._meta, "title": "Clean and merge Storage values", "groups": groups, "omitted": omitted})
 
 # Subject Model
 class SubjectAdmin(HistoricalAdmin):
