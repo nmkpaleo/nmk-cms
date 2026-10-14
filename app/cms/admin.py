@@ -1712,6 +1712,7 @@ class StorageAdmin(MergeAdminActionMixin, MergeAdminMixin, HistoricalImportExpor
     resource_class = StorageResource
     list_display = ('area', 'parent_area')
     search_fields = ('area', 'parent_area__area')
+    ordering = ('area',)
 
 # Subject Model
 class SubjectAdmin(HistoricalAdmin):
