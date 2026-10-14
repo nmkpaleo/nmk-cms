@@ -22,3 +22,13 @@ def querystring_replace(context, **kwargs):
         else:
             query[key] = value
     return query.urlencode()
+
+
+@register.simple_tag
+def page_range(page_obj):
+    """Return a compact, elided page range for a paginated page object."""
+    return page_obj.paginator.get_elided_page_range(
+        number=page_obj.number,
+        on_each_side=2,
+        on_ends=1,
+    )
