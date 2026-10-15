@@ -1,24 +1,173 @@
+
 {% extends "base_generic.html" %}
+{% load static %}
 
+{% block extra_head %}
+{{ block.super }}
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital@0;1&display=swap" rel="stylesheet">
+{% endblock extra_head %}
 
+{% block extra_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'css/homepage.css' %}">
+{% endblock extra_css %}
 
 {% block content %}
-<section class="w3-container w3-padding-64 w3-light-grey" aria-labelledby="homepage-hero-title">
-  <div class="w3-row-padding w3-stretch">
-    <article class="w3-col l6 m6 w3-padding-16">
-      <h1 id="homepage-hero-title" class="w3-xxxlarge w3-text-dark-grey w3-margin-top">Unlock the Past and
-        Discover the Stories</h1>
-      <p class="w3-large w3-text-grey">
-        Explore our extensive digital archives, gain insights into historical artifacts, and access curated content
-        designed to inspire learning and discovery for all.
-      </p>
-      <a class="w3-button w3-round-large w3-deep-orange w3-hover-amber w3-margin-top" href="#main-content">Read
-        more</a>
-    </article>
-    <aside class="w3-col l6 m6 w3-center w3-padding-16">
-      {% load static %}
-      <img src="{% static 'images/animal_skull.png' %}" class="w3-image w3-round-large w3-card" alt="Animal skull">
-    </aside>
-  </div>
+
+<!-- HERO SECTION -->
+<div class="show">
+    <div class="right">
+        <div class="slide on">
+            <div class="bg bg--hero"></div>
+        </div>
+        <div class="slide">
+            <div class="bg bg--hero"></div>
+        </div>
+    </div>
+
+    <div class="left">
+        <div class="texts">
+            <div class="t on">
+                <div class="kicker">
+                    Paleontology Collections Management System
+                </div>
+
+                <p class="hero-copy">
+                    A digital system for documenting, preserving, and
+                    managing NMK’s paleontological collection records.
+                </p>
+
+                <blockquote class="hero-quote">
+                    Every fossil holds a story, and every specimen reveals
+                    a chapter of Earth’s ancient past.
+                </blockquote>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- CORE FEATURES -->
+<section class="cols" id="collections">
+    <div class="wrap">
+        <div class="label">PaleoCMS at a glance</div>
+
+        <h2 class="sec-title">Core Features</h2>
+
+        <p class="section-intro">
+            One structured workflow for documenting, reviewing
+            and managing paleontological collection records.
+        </p>
+
+        <div class="feature-grid">
+            <a class="feature-card feature-card--core" href="/" aria-label="Digitization">
+                <div class="bg bg--digitization"></div>
+                <div class="shade"></div>
+                <div class="info">
+                    <h3>Digitization</h3>
+                    <p class="feature-copy">
+                        Convert handwritten accession cards into digital records.
+                    </p>
+                </div>
+            </a>
+
+            <a class="feature-card feature-card--core" href="/" aria-label="Accessioning">
+                <div class="bg bg--accessioning"></div>
+                <div class="shade"></div>
+                <div class="info">
+                    <h3>Accessioning</h3>
+                    <div class="feature-subtitle">KNM WT 15000</div>
+                    <p class="feature-copy">
+                        Cataloging made easy.
+                    </p>
+                </div>
+            </a>
+
+            <a class="feature-card feature-card--core" href="/" aria-label="Collection Statistics">
+                <div class="bg bg--stats"></div>
+                <div class="shade"></div>
+                <div class="info">
+                    <h3>Collection Statistics</h3>
+                    <div class="feature-stat">{{ record_count|default:0 }} records</div>
+                    <div class="feature-live">Live</div>
+                    <p class="feature-copy">
+                        Live counts from the digital catalogue.
+                    </p>
+                </div>
+            </a>
+        </div>
+    </div>
 </section>
+
+<script>
+(function () {
+    const slides = document.querySelectorAll('.show .right .slide');
+    const dots = document.querySelectorAll('.show .dots button');
+    const count = document.getElementById('count');
+    const progress = document.getElementById('pb');
+    const next = document.getElementById('next');
+    const prev = document.getElementById('prev');
+
+    if (!slides.length) return;
+
+    let current = 0;
+    let timer;
+
+    function startProgress() {
+        if (!progress) return;
+        progress.classList.remove('run');
+        void progress.offsetWidth;
+        progress.classList.add('run');
+    }
+
+    function go(index) {
+        slides[current].classList.remove('on');
+        slides[current].classList.add('prev');
+
+        if (dots[current]) dots[current].classList.remove('on');
+
+        current = (index + slides.length) % slides.length;
+
+        slides[current].classList.remove('prev');
+        slides[current].classList.add('on');
+
+        if (dots[current]) dots[current].classList.add('on');
+
+        if (count) {
+            count.textContent =
+                String(current + 1).padStart(2, '0') +
+                ' / ' + String(slides.length).padStart(2, '0');
+        }
+
+        startProgress();
+    }
+
+    function play() {
+        clearInterval(timer);
+        timer = setInterval(function () {
+            go(current + 1);
+        }, 6000);
+    }
+
+    if (next) next.addEventListener('click', function () {
+        go(current + 1);
+        play();
+    });
+
+    if (prev) prev.addEventListener('click', function () {
+        go(current - 1);
+        play();
+    });
+
+    dots.forEach(function (dot, index) {
+        dot.addEventListener('click', function () {
+            go(index);
+            play();
+        });
+    });
+
+    startProgress();
+    play();
+})();
+</script>
+
 {% endblock %}

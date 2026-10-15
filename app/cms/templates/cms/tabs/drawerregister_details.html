@@ -1,107 +1,99 @@
 {% load i18n %}
 
-<section class="w3-margin-top" aria-labelledby="drawer-overview-heading">
-  <div class="w3-row-padding">
-    <article class="w3-col s12 m6 l4">
-      <div class="w3-card w3-round w3-white w3-padding">
-        <h2 id="drawer-overview-heading" class="w3-margin-top">{% trans "Drawer overview" %}</h2>
-        <dl class="w3-margin-top">
-          <div class="w3-margin-bottom">
-            <dt class="w3-text-gray">{% trans "Estimated documents" %}</dt>
-            <dd class="w3-margin-0">{{ object.estimated_documents|default:"—" }}</dd>
-          </div>
-          <div class="w3-margin-bottom">
-            <dt class="w3-text-gray">{% trans "Status" %}</dt>
-            <dd class="w3-margin-0">{{ object.get_scanning_status_display }}</dd>
-          </div>
-          <div class="w3-margin-bottom">
-            <dt class="w3-text-gray">{% trans "Scanning users" %}</dt>
-            <dd class="w3-margin-0">
-              {% with users=object.scanning_users.all %}
-                {% if users|length %}
-                  {{ users|join:", " }}
-                {% else %}
-                  {% trans "None assigned" %}
-                {% endif %}
-              {% endwith %}
-            </dd>
-          </div>
-        </dl>
-      </div>
-    </article>
-
-    <article class="w3-col s12 m6 l8" aria-labelledby="drawer-scans-heading">
-      <div class="w3-card w3-round w3-white w3-padding">
-        <h2 id="drawer-scans-heading" class="w3-margin-top">{% trans "Scans" %}</h2>
-        <div class="w3-responsive w3-margin-top">
-          <table class="w3-table-all w3-hoverable w3-small">
-            <thead>
-              <tr>
-                <th scope="col">{% trans "Intern" %}</th>
-                <th scope="col">{% trans "Start" %}</th>
-                <th scope="col">{% trans "Stop" %}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for scan in object.scans.all %}
-                <tr>
-                  <td>{{ scan.user }}</td>
-                  <td>{{ scan.start_time }}</td>
-                  <td>{{ scan.end_time|default:"—" }}</td>
-                </tr>
-              {% empty %}
-                <tr>
-                  <td colspan="3" class="w3-center">{% trans "No scans recorded." %}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </article>
+<section class="drawer-detail-section" aria-labelledby="drawer-overview-heading">
+  <header class="drawer-section-header">
+    <h2 id="drawer-overview-heading" class="w3-margin-0">{% trans "Drawer overview" %}</h2>
+  </header>
+  <div class="w3-responsive">
+    <table class="w3-table-all w3-small drawer-data-table">
+      <tbody>
+        <tr>
+          <th scope="row">{% trans "Estimated documents" %}</th>
+          <td>{{ object.estimated_documents|default:"—" }}</td>
+        </tr>
+        <tr>
+          <th scope="row">{% trans "Status" %}</th>
+          <td>{{ object.get_scanning_status_display }}</td>
+        </tr>
+        <tr>
+          <th scope="row">{% trans "Scanning users" %}</th>
+          <td>
+            {% with users=object.scanning_users.all %}
+              {% if users|length %}{{ users|join:", " }}{% else %}{% trans "None assigned" %}{% endif %}
+            {% endwith %}
+          </td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 </section>
 
-<section class="w3-margin-top" aria-labelledby="drawer-related-heading">
-  <div class="w3-row-padding">
-    <article class="w3-col s12 m6" aria-labelledby="drawer-localities-heading">
-      <div class="w3-card w3-round w3-white w3-padding">
-        <header class="w3-display-container">
-          <h2 id="drawer-localities-heading" class="w3-margin-top">
-            <i class="fa-solid fa-map-location-dot" aria-hidden="true"></i>
-            <span class="w3-margin-left">{% trans "Localities" %}</span>
-          </h2>
-        </header>
-        <main aria-labelledby="drawer-localities-heading">
-          <ul class="w3-ul w3-margin-top" aria-label="{% trans 'Drawer localities list' %}">
-            {% for locality in object.localities.all %}
-              <li class="w3-padding-small">{{ locality }}</li>
-            {% empty %}
-              <li class="w3-padding-small w3-text-gray">{% trans "No localities assigned." %}</li>
-            {% endfor %}
-          </ul>
-        </main>
-      </div>
-    </article>
+<section class="drawer-detail-section" aria-labelledby="drawer-scans-heading">
+  <header class="drawer-section-header">
+    <h2 id="drawer-scans-heading" class="w3-margin-0">{% trans "Scans" %}</h2>
+  </header>
+  <div class="w3-responsive">
+    <table class="w3-table-all w3-hoverable w3-small">
+      <thead>
+        <tr>
+          <th scope="col">{% trans "Intern" %}</th>
+          <th scope="col">{% trans "Start" %}</th>
+          <th scope="col">{% trans "Stop" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for scan in object.scans.all %}
+          <tr>
+            <td>{{ scan.user }}</td>
+            <td>{{ scan.start_time }}</td>
+            <td>{{ scan.end_time|default:"—" }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="3" class="w3-center">{% trans "No scans recorded." %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
 
-    <article class="w3-col s12 m6" aria-labelledby="drawer-taxa-heading">
-      <div class="w3-card w3-round w3-white w3-padding">
-        <header class="w3-display-container">
-          <h2 id="drawer-taxa-heading" class="w3-margin-top">
-            <i class="fa-solid fa-leaf" aria-hidden="true"></i>
-            <span class="w3-margin-left">{% trans "Taxa" %}</span>
-          </h2>
-        </header>
-        <main aria-labelledby="drawer-taxa-heading">
-          <ul class="w3-ul w3-margin-top" aria-label="{% trans 'Drawer taxa list' %}">
-            {% for taxon in object.taxa.all %}
-              <li class="w3-padding-small">{{ taxon }}</li>
-            {% empty %}
-              <li class="w3-padding-small w3-text-gray">{% trans "No taxa assigned." %}</li>
-            {% endfor %}
-          </ul>
-        </main>
-      </div>
-    </article>
+<section class="drawer-detail-section" aria-labelledby="drawer-localities-heading">
+  <header class="drawer-section-header">
+    <h2 id="drawer-localities-heading" class="w3-margin-0">
+      <i class="fa-solid fa-map-location-dot" aria-hidden="true"></i>
+      <span class="w3-margin-left">{% trans "Localities" %}</span>
+    </h2>
+  </header>
+  <div class="w3-responsive">
+    <table class="w3-table-all w3-hoverable w3-small">
+      <thead><tr><th scope="col">{% trans "Locality" %}</th></tr></thead>
+      <tbody>
+        {% for locality in object.localities.all %}
+          <tr><td>{{ locality }}</td></tr>
+        {% empty %}
+          <tr><td class="w3-center w3-text-gray">{% trans "No localities assigned." %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="drawer-detail-section" aria-labelledby="drawer-taxa-heading">
+  <header class="drawer-section-header">
+    <h2 id="drawer-taxa-heading" class="w3-margin-0">
+      <i class="fa-solid fa-leaf" aria-hidden="true"></i>
+      <span class="w3-margin-left">{% trans "Taxa" %}</span>
+    </h2>
+  </header>
+  <div class="w3-responsive">
+    <table class="w3-table-all w3-hoverable w3-small">
+      <thead><tr><th scope="col">{% trans "Taxon" %}</th></tr></thead>
+      <tbody>
+        {% for taxon in object.taxa.all %}
+          <tr><td>{{ taxon }}</td></tr>
+        {% empty %}
+          <tr><td class="w3-center w3-text-gray">{% trans "No taxa assigned." %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 </section>
