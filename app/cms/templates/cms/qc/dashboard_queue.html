@@ -55,7 +55,7 @@
                         <span class="w3-tag w3-amber w3-round w3-small">Rows rearranged</span>
                       {% endif %}
                       {% if media.comment_count %}
-                        <span class="w3-tag w3-blue-grey w3-round w3-small nmk-comment-marker">{{ media.comment_count }} comment{{ media.comment_count|pluralize }}</span>
+                        <span class="w3-tag w3-blue-grey w3-round w3-small">{{ media.comment_count }} comment{{ media.comment_count|pluralize }}</span>
                       {% endif %}
                       {% if not media.rows_rearranged and not media.comment_count %}
                         -
