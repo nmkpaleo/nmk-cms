@@ -44,7 +44,10 @@ h6 {
 
 .site-main > .container-fluid {
     width: min(100% - 32px, 1440px);
-    margin: 0 auto;
+    margin-top: 0;
+    margin-right: auto;
+    margin-bottom: 0;
+    margin-left: auto;
 }
 
 .auth-layout-compact {
