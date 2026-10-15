@@ -4,9 +4,11 @@
 {% block title %}{% block wizard_title %}{% endblock %}{% endblock %}
 
 {% block content %}
-<div class="w3-container w3-padding">
-  <h2 class="w3-text-indigo">{% block wizard_heading %}{% endblock %}</h2>
-  <p class="w3-small w3-text-grey">{% block wizard_subheading %}{% endblock %}</p>
+<div class="w3-container w3-padding review-ui-page media-qc-review-page">
+  <header class="review-page-header">
+    <h1 class="review-page-title">{% block wizard_heading %}{% endblock %}</h1>
+    <p class="w3-small w3-text-grey">{% block wizard_subheading %}{% endblock %}</p>
+  </header>
 
   <style>
     .qc-layout {
@@ -15,10 +17,15 @@
       gap: 2rem;
       align-items: flex-start;
     }
+    .qc-layout > * {
+      min-width: 0;
+      box-sizing: border-box;
+    }
     .qc-media,
     .qc-form {
       flex: 1 1 calc(50% - 1rem);
       max-width: calc(50% - 1rem);
+      min-width: 0;
     }
     .qc-media {
       display: flex;
@@ -45,6 +52,15 @@
     }
     .qc-form {
       padding: 16px;
+    }
+    .qc-section,
+    .qc-card,
+    .qc-row-card,
+    .qc-preview-panel,
+    .qc-control {
+      min-width: 0;
+      max-width: 100%;
+      box-sizing: border-box;
     }
     .qc-section + .qc-section {
       margin-top: 24px;
@@ -74,11 +90,29 @@
     }
     .qc-control {
       width: 100%;
+      overflow-wrap: anywhere;
     }
     .qc-control input,
     .qc-control select,
     .qc-control textarea {
       width: 100%;
+      min-width: 0;
+      max-width: 100%;
+      box-sizing: border-box;
+    }
+    .qc-control .select2-container,
+    .qc-control .django-select2,
+    .qc-control .select2-selection {
+      width: 100% !important;
+      min-width: 0;
+      max-width: 100%;
+      box-sizing: border-box;
+    }
+    .qc-control .select2-selection__rendered {
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     .qc-control textarea {
       min-height: auto;
@@ -221,6 +255,12 @@
       gap: 0.5rem;
       flex-wrap: wrap;
       justify-content: flex-end;
+      max-width: 100%;
+    }
+    .qc-row-card__actions .w3-button {
+      flex: 1 1 7rem;
+      max-width: 100%;
+      white-space: normal;
     }
     .qc-row-card__body {
       display: grid;
@@ -384,11 +424,37 @@
     .qc-preview-panel {
       padding: 16px;
     }
+    .qc-preview-panel .w3-responsive {
+      display: block;
+      max-width: 100%;
+      overflow-x: auto;
+      overflow-y: visible;
+    }
     .qc-preview-panel .template-detail-container {
       margin: 0;
     }
     .qc-preview-panel table {
       font-size: 0.85rem;
+      width: 100%;
+      min-width: max-content;
+      table-layout: auto;
+    }
+    .qc-preview-panel .accession-section-header {
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+    .qc-preview-panel .accession-section-header > * {
+      min-width: 0;
+    }
+    .qc-add-row-button {
+      display: inline-flex;
+      align-items: center;
+      max-width: 100%;
+      white-space: normal;
+    }
+    .qc-add-row-button .w3-margin-left {
+      min-width: 0;
+      overflow-wrap: anywhere;
     }
     .qc-history-panel {
       padding: 16px;
@@ -522,7 +588,7 @@
       </div>
     </aside>
 
-    <form method="post" class="qc-form w3-card w3-white w3-padding" data-controller="qc-rows">
+    <form method="post" class="qc-form w3-card w3-white w3-padding review-panel" data-controller="qc-rows">
       {% csrf_token %}
 
       {% if accession_form.non_field_errors %}
