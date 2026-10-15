@@ -50,6 +50,12 @@
                     <label class="w3-text-grey" for="id_accessioned_by">{% trans "Accessioned By" %}</label>
                     {{ filter.form.accessioned_by }}
                 </div>
+                {% if user.is_superuser or user|has_group:"Collection Managers" %}
+                    <div class="w3-col s12 m6 l3 w3-margin-bottom">
+                        <label class="w3-text-grey" for="id_storage">{% trans "Storage" %}</label>
+                        {{ filter.form.storage }}
+                    </div>
+                {% endif %}
                 <div class="w3-col s12 m6 l3 w3-margin-bottom">
                     <label class="w3-text-grey" for="id_comment">{% trans "Comment" %}</label>
                     {{ filter.form.comment }}
