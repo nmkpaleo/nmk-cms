@@ -1740,7 +1740,13 @@ def index(request):
     """View function for home page of site."""
     if request.user.is_authenticated:
         return dashboard(request)
-    return render(request, 'index.html')
+    return render(
+        request,
+        'index.html',
+        {
+            'record_count': Accession.objects.count(),
+        },
+    )
 
 def base_generic(request):
     return render(request, 'base_generic.html')
