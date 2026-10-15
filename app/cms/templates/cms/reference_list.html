@@ -125,6 +125,12 @@
   {% if is_paginated %}
     <div class="w3-container w3-center w3-margin-top">
       <div class="w3-bar w3-border w3-round-large w3-white w3-card">
+        {% page_range page_obj as page_numbers %}
+        {% if page_obj.has_previous %}
+          <a href="?{% querystring_replace page=1 %}" class="w3-bar-item w3-button" aria-label="First page">First</a>
+        {% else %}
+          <span class="w3-bar-item w3-button w3-disabled">First</span>
+        {% endif %}
         {% if page_obj.has_previous %}
           <a href="?{% querystring_replace page=page_obj.previous_page_number %}" class="w3-bar-item w3-button" aria-label="Previous page">
             <i class="fa-solid fa-angles-left"></i>
@@ -136,6 +142,16 @@
             <span class="w3-hide-small">Previous</span>
           </span>
         {% endif %}
+
+        {% for page_number in page_numbers %}
+          {% if page_number == page_obj.number %}
+            <span class="w3-bar-item w3-button w3-light-grey" aria-current="page">{{ page_number }}</span>
+          {% elif page_number == '…' %}
+            <span class="w3-bar-item">{{ page_number }}</span>
+          {% else %}
+            <a href="?{% querystring_replace page=page_number %}" class="w3-bar-item w3-button">{{ page_number }}</a>
+          {% endif %}
+        {% endfor %}
 
         <span class="w3-bar-item">
           Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
@@ -151,6 +167,11 @@
             <span class="w3-hide-small">Next</span>
             <i class="fa-solid fa-angles-right"></i>
           </span>
+        {% endif %}
+        {% if page_obj.has_next %}
+          <a href="?{% querystring_replace page=page_obj.paginator.num_pages %}" class="w3-bar-item w3-button" aria-label="Last page">Last</a>
+        {% else %}
+          <span class="w3-bar-item w3-button w3-disabled">Last</span>
         {% endif %}
       </div>
     </div>

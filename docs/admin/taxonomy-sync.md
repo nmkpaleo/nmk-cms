@@ -34,6 +34,19 @@ The complete NOW TSV files are still downloaded because they are bulk exports;
 only the relevant records enter the preview and apply steps. Existing NOW records
 remain eligible for updates and missing-record deactivation. Previously imported catalogue records remain in scope.
 
+## Syncing one unresolved identification
+
+The **Taxonomy identification cleanup** report lists current identifications whose
+taxon value is empty or does not match an active
+GBIF/NOW record. For an unmatched value, select **Try taxonomy sync** to run a
+targeted sync for that normalized name. Only one GBIF name lookup is performed,
+and a successful result is linked anywhere that same normalized name is used.
+
+The action downloads the NOW exports as needed, but successful exports are reused
+from the configured cache. A failed or unresolved match remains in the report with
+an explanatory message and can be retried later. Empty taxon values still require
+manual editing.
+
 ## Source selection and duplicate prevention
 
 - GBIF checks each locally recorded name, using its rank when known.
@@ -70,6 +83,7 @@ restoring a backup.
 - `TAXON_GBIF_CHECKLIST_KEY`: defaults to `7ddf754f-d193-4cc9-b351-99906754a03b` (COL XR).
 - `TAXON_GBIF_TIMEOUT`: per-request timeout in seconds, default 15.
 - `TAXON_GBIF_WORKERS`: concurrent GBIF lookups, default 4 (limited to 1-16). A full batch of connection/HTTP failures stops further requests for that preview; deferred names appear as issues when NOW cannot supply a safe match. Retry after service recovery.
+- `TAXON_NOW_CACHE_TIMEOUT`: seconds to cache each successful NOW export download, default 3600. The cache uses Django's configured default backend (Redis when `USE_REDIS=true`); failed downloads are never cached.
 
 When `USE_REDIS=true`, reviewed previews use the shared Redis default cache so a subsequent apply can run on another web worker. Matches are reused within a preview run. Apply uses the reviewed snapshot without
 repeating NOW or GBIF requests. Previews expire after one hour and are rejected if
@@ -126,6 +140,11 @@ Import logs are managed by `django-simple-history`, allowing auditors to review 
 | Issues reported for missing accepted taxa | Contact the NOW data maintainers or postpone the sync until the dataset includes the referenced taxon. |
 | Sync result shows `ok = False` | Investigate the associated import log. Successful changes may have been committed; inspect the report before retrying. |
 | Need to undo a sync | Locate the relevant `TaxonomyImport`, export the list of affected taxa, and restore them from backups or re-run the sync after correcting the upstream data. Each dependent group (such as an accepted taxon and its synonyms) is atomic. Failed groups are skipped while successful independent groups are committed; inspect the import report for the changes actually saved. |
+
+For repeated targeted syncs, confirm that `USE_REDIS=true` is enabled in production
+so the NOW export cache is shared across web workers. Set `TAXON_NOW_CACHE_TIMEOUT`
+to shorten or extend the successful-export cache lifetime; set it to `0` to disable
+effective reuse when an immediate source refresh is required.
 
 ## Identification linkage checks
 
