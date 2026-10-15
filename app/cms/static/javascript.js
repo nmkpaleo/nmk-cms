@@ -1,86 +1,6 @@
 document.addEventListener("DOMContentLoaded", function() {
-    const siteHeader = document.querySelector(".site-header");
-    const siteNavigation = document.querySelector(".site-navigation");
     const navToggle = document.getElementById("nav-toggle");
     const mobileNav = document.getElementById("primary-navigation");
-
-    const updateHeaderHeight = () => {
-        if (!siteHeader) {
-            return;
-        }
-        document.documentElement.style.setProperty(
-            "--site-header-height",
-            `${Math.ceil(siteHeader.getBoundingClientRect().height)}px`
-        );
-    };
-
-    const setOpenDropdownSpace = (dropdownMenu) => {
-        if (!siteNavigation) {
-            return;
-        }
-        const menuHeight = Math.ceil(dropdownMenu.getBoundingClientRect().height);
-        siteNavigation.style.setProperty("--open-dropdown-space", `${menuHeight + 8}px`);
-    };
-
-    const clearOpenDropdownSpace = () => {
-        if (!siteNavigation) {
-            return;
-        }
-        siteNavigation.style.removeProperty("--open-dropdown-space");
-    };
-
-    const refreshOpenDropdownSpace = () => {
-        if (!siteNavigation || !siteNavigation.classList.contains("has-open-dropdown")) {
-            return;
-        }
-        const openDropdown = siteNavigation.querySelector(".nav-dropdown .w3-dropdown-content.w3-show");
-        if (openDropdown) {
-            setOpenDropdownSpace(openDropdown);
-        }
-    };
-
-    const queueHeaderHeightUpdate = () => {
-        window.requestAnimationFrame(() => {
-            refreshOpenDropdownSpace();
-            updateHeaderHeight();
-        });
-    };
-
-    updateHeaderHeight();
-    window.addEventListener("load", queueHeaderHeightUpdate);
-    window.addEventListener("resize", queueHeaderHeightUpdate);
-
-    const closeFloatingFieldMenus = () => {
-        const select2jQuery = window.jQuery || (window.django && window.django.jQuery);
-        if (select2jQuery && select2jQuery.fn && select2jQuery.fn.select2) {
-            select2jQuery(".select2-hidden-accessible").each(function() {
-                const field = select2jQuery(this);
-                if (field.data("select2")) {
-                    field.select2("close");
-                }
-            });
-        }
-
-        document.querySelectorAll(".select2-container--open").forEach((container) => {
-            container.classList.remove("select2-container--open");
-        });
-        document.querySelectorAll(".select2-dropdown, .ui-autocomplete, .tt-menu").forEach((menu) => {
-            menu.setAttribute("aria-hidden", "true");
-            menu.style.display = "none";
-        });
-    };
-
-    let scrollCloseQueued = false;
-    window.addEventListener("scroll", () => {
-        if (scrollCloseQueued) {
-            return;
-        }
-        scrollCloseQueued = true;
-        window.requestAnimationFrame(() => {
-            closeFloatingFieldMenus();
-            scrollCloseQueued = false;
-        });
-    }, true);
 
     if (navToggle && mobileNav) {
         const setCollapsedState = (isOpen) => {
@@ -96,7 +16,6 @@ document.addEventListener("DOMContentLoaded", function() {
                 mobileNav.classList.add("w3-hide");
             }
             setCollapsedState(isOpen);
-            updateHeaderHeight();
         };
 
         navToggle.addEventListener("click", function(event) {
@@ -125,11 +44,6 @@ document.addEventListener("DOMContentLoaded", function() {
             if (dropdownContainer) {
                 dropdownContainer.classList.remove("is-open");
             }
-            if (siteNavigation) {
-                siteNavigation.classList.remove("has-open-dropdown");
-            }
-            clearOpenDropdownSpace();
-            queueHeaderHeightUpdate();
         };
 
         const openDropdown = () => {
@@ -139,14 +53,6 @@ document.addEventListener("DOMContentLoaded", function() {
             if (dropdownContainer) {
                 dropdownContainer.classList.add("is-open");
             }
-            if (siteNavigation) {
-                siteNavigation.classList.add("has-open-dropdown");
-            }
-            window.requestAnimationFrame(() => {
-                setOpenDropdownSpace(dropdownMenu);
-                updateHeaderHeight();
-            });
-            queueHeaderHeightUpdate();
         };
 
         dropdownToggle.addEventListener("click", function(event) {
