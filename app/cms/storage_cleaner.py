@@ -12,7 +12,7 @@ from .merge.constants import MergeStrategy
 from .models import Storage
 
 LETTER_FIRST_RE = re.compile(r"^([A-Za-z]+)\s*(\d+)\s*(?:/\s*(\d+))?$")
-NUMBER_FIRST_RE = re.compile(r"^(\d+)\s*([A-Za-z]+)(?:\s*/\s*([A-Za-z]+))?$")
+NUMBER_FIRST_RE = re.compile(r"^(\d{2})\s*([A-Za-z])\s*(?:/\s*)?([A-Za-z])$")
 
 
 def normalize_storage_token(value: str) -> str | None:
@@ -25,7 +25,7 @@ def normalize_storage_token(value: str) -> str | None:
     match = NUMBER_FIRST_RE.fullmatch(value)
     if match:
         number, first, second = match.groups()
-        return f"{number} {(first + (second or '')).upper()}"
+        return f"{number} {(first + second).upper()}"
 
     return None
 

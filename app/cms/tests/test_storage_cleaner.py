@@ -13,6 +13,7 @@ class StorageCleanerTests(SimpleTestCase):
         self.assertEqual(normalize_storage_token("08 AF"), "08 AF")
         self.assertEqual(normalize_storage_token("81 G/F"), "81 GF")
         self.assertEqual(normalize_storage_token("35 AB"), "35 AB")
+        self.assertIsNone(normalize_storage_token("123 ABC"))
 
     def test_deduplicates_pipe_delimited_values(self):
         self.assertEqual(normalize_storage_area("08AF | 08 AF"), "08 AF")
