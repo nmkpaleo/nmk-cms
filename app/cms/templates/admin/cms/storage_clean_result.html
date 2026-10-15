@@ -1,0 +1,16 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% block content %}
+<h1>{{ title }}</h1>
+<ul>
+  <li>{% trans "Groups processed" %}: {{ stats.groups }}</li>
+  <li>{% trans "Groups normalized" %}: {{ stats.normalized }}</li>
+  <li>{% trans "Storage records merged" %}: {{ stats.merged }}</li>
+  <li>{% trans "Relations reassigned" %}: {{ stats.relations }}</li>
+  <li>{% trans "Unsupported values omitted" %}: {{ omitted|length }}</li>
+</ul>
+<table class="adminlist"><thead><tr><th>{% trans "Original values" %}</th><th>{% trans "Merged value" %}</th></tr></thead><tbody>
+{% for group in groups %}<tr><td>{% for record in group.records %}{{ record.area }}{% if not forloop.last %}, {% endif %}{% endfor %}</td><td>{{ group.normalized }}</td></tr>{% endfor %}
+</tbody></table>
+<p><a href="{% url 'admin:cms_storage_changelist' %}" class="button">{% trans "Back to Storages" %}</a></p>
+{% endblock %}

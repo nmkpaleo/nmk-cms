@@ -13,5 +13,6 @@
 - [Accession detail review](accessions-detail.md)
 - [Accession Reference merges](accession-reference-merges.md)
 - [Users](users.md)
+- [Storage cleaning and merging](storage-cleaning.md)
 - [Merge Tool](merge-tool.md)
 - [Django 5.2 upgrade notes](django-52-upgrade.md)

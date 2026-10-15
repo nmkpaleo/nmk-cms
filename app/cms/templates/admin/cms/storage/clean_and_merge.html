@@ -1,0 +1,12 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% block content %}
+<h1>{{ title }}</h1>
+<p>{% trans "Review normalized values before applying changes. Unsupported values are omitted." %}</p>
+<form method="post">{% csrf_token %}
+<table class="adminlist"><thead><tr><th>{% trans "Original values" %}</th><th>{% trans "Merged value" %}</th><th>{% trans "Parent" %}</th></tr></thead><tbody>
+{% for group in groups %}<tr><td>{% for record in group.records %}{{ record.area }}{% if not forloop.last %}, {% endif %}{% endfor %}</td><td>{{ group.normalized }}</td><td>{% if group.meaningful_parents|length > 1 %}<select name="parent__{{ group.normalized }}" required><option value="">{% trans "Choose a parent" %}</option>{% for parent in group.meaningful_parents %}<option value="{{ parent.pk }}">{{ parent.area }}</option>{% endfor %}</select>{% elif group.meaningful_parents %}{{ group.meaningful_parents.0.area }}{% else %}{% trans "No parent" %}{% endif %}</td></tr>{% endfor %}
+</tbody></table>
+<p>{% trans "Omitted values" %}: {% for record in omitted %}{{ record.area }}{% if not forloop.last %}, {% endif %}{% empty %}{% trans "None" %}{% endfor %}</p>
+<input type="hidden" name="confirm" value="yes"><button type="submit" class="button default">{% trans "Apply clean and merge" %}</button> <a href="{% url 'admin:cms_storage_changelist' %}" class="button">{% trans "Cancel" %}</a>
+</form>{% endblock %}
