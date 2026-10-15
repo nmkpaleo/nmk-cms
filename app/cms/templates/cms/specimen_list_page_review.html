@@ -2,8 +2,8 @@
 {% load i18n %}
 
 {% block content %}
-<main class="w3-container w3-content" style="max-width: 1200px;">
-  <header class="w3-padding-16">
+<main class="w3-container w3-content review-ui-page specimen-page-review" style="max-width: 1200px;">
+  <header class="w3-padding-16 review-page-header">
     <h1 class="w3-xxlarge">
       <i class="fa fa-file-text-o" aria-hidden="true"></i>
       {% trans "Specimen list page review" %}
@@ -13,7 +13,7 @@
     </p>
   </header>
 
-  <section class="w3-card w3-white w3-padding w3-margin-bottom">
+  <section class="w3-card w3-white w3-padding w3-margin-bottom review-panel">
     <div class="w3-row-padding">
       <div class="w3-half">
         <p><strong>{% trans "Source" %}:</strong> {{ page.pdf.source_label }}</p>
@@ -36,7 +36,7 @@
     {% endif %}
   </section>
 
-  <section class="w3-card w3-white w3-padding">
+  <section class="w3-card w3-white w3-padding review-panel review-image-panel">
     {% if page.image_file %}
       <img src="{{ page.image_file.url }}" alt="{% trans 'Specimen list page image' %}" class="w3-image w3-border" />
     {% else %}

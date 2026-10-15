@@ -41,8 +41,9 @@ def test_login_template_renders_w3_layout(orcid_social_app):
     body = response.content.decode()
 
     assert "w3-container w3-padding-64 w3-sand" in body
+    assert "auth-layout-compact" in body
     assert "images/animal_skull.png" in body
-    assert "fa-solid fa-shield-halved" in body
+    assert "auth-layout-skull" in body
 
 
 def test_login_template_includes_orcid_cta(orcid_social_app):
@@ -56,3 +57,4 @@ def test_login_template_includes_orcid_cta(orcid_social_app):
     assert "Sign in with ORCID" in body
     assert "images/orcid-logo.png" in body
     assert "w3-button w3-green" in body
+    assert body.count("Sign in with ORCID") == 1

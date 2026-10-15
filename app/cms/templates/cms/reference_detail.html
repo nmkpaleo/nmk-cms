@@ -4,7 +4,7 @@
 {% block title %}{% blocktrans %}Reference {{ reference.title }}{% endblocktrans %}{% endblock %}
 
 {% block content %}
-<main class="w3-container w3-margin-top" role="main">
+<main class="w3-container w3-margin-top reference-detail-page" role="main">
   <header class="w3-row w3-padding-16 w3-border-bottom w3-white w3-round-large" aria-labelledby="reference-details-heading">
     <div class="w3-col s12 m8">
       <h1 id="reference-details-heading" class="w3-margin-0">
@@ -22,70 +22,48 @@
     {% endif %}
   </header>
 
-  <section class="w3-margin-top" aria-labelledby="reference-metadata-heading">
-    <div class="w3-row-padding">
-      <article class="w3-col s12 m6 l4">
-        <div class="w3-card w3-round w3-white w3-padding">
-          <h2 id="reference-metadata-heading" class="w3-margin-top">{% trans "Reference metadata" %}</h2>
-          <dl class="w3-margin-top">
-            <div class="w3-margin-bottom">
-              <dt class="w3-text-gray">{% trans "Title" %}</dt>
-              <dd class="w3-margin-0">{{ reference.title }}</dd>
-            </div>
-            <div class="w3-margin-bottom">
-              <dt class="w3-text-gray">{% trans "First author" %}</dt>
-              <dd class="w3-margin-0">{{ reference.first_author }}</dd>
-            </div>
-            <div class="w3-margin-bottom">
-              <dt class="w3-text-gray">{% trans "Year" %}</dt>
-              <dd class="w3-margin-0">{{ reference.year }}</dd>
-            </div>
-            {% if reference.citation %}
-              <div class="w3-margin-bottom">
-                <dt class="w3-text-gray">{% trans "Citation" %}</dt>
-                <dd class="w3-margin-0">{{ reference.citation }}</dd>
-              </div>
-            {% endif %}
-          </dl>
-        </div>
-      </article>
-
-      <article class="w3-col s12 m6 l4">
-        <div class="w3-card w3-round w3-white w3-padding" aria-labelledby="reference-journal-heading">
-          <h2 id="reference-journal-heading" class="w3-margin-top">{% trans "Publication details" %}</h2>
-          <dl class="w3-margin-top">
-            <div class="w3-margin-bottom">
-              <dt class="w3-text-gray">{% trans "Journal" %}</dt>
-              <dd class="w3-margin-0">{{ reference.journal|default:"—" }}</dd>
-            </div>
-            <div class="w3-margin-bottom">
-              <dt class="w3-text-gray">{% trans "Volume" %}</dt>
-              <dd class="w3-margin-0">{{ reference.volume|default:"—" }}</dd>
-            </div>
-            <div class="w3-margin-bottom">
-              <dt class="w3-text-gray">{% trans "Issue" %}</dt>
-              <dd class="w3-margin-0">{{ reference.issue|default:"—" }}</dd>
-            </div>
-            <div class="w3-margin-bottom">
-              <dt class="w3-text-gray">{% trans "Pages" %}</dt>
-              <dd class="w3-margin-0">{{ reference.pages|default:"—" }}</dd>
-            </div>
-            {% if doi_url %}
-              <div class="w3-margin-bottom">
-                <dt class="w3-text-gray">{% trans "DOI" %}</dt>
-                <dd class="w3-margin-0">
-                  <a href="{{ doi_url }}" target="_blank" rel="noopener">{{ reference.doi }}</a>
-                </dd>
-              </div>
-            {% endif %}
-          </dl>
-        </div>
-      </article>
+  <section class="w3-margin-top reference-detail-section" aria-labelledby="reference-metadata-heading">
+    <header class="reference-section-header">
+      <h2 id="reference-metadata-heading" class="w3-margin-0">{% trans "Reference metadata" %}</h2>
+    </header>
+    <div class="w3-responsive">
+      <table class="w3-table-all w3-small reference-metadata-table">
+        <tbody>
+          <tr><th scope="row">{% trans "Title" %}</th><td>{{ reference.title }}</td></tr>
+          <tr><th scope="row">{% trans "First author" %}</th><td>{{ reference.first_author }}</td></tr>
+          <tr><th scope="row">{% trans "Year" %}</th><td>{{ reference.year }}</td></tr>
+          {% if reference.citation %}
+            <tr><th scope="row">{% trans "Citation" %}</th><td>{{ reference.citation }}</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
     </div>
   </section>
 
-  <section class="w3-margin-top" aria-labelledby="reference-accessions-heading">
-    <header class="w3-padding-16">
+  <section class="w3-margin-top reference-detail-section" aria-labelledby="reference-publication-heading">
+    <header class="reference-section-header">
+      <h2 id="reference-publication-heading" class="w3-margin-0">{% trans "Publication details" %}</h2>
+    </header>
+    <div class="w3-responsive">
+      <table class="w3-table-all w3-small reference-metadata-table">
+        <tbody>
+          <tr><th scope="row">{% trans "Journal" %}</th><td>{{ reference.journal|default:"—" }}</td></tr>
+          <tr><th scope="row">{% trans "Volume" %}</th><td>{{ reference.volume|default:"—" }}</td></tr>
+          <tr><th scope="row">{% trans "Issue" %}</th><td>{{ reference.issue|default:"—" }}</td></tr>
+          <tr><th scope="row">{% trans "Pages" %}</th><td>{{ reference.pages|default:"—" }}</td></tr>
+          {% if doi_url %}
+            <tr>
+              <th scope="row">{% trans "DOI" %}</th>
+              <td><a href="{{ doi_url }}" target="_blank" rel="noopener">{{ reference.doi }}</a></td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="w3-margin-top reference-detail-section" aria-labelledby="reference-accessions-heading">
+    <header class="reference-section-header">
       <h2 id="reference-accessions-heading" class="w3-margin-0">
         <i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i>
         <span class="w3-margin-left">{% trans "Referenced accessions" %}</span>

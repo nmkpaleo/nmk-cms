@@ -7,25 +7,18 @@ pytestmark = pytest.mark.django_db
 
 
 def test_responsive_css_contains_large_screen_constraint():
-    """Test that style.css includes responsive layout rules for large screens."""
+    """Test that style.css includes responsive layout rules for shared containers."""
     css_path = Path(settings.BASE_DIR, "cms", "static", "css", "style.css")
     content = css_path.read_text(encoding="utf-8")
-    
-    # Check for media query targeting large screens (993px+)
-    assert "@media screen and (min-width: 993px)" in content
-    
-    # Check for max-width constraint (updated to 1280px for ~10% margins)
-    assert "max-width: 1280px" in content
-    
-    # Check for width percentage constraint
-    assert "width: 80%" in content
-    
-    # Check for centering with auto margins
+
+    # Check for responsive max-width constraints on the shared content container.
+    assert ".site-main > .container-fluid" in content
+    assert "width: min(100% - 32px, 1440px)" in content
+    assert "width: min(100% - 20px, 1440px)" in content
+
+    # Check for centering with auto margins.
     assert "margin-left: auto" in content
     assert "margin-right: auto" in content
-    
-    # Check that it targets the main content container
-    assert ".site-main .container-fluid" in content
 
 
 def test_base_template_has_container_structure():
