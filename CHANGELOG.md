@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add Storage cleaning and merging in the admin, including supported label normalization, pipe-delimited deduplication, relation preservation, parent conflict choices, and `-Undefined` fallback parents.
+- Add an accession-list storage filter for superusers and Collection Managers, and sort the Storage admin list by Area by default.
+
 - Add a per-identification **Try taxonomy sync** action to the taxonomy cleanup report, with targeted NOW/GBIF matching, global linkage for the normalized taxon name, and visible success/failure messages.
 - Cache successful NOW taxonomy exports through Django's configured cache backend, with a configurable one-hour default TTL, to reduce repeated downloads during targeted syncs.
 
