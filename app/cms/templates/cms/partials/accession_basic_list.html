@@ -1,5 +1,5 @@
 {% load i18n %}
-<section class="w3-margin-top" aria-labelledby="{{ section_id|default:'accessions-section' }}-heading">
+<section class="w3-margin-top{% if section_class %} {{ section_class }}{% endif %}" aria-labelledby="{{ section_id|default:'accessions-section' }}-heading">
   <header class="w3-padding-16 w3-white w3-round-large">
     <h2 id="{{ section_id|default:'accessions-section' }}-heading" class="w3-margin-0">
       <i class="fa-solid {{ section_icon|default:'fa-box-archive' }}" aria-hidden="true"></i>

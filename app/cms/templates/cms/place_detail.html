@@ -10,7 +10,7 @@
 {% endblock %}
 
 {% block content %}
-<main class="w3-container w3-margin-top" role="main">
+<main class="w3-container w3-margin-top place-detail-page" role="main">
   <header class="w3-row w3-padding-16 w3-border-bottom w3-white w3-round-large" aria-labelledby="place-details-heading">
     <div class="w3-col s12 m8">
       <h1 id="place-details-heading" class="w3-margin-0">
@@ -28,77 +28,95 @@
     {% endif %}
   </header>
 
-  <section class="w3-margin-top" aria-labelledby="place-metadata-heading">
-    <div class="w3-row-padding">
-      <article class="w3-col s12 m6 l4">
-        <div class="w3-card w3-round w3-white w3-padding">
-          <h2 id="place-metadata-heading" class="w3-margin-top">{% trans "Place overview" %}</h2>
-          <dl class="w3-margin-top">
-            <div class="w3-margin-bottom">
-              <dt class="w3-text-gray">{% trans "Name" %}</dt>
-              <dd class="w3-margin-0">{{ place.name }}</dd>
-            </div>
-            <div class="w3-margin-bottom">
-              <dt class="w3-text-gray">{% trans "Type" %}</dt>
-              <dd class="w3-margin-0">{{ place.get_place_type_display }}</dd>
-            </div>
-            <div class="w3-margin-bottom">
-              <dt class="w3-text-gray">{% trans "Locality" %}</dt>
-              <dd class="w3-margin-0">{{ place.locality.abbreviation }}</dd>
-            </div>
-            <div class="w3-margin-bottom">
-              <dt class="w3-text-gray">{% trans "Higher geography" %}</dt>
-              <dd class="w3-margin-0">{{ place.part_of_hierarchy|default:"—" }}</dd>
-            </div>
-            {% if place.description %}
-              <div class="w3-margin-bottom">
-                <dt class="w3-text-gray">{% trans "Description" %}</dt>
-                <dd class="w3-margin-0">{{ place.description }}</dd>
-              </div>
-            {% endif %}
-            {% if place.comment %}
-              <div class="w3-margin-bottom">
-                <dt class="w3-text-gray">{% trans "Comment" %}</dt>
-                <dd class="w3-margin-0">{{ place.comment }}</dd>
-              </div>
-            {% endif %}
-          </dl>
-        </div>
-      </article>
-
-      <article class="w3-col s12 m6 l4">
-        <div class="w3-card w3-round w3-white w3-padding" aria-labelledby="place-children-heading">
-          <h2 id="place-children-heading" class="w3-margin-top">{% trans "Lower geography" %}</h2>
-          <ul class="w3-ul w3-margin-top" aria-label="{% trans 'List of child places' %}">
-            {% if children %}
-              {% for child in children %}
-                <li>
-                  <a class="w3-text-indigo" href="{% url 'place_detail' child.pk %}">{{ child.name }}</a>
-                </li>
-              {% endfor %}
-            {% else %}
-              <li class="w3-text-gray">{% trans "No child places recorded." %}</li>
-            {% endif %}
-          </ul>
-        </div>
-      </article>
-
-      {% if place.related_place %}
-        <article class="w3-col s12 m6 l4">
-          <div class="w3-card w3-round w3-white w3-padding" aria-labelledby="place-related-heading">
-            <h2 id="place-related-heading" class="w3-margin-top">{% trans "Related place" %}</h2>
-            <p class="w3-margin-top">{{ place.get_relation_type_display }} → {{ place.related_place.name }}</p>
-          </div>
-        </article>
-      {% endif %}
+  <section class="w3-margin-top place-detail-section" aria-labelledby="place-metadata-heading">
+    <header class="place-section-header">
+      <h2 id="place-metadata-heading" class="w3-margin-0">{% trans "Place overview" %}</h2>
+    </header>
+    <div class="w3-responsive">
+      <table class="w3-table-all w3-small place-overview-table">
+        <tbody>
+          <tr>
+            <th scope="row">{% trans "Name" %}</th>
+            <td>{{ place.name }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Type" %}</th>
+            <td>{{ place.get_place_type_display }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Locality" %}</th>
+            <td>{{ place.locality.abbreviation }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Higher geography" %}</th>
+            <td>{{ place.part_of_hierarchy|default:"—" }}</td>
+          </tr>
+          {% if place.description %}
+            <tr>
+              <th scope="row">{% trans "Description" %}</th>
+              <td>{{ place.description }}</td>
+            </tr>
+          {% endif %}
+          {% if place.comment %}
+            <tr>
+              <th scope="row">{% trans "Comment" %}</th>
+              <td>{{ place.comment }}</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
     </div>
   </section>
 
-  <section class="w3-margin-top" aria-labelledby="place-accessions-heading">
-    <header class="w3-row w3-padding-16">
-      <div class="w3-col s12 m8">
+  <section class="w3-margin-top place-detail-section" aria-labelledby="place-children-heading">
+    <header class="place-section-header">
+      <h2 id="place-children-heading" class="w3-margin-0">{% trans "Lower geography" %}</h2>
+    </header>
+    <div class="w3-responsive">
+      <table class="w3-table-all w3-hoverable w3-small">
+        <thead>
+          <tr><th scope="col">{% trans "Place" %}</th></tr>
+        </thead>
+        <tbody>
+          {% for child in children %}
+            <tr>
+              <td><a href="{% url 'place_detail' child.pk %}">{{ child.name }}</a></td>
+            </tr>
+          {% empty %}
+            <tr><td class="w3-center w3-text-gray">{% trans "No child places recorded." %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  {% if place.related_place %}
+    <section class="w3-margin-top place-detail-section" aria-labelledby="place-related-heading">
+      <header class="place-section-header">
+        <h2 id="place-related-heading" class="w3-margin-0">{% trans "Related place" %}</h2>
+      </header>
+      <div class="w3-responsive">
+        <table class="w3-table-all w3-small place-overview-table">
+          <tbody>
+            <tr>
+              <th scope="row">{% trans "Relationship" %}</th>
+              <td>{{ place.get_relation_type_display }}</td>
+            </tr>
+            <tr>
+              <th scope="row">{% trans "Place" %}</th>
+              <td><a href="{% url 'place_detail' place.related_place.pk %}">{{ place.related_place.name }}</a></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% endif %}
+
+  <section class="w3-margin-top place-detail-section" aria-labelledby="place-accessions-heading">
+    <header class="place-section-header place-accessions-header">
+      <div>
         <h2 id="place-accessions-heading" class="w3-margin-0">{% trans "Accessions" %}</h2>
-        <p class="w3-text-gray">
+        <p class="w3-text-gray w3-margin-top">
           {% if include_lower_geography %}
             {% trans "Including accessions from lower geography." %}
           {% else %}
@@ -106,7 +124,7 @@
           {% endif %}
         </p>
       </div>
-      <div class="w3-col s12 m4 w3-right-align w3-margin-top">
+      <div>
         {% if children %}
           {% if include_lower_geography %}
             <a class="w3-button w3-light-grey w3-round" href="{% url 'place_detail' place.pk %}">{% trans "Direct only" %}</a>
