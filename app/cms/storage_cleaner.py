@@ -11,15 +11,23 @@ from .merge import merge_records
 from .merge.constants import MergeStrategy
 from .models import Storage
 
-TOKEN_RE = re.compile(r"^([A-Za-z]+)\s*(\d+)\s*(?:/\s*(\d+))?$")
+LETTER_FIRST_RE = re.compile(r"^([A-Za-z]+)\s*(\d+)\s*(?:/\s*(\d+))?$")
+NUMBER_FIRST_RE = re.compile(r"^(\d+)\s*([A-Za-z]+)(?:\s*/\s*([A-Za-z]+))?$")
 
 
 def normalize_storage_token(value: str) -> str | None:
-    match = TOKEN_RE.fullmatch(value.strip())
-    if not match:
-        return None
-    prefix, first, second = match.groups()
-    return f"{prefix.upper()} {int(first + (second or ''))}"
+    value = value.strip()
+    match = LETTER_FIRST_RE.fullmatch(value)
+    if match:
+        prefix, first, second = match.groups()
+        return f"{prefix.upper()} {int(first + (second or ''))}"
+
+    match = NUMBER_FIRST_RE.fullmatch(value)
+    if match:
+        number, first, second = match.groups()
+        return f"{number} {(first + (second or '')).upper()}"
+
+    return None
 
 
 def normalize_storage_area(value: str) -> str | None:
