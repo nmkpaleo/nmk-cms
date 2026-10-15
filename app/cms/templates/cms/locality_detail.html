@@ -4,7 +4,7 @@
 {% block title %}{% blocktrans %}Locality {{ locality.abbreviation }}{% endblocktrans %}{% endblock %}
 
 {% block content %}
-<main class="w3-container w3-margin-top locality-detail-page" role="main">
+<main class="w3-container w3-margin-top" role="main">
   <header class="w3-row w3-padding-16 w3-border-bottom w3-white w3-round-large" aria-labelledby="locality-details-heading">
     <div class="w3-col s12 m8">
       <h1 id="locality-details-heading" class="w3-margin-0">
@@ -22,67 +22,64 @@
     {% endif %}
   </header>
 
-  <section class="w3-margin-top locality-detail-section" aria-labelledby="locality-metadata-heading">
-    <header class="locality-section-header">
-      <h2 id="locality-metadata-heading" class="w3-margin-0">{% trans "Locality overview" %}</h2>
-    </header>
-    <div class="w3-responsive">
-      <table class="w3-table-all w3-small locality-overview-table">
-        <tbody>
-          <tr>
-            <th scope="row">{% trans "Abbreviation" %}</th>
-            <td>{{ locality.abbreviation }}</td>
-          </tr>
-          <tr>
-            <th scope="row">{% trans "Name" %}</th>
-            <td>{{ locality.name }}</td>
-          </tr>
-          {% if locality.geological_times %}
-            <tr>
-              <th scope="row">{% trans "Geological time" %}</th>
-              <td><span title="{{ locality.geological_times_abbreviation_display }}">{{ locality.geological_times_label_display }}</span></td>
-            </tr>
-          {% endif %}
-          {% if locality.description %}
-            <tr>
-              <th scope="row">{% trans "Description" %}</th>
-              <td>{{ locality.description }}</td>
-            </tr>
-          {% endif %}
-          {% if locality.comment %}
-            <tr>
-              <th scope="row">{% trans "Comment" %}</th>
-              <td>{{ locality.comment }}</td>
-            </tr>
-          {% endif %}
-        </tbody>
-      </table>
+  <section class="w3-margin-top" aria-labelledby="locality-metadata-heading">
+    <div class="w3-row-padding">
+      <article class="w3-col s12 m6 l4">
+        <div class="w3-card w3-round w3-white w3-padding">
+          <h2 id="locality-metadata-heading" class="w3-margin-top">{% trans "Locality overview" %}</h2>
+          <dl class="w3-margin-top">
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Abbreviation" %}</dt>
+              <dd class="w3-margin-0">{{ locality.abbreviation }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Name" %}</dt>
+              <dd class="w3-margin-0">{{ locality.name }}</dd>
+            </div>
+            {% if locality.geological_times %}
+              <div class="w3-margin-bottom">
+                <dt class="w3-text-gray">{% trans "Geological time" %}</dt>
+                <dd class="w3-margin-0">
+                  <span title="{{ locality.geological_times_abbreviation_display }}">
+                    {{ locality.geological_times_label_display }}
+                  </span>
+                </dd>
+              </div>
+            {% endif %}
+            {% if locality.description %}
+              <div class="w3-margin-bottom">
+                <dt class="w3-text-gray">{% trans "Description" %}</dt>
+                <dd class="w3-margin-0">{{ locality.description }}</dd>
+              </div>
+            {% endif %}
+            {% if locality.comment %}
+              <div class="w3-margin-bottom">
+                <dt class="w3-text-gray">{% trans "Comment" %}</dt>
+                <dd class="w3-margin-0">{{ locality.comment }}</dd>
+              </div>
+            {% endif %}
+          </dl>
+        </div>
+      </article>
+
+      {% with places=locality.place_set.all %}
+        {% if places|length %}
+        <article class="w3-col s12 m6 l4">
+          <div class="w3-card w3-round w3-white w3-padding" aria-labelledby="locality-places-heading">
+            <h2 id="locality-places-heading" class="w3-margin-top">{% trans "Places within this locality" %}</h2>
+            <ul class="w3-ul w3-margin-top">
+              {% for place in places %}
+                <li><a href="{% url 'place_detail' place.pk %}">{{ place.name }}</a></li>
+              {% empty %}
+                <li class="w3-text-gray">{% trans "No places recorded." %}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        </article>
+        {% endif %}
+      {% endwith %}
     </div>
   </section>
-
-  {% with places=locality.place_set.all %}
-    {% if places|length %}
-      <section class="w3-margin-top locality-detail-section" aria-labelledby="locality-places-heading">
-        <header class="locality-section-header">
-          <h2 id="locality-places-heading" class="w3-margin-0">{% trans "Places within this locality" %}</h2>
-        </header>
-        <div class="w3-responsive">
-          <table class="w3-table-all w3-hoverable w3-small">
-            <thead>
-              <tr><th scope="col">{% trans "Place" %}</th></tr>
-            </thead>
-            <tbody>
-              {% for place in places %}
-                <tr><td><a href="{% url 'place_detail' place.pk %}">{{ place.name }}</a></td></tr>
-              {% empty %}
-                <tr><td class="w3-center w3-text-gray">{% trans "No places recorded." %}</td></tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </section>
-    {% endif %}
-  {% endwith %}
 
   {% if user.is_authenticated %}
     {% blocktrans asvar associated_accessions_title %}Associated accessions{% endblocktrans %}
@@ -90,7 +87,7 @@
     {% blocktrans asvar associated_accessions_title %}Associated published accessions{% endblocktrans %}
   {% endif %}
   {% blocktrans asvar associated_accessions_empty %}No accessions found.{% endblocktrans %}
-  {% include "cms/partials/accession_basic_list.html" with accessions=accessions section_id="locality-accessions" section_title=associated_accessions_title empty_message=associated_accessions_empty show_staff_columns=show_accession_staff_columns section_class="locality-detail-section" %}
+  {% include "cms/partials/accession_basic_list.html" with accessions=accessions section_id="locality-accessions" section_title=associated_accessions_title empty_message=associated_accessions_empty show_staff_columns=show_accession_staff_columns %}
 </main>
 {% endblock %}
 

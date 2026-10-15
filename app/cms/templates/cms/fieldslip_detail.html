@@ -4,7 +4,7 @@
 {% block title %}{% blocktrans %}Field Slip {{ fieldslip.field_number }}{% endblocktrans %}{% endblock %}
 
 {% block content %}
-<main class="w3-container w3-margin-top fieldslip-detail-page" role="main">
+<main class="w3-container w3-margin-top" role="main">
   <header class="w3-row w3-padding-16 w3-border-bottom w3-white w3-round-large" aria-labelledby="fieldslip-details-heading">
     <div class="w3-col s12 m8">
       <h1 id="fieldslip-details-heading" class="w3-margin-0">
@@ -20,128 +20,206 @@
     </div>
   </header>
 
-  <section class="w3-margin-top fieldslip-detail-section" aria-labelledby="fieldslip-primary-context-heading">
-    <header class="fieldslip-section-header">
-      <h2 id="fieldslip-primary-context-heading" class="w3-margin-0">
-        <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
-        <span class="w3-margin-left">{% trans "Primary context" %}</span>
-      </h2>
-    </header>
-    <div class="w3-responsive">
-      <table class="w3-table-all w3-small fieldslip-data-table">
-        <tbody>
-          <tr class="fieldslip-group-row"><th id="fieldslip-overview-heading" scope="colgroup" colspan="2">{% trans "Overview" %}</th></tr>
-          <tr><th scope="row">{% trans "Field number" %}</th><td>{{ fieldslip.field_number }}</td></tr>
-          <tr><th scope="row">{% trans "Discoverer" %}</th><td>{{ fieldslip.discoverer|default:"—" }}</td></tr>
-          <tr><th scope="row">{% trans "Collector" %}</th><td>{{ fieldslip.collector|default:"—" }}</td></tr>
-          <tr><th scope="row">{% trans "Collection date" %}</th><td>{{ fieldslip.collection_date|date:"Y-m-d"|default:"—" }}</td></tr>
-          <tr><th scope="row">{% trans "Verbatim locality" %}</th><td>{{ fieldslip.verbatim_locality|default:"—" }}</td></tr>
-          <tr><th scope="row">{% trans "Comment" %}</th><td>{{ fieldslip.comment|default:"—" }}</td></tr>
-          <tr class="fieldslip-group-row"><th id="fieldslip-taxonomy-heading" scope="colgroup" colspan="2">{% trans "Taxonomic notes" %}</th></tr>
-          <tr><th scope="row">{% trans "Verbatim taxon" %}</th><td>{{ fieldslip.verbatim_taxon|default:"—" }}</td></tr>
-          <tr><th scope="row">{% trans "Verbatim element" %}</th><td>{{ fieldslip.verbatim_element|default:"—" }}</td></tr>
-          <tr><th scope="row">{% trans "Verbatim horizon" %}</th><td>{{ fieldslip.verbatim_horizon|default:"—" }}</td></tr>
-          <tr><th scope="row">{% trans "Verbatim SRS" %}</th><td>{{ fieldslip.verbatim_SRS|default:"—" }}</td></tr>
-          <tr class="fieldslip-group-row"><th id="fieldslip-location-heading" scope="colgroup" colspan="2">{% trans "Location" %}</th></tr>
-          <tr><th scope="row">{% trans "Verbatim latitude" %}</th><td>{{ fieldslip.verbatim_latitude|default:"—" }}</td></tr>
-          <tr><th scope="row">{% trans "Verbatim longitude" %}</th><td>{{ fieldslip.verbatim_longitude|default:"—" }}</td></tr>
-          <tr><th scope="row">{% trans "Verbatim elevation" %}</th><td>{{ fieldslip.verbatim_elevation|default:"—" }}</td></tr>
-          <tr><th scope="row">{% trans "Verbatim coordinate system" %}</th><td>{{ fieldslip.verbatim_coordinate_system|default:"—" }}</td></tr>
-          <tr class="fieldslip-group-row"><th id="fieldslip-media-heading" scope="colgroup" colspan="2">{% trans "Aerial photo" %}</th></tr>
-          <tr>
-            <th scope="row">{% trans "Aerial photo" %}</th>
-            <td>
-              {% if fieldslip.aerial_photo %}
-                <p class="w3-tag w3-light-blue w3-round w3-text-black w3-padding-small">
-                  <i class="fa-solid fa-map-location-dot" aria-hidden="true"></i>
-                  <span class="w3-margin-left">{{ fieldslip.aerial_photo }}</span>
-                </p>
-              {% else %}
-                <span class="w3-text-gray">{% trans "No aerial photo information provided." %}</span>
-              {% endif %}
-            </td>
-          </tr>
-        </tbody>
-      </table>
+  <section class="w3-margin-top" aria-labelledby="fieldslip-primary-context-heading">
+    <div class="w3-card w3-round w3-white w3-padding">
+      <header class="w3-margin-bottom">
+        <h2 id="fieldslip-primary-context-heading" class="w3-margin-top">
+          <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+          <span class="w3-margin-left">{% trans "Primary context" %}</span>
+        </h2>
+      </header>
+
+      <div class="w3-row-padding">
+        <article class="w3-col s12 m6 l3" aria-labelledby="fieldslip-overview-heading">
+          <h3 id="fieldslip-overview-heading" class="w3-medium w3-text-gray">{% trans "Overview" %}</h3>
+          <dl class="w3-margin-top">
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Field number" %}</dt>
+              <dd class="w3-margin-0">{{ fieldslip.field_number }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Discoverer" %}</dt>
+              <dd class="w3-margin-0">{{ fieldslip.discoverer|default:"—" }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Collector" %}</dt>
+              <dd class="w3-margin-0">{{ fieldslip.collector|default:"—" }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Collection date" %}</dt>
+              <dd class="w3-margin-0">{{ fieldslip.collection_date|date:"Y-m-d"|default:"—" }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Verbatim locality" %}</dt>
+              <dd class="w3-margin-0">{{ fieldslip.verbatim_locality|default:"—" }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Comment" %}</dt>
+              <dd class="w3-margin-0">{{ fieldslip.comment|default:"—" }}</dd>
+            </div>
+          </dl>
+        </article>
+
+        <article class="w3-col s12 m6 l3" aria-labelledby="fieldslip-taxonomy-heading">
+          <h3 id="fieldslip-taxonomy-heading" class="w3-medium w3-text-gray">{% trans "Taxonomic notes" %}</h3>
+          <dl class="w3-margin-top">
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Verbatim taxon" %}</dt>
+              <dd class="w3-margin-0">{{ fieldslip.verbatim_taxon|default:"—" }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Verbatim element" %}</dt>
+              <dd class="w3-margin-0">{{ fieldslip.verbatim_element|default:"—" }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Verbatim horizon" %}</dt>
+              <dd class="w3-margin-0">{{ fieldslip.verbatim_horizon|default:"—" }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Verbatim SRS" %}</dt>
+              <dd class="w3-margin-0">{{ fieldslip.verbatim_SRS|default:"—" }}</dd>
+            </div>
+          </dl>
+        </article>
+
+        <article class="w3-col s12 m6 l3" aria-labelledby="fieldslip-location-heading">
+          <h3 id="fieldslip-location-heading" class="w3-medium w3-text-gray">{% trans "Location" %}</h3>
+          <dl class="w3-margin-top">
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Verbatim latitude" %}</dt>
+              <dd class="w3-margin-0">{{ fieldslip.verbatim_latitude|default:"—" }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Verbatim longitude" %}</dt>
+              <dd class="w3-margin-0">{{ fieldslip.verbatim_longitude|default:"—" }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Verbatim elevation" %}</dt>
+              <dd class="w3-margin-0">{{ fieldslip.verbatim_elevation|default:"—" }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Verbatim coordinate system" %}</dt>
+              <dd class="w3-margin-0">{{ fieldslip.verbatim_coordinate_system|default:"—" }}</dd>
+            </div>
+          </dl>
+        </article>
+
+        <article class="w3-col s12 m6 l3" aria-labelledby="fieldslip-media-heading">
+          <h3 id="fieldslip-media-heading" class="w3-medium w3-text-gray">{% trans "Aerial photo" %}</h3>
+          <div class="w3-margin-top">
+            {% if fieldslip.aerial_photo %}
+              <p class="w3-tag w3-light-blue w3-round w3-text-black w3-padding-small">
+                <i class="fa-solid fa-map-location-dot" aria-hidden="true"></i>
+                <span class="w3-margin-left">{{ fieldslip.aerial_photo }}</span>
+              </p>
+            {% else %}
+              <p class="w3-text-gray">{% trans "No aerial photo information provided." %}</p>
+            {% endif %}
+          </div>
+        </article>
+      </div>
     </div>
   </section>
 
-  <section class="w3-margin-top fieldslip-detail-section" aria-labelledby="fieldslip-sedimentary-heading">
-    <header class="fieldslip-section-header">
-      <h2 id="fieldslip-sedimentary-heading" class="w3-margin-0">
-        <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
-        <span class="w3-margin-left">{% trans "Sedimentary context" %}</span>
-      </h2>
-    </header>
-    <div class="w3-responsive">
-      <table class="w3-table-all w3-small fieldslip-data-table">
-        <tbody>
-          <tr>
-            <th id="fieldslip-sedimentary-features-heading" scope="row">{% trans "Sedimentary features" %}</th>
-            <td>
-              {% if fieldslip.sedimentary_features.all %}
-                <ul class="fieldslip-value-list">
-                  {% for feature in fieldslip.sedimentary_features.all %}<li>{{ feature.name }}</li>{% endfor %}
-                </ul>
-              {% else %}{% trans "No sedimentary features recorded." %}{% endif %}
-            </td>
-          </tr>
-          <tr>
-            <th id="fieldslip-fossil-groups-heading" scope="row">{% trans "Associated fossil groups" %}</th>
-            <td>
-              {% if fieldslip.fossil_groups.all %}
-                <ul class="fieldslip-value-list">
-                  {% for group in fieldslip.fossil_groups.all %}<li>{{ group.name }}</li>{% endfor %}
-                </ul>
-              {% else %}{% trans "No fossil groups recorded." %}{% endif %}
-            </td>
-          </tr>
-          <tr>
-            <th id="fieldslip-preservation-states-heading" scope="row">{% trans "Preservation states" %}</th>
-            <td>
-              {% if fieldslip.preservation_states.all %}
-                <ul class="fieldslip-value-list">
-                  {% for state in fieldslip.preservation_states.all %}<li>{{ state.name }}</li>{% endfor %}
-                </ul>
-              {% else %}{% trans "No preservation states recorded." %}{% endif %}
-            </td>
-          </tr>
-          <tr>
-            <th id="fieldslip-recommended-methods-heading" scope="row">{% trans "Recommended collection methods" %}</th>
-            <td>
-              {% if fieldslip.recommended_methods.all %}
-                <ul class="fieldslip-value-list">
-                  {% for method in fieldslip.recommended_methods.all %}<li>{{ method.name }}</li>{% endfor %}
-                </ul>
-              {% else %}{% trans "No recommended methods recorded." %}{% endif %}
-            </td>
-          </tr>
-          <tr>
-            <th id="fieldslip-collection-position-heading" scope="row">{% trans "Collection position" %}</th>
-            <td>{{ fieldslip.get_collection_position_display|default:"—" }}</td>
-          </tr>
-          <tr>
-            <th id="fieldslip-matrix-association-heading" scope="row">{% trans "Matrix association" %}</th>
-            <td>{{ fieldslip.get_matrix_association_display|default:"—" }}</td>
-          </tr>
-          <tr>
-            <th id="fieldslip-surface-exposure-heading" scope="row">{% trans "Surface exposure" %}</th>
-            <td>
-              {% if fieldslip.surface_exposure is None %}—{% elif fieldslip.surface_exposure %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}
-            </td>
-          </tr>
-          <tr>
-            <th id="fieldslip-matrix-grain-size-heading" scope="row">{% trans "Matrix grain size" %}</th>
-            <td>{{ fieldslip.matrix_grain_size.name|default:"—" }}</td>
-          </tr>
-        </tbody>
-      </table>
+
+  <section class="w3-margin-top" aria-labelledby="fieldslip-sedimentary-heading">
+    <div class="w3-card w3-round w3-white w3-padding">
+      <header class="w3-margin-bottom">
+        <h2 id="fieldslip-sedimentary-heading" class="w3-margin-top">
+          <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+          <span class="w3-margin-left">{% trans "Sedimentary context" %}</span>
+        </h2>
+      </header>
+
+      <div class="w3-row-padding">
+        <article class="w3-col s12 m6 l3" aria-labelledby="fieldslip-sedimentary-features-heading">
+          <h3 id="fieldslip-sedimentary-features-heading" class="w3-medium w3-text-gray">{% trans "Sedimentary features" %}</h3>
+          {% if fieldslip.sedimentary_features.all %}
+            <ul class="w3-ul w3-small">
+              {% for feature in fieldslip.sedimentary_features.all %}
+                <li>{{ feature.name }}</li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="w3-text-gray">{% trans "No sedimentary features recorded." %}</p>
+          {% endif %}
+        </article>
+
+        <article class="w3-col s12 m6 l3" aria-labelledby="fieldslip-fossil-groups-heading">
+          <h3 id="fieldslip-fossil-groups-heading" class="w3-medium w3-text-gray">{% trans "Associated fossil groups" %}</h3>
+          {% if fieldslip.fossil_groups.all %}
+            <ul class="w3-ul w3-small">
+              {% for group in fieldslip.fossil_groups.all %}
+                <li>{{ group.name }}</li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="w3-text-gray">{% trans "No fossil groups recorded." %}</p>
+          {% endif %}
+        </article>
+
+        <article class="w3-col s12 m6 l3" aria-labelledby="fieldslip-preservation-states-heading">
+          <h3 id="fieldslip-preservation-states-heading" class="w3-medium w3-text-gray">{% trans "Preservation states" %}</h3>
+          {% if fieldslip.preservation_states.all %}
+            <ul class="w3-ul w3-small">
+              {% for state in fieldslip.preservation_states.all %}
+                <li>{{ state.name }}</li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="w3-text-gray">{% trans "No preservation states recorded." %}</p>
+          {% endif %}
+        </article>
+
+        <article class="w3-col s12 m6 l3" aria-labelledby="fieldslip-recommended-methods-heading">
+          <h3 id="fieldslip-recommended-methods-heading" class="w3-medium w3-text-gray">{% trans "Recommended collection methods" %}</h3>
+          {% if fieldslip.recommended_methods.all %}
+            <ul class="w3-ul w3-small">
+              {% for method in fieldslip.recommended_methods.all %}
+                <li>{{ method.name }}</li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="w3-text-gray">{% trans "No recommended methods recorded." %}</p>
+          {% endif %}
+        </article>
+      </div>
+
+      <div class="w3-row-padding w3-margin-top">
+        <article class="w3-col s12 m4" aria-labelledby="fieldslip-collection-position-heading">
+          <h3 id="fieldslip-collection-position-heading" class="w3-medium w3-text-gray">{% trans "Collection position" %}</h3>
+          <p>{{ fieldslip.get_collection_position_display|default:"—" }}</p>
+        </article>
+
+        <article class="w3-col s12 m4" aria-labelledby="fieldslip-matrix-association-heading">
+          <h3 id="fieldslip-matrix-association-heading" class="w3-medium w3-text-gray">{% trans "Matrix association" %}</h3>
+          <p>{{ fieldslip.get_matrix_association_display|default:"—" }}</p>
+        </article>
+
+        <article class="w3-col s12 m4" aria-labelledby="fieldslip-surface-exposure-heading">
+          <h3 id="fieldslip-surface-exposure-heading" class="w3-medium w3-text-gray">{% trans "Surface exposure" %}</h3>
+          {% if fieldslip.surface_exposure is None %}
+            <p>—</p>
+          {% elif fieldslip.surface_exposure %}
+            <p>{% trans "Yes" %}</p>
+          {% else %}
+            <p>{% trans "No" %}</p>
+          {% endif %}
+        </article>
+      </div>
+
+      <div class="w3-row-padding">
+        <article class="w3-col s12" aria-labelledby="fieldslip-matrix-grain-size-heading">
+          <h3 id="fieldslip-matrix-grain-size-heading" class="w3-medium w3-text-gray">{% trans "Matrix grain size" %}</h3>
+          <p>{{ fieldslip.matrix_grain_size.name|default:"—" }}</p>
+        </article>
+      </div>
     </div>
   </section>
 
   {% blocktrans asvar related_accessions_title %}Related accessions{% endblocktrans %}
   {% blocktrans asvar related_accessions_empty %}No related accessions recorded for this field slip.{% endblocktrans %}
-  {% include "cms/partials/accession_basic_list.html" with accessions=accessions section_id="fieldslip-related-accessions" section_icon="fa-diagram-project" section_title=related_accessions_title empty_message=related_accessions_empty show_staff_columns=show_accession_staff_columns section_class="fieldslip-detail-section" %}
+  {% include "cms/partials/accession_basic_list.html" with accessions=accessions section_id="fieldslip-related-accessions" section_icon="fa-diagram-project" section_title=related_accessions_title empty_message=related_accessions_empty show_staff_columns=show_accession_staff_columns %}
 </main>
 {% endblock %}
 

@@ -4,7 +4,7 @@
 {% block title %}{% blocktrans %}Preparation {{ preparation.accession_row }}{% endblocktrans %}{% endblock %}
 
 {% block content %}
-<main class="w3-container w3-margin-top preparation-detail-page" role="main">
+<main class="w3-container w3-margin-top" role="main">
   <header class="w3-row w3-padding-16 w3-border-bottom w3-white w3-round-large" aria-labelledby="preparation-details-heading">
     <div class="w3-col s12 m8">
       <h1 id="preparation-details-heading" class="w3-margin-0">
@@ -22,86 +22,132 @@
     {% endif %}
   </header>
 
-  <section class="preparation-detail-section" aria-labelledby="preparation-overview-heading">
-    <header class="preparation-section-header">
-      <h2 id="preparation-overview-heading" class="w3-margin-0">{% trans "Preparation overview" %}</h2>
-    </header>
-    <div class="w3-responsive">
-      <table class="w3-table-all w3-small preparation-data-table">
-        <tbody>
-          <tr><th scope="row">{% trans "Specimen" %}</th><td>{{ preparation.accession_row }}</td></tr>
-          <tr><th scope="row">{% trans "Preparator" %}</th><td>{{ preparation.preparator|default:"—" }}</td></tr>
-          <tr><th scope="row">{% trans "Status" %}</th><td>{{ preparation.status }}</td></tr>
-          <tr><th scope="row">{% trans "Preparation type" %}</th><td>{{ preparation.preparation_type }}</td></tr>
-          <tr><th scope="row">{% trans "Started on" %}</th><td>{{ preparation.started_on|date:"Y-m-d"|default:"—" }}</td></tr>
-          <tr>
-            <th scope="row">{% trans "Completed on" %}</th>
-            <td>{% if preparation.completed_on %}{{ preparation.completed_on|date:"Y-m-d" }}{% else %}{% trans "Not completed" %}{% endif %}</td>
-          </tr>
-        </tbody>
-      </table>
+  <section class="w3-margin-top" aria-labelledby="preparation-overview-heading">
+    <div class="w3-row-padding">
+      <article class="w3-col s12 m6 l4">
+        <div class="w3-card w3-round w3-white w3-padding">
+          <h2 id="preparation-overview-heading" class="w3-margin-top">{% trans "Preparation overview" %}</h2>
+          <dl class="w3-margin-top">
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Specimen" %}</dt>
+              <dd class="w3-margin-0">{{ preparation.accession_row }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Preparator" %}</dt>
+              <dd class="w3-margin-0">{{ preparation.preparator|default:"—" }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Status" %}</dt>
+              <dd class="w3-margin-0">{{ preparation.status }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Preparation type" %}</dt>
+              <dd class="w3-margin-0">{{ preparation.preparation_type }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Started on" %}</dt>
+              <dd class="w3-margin-0">{{ preparation.started_on|date:"Y-m-d"|default:"—" }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Completed on" %}</dt>
+              <dd class="w3-margin-0">
+                {% if preparation.completed_on %}
+                  {{ preparation.completed_on|date:"Y-m-d" }}
+                {% else %}
+                  {% trans "Not completed" %}
+                {% endif %}
+              </dd>
+            </div>
+          </dl>
+        </div>
+      </article>
+
+      <article class="w3-col s12 m6 l4">
+        <div class="w3-card w3-round w3-white w3-padding" aria-labelledby="preparation-method-heading">
+          <h2 id="preparation-method-heading" class="w3-margin-top">{% trans "Methods and materials" %}</h2>
+          <dl class="w3-margin-top">
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Condition before" %}</dt>
+              <dd class="w3-margin-0">{{ preparation.condition_before|default:"—" }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Condition after" %}</dt>
+              <dd class="w3-margin-0">{{ preparation.condition_after|default:"—" }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Method" %}</dt>
+              <dd class="w3-margin-0">{{ preparation.preparation_method|default:"—" }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Chemicals used" %}</dt>
+              <dd class="w3-margin-0">{{ preparation.chemicals_used|default:"—" }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Materials used" %}</dt>
+              <dd class="w3-margin-0">
+                {% for material in preparation.materials_used.all %}
+                  {{ material.name }}{% if not forloop.last %}, {% endif %}
+                {% empty %}
+                  {% trans "None recorded" %}
+                {% endfor %}
+              </dd>
+            </div>
+          </dl>
+        </div>
+      </article>
+
+      <article class="w3-col s12 m6 l4">
+        <div class="w3-card w3-round w3-white w3-padding" aria-labelledby="preparation-approval-heading">
+          <h2 id="preparation-approval-heading" class="w3-margin-top">{% trans "Curatorial review" %}</h2>
+          {% if user.is_superuser or user|has_group:"Curators" and user != preparation.preparator %}
+            <a href="{% url 'preparation_approve' preparation.id %}" class="w3-button w3-green w3-round w3-margin-bottom">
+              <i class="fa-solid fa-check" aria-hidden="true"></i>
+              <span class="w3-margin-left">{% trans "Curate" %}</span>
+            </a>
+          {% endif %}
+          <dl>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Curator" %}</dt>
+              <dd class="w3-margin-0">
+                {% if preparation.curator %}
+                  {{ preparation.curator }}
+                {% else %}
+                  {% trans "Not assigned" %}
+                {% endif %}
+              </dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Approval status" %}</dt>
+              <dd class="w3-margin-0">{{ preparation.approval_status }}</dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Approval date" %}</dt>
+              <dd class="w3-margin-0">
+                {% if preparation.approval_date %}
+                  {{ preparation.approval_date|date:"Y-m-d" }}
+                {% else %}
+                  {% trans "Pending" %}
+                {% endif %}
+              </dd>
+            </div>
+            <div class="w3-margin-bottom">
+              <dt class="w3-text-gray">{% trans "Curator comments" %}</dt>
+              <dd class="w3-margin-0">
+                {% if preparation.curator_comments %}
+                  {{ preparation.curator_comments }}
+                {% else %}
+                  {% trans "No comments" %}
+                {% endif %}
+              </dd>
+            </div>
+          </dl>
+        </div>
+      </article>
     </div>
   </section>
 
-  <section class="preparation-detail-section" aria-labelledby="preparation-method-heading">
-    <header class="preparation-section-header">
-      <h2 id="preparation-method-heading" class="w3-margin-0">{% trans "Methods and materials" %}</h2>
-    </header>
-    <div class="w3-responsive">
-      <table class="w3-table-all w3-small preparation-data-table">
-        <tbody>
-          <tr><th scope="row">{% trans "Condition before" %}</th><td>{{ preparation.condition_before|default:"—" }}</td></tr>
-          <tr><th scope="row">{% trans "Condition after" %}</th><td>{{ preparation.condition_after|default:"—" }}</td></tr>
-          <tr><th scope="row">{% trans "Method" %}</th><td>{{ preparation.preparation_method|default:"—" }}</td></tr>
-          <tr><th scope="row">{% trans "Chemicals used" %}</th><td>{{ preparation.chemicals_used|default:"—" }}</td></tr>
-          <tr>
-            <th scope="row">{% trans "Materials used" %}</th>
-            <td>
-              {% for material in preparation.materials_used.all %}
-                {{ material.name }}{% if not forloop.last %}, {% endif %}
-              {% empty %}
-                {% trans "None recorded" %}
-              {% endfor %}
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </section>
-
-  <section class="preparation-detail-section" aria-labelledby="preparation-approval-heading">
-    <header class="preparation-section-header">
-      <h2 id="preparation-approval-heading" class="w3-margin-0">{% trans "Curatorial review" %}</h2>
-      {% if user.is_superuser or user|has_group:"Curators" and user != preparation.preparator %}
-        <a href="{% url 'preparation_approve' preparation.id %}" class="w3-button w3-green w3-round">
-          <i class="fa-solid fa-check" aria-hidden="true"></i>
-          <span class="w3-margin-left">{% trans "Curate" %}</span>
-        </a>
-      {% endif %}
-    </header>
-    <div class="w3-responsive">
-      <table class="w3-table-all w3-small preparation-data-table">
-        <tbody>
-          <tr>
-            <th scope="row">{% trans "Curator" %}</th>
-            <td>{% if preparation.curator %}{{ preparation.curator }}{% else %}{% trans "Not assigned" %}{% endif %}</td>
-          </tr>
-          <tr><th scope="row">{% trans "Approval status" %}</th><td>{{ preparation.approval_status }}</td></tr>
-          <tr>
-            <th scope="row">{% trans "Approval date" %}</th>
-            <td>{% if preparation.approval_date %}{{ preparation.approval_date|date:"Y-m-d" }}{% else %}{% trans "Pending" %}{% endif %}</td>
-          </tr>
-          <tr>
-            <th scope="row">{% trans "Curator comments" %}</th>
-            <td>{% if preparation.curator_comments %}{{ preparation.curator_comments }}{% else %}{% trans "No comments" %}{% endif %}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </section>
-
-  <section class="preparation-detail-section" aria-labelledby="preparation-history-heading">
-    <header class="preparation-section-header">
+  <section class="w3-margin-top" aria-labelledby="preparation-history-heading">
+    <header class="w3-padding-16">
       <h2 id="preparation-history-heading" class="w3-margin-0">
         <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
         <span class="w3-margin-left">{% trans "Change history" %}</span>
@@ -112,8 +158,8 @@
     {% include "cms/history_table.html" with entries=history_entries table_id="preparation-history-table" caption=preparation_history_caption empty_message=preparation_history_empty %}
   </section>
 
-  <section class="preparation-detail-section" aria-labelledby="preparation-media-heading">
-    <header class="preparation-section-header">
+  <section class="w3-margin-top" aria-labelledby="preparation-media-heading">
+    <header class="w3-row w3-padding-16">
       <div class="w3-col s12 m6">
         <h2 id="preparation-media-heading" class="w3-margin-0">
           <i class="fa-solid fa-photo-film" aria-hidden="true"></i>

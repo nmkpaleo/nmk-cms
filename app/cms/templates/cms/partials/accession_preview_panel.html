@@ -1,51 +1,54 @@
 {% load i18n custom_filters user_tags %}
 
-<section class="w3-margin-top accession-summary-panel" aria-labelledby="accession-summary-heading">
-  <section class="accession-detail-section" aria-labelledby="accession-summary-heading">
-    <header class="accession-section-header">
-      <h2 id="accession-summary-heading" class="w3-margin-0">{% trans "Accession overview" %}</h2>
-    </header>
-    <div class="w3-responsive">
-      <table class="w3-table-all w3-small accession-overview-table">
-        <tbody>
-          <tr>
-            <th scope="row">{% trans "Accession number" %}</th>
-            <td>{{ accession }}</td>
-          </tr>
-          <tr>
-            <th scope="row">{% trans "Locality" %}</th>
-            <td>{{ accession.specimen_prefix }}</td>
-          </tr>
-          <tr>
-            <th scope="row">{% trans "Site / Collecting Area" %}</th>
-            <td id="accession-preview-site-area">
-              {% if accession.site_area %}{{ accession.site_area }}{% elif accession.site %}{{ accession.site }}{% else %}—{% endif %}
-            </td>
-          </tr>
-          <tr>
-            <th scope="row">{% trans "Type specimen" %}</th>
-            <td>{{ accession.type_status|default:"—" }}</td>
-          </tr>
+<section class="w3-margin-top" aria-labelledby="accession-summary-heading">
+  <div class="w3-row-padding accession-upper-grid">
+    <article class="w3-col s12 l5">
+      <div class="w3-card w3-round w3-white w3-padding">
+        <h2 id="accession-summary-heading" class="w3-margin-top">{% trans "Accession overview" %}</h2>
+        <dl class="w3-margin-top">
+          <div class="w3-margin-bottom">
+            <dt class="w3-text-gray">{% trans "Accession number" %}</dt>
+            <dd class="w3-margin-0">{{ accession }}</dd>
+          </div>
+          <div class="w3-margin-bottom">
+            <dt class="w3-text-gray">{% trans "Locality" %}</dt>
+            <dd class="w3-margin-0">{{ accession.specimen_prefix }}</dd>
+          </div>
+          <div class="w3-margin-bottom">
+            <dt class="w3-text-gray">{% trans "Site / Collecting Area" %}</dt>
+            <dd id="accession-preview-site-area" class="w3-margin-0">
+              {% if accession.site_area %}
+                {{ accession.site_area }}
+              {% elif accession.site %}
+                {{ accession.site }}
+              {% else %}
+                —
+              {% endif %}
+            </dd>
+          </div>
+          <div class="w3-margin-bottom">
+            <dt class="w3-text-gray">{% trans "Type specimen" %}</dt>
+            <dd class="w3-margin-0">{{ accession.type_status|default:"—" }}</dd>
+          </div>
           {% if not preview_mode %}
             {% if user.is_superuser or user|has_group:"Collection Managers" %}
-              <tr>
-                <th scope="row">{% trans "Accessioned by" %}</th>
-                <td>{{ accession.accessioned_by|default:"—" }}</td>
-              </tr>
+              <div class="w3-margin-bottom">
+                <dt class="w3-text-gray">{% trans "Accessioned by" %}</dt>
+                <dd class="w3-margin-0">{{ accession.accessioned_by|default:"—" }}</dd>
+              </div>
             {% endif %}
           {% endif %}
-          <tr>
-            <th scope="row">{% trans "General comment" %}</th>
-            <td>{{ accession.comment|default:"—" }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </section>
+          <div class="w3-margin-bottom">
+            <dt class="w3-text-gray">{% trans "General comment" %}</dt>
+            <dd class="w3-margin-0">{{ accession.comment|default:"—" }}</dd>
+          </div>
+        </dl>
+      </div>
+    </article>
 
-  <div class="accession-detail-sections">
-      <section class="w3-margin-bottom accession-detail-section" aria-labelledby="accession-specimens-heading">
-        <header class="w3-row w3-padding-16 accession-section-header">
+    <div class="w3-col s12 l7" aria-labelledby="accession-specimens-heading">
+      <section class="w3-margin-bottom" aria-labelledby="accession-specimens-heading">
+        <header class="w3-row w3-padding-16">
           <div class="w3-col s12 m6">
             <h2 id="accession-specimens-heading" class="w3-margin-0">
               <i class="fa-solid fa-bone" aria-hidden="true"></i>
@@ -164,8 +167,8 @@
       </section>
 
       {% if preview_mode %}
-        <section class="w3-margin-bottom accession-detail-section" aria-labelledby="accession-fieldslips-heading">
-          <header class="w3-padding-16 accession-section-header">
+        <section class="w3-margin-bottom" aria-labelledby="accession-fieldslips-heading">
+          <header class="w3-padding-16">
             <h2 id="accession-fieldslips-heading" class="w3-margin-0">
               <i class="fa-solid fa-map-location-dot" aria-hidden="true"></i>
               <span class="w3-margin-left">{% trans "Field slips" %}</span>
@@ -228,8 +231,8 @@
           </div>
         </section>
       {% elif user.is_superuser or user|has_group:"Collection Managers" %}
-        <section class="w3-margin-bottom accession-detail-section" aria-labelledby="accession-fieldslip-links-heading">
-          <header class="w3-row w3-padding-16 accession-section-header">
+        <section class="w3-margin-bottom" aria-labelledby="accession-fieldslip-links-heading">
+          <header class="w3-row w3-padding-16">
             <div class="w3-col s12">
               <h2 id="accession-fieldslip-links-heading" class="w3-margin-0">
                 <i class="fa-solid fa-link" aria-hidden="true"></i>
@@ -237,7 +240,7 @@
               </h2>
             </div>
           </header>
-          <div class="accession-section-content">
+          <div class="w3-card w3-round w3-white w3-padding">
             <div class="w3-responsive">
               <table class="w3-table-all w3-hoverable w3-small">
                 <thead>
@@ -269,7 +272,7 @@
               <div class="w3-col s12 m6">
                 <h3 class="w3-margin-top">{% trans "Link existing field slip" %}</h3>
                 {{ add_fieldslip_form.media }}
-                <form id="accession-fieldslip-link-form" method="post" action="{% url 'accession_add_fieldslip' accession.pk %}" class="w3-margin-top">
+                <form method="post" action="{% url 'accession_add_fieldslip' accession.pk %}" class="w3-margin-top">
                   {% csrf_token %}
                   <div class="w3-margin-bottom">
                     {{ add_fieldslip_form }}
@@ -339,9 +342,9 @@
         </section>
       {% endif %}
 
-      <section class="w3-margin-bottom accession-detail-section" aria-labelledby="accession-horizon-heading">
-        <div class="accession-section-content">
-          <header class="w3-row accession-section-header">
+      <section class="w3-margin-bottom" aria-labelledby="accession-horizon-heading">
+        <div class="w3-card w3-round w3-white w3-padding">
+          <div class="w3-row">
             <div class="w3-col s12 m6">
               <h2 id="accession-horizon-heading" class="w3-margin-0">{% trans "Horizon" %}</h2>
             </div>
@@ -355,7 +358,7 @@
                 </div>
               {% endif %}
             {% endif %}
-          </header>
+          </div>
           <div class="w3-responsive w3-margin-top">
             <table class="w3-table-all w3-hoverable w3-small">
               <thead>
@@ -381,10 +384,11 @@
         </div>
       </section>
     </div>
+  </div>
 
   <div class="w3-margin-top accession-lower-area">
-    <section class="w3-margin-bottom accession-detail-section" aria-labelledby="accession-references-heading">
-      <header class="w3-row w3-padding-16 accession-section-header">
+    <section class="w3-margin-bottom" aria-labelledby="accession-references-heading">
+      <header class="w3-row w3-padding-16">
         <div class="w3-col s12 m6">
           <h2 id="accession-references-heading" class="w3-margin-0">
             <i class="fa-solid fa-book" aria-hidden="true"></i>
@@ -574,8 +578,8 @@
       {% endif %}
     </section>
 
-    <section class="w3-margin-bottom accession-detail-section" aria-labelledby="accession-media-heading">
-      <header class="w3-row w3-padding-16 accession-section-header">
+    <section class="w3-margin-bottom" aria-labelledby="accession-media-heading">
+      <header class="w3-row w3-padding-16">
         <div class="w3-col s12 m6">
           <h2 id="accession-media-heading" class="w3-margin-0">
             <i class="fa-solid fa-photo-film" aria-hidden="true"></i>

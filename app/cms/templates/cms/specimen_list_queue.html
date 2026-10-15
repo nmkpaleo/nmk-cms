@@ -2,8 +2,8 @@
 {% load i18n %}
 
 {% block content %}
-<main class="w3-container w3-content review-ui-page specimen-review-queue" style="max-width: 1200px;">
-  <header class="w3-padding-16 review-page-header">
+<main class="w3-container w3-content" style="max-width: 1200px;">
+  <header class="w3-padding-16">
     <h1 class="w3-xxlarge">
       <i class="fa fa-list" aria-hidden="true"></i>
       {% trans "Specimen list review queue" %}
@@ -13,7 +13,7 @@
     </p>
   </header>
 
-  <section class="w3-card w3-white w3-padding w3-margin-bottom review-panel review-filter-panel">
+  <section class="w3-card w3-white w3-padding w3-margin-bottom">
     <form method="get" class="w3-container">
       <div class="w3-row-padding">
         {% for field in filter.form %}
@@ -32,9 +32,9 @@
     </form>
   </section>
 
-  <section class="w3-card w3-white w3-padding review-panel">
+  <section class="w3-card w3-white w3-padding">
     <div class="w3-responsive">
-      <table class="w3-table w3-striped review-data-table">
+      <table class="w3-table w3-striped">
         <thead>
           <tr>
             <th>{% trans "Source" %}</th>
