@@ -4,7 +4,7 @@
 {% block title %}{% blocktrans with accession_number=accession %}Accession {{ accession_number }}{% endblocktrans %}{% endblock %}
 
 {% block content %}
-<main class="w3-container w3-margin-top" role="main">
+<main class="w3-container w3-margin-top accession-detail-page" role="main">
   <header class="w3-row w3-padding-16 w3-border-bottom w3-white w3-round-large" aria-labelledby="accession-details-heading">
     <div class="w3-col s12 m8">
       <h1 id="accession-details-heading" class="w3-margin-0">
@@ -25,8 +25,8 @@
   {% include "cms/partials/accession_preview_panel.html" with preview_mode=False can_edit_accession_rows=can_edit_accession_rows specimen_table_empty_colspan=specimen_table_empty_colspan %}
 
   {% if user.is_authenticated %}
-    <section class="w3-margin-top accession-lower-area" aria-labelledby="accession-comments-heading">
-      <header class="w3-row w3-padding-16">
+    <section class="w3-margin-top accession-lower-area accession-detail-section" aria-labelledby="accession-comments-heading">
+      <header class="accession-section-header">
         <div class="w3-col s12 m6">
           <h2 id="accession-comments-heading" class="w3-margin-0">
             <i class="fa-solid fa-comments" aria-hidden="true"></i>
@@ -215,6 +215,30 @@
       hideModal();
       window.location.reload();
     };
+  })();
+
+  (function () {
+    const actionPanel = document.getElementById("accession-fieldslip-actions");
+    const linkForm = document.getElementById("accession-fieldslip-link-form");
+    const fieldSlipSelect = linkForm ? linkForm.querySelector('select[name="fieldslip"]') : null;
+    const select2jQuery = window.jQuery || (window.django && window.django.jQuery);
+
+    if (!actionPanel || !fieldSlipSelect || !select2jQuery || !select2jQuery.fn || !select2jQuery.fn.select2) {
+      return;
+    }
+
+    const field = select2jQuery(fieldSlipSelect);
+    if (field.data("select2")) {
+      field.select2("destroy");
+    }
+
+    field.select2({
+      allowClear: true,
+      dropdownParent: select2jQuery(actionPanel),
+      minimumResultsForSearch: 0,
+      placeholder: fieldSlipSelect.dataset.placeholder || "Select a Field Slip",
+      width: "100%"
+    });
   })();
 
   (function () {
