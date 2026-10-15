@@ -76,7 +76,12 @@ def apply_storage_clean(groups, parent_choices, user):
             if not records:
                 continue
             parent_id = parent_choices.get(group.normalized)
-            parent = Storage.objects.filter(pk=parent_id).first() if parent_id else None
+            if parent_id:
+                parent = Storage.objects.filter(pk=parent_id).first()
+            elif group.meaningful_parents:
+                parent = group.meaningful_parents[0]
+            else:
+                parent = Storage.objects.filter(area="-Undefined").first()
             target = records[0]
             target.area, target.parent_area = group.normalized, parent
             target.save(update_fields=["area", "parent_area"])
