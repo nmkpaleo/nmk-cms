@@ -1,4 +1,4 @@
-{% load i18n allauth account form_widgets static socialaccount %}
+{% load i18n allauth account form_widgets %}
 {% if not SOCIALACCOUNT_ONLY %}
     {% url 'account_login' as login_url %}
     <form method="post"
@@ -61,30 +61,5 @@
 {% endif %}
 
 {% if SOCIALACCOUNT_ENABLED %}
-    {% get_providers as socialaccount_providers %}
-    {% for provider in socialaccount_providers %}
-        {% if provider.id == "orcid" %}
-            {% provider_login_url provider process="login" as orcid_login_url %}
-            <div class="w3-section">
-                {% if not SOCIALACCOUNT_ONLY %}
-                    <div class="w3-center w3-border-top w3-border-light-grey w3-padding-small">
-                        <span class="w3-small w3-text-grey">{% trans "Or continue with" %}</span>
-                    </div>
-                {% endif %}
-                <a class="w3-button w3-green w3-round-xlarge w3-block w3-large auth-orcid-button"
-                   href="{{ orcid_login_url }}"
-                   rel="nofollow"
-                   aria-label='{% trans "Continue with ORCID" %}'>
-                    <img src="{% static 'images/orcid-logo.png' %}"
-                         width="28"
-                         height="28"
-                         alt="{% trans 'ORCID logo' %}"
-                         class="auth-orcid-logo"
-                         loading="lazy">
-                    <span>{% trans "Sign in with ORCID" %}</span>
-                </a>
-            </div>
-        {% endif %}
-    {% endfor %}
-    {% include "socialaccount/snippets/login_extra.html" %}
+    {% include "socialaccount/snippets/login.html" with page_layout="entrance" %}
 {% endif %}
