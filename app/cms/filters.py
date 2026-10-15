@@ -75,6 +75,12 @@ class AccessionFilter(django_filters.FilterSet):
         label="Site / Collecting Area",
         widget=forms.Select(attrs={"class": "w3-select"}),
     )
+    storage = django_filters.ModelChoiceFilter(
+        queryset=Storage.objects.none(),
+        label="Storage",
+        method="filter_by_storage",
+        widget=forms.Select(attrs={"class": "w3-select"}),
+    )
     accessioned_by = django_filters.ModelChoiceFilter(
         queryset=User.objects.order_by("last_name", "first_name", "username"),
         label="Accessioned By",
@@ -139,6 +145,7 @@ class AccessionFilter(django_filters.FilterSet):
             "specimen_no",
             "specimen_prefix",
             "site",
+            "storage",
             "accessioned_by",
             "specimen_suffix",
             "comment",
@@ -162,6 +169,12 @@ class AccessionFilter(django_filters.FilterSet):
         self.filters["site"].queryset = self.filters["site"].queryset.filter(
             pk__in=site_ids
         )
+        storage_ids = accession_queryset.filter(
+            accessionrow__storage__isnull=False
+        ).values("accessionrow__storage_id")
+        self.filters["storage"].queryset = Storage.objects.filter(
+            pk__in=storage_ids
+        ).order_by("area")
         self.filters["accessioned_by"].queryset = self.filters[
             "accessioned_by"
         ].queryset.filter(pk__in=accessioned_by_ids)
@@ -193,6 +206,11 @@ class AccessionFilter(django_filters.FilterSet):
         return queryset.filter(
             accessioned_by__organisation_membership__organisation=value
         ).distinct()
+
+    def filter_by_storage(self, queryset, name, value):
+        if not value:
+            return queryset
+        return queryset.filter(accessionrow__storage=value).distinct()
 
     def filter_by_taxon(self, queryset, name, value):
         if not value:
