@@ -1,6 +1,23 @@
 import pytest
 
-from app.cms.resources import GeologicalTimesWidget
+from app.cms.models import Storage
+from app.cms.resources import GeologicalTimesWidget, StorageResource
+
+
+@pytest.mark.django_db
+def test_storage_resource_exports_and_imports_parent_area_name():
+    parent = Storage.objects.create(area="Main Room")
+    child = Storage.objects.create(area="Cabinet 1", parent_area=parent)
+    resource = StorageResource()
+
+    exported = resource.export(Storage.objects.filter(pk=child.pk))
+    assert exported.dict[0]["parent_area"] == "Main Room"
+
+    Storage.objects.filter(pk=child.pk).delete()
+    resource.import_data(exported, dry_run=False)
+
+    imported = Storage.objects.get(area="Cabinet 1")
+    assert imported.parent_area == parent
 
 
 @pytest.mark.parametrize(
