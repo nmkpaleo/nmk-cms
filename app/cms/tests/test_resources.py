@@ -1,4 +1,6 @@
 import pytest
+from crum import set_current_user
+from django.contrib.auth import get_user_model
 
 from app.cms.models import Storage
 from app.cms.resources import GeologicalTimesWidget, StorageResource
@@ -6,6 +8,18 @@ from app.cms.resources import GeologicalTimesWidget, StorageResource
 
 @pytest.mark.django_db
 def test_storage_resource_exports_and_imports_parent_area_name():
+    user = get_user_model().objects.create_user(
+        username="storage-resource-test",
+        password="test-password",
+    )
+    set_current_user(user)
+    try:
+        _test_storage_resource_round_trip()
+    finally:
+        set_current_user(None)
+
+
+def _test_storage_resource_round_trip():
     parent = Storage.objects.create(area="Main Room")
     child = Storage.objects.create(area="Cabinet 1", parent_area=parent)
     resource = StorageResource()
