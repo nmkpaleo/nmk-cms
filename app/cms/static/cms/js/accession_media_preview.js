@@ -60,7 +60,13 @@
     function centerPreview() {
       previewContainer.classList.add(CENTERED_CLASS);
       previewContainer.style.removeProperty('left');
-      previewContainer.style.removeProperty('top');
+      var navigation = document.querySelector('.site-navigation');
+      var navigationBottom = navigation
+        ? Math.max(0, navigation.getBoundingClientRect().bottom)
+        : 0;
+      var availableHeight = Math.max(0, window.innerHeight - navigationBottom);
+      previewContainer.style.top =
+        navigationBottom + availableHeight / 2 + 'px';
     }
 
     function uncenterPreview() {
