@@ -1566,6 +1566,7 @@ footer[aria-label="Application version"] {
 
 @media screen and (min-width: 993px) {
     .accession-media-hover-preview {
+        max-width: 720px;
         max-width: min(720px, calc(100vw - 32px));
     }
 }
