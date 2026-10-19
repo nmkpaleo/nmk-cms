@@ -77,11 +77,13 @@
       gap: 0.75rem;
       padding: 0.25rem 0;
     }
-    .qc-chip[data-chip-type="ident"] .qc-field {
+    .qc-chip[data-chip-type="ident"] .qc-field,
+    .qc-chip[data-chip-type="specimen"] .qc-field {
       grid-template-columns: minmax(150px, max-content) minmax(0, 1fr);
       align-items: flex-start;
     }
-    .qc-chip[data-chip-type="ident"] .qc-label {
+    .qc-chip[data-chip-type="ident"] .qc-label,
+    .qc-chip[data-chip-type="specimen"] .qc-label {
       margin-bottom: 0;
     }
     .qc-label {
@@ -182,6 +184,11 @@
     }
     .qc-section-heading h3 {
       margin: 0;
+    }
+    .qc-section-actions {
+      display: flex;
+      justify-content: flex-start;
+      margin: 0.5rem 0 1rem;
     }
     .qc-inline-note {
       color: #666;
@@ -300,6 +307,7 @@
       gap: 0.5rem;
       flex-wrap: wrap;
       min-height: 2.5rem;
+      align-items: flex-start;
     }
     .qc-chip-zone__empty {
       margin-top: 0.5rem;
@@ -361,7 +369,28 @@
       flex-shrink: 0;
     }
     .qc-chip--selected {
+      flex: 1 1 100%;
+      width: 100%;
+      border-radius: 12px;
       box-shadow: 0 0 0 2px #2563eb inset;
+    }
+    .qc-chip--selected .qc-chip__fields {
+      width: 100%;
+    }
+    .qc-chip--selected .qc-field-grid--compact {
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    }
+    .qc-chip--selected[data-chip-type="ident"] .qc-field-grid--compact {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .qc-chip--selected[data-chip-type="specimen"] .qc-field-grid--compact {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .qc-chip--selected[data-chip-type="ident"] .qc-field {
+      grid-template-columns: minmax(150px, max-content) minmax(0, 1fr);
+    }
+    .qc-chip--selected[data-chip-type="specimen"] .qc-field {
+      grid-template-columns: minmax(150px, max-content) minmax(0, 1fr);
     }
     .qc-chip.is-dragging {
       opacity: 0.6;
@@ -447,8 +476,9 @@
       min-width: 0;
     }
     .qc-add-row-button {
-      display: inline-flex;
+      display: flex;
       align-items: center;
+      width: fit-content;
       max-width: 100%;
       white-space: normal;
     }

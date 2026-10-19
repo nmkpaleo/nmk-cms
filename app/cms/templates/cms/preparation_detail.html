@@ -24,7 +24,10 @@
 
   <section class="preparation-detail-section" aria-labelledby="preparation-overview-heading">
     <header class="preparation-section-header">
-      <h2 id="preparation-overview-heading" class="w3-margin-0">{% trans "Preparation overview" %}</h2>
+      <h2 id="preparation-overview-heading" class="w3-margin-0">
+        <i class="fa-solid fa-screwdriver-wrench" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "Preparation overview" %}</span>
+      </h2>
     </header>
     <div class="w3-responsive">
       <table class="w3-table-all w3-small preparation-data-table">
@@ -45,7 +48,10 @@
 
   <section class="preparation-detail-section" aria-labelledby="preparation-method-heading">
     <header class="preparation-section-header">
-      <h2 id="preparation-method-heading" class="w3-margin-0">{% trans "Methods and materials" %}</h2>
+      <h2 id="preparation-method-heading" class="w3-margin-0">
+        <i class="fa-solid fa-flask" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "Methods and materials" %}</span>
+      </h2>
     </header>
     <div class="w3-responsive">
       <table class="w3-table-all w3-small preparation-data-table">
@@ -71,7 +77,10 @@
 
   <section class="preparation-detail-section" aria-labelledby="preparation-approval-heading">
     <header class="preparation-section-header">
-      <h2 id="preparation-approval-heading" class="w3-margin-0">{% trans "Curatorial review" %}</h2>
+      <h2 id="preparation-approval-heading" class="w3-margin-0">
+        <i class="fa-solid fa-clipboard-check" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "Curatorial review" %}</span>
+      </h2>
       {% if user.is_superuser or user|has_group:"Curators" and user != preparation.preparator %}
         <a href="{% url 'preparation_approve' preparation.id %}" class="w3-button w3-green w3-round">
           <i class="fa-solid fa-check" aria-hidden="true"></i>

@@ -1172,6 +1172,12 @@ class ReferenceResource(resources.ModelResource):
 
 
 class StorageResource(resources.ModelResource):
+    parent_area = fields.Field(
+        column_name="parent_area",
+        attribute="parent_area",
+        widget=ForeignKeyWidget(Storage, "area"),
+    )
+
     class Meta:
         model = Storage
         skip_unchanged = True

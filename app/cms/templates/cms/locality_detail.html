@@ -24,7 +24,10 @@
 
   <section class="w3-margin-top locality-detail-section" aria-labelledby="locality-metadata-heading">
     <header class="locality-section-header">
-      <h2 id="locality-metadata-heading" class="w3-margin-0">{% trans "Locality overview" %}</h2>
+      <h2 id="locality-metadata-heading" class="w3-margin-0">
+        <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "Locality overview" %}</span>
+      </h2>
     </header>
     <div class="w3-responsive">
       <table class="w3-table-all w3-small locality-overview-table">
@@ -64,7 +67,10 @@
     {% if places|length %}
       <section class="w3-margin-top locality-detail-section" aria-labelledby="locality-places-heading">
         <header class="locality-section-header">
-          <h2 id="locality-places-heading" class="w3-margin-0">{% trans "Places within this locality" %}</h2>
+          <h2 id="locality-places-heading" class="w3-margin-0">
+            <i class="fa-solid fa-map-location-dot" aria-hidden="true"></i>
+            <span class="w3-margin-left">{% trans "Places within this locality" %}</span>
+          </h2>
         </header>
         <div class="w3-responsive">
           <table class="w3-table-all w3-hoverable w3-small">
