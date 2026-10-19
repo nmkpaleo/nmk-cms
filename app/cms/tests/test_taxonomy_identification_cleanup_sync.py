@@ -22,6 +22,16 @@ from cms.taxonomy.sync import AcceptedRecord, NowTaxonomySyncService, SynonymRec
 pytestmark = pytest.mark.django_db
 
 
+@pytest.fixture(autouse=True)
+def authenticated_model_user(db, django_user_model):
+    user = django_user_model.objects.create_user(username="taxonomy-cleanup-sync-user", password="password")
+    set_current_user(user)
+    try:
+        yield
+    finally:
+        set_current_user(None)
+
+
 def _taxon(name, *, status=TaxonStatus.ACCEPTED, accepted_taxon=None):
     return Taxon.objects.create(
         taxon_name=name,
@@ -89,7 +99,7 @@ def test_cleanup_sync_action_reports_success(client, django_user_model):
         set_current_user(None)
 
     assert response.status_code == 302
-    assert b"Taxon 'Hipparion sitifense' was synchronized." in client.get(response.url).content
+    assert b"Taxon &#x27;Hipparion sitifense&#x27; was synchronized." in client.get(response.url).content
 
 
 def test_cleanup_sync_action_includes_issue_context(client, django_user_model):
