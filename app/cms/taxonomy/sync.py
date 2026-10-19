@@ -291,9 +291,13 @@ class NowTaxonomySyncService:
             if rank in SKIPPED_RANKS:
                 logger.debug("Skipping NOW synonym row with ignored rank '%s': %s", rank, row)
                 continue
+            rank_identity = _record_rank(rank)
+            if taxon_identity(syn_name, rank_identity) == taxon_identity(accepted_name, rank_identity):
+                logger.debug("Skipping NOW synonym row that refers to itself: %s", row)
+                continue
             author = _normalize_label(row.get("author", ""))
             source_version = _normalize_label(row.get("STG_TIME_STAMP", ""))
-            accepted_record = accepted_by_identity.get((accepted_name.lower(), _record_rank(rank)))
+            accepted_record = accepted_by_identity.get((accepted_name.lower(), rank_identity))
             accepted_external_id = (
                 accepted_record.external_id if accepted_record else build_accepted_external_id(accepted_name, rank)
             )
@@ -1040,4 +1044,3 @@ def apply_changes(instance: Taxon, changes: Dict[str, Any]) -> None:
     for field, value in changes.items():
         setattr(instance, field, value)
     instance.identity_key = taxon_identity(instance.taxon_name, instance.taxon_rank)
-

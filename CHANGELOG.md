@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Ignore self-referential taxonomy synonym records so cleanup retains accepted taxa and repairs invalid local self-links.
+
 - Add Storage cleaning and merging in the admin, including supported label normalization, pipe-delimited deduplication, relation preservation, parent conflict choices, and `-Undefined` fallback parents.
 - Add an accession-list storage filter for superusers and Collection Managers, and sort the Storage admin list by Area by default.
 

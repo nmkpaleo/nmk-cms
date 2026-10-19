@@ -12,6 +12,14 @@ from .gbif import GbifClient, GbifNoMatchError
 from .sync import NowTaxonomySyncService, SynonymRecord, SyncIssue, _latest_version, _record_rank
 
 
+def _is_self_synonym(record):
+    return (
+        isinstance(record, SynonymRecord)
+        and taxon_identity(record.name, _record_rank(record.rank))
+        == taxon_identity(record.accepted_name, _record_rank(record.rank))
+    )
+
+
 class TaxonomySyncService(NowTaxonomySyncService):
     def __init__(self, http_get=None, gbif_get=None):
         super().__init__(http_get=http_get)
@@ -101,10 +109,16 @@ class TaxonomySyncService(NowTaxonomySyncService):
                 if known_non_mammals or not known_mammals:
                     issues.append(SyncIssue("gbif-match", str(exc), {"name": name, "rank": rank}))
 
+        candidates = [record for record in candidates if not _is_self_synonym(record)]
+
         # GBIF may resolve a local synonym to a mammal whose accepted name is
         # already in NOW, even though that accepted name was not locally entered.
         candidate_keys = {taxon_identity(r.name, _record_rank(r.rank)) for r in candidates}
-        additional_synonyms = [r for r in full_now_synonyms if taxon_identity(r.name, _record_rank(r.rank)) in candidate_keys]
+        additional_synonyms = [
+            r for r in full_now_synonyms
+            if not _is_self_synonym(r)
+            and taxon_identity(r.name, _record_rank(r.rank)) in candidate_keys
+        ]
         dependency_ids = {r.accepted_key for r in additional_synonyms}
         candidates.extend(additional_synonyms)
         candidates.extend(r for r in full_now_accepted if taxon_identity(r.name, _record_rank(r.rank)) in candidate_keys
@@ -208,6 +222,15 @@ class TaxonomySyncService(NowTaxonomySyncService):
             if taxon_identity(r.name, _record_rank(r.rank)) in accepted_keys
             or (r.external_source, r.external_id) in dependency_keys
         )
+        accepted_identity_keys = {
+            taxon_identity(record.name, _record_rank(record.rank))
+            for record in accepted
+        }
+        synonyms = [
+            record for record in synonyms
+            if not _is_self_synonym(record)
+            and taxon_identity(record.name, _record_rank(record.rank)) not in accepted_identity_keys
+        ]
         preview = self._build_preview(
             accepted,
             synonyms,

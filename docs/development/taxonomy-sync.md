@@ -18,6 +18,12 @@ validation lives in `gbif.py`; the shared diff/apply machinery remains in `sync.
 populate the source-independent `Taxon.identity_key`; bulk writers must compute it
 with `cms.taxon_identity.taxon_identity` when changing name/rank.
 
+NOW synonym rows that identify a taxon as its own accepted taxon are ignored.
+Single-name cleanup also gives an accepted record precedence over a synonym record
+for the same normalized name and rank. When an accepted record matches a local
+row whose synonym link points to itself, applying that accepted update clears the
+invalid link; unrelated dependent synonyms remain attached to the accepted row.
+
 GBIF is queried only for locally recorded names. Exact matches establish the class:
 NOW takes priority for Mammalia, GBIF for other classes and mammals missing in NOW.
 Source transitions reuse the existing row. Apply also links resolvable identification

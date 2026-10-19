@@ -434,9 +434,16 @@ def taxonomy_identification_cleanup_report(request):
                 if result.ok:
                     messages.success(request, _("Taxon '%(name)s' was synchronized.") % {"name": name})
                 else:
+                    issue_messages = []
+                    for issue in preview.issues:
+                        context = ", ".join(f"{key}: {value}" for key, value in issue.context.items())
+                        description = f"{issue.code}: {issue.message}"
+                        if context:
+                            description += f" ({context})"
+                        issue_messages.append(description)
                     messages.warning(request, _("Taxon '%(name)s' could not be synchronized: %(issues)s") % {
                         "name": name,
-                        "issues": "; ".join(issue.message for issue in preview.issues) or _("no exact match"),
+                        "issues": "; ".join(issue_messages) or _("no exact match"),
                     })
             except Exception as exc:
                 messages.error(request, _("Taxon '%(name)s' could not be synchronized: %(error)s") % {
