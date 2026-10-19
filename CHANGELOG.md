@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Sort the taxonomy identification cleanup report by same-taxon count, highest first.
+
 - Ignore self-referential taxonomy synonym records so cleanup retains accepted taxa and repairs invalid local self-links.
 
 - Add Storage cleaning and merging in the admin, including supported label normalization, pipe-delimited deduplication, relation preservation, parent conflict choices, and `-Undefined` fallback parents.
