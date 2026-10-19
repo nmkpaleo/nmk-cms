@@ -62,7 +62,7 @@
 
 {% if SOCIALACCOUNT_ENABLED %}
     {% get_providers as socialaccount_providers %}
-    {% for provider in socialaccount_providers %}
+    {% with provider=socialaccount_providers.0 %}
         {% if provider.id == "orcid" %}
             {% ifchanged provider.id %}
                 {% provider_login_url provider process="login" as orcid_login_url %}
@@ -87,6 +87,5 @@
                 </div>
             {% endifchanged %}
         {% endif %}
-    {% endfor %}
-    {% include "socialaccount/snippets/login_extra.html" %}
+    {% endwith %}
 {% endif %}
