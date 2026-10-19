@@ -5,13 +5,51 @@
 
 {% block content %}
 <div class="w3-content w3-padding-32 w3-animate-opacity">
-  <h2 class="w3-center w3-margin-bottom">Accession Distribution per Locality</h2>
+  <h2 class="w3-center w3-margin-bottom">Accession Reports</h2>
 
   {% if message %}
     <p class="w3-center w3-text-grey">{{ message }}</p>
   {% else %}
+    <!-- Progress chart -->
+    {% if chart_progress %}
+      <div class="w3-card w3-round-large w3-padding-large w3-white w3-margin-bottom">
+        <div class="w3-row-padding w3-margin-bottom">
+          <div class="w3-col s12 m8">
+            <h3 class="w3-margin-top">
+              <i class="fa-solid fa-chart-line" aria-hidden="true"></i>
+              <span class="w3-margin-left">Collection data progress over time</span>
+            </h3>
+            <p class="w3-text-grey">
+              Cumulative accession records added to the CMS, shown as a progress line over time.
+            </p>
+          </div>
+          <div class="w3-col s12 m4">
+            <div class="w3-row-padding">
+              <div class="w3-col s6">
+                <div class="w3-padding w3-round-large w3-light-grey w3-center">
+                  <strong class="w3-xlarge">{{ progress_summary.total }}</strong>
+                  <div class="w3-small w3-text-grey">Total records</div>
+                </div>
+              </div>
+              <div class="w3-col s6">
+                <div class="w3-padding w3-round-large w3-pale-green w3-center">
+                  <strong class="w3-xlarge">{{ progress_summary.latest_period }}</strong>
+                  <div class="w3-small w3-text-grey">Latest period</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        {{ chart_progress|safe }}
+      </div>
+    {% endif %}
+
     <!-- Locality chart -->
     <div class="w3-card w3-round-large w3-padding-large w3-white w3-margin-bottom">
+      <h3 class="w3-margin-top">
+        <i class="fa-solid fa-map-location-dot" aria-hidden="true"></i>
+        <span class="w3-margin-left">Accessions per locality</span>
+      </h3>
       {{ chart_locality|safe }}
     </div>
 
