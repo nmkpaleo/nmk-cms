@@ -30,7 +30,10 @@
 
   <section class="w3-margin-top place-detail-section" aria-labelledby="place-metadata-heading">
     <header class="place-section-header">
-      <h2 id="place-metadata-heading" class="w3-margin-0">{% trans "Place overview" %}</h2>
+      <h2 id="place-metadata-heading" class="w3-margin-0">
+        <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "Place overview" %}</span>
+      </h2>
     </header>
     <div class="w3-responsive">
       <table class="w3-table-all w3-small place-overview-table">
@@ -70,7 +73,10 @@
 
   <section class="w3-margin-top place-detail-section" aria-labelledby="place-children-heading">
     <header class="place-section-header">
-      <h2 id="place-children-heading" class="w3-margin-0">{% trans "Lower geography" %}</h2>
+      <h2 id="place-children-heading" class="w3-margin-0">
+        <i class="fa-solid fa-sitemap" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "Lower geography" %}</span>
+      </h2>
     </header>
     <div class="w3-responsive">
       <table class="w3-table-all w3-hoverable w3-small">
@@ -93,7 +99,10 @@
   {% if place.related_place %}
     <section class="w3-margin-top place-detail-section" aria-labelledby="place-related-heading">
       <header class="place-section-header">
-        <h2 id="place-related-heading" class="w3-margin-0">{% trans "Related place" %}</h2>
+        <h2 id="place-related-heading" class="w3-margin-0">
+          <i class="fa-solid fa-link" aria-hidden="true"></i>
+          <span class="w3-margin-left">{% trans "Related place" %}</span>
+        </h2>
       </header>
       <div class="w3-responsive">
         <table class="w3-table-all w3-small place-overview-table">
@@ -115,7 +124,10 @@
   <section class="w3-margin-top place-detail-section" aria-labelledby="place-accessions-heading">
     <header class="place-section-header place-accessions-header">
       <div>
-        <h2 id="place-accessions-heading" class="w3-margin-0">{% trans "Accessions" %}</h2>
+        <h2 id="place-accessions-heading" class="w3-margin-0">
+          <i class="fa-solid fa-box-archive" aria-hidden="true"></i>
+          <span class="w3-margin-left">{% trans "Accessions" %}</span>
+        </h2>
         <p class="w3-text-gray w3-margin-top">
           {% if include_lower_geography %}
             {% trans "Including accessions from lower geography." %}

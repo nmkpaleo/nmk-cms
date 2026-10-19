@@ -4,7 +4,7 @@
 {% block title %}{% blocktrans with suffix=accessionrow.specimen_suffix %}Specimen {{ suffix }}{% endblocktrans %}{% endblock %}
 
 {% block content %}
-<main class="w3-container w3-margin-top" role="main">
+<main class="w3-container w3-margin-top accession-row-detail-page" role="main">
   <header class="w3-row w3-padding-16 w3-border-bottom w3-white w3-round-large" aria-labelledby="specimen-details-heading">
     <div class="w3-col s12 m8">
       <h1 id="specimen-details-heading" class="w3-margin-0">
@@ -57,13 +57,15 @@
     </div>
   </header>
 
-  <section class="w3-margin-top" aria-labelledby="specimen-overview-heading">
-    <div class="w3-row-padding">
-      <article class="w3-col s12">
-        <div class="w3-card w3-round w3-white w3-padding">
-          <h2 id="specimen-overview-heading" class="w3-margin-top">{% trans "Specimen overview" %}</h2>
-          <div class="w3-responsive w3-margin-top">
-            <table class="w3-table-all w3-small">
+  <section class="w3-margin-top accession-row-detail-section" aria-labelledby="specimen-overview-heading">
+    <header class="accession-row-section-header">
+      <h2 id="specimen-overview-heading" class="w3-margin-0">
+        <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "Specimen overview" %}</span>
+      </h2>
+    </header>
+    <div class="w3-responsive">
+      <table class="w3-table-all w3-small accession-row-overview-table">
               <tbody>
                 <tr>
                   <th scope="row">{% trans "Accession" %}</th>
@@ -92,15 +94,12 @@
                   </tr>
                 {% endif %}
               </tbody>
-            </table>
-          </div>
-        </div>
-      </article>
+      </table>
     </div>
   </section>
 
-  <section class="w3-margin-top" aria-labelledby="specimen-identification-heading">
-    <header class="w3-row w3-padding-16">
+  <section class="w3-margin-top accession-row-detail-section" aria-labelledby="specimen-identification-heading">
+    <header class="w3-row w3-padding-16 accession-row-section-header">
       <div class="w3-col s12 m6">
         <h2 id="specimen-identification-heading" class="w3-margin-0">
           <i class="fa-solid fa-dna" aria-hidden="true"></i>
@@ -161,8 +160,8 @@
     </div>
   </section>
 
-  <section class="w3-margin-top" aria-labelledby="specimen-elements-heading">
-    <header class="w3-row w3-padding-16">
+  <section class="w3-margin-top accession-row-detail-section" aria-labelledby="specimen-elements-heading">
+    <header class="w3-row w3-padding-16 accession-row-section-header">
       <div class="w3-col s12 m6">
         <h2 id="specimen-elements-heading" class="w3-margin-0">
           <i class="fa-solid fa-bone" aria-hidden="true"></i>
