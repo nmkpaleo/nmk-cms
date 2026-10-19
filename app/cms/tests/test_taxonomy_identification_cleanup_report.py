@@ -108,7 +108,7 @@ def test_cleanup_report_requires_collection_manager(client, django_user_model):
 
 
 def test_cleanup_report_sorts_by_same_taxon_count_descending(client, django_user_model):
-    user = django_user_model.objects.create_user(username="count-manager", ******)
+    user = django_user_model.objects.create_user(username="count-manager", password="password")
     managers, _ = Group.objects.get_or_create(name="Collection Managers")
     user.groups.add(managers)
     set_current_user(user)

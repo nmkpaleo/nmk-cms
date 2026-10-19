@@ -93,7 +93,7 @@ def test_cleanup_sync_action_reports_success(client, django_user_model):
 
 
 def test_cleanup_sync_action_includes_issue_context(client, django_user_model):
-    user = django_user_model.objects.create_user(username="cleanup-issue-manager", ******)
+    user = django_user_model.objects.create_user(username="cleanup-issue-manager", password="password")
     managers, _ = Group.objects.get_or_create(name="Collection Managers")
     user.groups.add(managers)
     set_current_user(user)
