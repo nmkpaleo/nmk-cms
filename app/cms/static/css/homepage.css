@@ -1,7 +1,16 @@
 :root {
-    --img1: url("../images/turkana_boy.png");
-    --img4: url("../images/nmk1.jpeg");
-    --img-card: url("../images/card.png");
+    --img1: image-set(
+        url("../images/home-accessioning-card.webp") type("image/webp"),
+        url("../images/turkana_boy.png") type("image/png")
+    );
+    --img4: image-set(
+        url("../images/home-hero.webp") type("image/webp"),
+        url("../images/nmk1.jpeg") type("image/jpeg")
+    );
+    --img-card: image-set(
+        url("../images/home-digitization-card.webp") type("image/webp"),
+        url("../images/card.png") type("image/png")
+    );
     --img-stats: url("../images/collection_statistics_graph.svg");
     --jungle: #6B4423;
     --jungle-dark: #171717;

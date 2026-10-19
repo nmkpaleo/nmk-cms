@@ -2,8 +2,6 @@ import pytest
 from django.conf import settings
 from pathlib import Path
 
-pytestmark = pytest.mark.django_db
-
 DETAIL_TEMPLATES = [
     (
         "accession_detail.html",

@@ -1,9 +1,5 @@
-import pytest
 from django.conf import settings
 from pathlib import Path
-
-
-pytestmark = pytest.mark.django_db
 
 
 def test_responsive_css_contains_large_screen_constraint():
@@ -16,9 +12,8 @@ def test_responsive_css_contains_large_screen_constraint():
     assert "width: min(100% - 32px, 1440px)" in content
     assert "width: min(100% - 20px, 1440px)" in content
 
-    # Check for centering with auto margins.
-    assert "margin-left: auto" in content
-    assert "margin-right: auto" in content
+    # Check for centering with auto horizontal margins.
+    assert "margin: 0 auto" in content
 
 
 def test_base_template_has_container_structure():

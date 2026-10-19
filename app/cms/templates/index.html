@@ -5,6 +5,7 @@
 {% block extra_head %}
 {{ block.super }}
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital@0;1&display=swap" rel="stylesheet">
+<link rel="preload" as="image" href="{% static 'images/home-hero.webp' %}" type="image/webp" fetchpriority="high">
 {% endblock extra_head %}
 
 {% block extra_css %}

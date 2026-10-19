@@ -13,6 +13,14 @@
     --nmk-success: #286044;
     --nmk-danger: #a3342b;
     --nmk-focus: #ad7748;
+    --nmk-divider: #d8d3ca;
+    --nmk-label-bg: #f4efe8;
+    --nmk-hover-cool: #eef6f8;
+    --nmk-icon-teal: #2f6f73;
+    --nmk-icon-green: #2e6f4e;
+    --nmk-icon-indigo: #5e548e;
+    --nmk-icon-slate: #475569;
+    --nmk-icon-amber: #b45309;
 }
 
 html {
@@ -20,7 +28,7 @@ html {
 }
 
 body {
-    padding-top: var(--site-header-height, 76px);
+    padding-top: var(--site-header-height, 164px);
     color: var(--nmk-black);
     background: var(--nmk-background);
     font-family: "Trebuchet MS", "Segoe UI", sans-serif;
@@ -1047,12 +1055,18 @@ table a:not(.w3-button) {
 }
 
 .fieldslip-detail-page .fieldslip-data-table .fieldslip-group-row th {
-    padding: 10px 14px;
+    padding: 12px 14px 10px;
     color: var(--nmk-brown-dark);
-    background: var(--nmk-brown-pale);
+    background: #f5f5f5;
+    border-top: 2px solid var(--nmk-border);
+    border-bottom: 1px solid var(--nmk-border);
     font-size: 0.95rem;
     text-align: left;
     text-transform: none;
+}
+
+.fieldslip-detail-page .fieldslip-data-table tbody .fieldslip-group-row:first-child th {
+    border-top: 0;
 }
 
 .fieldslip-detail-page .fieldslip-value-list {
@@ -1263,6 +1277,414 @@ table a:not(.w3-button) {
     overflow-wrap: anywhere;
 }
 
+.accession-detail-page .accession-overview-table tbody tr + tr th,
+.accession-detail-page .accession-overview-table tbody tr + tr td,
+.locality-detail-page .locality-overview-table tbody tr + tr th,
+.locality-detail-page .locality-overview-table tbody tr + tr td,
+.place-detail-page .place-overview-table tbody tr + tr th,
+.place-detail-page .place-overview-table tbody tr + tr td,
+.reference-detail-page .reference-metadata-table tbody tr + tr th,
+.reference-detail-page .reference-metadata-table tbody tr + tr td,
+.fieldslip-detail-page .fieldslip-data-table tbody tr + tr th,
+.fieldslip-detail-page .fieldslip-data-table tbody tr + tr td,
+.drawer-detail-page .drawer-data-table tbody tr + tr th,
+.drawer-detail-page .drawer-data-table tbody tr + tr td,
+.storage-detail-page .storage-data-table tbody tr + tr th,
+.storage-detail-page .storage-data-table tbody tr + tr td,
+.preparation-detail-page .preparation-data-table tbody tr + tr th,
+.preparation-detail-page .preparation-data-table tbody tr + tr td {
+    border-top: 1px solid var(--nmk-border);
+}
+
+.accession-detail-page .accession-overview-table th[scope="row"],
+.locality-detail-page .locality-overview-table th[scope="row"],
+.place-detail-page .place-overview-table th[scope="row"],
+.reference-detail-page .reference-metadata-table th[scope="row"],
+.fieldslip-detail-page .fieldslip-data-table th[scope="row"],
+.drawer-detail-page .drawer-data-table th[scope="row"],
+.storage-detail-page .storage-data-table th[scope="row"],
+.preparation-detail-page .preparation-data-table th[scope="row"] {
+    width: 168px;
+}
+
+.accession-detail-page .accession-overview-table tbody tr:hover td,
+.locality-detail-page .locality-overview-table tbody tr:hover td,
+.place-detail-page .place-overview-table tbody tr:hover td,
+.reference-detail-page .reference-metadata-table tbody tr:hover td,
+.fieldslip-detail-page .fieldslip-data-table tbody tr:hover td,
+.drawer-detail-page .drawer-data-table tbody tr:hover td,
+.storage-detail-page .storage-data-table tbody tr:hover td,
+.preparation-detail-page .preparation-data-table tbody tr:hover td {
+    background: #eef6f8;
+}
+
+.accession-detail-page .accession-overview-table tbody tr:hover th[scope="row"],
+.locality-detail-page .locality-overview-table tbody tr:hover th[scope="row"],
+.place-detail-page .place-overview-table tbody tr:hover th[scope="row"],
+.reference-detail-page .reference-metadata-table tbody tr:hover th[scope="row"],
+.fieldslip-detail-page .fieldslip-data-table tbody tr:hover th[scope="row"],
+.drawer-detail-page .drawer-data-table tbody tr:hover th[scope="row"],
+.storage-detail-page .storage-data-table tbody tr:hover th[scope="row"],
+.preparation-detail-page .preparation-data-table tbody tr:hover th[scope="row"] {
+    background: #dcecf3;
+}
+
+/* Detail page design system */
+.accession-detail-page,
+.accession-row-detail-page,
+.locality-detail-page,
+.place-detail-page,
+.reference-detail-page,
+.fieldslip-detail-page,
+.drawer-detail-page,
+.storage-detail-page,
+.preparation-detail-page {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    width: min(100%, 1240px);
+    margin-right: auto;
+    margin-left: auto;
+    padding: 18px;
+    background: var(--nmk-white);
+    border: 1px solid var(--nmk-border);
+    border-radius: 10px;
+    gap: 18px;
+}
+
+.accession-detail-page > header[aria-labelledby],
+.accession-row-detail-page > header[aria-labelledby],
+.locality-detail-page > header[aria-labelledby],
+.place-detail-page > header[aria-labelledby],
+.reference-detail-page > header[aria-labelledby],
+.fieldslip-detail-page > header[aria-labelledby],
+.drawer-detail-page > header[aria-labelledby],
+.storage-detail-page > header[aria-labelledby],
+.preparation-detail-page > header[aria-labelledby] {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    margin: 0 0 18px !important;
+    padding: 22px 24px !important;
+    background: var(--nmk-white) !important;
+    border: 1px solid var(--nmk-border) !important;
+    border-left: 5px solid var(--nmk-brown) !important;
+    border-radius: 8px !important;
+    box-shadow: 0 14px 34px rgb(32 32 32 / 13%);
+}
+
+.accession-detail-page > header[aria-labelledby] > div,
+.accession-row-detail-page > header[aria-labelledby] > div,
+.locality-detail-page > header[aria-labelledby] > div,
+.place-detail-page > header[aria-labelledby] > div,
+.reference-detail-page > header[aria-labelledby] > div,
+.fieldslip-detail-page > header[aria-labelledby] > div,
+.drawer-detail-page > header[aria-labelledby] > div,
+.storage-detail-page > header[aria-labelledby] > div,
+.preparation-detail-page > header[aria-labelledby] > div {
+    float: none;
+}
+
+.accession-detail-page > header h1,
+.accession-row-detail-page > header h1,
+.locality-detail-page > header h1,
+.place-detail-page > header h1,
+.reference-detail-page > header h1,
+.fieldslip-detail-page > header h1,
+.drawer-detail-page > header h1,
+.storage-detail-page > header h1,
+.preparation-detail-page > header h1 {
+    color: #3f2a1d;
+    font-size: clamp(1.65rem, 2vw, 2.15rem);
+    line-height: 1.18;
+}
+
+.accession-detail-page > header p,
+.accession-row-detail-page > header p,
+.locality-detail-page > header p,
+.place-detail-page > header p,
+.reference-detail-page > header p,
+.fieldslip-detail-page > header p,
+.drawer-detail-page > header p,
+.preparation-detail-page > header p {
+    margin: 8px 0 0;
+    color: #6b7280 !important;
+    font-size: 0.98rem;
+}
+
+.accession-detail-page .accession-detail-section,
+.accession-row-detail-page .accession-row-detail-section,
+.locality-detail-page .locality-detail-section,
+.place-detail-page .place-detail-section,
+.reference-detail-page .reference-detail-section,
+.fieldslip-detail-page .fieldslip-detail-section,
+.drawer-detail-page .drawer-detail-section,
+.storage-detail-page .storage-detail-section,
+.preparation-detail-page .preparation-detail-section {
+    padding: 20px;
+    border: 1px solid var(--nmk-border);
+    border-left: 4px solid var(--nmk-brown-light);
+    border-radius: 8px;
+    background: var(--nmk-white);
+    box-shadow: 0 10px 26px rgb(32 32 32 / 10%);
+}
+
+.accession-row-detail-page .accession-row-detail-section {
+    margin-top: 0 !important;
+}
+
+.accession-detail-page .accession-section-header,
+.accession-row-detail-page .accession-row-section-header,
+.locality-detail-page .locality-section-header,
+.locality-detail-page .locality-detail-section > header,
+.place-detail-page .place-section-header,
+.reference-detail-page .reference-section-header,
+.fieldslip-detail-page .fieldslip-section-header,
+.fieldslip-detail-page .fieldslip-detail-section > header,
+.drawer-detail-page .drawer-section-header,
+.storage-detail-page .storage-section-header,
+.preparation-detail-page .preparation-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin: 0 0 14px;
+    padding: 0 0 12px;
+    border-bottom: 1px solid var(--nmk-divider);
+}
+
+.accession-detail-page .accession-section-header h2,
+.accession-detail-page .accession-section-header h3,
+.accession-row-detail-page .accession-row-section-header h2,
+.locality-detail-page .locality-section-header h2,
+.locality-detail-page .locality-detail-section > header h2,
+.place-detail-page .place-section-header h2,
+.reference-detail-page .reference-section-header h2,
+.fieldslip-detail-page .fieldslip-section-header h2,
+.fieldslip-detail-page .fieldslip-detail-section > header h2,
+.drawer-detail-page .drawer-section-header h2,
+.storage-detail-page .storage-section-header h2,
+.preparation-detail-page .preparation-section-header h2 {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+    color: #3f2a1d;
+    font-size: 1.18rem;
+    line-height: 1.25;
+}
+
+.accession-detail-page .accession-section-header h2 .w3-margin-left,
+.accession-row-detail-page .accession-row-section-header h2 .w3-margin-left,
+.locality-detail-page .locality-section-header h2 .w3-margin-left,
+.locality-detail-page .locality-detail-section > header h2 .w3-margin-left,
+.place-detail-page .place-section-header h2 .w3-margin-left,
+.reference-detail-page .reference-section-header h2 .w3-margin-left,
+.fieldslip-detail-page .fieldslip-section-header h2 .w3-margin-left,
+.fieldslip-detail-page .fieldslip-detail-section > header h2 .w3-margin-left,
+.drawer-detail-page .drawer-section-header h2 .w3-margin-left,
+.storage-detail-page .storage-section-header h2 .w3-margin-left,
+.preparation-detail-page .preparation-section-header h2 .w3-margin-left {
+    margin-left: 0 !important;
+}
+
+.accession-detail-page .accession-section-header h2 > i,
+.accession-row-detail-page .accession-row-section-header h2 > i,
+.locality-detail-page .locality-section-header h2 > i,
+.locality-detail-page .locality-detail-section > header h2 > i,
+.place-detail-page .place-section-header h2 > i,
+.reference-detail-page .reference-section-header h2 > i,
+.fieldslip-detail-page .fieldslip-section-header h2 > i,
+.fieldslip-detail-page .fieldslip-detail-section > header h2 > i,
+.drawer-detail-page .drawer-section-header h2 > i,
+.storage-detail-page .storage-section-header h2 > i,
+.preparation-detail-page .preparation-section-header h2 > i {
+    width: 18px;
+    color: var(--nmk-brown-dark);
+    font-size: 0.95rem;
+    text-align: center;
+}
+
+.accession-row-detail-page .accession-row-section-header > .w3-col,
+.accession-row-detail-page .accession-row-section-header > div,
+.preparation-detail-page .preparation-section-header > .w3-col,
+.preparation-detail-page .preparation-section-header > div {
+    float: none;
+    width: auto;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.accession-row-detail-page .accession-row-section-header > .w3-right-align,
+.preparation-detail-page .preparation-section-header > .w3-right-align {
+    flex: 0 0 auto;
+}
+
+.accession-detail-page .fa-dna,
+.accession-row-detail-page .fa-dna,
+.drawer-detail-page .fa-leaf {
+    color: var(--nmk-icon-teal) !important;
+}
+
+.accession-detail-page .fa-map-location-dot,
+.locality-detail-page .fa-map-location-dot,
+.place-detail-page .fa-map-location-dot,
+.place-detail-page .fa-sitemap,
+.fieldslip-detail-page .fa-map-location-dot {
+    color: var(--nmk-icon-green) !important;
+}
+
+.accession-detail-page .fa-photo-film,
+.accession-detail-page .fa-image,
+.preparation-detail-page .fa-photo-film {
+    color: var(--nmk-icon-indigo) !important;
+}
+
+.reference-detail-page .fa-book,
+.reference-detail-page .fa-book-open,
+.storage-detail-page .fa-warehouse,
+.storage-detail-page .fa-box-archive,
+.storage-detail-page .fa-boxes-stacked,
+.drawer-detail-page .fa-box-archive,
+.drawer-detail-page .fa-barcode,
+.drawer-detail-page .fa-folder-open {
+    color: var(--nmk-icon-slate) !important;
+}
+
+.accession-detail-page .fa-comments,
+.preparation-detail-page .fa-clipboard-check,
+.preparation-detail-page .fa-clock-rotate-left {
+    color: #6b7280 !important;
+}
+
+.fieldslip-detail-page .fieldslip-data-table .fieldslip-group-row th {
+    padding: 14px 16px 11px;
+    color: #3f2a1d;
+    background: #f6f6f6;
+    border-top: 3px solid var(--nmk-divider);
+    border-bottom: 1px solid var(--nmk-divider);
+    font-size: 0.9rem;
+    letter-spacing: 0;
+}
+
+.fieldslip-detail-page .fieldslip-data-table tbody .fieldslip-group-row:first-child th {
+    border-top: 0;
+}
+
+.accession-detail-page .accession-overview-table,
+.accession-row-detail-page .accession-row-overview-table,
+.locality-detail-page .locality-overview-table,
+.place-detail-page .place-overview-table,
+.reference-detail-page .reference-metadata-table,
+.fieldslip-detail-page .fieldslip-data-table,
+.drawer-detail-page .drawer-data-table,
+.storage-detail-page .storage-data-table,
+.preparation-detail-page .preparation-data-table {
+    width: min(100%, 1040px);
+}
+
+.accession-detail-page .w3-responsive,
+.accession-row-detail-page .w3-responsive,
+.locality-detail-page .w3-responsive,
+.place-detail-page .w3-responsive,
+.reference-detail-page .w3-responsive,
+.fieldslip-detail-page .w3-responsive,
+.drawer-detail-page .w3-responsive,
+.storage-detail-page .w3-responsive,
+.preparation-detail-page .w3-responsive {
+    border-color: var(--nmk-divider);
+    border-radius: 6px;
+    box-shadow: none;
+}
+
+.accession-detail-page .accession-overview-table th[scope="row"],
+.accession-row-detail-page .accession-row-overview-table th[scope="row"],
+.locality-detail-page .locality-overview-table th[scope="row"],
+.place-detail-page .place-overview-table th[scope="row"],
+.reference-detail-page .reference-metadata-table th[scope="row"],
+.fieldslip-detail-page .fieldslip-data-table th[scope="row"],
+.drawer-detail-page .drawer-data-table th[scope="row"],
+.storage-detail-page .storage-data-table th[scope="row"],
+.preparation-detail-page .preparation-data-table th[scope="row"] {
+    width: 180px;
+    color: #3f2a1d;
+    background: var(--nmk-label-bg);
+    font-weight: 700;
+    text-align: left;
+    vertical-align: top;
+}
+
+.accession-row-detail-page .accession-row-overview-table td,
+.accession-row-detail-page .accession-row-overview-table th,
+.accession-detail-page .accession-overview-table td,
+.accession-detail-page .accession-overview-table th,
+.locality-detail-page .locality-overview-table td,
+.locality-detail-page .locality-overview-table th,
+.place-detail-page .place-overview-table td,
+.place-detail-page .place-overview-table th,
+.reference-detail-page .reference-metadata-table td,
+.reference-detail-page .reference-metadata-table th,
+.fieldslip-detail-page .fieldslip-data-table td,
+.fieldslip-detail-page .fieldslip-data-table th,
+.drawer-detail-page .drawer-data-table td,
+.drawer-detail-page .drawer-data-table th,
+.storage-detail-page .storage-data-table td,
+.storage-detail-page .storage-data-table th,
+.preparation-detail-page .preparation-data-table td,
+.preparation-detail-page .preparation-data-table th {
+    min-height: 44px;
+    border-color: var(--nmk-divider);
+}
+
+.accession-row-detail-page .accession-row-overview-table tbody tr + tr th,
+.accession-row-detail-page .accession-row-overview-table tbody tr + tr td {
+    border-top: 1px solid var(--nmk-divider);
+}
+
+.accession-row-detail-page .accession-row-overview-table tbody tr:hover td {
+    background: var(--nmk-hover-cool);
+}
+
+.accession-row-detail-page .accession-row-overview-table tbody tr:hover th[scope="row"] {
+    background: #dcecf3;
+}
+
+.accession-detail-page .accession-overview-table tbody tr:hover td,
+.locality-detail-page .locality-overview-table tbody tr:hover td,
+.place-detail-page .place-overview-table tbody tr:hover td,
+.reference-detail-page .reference-metadata-table tbody tr:hover td,
+.fieldslip-detail-page .fieldslip-data-table tbody tr:hover td,
+.drawer-detail-page .drawer-data-table tbody tr:hover td,
+.storage-detail-page .storage-data-table tbody tr:hover td,
+.preparation-detail-page .preparation-data-table tbody tr:hover td {
+    background: var(--nmk-hover-cool);
+}
+
+.accession-detail-page .accession-overview-table tbody tr:hover th[scope="row"],
+.locality-detail-page .locality-overview-table tbody tr:hover th[scope="row"],
+.place-detail-page .place-overview-table tbody tr:hover th[scope="row"],
+.reference-detail-page .reference-metadata-table tbody tr:hover th[scope="row"],
+.fieldslip-detail-page .fieldslip-data-table tbody tr:hover th[scope="row"],
+.drawer-detail-page .drawer-data-table tbody tr:hover th[scope="row"],
+.storage-detail-page .storage-data-table tbody tr:hover th[scope="row"],
+.preparation-detail-page .preparation-data-table tbody tr:hover th[scope="row"] {
+    background: #dcecf3;
+}
+
+.accession-detail-page .w3-button.w3-light-grey,
+.accession-row-detail-page .w3-button.w3-light-grey,
+.locality-detail-page .w3-button.w3-light-grey,
+.place-detail-page .w3-button.w3-light-grey,
+.reference-detail-page .w3-button.w3-light-grey,
+.fieldslip-detail-page .w3-button.w3-light-grey,
+.drawer-detail-page .w3-button.w3-light-grey,
+.storage-detail-page .w3-button.w3-light-grey,
+.preparation-detail-page .w3-button.w3-light-grey {
+    color: #3f2a1d !important;
+    background: var(--nmk-white) !important;
+    border-color: var(--nmk-divider) !important;
+}
+
 .preparation-detail-page .preparation-history-table {
     width: 100%;
 }
@@ -1431,6 +1853,19 @@ footer[aria-label="Application version"] {
 @media screen and (max-width: 768px) {
     .site-main > .container-fluid {
         width: min(100% - 20px, 1440px);
+    }
+
+    .accession-detail-page,
+    .accession-row-detail-page,
+    .locality-detail-page,
+    .place-detail-page,
+    .reference-detail-page,
+    .fieldslip-detail-page,
+    .drawer-detail-page,
+    .storage-detail-page,
+    .preparation-detail-page {
+        padding: 10px;
+        border-radius: 8px;
     }
 
     main[role="main"] > header[aria-labelledby] {

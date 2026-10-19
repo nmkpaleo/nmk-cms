@@ -29,7 +29,7 @@ from django.db.models import (
     Q, Subquery, Sum, Value, When,
 )
 from django.db.models.expressions import Window
-from django.db.models.functions import Cast, Coalesce, Concat, Greatest, Lower, Replace, TruncDate, TruncWeek, Trim
+from django.db.models.functions import Cast, Coalesce, Concat, Greatest, Lower, Replace, TruncDate, TruncMonth, TruncWeek, Trim
 from django.db.models.functions.window import RowNumber
 from django.http import JsonResponse
 from django.utils.decorators import method_decorator
@@ -237,34 +237,50 @@ class CollectionManagerAccessMixin(UserPassesTestMixin):
 @login_required
 @user_passes_test(is_collection_manager)
 def media_report_view(request):
-    # Fetch OCR status data
-    data = Media.objects.values('ocr_status', 'created_on')
-    df = pd.DataFrame.from_records(data)
+    range_options = {
+        "30": {"label": "Last 30 days", "days": 30, "trunc": TruncDate, "freq": "D"},
+        "90": {"label": "Last 90 days", "days": 90, "trunc": TruncDate, "freq": "D"},
+        "365": {"label": "Last 12 months", "days": 365, "trunc": TruncWeek, "freq": "W-MON"},
+        "all": {"label": "All time", "days": None, "trunc": TruncMonth, "freq": "MS"},
+    }
+    selected_range = request.GET.get("range", "90")
+    if selected_range not in range_options:
+        selected_range = "90"
+    range_config = range_options[selected_range]
 
-    # Handle empty dataset
-    if df.empty or 'ocr_status' not in df.columns:
+    media_queryset = Media.objects.all()
+    total_files = media_queryset.count()
+
+    if total_files == 0:
         context = {
             'chart_html': None,
-            'daily_chart_html': None,
+            'progress_chart_html': None,
             'summary': None,
-            'message': 'No media data available for reporting yet.'
+            'message': 'No media data available for reporting yet.',
+            'range_options': range_options,
+            'selected_range': selected_range,
         }
         return render(request, 'reports/media_report.html', context)
 
     # ======== OCR STATUS SUMMARY =========
-    counts = df['ocr_status'].value_counts().reset_index()
-    counts.columns = ['OCR Status', 'Count']
-
-    #  labels
     status_labels = {
         'pending': 'Pending OCR',
         'completed': 'Completed',
         'failed': 'Failed',
     }
-    counts['OCR Status'] = counts['OCR Status'].map(lambda x: status_labels.get(x.lower(), x.title()))
+    status_counts = {
+        row['ocr_status']: row['count']
+        for row in media_queryset.values('ocr_status').annotate(count=Count('pk'))
+    }
+    counts = pd.DataFrame([
+        {
+            'OCR Status': status_labels.get(status, status.replace('_', ' ').title()),
+            'Count': int(status_counts.get(status, 0)),
+        }
+        for status, _label in Media.OCRStatus.choices
+    ])
 
-    total_files = counts['Count'].sum()
-    completed = counts.loc[counts['OCR Status'] == 'Completed', 'Count'].sum()
+    completed = int(status_counts.get(Media.OCRStatus.COMPLETED, 0))
     completion_rate = (completed / total_files * 100) if total_files > 0 else 0
 
     # Build OCR summary chart
@@ -289,53 +305,114 @@ def media_report_view(request):
         xaxis_tickangle=-15,
         showlegend=False
     )
-    chart_html = to_html(fig1, full_html=False, include_plotlyjs='cdn')
+    chart_html = to_html(
+        fig1,
+        full_html=False,
+        include_plotlyjs='cdn',
+        config={'displayModeBar': False, 'responsive': True},
+    )
 
-    # ======== DAILY UPLOAD PROGRESS (MON-SUN) =========
-    if 'created_on' in df.columns:
-        df['created_on'] = pd.to_datetime(df['created_on'], errors='coerce')
-        df = df.dropna(subset=['created_on'])
-        df['day_of_week'] = df['created_on'].dt.day_name()
+    # ======== UPLOAD PROGRESS =========
+    report_queryset = media_queryset
+    if range_config["days"] is not None:
+        report_start = timezone.now() - timedelta(days=range_config["days"])
+        report_queryset = report_queryset.filter(created_on__gte=report_start)
 
-        # Ensure week order
-        week_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-        daily_counts = df['day_of_week'].value_counts().reindex(week_order, fill_value=0)
+    progress_data = (
+        report_queryset
+        .annotate(period=range_config["trunc"]("created_on"))
+        .values("period")
+        .annotate(new_media=Count("pk"))
+        .order_by("period")
+    )
+    progress_df = pd.DataFrame.from_records(progress_data)
+    if not progress_df.empty:
+        progress_df["period"] = pd.to_datetime(progress_df["period"], errors="coerce")
+        progress_df = progress_df.dropna(subset=["period"]).sort_values("period")
+        progress_df["new_media"] = progress_df["new_media"].astype(int)
 
-        # Force integers only
-        daily_counts = daily_counts.astype(int)
+        full_range = pd.date_range(
+            progress_df["period"].min(),
+            progress_df["period"].max(),
+            freq=range_config["freq"],
+        )
+        if len(full_range):
+            progress_df = (
+                progress_df
+                .set_index("period")
+                .reindex(full_range, fill_value=0)
+                .rename_axis("period")
+                .reset_index()
+            )
+        if len(progress_df) == 1:
+            interval = pd.Timedelta(days=7 if range_config["freq"].startswith("W") else 30 if range_config["freq"] == "MS" else 1)
+            progress_df = pd.concat(
+                [
+                    pd.DataFrame([{
+                        "period": progress_df["period"].iloc[0] - interval,
+                        "new_media": 0,
+                    }]),
+                    progress_df,
+                ],
+                ignore_index=True,
+            )
 
-        # Build line/bar chart for daily uploads
-        fig2 = go.Figure(data=go.Bar(
-            x=daily_counts.index,
-            y=daily_counts.values,
-            text=daily_counts.values,
-            textposition='outside',
-            marker_color='rgba(46, 204, 113, 0.8)'
+        progress_df["total_media"] = progress_df["new_media"].cumsum()
+        fig2 = go.Figure(data=go.Scatter(
+            x=progress_df["period"],
+            y=progress_df["total_media"],
+            customdata=progress_df["new_media"],
+            mode="lines+markers",
+            line=dict(color="#2e6f4e", width=3, shape="spline"),
+            marker=dict(size=7, color="#2e6f4e", line=dict(width=1, color="#ffffff")),
+            fill="tozeroy",
+            fillcolor="rgba(46, 111, 78, 0.12)",
+            hovertemplate=(
+                "<b>%{x|%Y-%m-%d}</b><br>"
+                "Total in range: %{y}<br>"
+                "New in period: %{customdata}<extra></extra>"
+            ),
         ))
+        xaxis_config = dict(gridcolor="#f1ebe2", tickformat="%b %d, %Y")
+        if len(progress_df) <= 10:
+            xaxis_config.update(
+                tickmode="array",
+                tickvals=progress_df["period"],
+                ticktext=[period.strftime("%b %d, %Y") for period in progress_df["period"]],
+            )
 
         fig2.update_layout(
-            title="Weekly Upload Progress (Monday - Sunday)",
-            xaxis_title="Day of Week",
-            yaxis_title="Number of Uploads",
+            title=f"Media Upload Progress ({range_config['label']})",
+            xaxis_title="Period",
+            yaxis_title="Cumulative media records",
             plot_bgcolor='#ffffff',
             paper_bgcolor='#ffffff',
-            font=dict(size=14),
+            font=dict(size=14, color="#3f2a1d"),
+            hovermode="x unified",
             showlegend=False,
-            yaxis=dict(dtick=1),  # ensure whole numbers
-            margin=dict(l=40, r=40, t=60, b=40)
+            yaxis=dict(rangemode="tozero", gridcolor="#eadfce", tickformat=",d"),
+            xaxis=xaxis_config,
+            margin=dict(l=48, r=24, t=64, b=48),
         )
-        daily_chart_html = to_html(fig2, full_html=False, include_plotlyjs=False)
+        progress_chart_html = to_html(
+            fig2,
+            full_html=False,
+            include_plotlyjs=False,
+            config={'displayModeBar': False, 'responsive': True},
+        )
     else:
-        daily_chart_html = None
+        progress_chart_html = None
 
     context = {
         'chart_html': chart_html,
-        'daily_chart_html': daily_chart_html,
+        'progress_chart_html': progress_chart_html,
         'summary': {
             'total': total_files,
             'completed': completed,
             'completion_rate': round(completion_rate, 2)
         },
+        'range_options': range_options,
+        'selected_range': selected_range,
     }
     return render(request, 'reports/media_report.html', context)
 
@@ -541,6 +618,107 @@ def accession_distribution_report(request):
     df = pd.DataFrame.from_records(accession_data)
     df.rename(columns={'specimen_prefix__name': 'Locality', 'total_accessions': 'Accessions'}, inplace=True)
 
+    progress_data = (
+        Accession.objects
+        .annotate(day=TruncDate('created_on'))
+        .values('day')
+        .annotate(new_accessions=Count('pk'))
+        .order_by('day')
+    )
+    progress_df = pd.DataFrame.from_records(progress_data)
+    if not progress_df.empty:
+        progress_df['day'] = pd.to_datetime(progress_df['day'], errors='coerce')
+        progress_df = progress_df.dropna(subset=['day']).sort_values('day')
+        progress_df['new_accessions'] = progress_df['new_accessions'].astype(int)
+
+        date_span = (progress_df['day'].max() - progress_df['day'].min()).days
+        if date_span > 180:
+            progress_df = (
+                progress_df
+                .set_index('day')
+                .resample('W-MON', label='left', closed='left')
+                .sum()
+                .reset_index()
+            )
+            xaxis_title = 'Week'
+            chart_title = 'Accession Data Progress by Week'
+        else:
+            full_range = pd.date_range(progress_df['day'].min(), progress_df['day'].max(), freq='D')
+            progress_df = (
+                progress_df
+                .set_index('day')
+                .reindex(full_range, fill_value=0)
+                .rename_axis('day')
+                .reset_index()
+            )
+            xaxis_title = 'Date'
+            chart_title = 'Accession Data Progress by Day'
+
+        if len(progress_df) == 1:
+            interval = pd.Timedelta(weeks=1 if xaxis_title == 'Week' else 0, days=0 if xaxis_title == 'Week' else 1)
+            progress_df = pd.concat(
+                [
+                    pd.DataFrame([{
+                        'day': progress_df['day'].iloc[0] - interval,
+                        'new_accessions': 0,
+                    }]),
+                    progress_df,
+                ],
+                ignore_index=True,
+            )
+
+        progress_df['total_accessions'] = progress_df['new_accessions'].cumsum()
+        progress_total = int(progress_df['total_accessions'].max())
+        progress_new_latest = int(progress_df['new_accessions'].iloc[-1])
+
+        fig_progress = go.Figure()
+        fig_progress.add_trace(go.Scatter(
+            x=progress_df['day'],
+            y=progress_df['total_accessions'],
+            mode='lines+markers',
+            name='Total accessions',
+            line=dict(color='#2e6f4e', width=3, shape='spline'),
+            marker=dict(size=7, color='#2e6f4e', line=dict(width=1, color='#ffffff')),
+            fill='tozeroy',
+            fillcolor='rgba(46, 111, 78, 0.12)',
+            customdata=progress_df['new_accessions'],
+            hovertemplate=(
+                '<b>%{x|%Y-%m-%d}</b><br>'
+                'Total accessions: %{y}<br>'
+                'New in period: %{customdata}<extra></extra>'
+            ),
+        ))
+        xaxis_config = dict(gridcolor='#f1ebe2', tickformat='%b %d, %Y')
+        if len(progress_df) <= 10:
+            xaxis_config.update(
+                tickmode='array',
+                tickvals=progress_df['day'],
+                ticktext=[day.strftime('%b %d, %Y') for day in progress_df['day']],
+            )
+        fig_progress.update_layout(
+            title=chart_title,
+            xaxis_title=xaxis_title,
+            yaxis_title='Cumulative accessions',
+            plot_bgcolor='#ffffff',
+            paper_bgcolor='#ffffff',
+            font=dict(size=14, color='#3f2a1d'),
+            hovermode='x unified',
+            showlegend=False,
+            margin=dict(l=48, r=24, t=64, b=48),
+            yaxis=dict(rangemode='tozero', gridcolor='#eadfce', dtick=1, tickformat=',d'),
+            xaxis=xaxis_config,
+        )
+        chart_progress = to_html(
+            fig_progress,
+            full_html=False,
+            include_plotlyjs='cdn',
+            config={'displayModeBar': False, 'responsive': True},
+        )
+    else:
+        chart_progress = None
+        progress_total = 0
+        progress_new_latest = 0
+
     # --- Locality-based chart ---
     fig_locality = px.bar(
         df,
@@ -561,11 +739,21 @@ def accession_distribution_report(request):
         paper_bgcolor='#ffffff'
     )
 
-    chart_locality = to_html(fig_locality, full_html=False, include_plotlyjs='cdn')
+    chart_locality = to_html(
+        fig_locality,
+        full_html=False,
+        include_plotlyjs=False if chart_progress else 'cdn',
+        config={'displayModeBar': False, 'responsive': True},
+    )
 
     context = {
+        'chart_progress': chart_progress,
         'chart_locality': chart_locality,
         'locality_table': df.to_dict(orient='records'),
+        'progress_summary': {
+            'total': progress_total,
+            'latest_period': progress_new_latest,
+        },
     }
 
     return render(request, 'reports/accession_distribution.html', context)
