@@ -2319,6 +2319,11 @@ class Media(BaseModel):
     class Meta:
         verbose_name = "Media"
         verbose_name_plural = "Medias"
+        indexes = [
+            models.Index(fields=["ocr_status"], name="media_ocr_status_idx"),
+            models.Index(fields=["created_on"], name="media_created_on_idx"),
+            models.Index(fields=["created_on", "ocr_status"], name="media_created_ocr_idx"),
+        ]
 
     def __str__(self):
         return f"{self.file_name} ({self.type})"
