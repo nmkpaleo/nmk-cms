@@ -1,0 +1,43 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% block content %}
+<h1>{{ title }}</h1>
+<p>{% blocktrans with split_count=split_count created_count=created_count %}This will split {{ split_count }} Reference record(s) into {{ created_count }} additional record(s), using each non-empty part of the citation separated by a vertical bar as the title, first author and citation. A four-digit year in a part will be used; otherwise the year will be left blank. Accession and identification links will also be copied.{% endblocktrans %}</p>
+{% if candidates %}
+<ul>
+  {% for candidate in candidates %}
+  <li>
+    {{ candidate.reference.citation }}
+    <ul>
+      {% for part in candidate.parts %}
+      <li>{{ part }}</li>
+      {% endfor %}
+    </ul>
+    {% if candidate.oversized_parts %}
+    <p class="errornote">{% blocktrans with max_length=candidate.max_part_length %}This reference cannot be split because one or more parts exceed {{ max_length }} characters:{% endblocktrans %}</p>
+    <ul>
+      {% for part in candidate.oversized_parts %}
+      <li>{{ part }} ({{ part|length }} {% trans "characters" %})</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% if can_confirm %}
+<form method="post">
+  {% csrf_token %}
+  <input type="hidden" name="confirm" value="yes">
+  <input type="hidden" name="preview_token" value="{{ preview_token }}">
+  <button type="submit" class="button default">{% trans "Split references" %}</button>
+  <a href="{% url 'admin:cms_reference_changelist' %}" class="button">{% trans "Cancel" %}</a>
+</form>
+{% else %}
+<p class="errornote">{% trans "Correct the oversized citation parts before splitting references." %}</p>
+<a href="{% url 'admin:cms_reference_changelist' %}" class="button">{% trans "Cancel" %}</a>
+{% endif %}
+{% else %}
+<p>{% trans "No references with multiple non-empty citation parts were found." %}</p>
+<a href="{% url 'admin:cms_reference_changelist' %}" class="button">{% trans "Back to References" %}</a>
+{% endif %}
+{% endblock %}

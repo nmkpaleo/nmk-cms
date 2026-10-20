@@ -1,6 +1,11 @@
 {% extends "admin/change_list.html" %}
 {% load i18n %}
 {% block object-tools-items %}
-  <li><a href="{% url 'admin:cms_reference_deduplicate_exact' %}">{% trans "Deduplicate exact References" %}</a></li>
+  {% if split_references_url %}
+    <li><a href="{{ split_references_url }}">{% trans "Split References by |" %}</a></li>
+  {% endif %}
+  {% if exact_deduplicate_url %}
+    <li><a href="{{ exact_deduplicate_url }}">{% trans "Deduplicate exact References" %}</a></li>
+  {% endif %}
   {{ block.super }}
 {% endblock %}
