@@ -1262,6 +1262,18 @@ class Reference(MergeMixin, BaseModel):
             if len(citations) < 2:
                 return 0
 
+            max_part_length = min(
+                self._meta.get_field(field_name).max_length
+                for field_name in ("title", "first_author")
+            )
+            if any(len(citation) > max_part_length for citation in citations):
+                raise ValidationError(
+                    _(
+                        "Citation parts must not exceed %(max_length)d characters."
+                    )
+                    % {"max_length": max_part_length}
+                )
+
             accession_references = list(
                 AccessionReference.objects.filter(reference=reference)
             )

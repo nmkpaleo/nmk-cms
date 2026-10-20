@@ -13,15 +13,29 @@
       <li>{{ part }}</li>
       {% endfor %}
     </ul>
+    {% if candidate.oversized_parts %}
+    <p class="errornote">{% blocktrans with max_length=candidate.max_part_length %}This reference cannot be split because one or more parts exceed {{ max_length }} characters:{% endblocktrans %}</p>
+    <ul>
+      {% for part in candidate.oversized_parts %}
+      <li>{{ part }} ({{ part|length }} {% trans "characters" %})</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
   </li>
   {% endfor %}
 </ul>
+{% if can_confirm %}
 <form method="post">
   {% csrf_token %}
   <input type="hidden" name="confirm" value="yes">
+  <input type="hidden" name="preview_token" value="{{ preview_token }}">
   <button type="submit" class="button default">{% trans "Split references" %}</button>
   <a href="{% url 'admin:cms_reference_changelist' %}" class="button">{% trans "Cancel" %}</a>
 </form>
+{% else %}
+<p class="errornote">{% trans "Correct the oversized citation parts before splitting references." %}</p>
+<a href="{% url 'admin:cms_reference_changelist' %}" class="button">{% trans "Cancel" %}</a>
+{% endif %}
 {% else %}
 <p>{% trans "No references with multiple non-empty citation parts were found." %}</p>
 <a href="{% url 'admin:cms_reference_changelist' %}" class="button">{% trans "Back to References" %}</a>

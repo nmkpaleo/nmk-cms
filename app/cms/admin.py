@@ -1,3 +1,5 @@
+import hashlib
+import json
 import logging
 from typing import Any, Mapping
 
@@ -8,6 +10,7 @@ from django.db import transaction
 from django.db.models import Count, OuterRef, Exists, Q
 from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.core import signing
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
@@ -1668,9 +1671,62 @@ class ReferenceAdmin(MergeAdminActionMixin, MergeAdminMixin, HistoricalImportExp
     def has_deduplicate_permission(self, request):
         return request.user.is_superuser or request.user.has_perm("cms.can_merge")
 
+    def has_split_permission(self, request):
+        return (
+            self.has_change_permission(request)
+            and self.has_add_permission(request)
+            and self.admin_site._registry[AccessionReference].has_add_permission(
+                request
+            )
+            and self.admin_site._registry[Identification].has_add_permission(request)
+        )
+
+    @staticmethod
+    def _split_candidates(references):
+        max_part_length = min(
+            Reference._meta.get_field(field_name).max_length
+            for field_name in ("title", "first_author")
+        )
+        candidates = []
+        for reference in references:
+            parts = reference.citation_parts
+            if len(parts) > 1:
+                candidates.append(
+                    {
+                        "reference": reference,
+                        "parts": parts,
+                        "oversized_parts": [
+                            part for part in parts if len(part) > max_part_length
+                        ],
+                        "max_part_length": max_part_length,
+                    }
+                )
+        return candidates
+
+    @staticmethod
+    def _split_preview_digest(candidates):
+        snapshot = [
+            (
+                candidate["reference"].pk,
+                candidate["reference"].citation,
+                candidate["reference"].modified_on.isoformat(),
+            )
+            for candidate in candidates
+        ]
+        return hashlib.sha256(
+            json.dumps(snapshot, ensure_ascii=False, separators=(",", ":")).encode()
+        ).hexdigest()
+
+    @classmethod
+    def _split_preview_signature(cls, candidates):
+        return signing.dumps(
+            cls._split_preview_digest(candidates),
+            salt="cms.reference.split-pipe.preview",
+        )
+
     def changelist_view(self, request, extra_context=None):
         extra_context = extra_context or {}
-        if self.has_change_permission(request):
+        if self.has_split_permission(request):
             extra_context["split_references_url"] = reverse(
                 "admin:cms_reference_split_pipe"
             )
@@ -1679,19 +1735,47 @@ class ReferenceAdmin(MergeAdminActionMixin, MergeAdminMixin, HistoricalImportExp
         return super().changelist_view(request, extra_context=extra_context)
 
     def split_references_view(self, request):
-        if not self.has_change_permission(request):
+        if not self.has_split_permission(request):
             raise PermissionDenied
 
-        candidates = []
-        references = Reference.objects.filter(citation__contains="|").order_by("pk")
-        for reference in references:
-            parts = reference.citation_parts
-            if len(parts) > 1:
-                candidates.append({"reference": reference, "parts": parts})
         if request.method == "POST" and request.POST.get("confirm") == "yes":
+            try:
+                preview_digest = signing.loads(
+                    request.POST.get("preview_token", ""),
+                    salt="cms.reference.split-pipe.preview",
+                    max_age=3600,
+                )
+            except signing.BadSignature:
+                preview_digest = None
+
             split_count = 0
             created_count = 0
             with transaction.atomic():
+                references = list(
+                    Reference.objects.select_for_update()
+                    .filter(citation__contains="|")
+                    .order_by("pk")
+                )
+                candidates = self._split_candidates(references)
+                if preview_digest != self._split_preview_digest(candidates):
+                    self.message_user(
+                        request,
+                        _(
+                            "References changed since the preview. Review the updated preview before confirming."
+                        ),
+                        level=messages.WARNING,
+                    )
+                    return redirect(reverse("admin:cms_reference_split_pipe"))
+                if any(candidate["oversized_parts"] for candidate in candidates):
+                    self.message_user(
+                        request,
+                        _(
+                            "One or more citation parts exceed the maximum field length. No references were split."
+                        ),
+                        level=messages.ERROR,
+                    )
+                    return redirect(reverse("admin:cms_reference_split_pipe"))
+
                 for candidate in candidates:
                     created = candidate["reference"].split_by_pipe()
                     if created:
@@ -1711,6 +1795,8 @@ class ReferenceAdmin(MergeAdminActionMixin, MergeAdminMixin, HistoricalImportExp
             )
             return redirect(reverse("admin:cms_reference_changelist"))
 
+        references = Reference.objects.filter(citation__contains="|").order_by("pk")
+        candidates = self._split_candidates(references)
         return TemplateResponse(
             request,
             "admin/cms/reference_split.html",
@@ -1720,6 +1806,10 @@ class ReferenceAdmin(MergeAdminActionMixin, MergeAdminMixin, HistoricalImportExp
                 "split_count": len(candidates),
                 "created_count": sum(
                     len(candidate["parts"]) - 1 for candidate in candidates
+                ),
+                "preview_token": self._split_preview_signature(candidates),
+                "can_confirm": not any(
+                    candidate["oversized_parts"] for candidate in candidates
                 ),
                 "title": _("Split References by |"),
             },
