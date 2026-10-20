@@ -10,7 +10,7 @@ from app.cms.models import (
     Accession, AccessionRow, Collection, DrawerRegister, FieldSlip,
     Identification, Locality, Taxon, TaxonExternalSource, TaxonStatus, TaxonomyImport,
 )
-from app.cms.taxonomy.sync import NowTaxonomySyncService, build_taxon_from_record
+from app.cms.taxonomy.sync import AcceptedRecord, NowTaxonomySyncService, build_taxon_from_record
 
 
 @override_settings(TAXON_NOW_CACHE_TIMEOUT=3600)
@@ -35,6 +35,23 @@ def test_now_export_downloads_are_cached(monkeypatch):
     service._fetch_text("https://example.com/now.tsv")
 
     assert calls == ["https://example.com/now.tsv"]
+
+
+def test_now_synonym_parser_skips_self_synonyms():
+    accepted = AcceptedRecord(
+        "NOW:species:Hipparion sitifense",
+        "Hipparion sitifense",
+        "species",
+        "",
+        "v1",
+        {},
+    )
+    synonyms = list(NowTaxonomySyncService()._parse_synonyms(
+        io.StringIO("syn_name\ttaxon_name\ttaxon_rank\nHipparion sitifense\tHipparion sitifense\tspecies\n"),
+        [accepted],
+    ))
+
+    assert synonyms == []
 
 
 @pytest.fixture(autouse=True)
