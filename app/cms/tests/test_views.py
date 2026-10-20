@@ -263,6 +263,67 @@ def test_locality_detail_displays_geological_times(client):
     assert "Miocene/Pliocene" in content
 
 
+def test_reference_detail_accessions_are_paginated_and_respect_user_visibility(client):
+    locality = create_locality(abbreviation="RA", name="Reference Accessions")
+    reference = Reference.objects.create(
+        title="Referenced specimens",
+        first_author="A. Author",
+        year="2024",
+        citation="Author 2024",
+    )
+    for specimen_no in range(1, 12):
+        accession = create_accession(
+            locality=locality,
+            specimen_no=specimen_no,
+            is_published=specimen_no != 11,
+        )
+        AccessionReference.objects.create(
+            accession=accession,
+            reference=reference,
+            page=f"{specimen_no}",
+        )
+
+    client.force_login(User.objects.create_user(username="reference-reader"))
+    response = client.get(reverse("reference_detail", args=[reference.pk]), {"page": 2})
+
+    assert response.status_code == 200
+    assert response.context["is_paginated"] is True
+    assert response.context["page_obj"].number == 2
+    assert response.context["page_obj"].paginator.count == 10
+    assert len(response.context["accession_entries"]) == 1
+    accession, page = response.context["accession_entries"][0]
+    assert accession.specimen_no == 10
+    assert page == "10"
+
+    content = response.content.decode()
+    assert "Site / Collecting Area" in content
+    assert "Accessioned by" not in content
+
+
+def test_reference_detail_accessions_show_staff_column_to_collection_managers(client):
+    locality = create_locality(abbreviation="RM", name="Reference Manager")
+    reference = Reference.objects.create(
+        title="Manager-visible specimens",
+        first_author="A. Author",
+        year="2024",
+        citation="Author 2024",
+    )
+    accession = create_accession(locality=locality, specimen_no=1, is_published=False)
+    AccessionReference.objects.create(accession=accession, reference=reference, page="5")
+    manager = create_collection_manager_user(username="reference-manager")
+    accession.accessioned_by = manager
+    accession.save()
+
+    client.force_login(manager)
+    response = client.get(reverse("reference_detail", args=[reference.pk]))
+
+    assert response.status_code == 200
+    assert len(response.context["accession_entries"]) == 1
+    content = response.content.decode()
+    assert "Accessioned by" in content
+    assert "reference-manager" in content
+
+
 def test_accession_row_print_view_populates_taxonomy_and_references(client):
     locality = create_locality(abbreviation="PR", name="Print Ridge")
     accession = create_accession(locality=locality, specimen_no=101)
