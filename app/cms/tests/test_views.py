@@ -271,17 +271,17 @@ def test_reference_detail_accessions_are_paginated_and_respect_user_visibility(c
         year="2024",
         citation="Author 2024",
     )
-    for specimen_no in range(1, 12):
+    for specimen_no in range(1, 13):
         accession = create_accession(
             locality=locality,
             specimen_no=specimen_no,
-            is_published=specimen_no != 11,
         )
         AccessionReference.objects.create(
             accession=accession,
             reference=reference,
             page=f"{specimen_no}",
         )
+    Accession.objects.filter(specimen_no=12).update(is_published=False)
 
     client.force_login(User.objects.create_user(username="reference-reader"))
     response = client.get(reverse("reference_detail", args=[reference.pk]), {"page": 2})
@@ -289,11 +289,11 @@ def test_reference_detail_accessions_are_paginated_and_respect_user_visibility(c
     assert response.status_code == 200
     assert response.context["is_paginated"] is True
     assert response.context["page_obj"].number == 2
-    assert response.context["page_obj"].paginator.count == 10
+    assert response.context["page_obj"].paginator.count == 11
     assert len(response.context["accession_entries"]) == 1
     accession, page = response.context["accession_entries"][0]
-    assert accession.specimen_no == 10
-    assert page == "10"
+    assert accession.specimen_no == 11
+    assert page == "11"
 
     content = response.content.decode()
     assert "Site / Collecting Area" in content
@@ -313,6 +313,7 @@ def test_reference_detail_accessions_show_staff_column_to_collection_managers(cl
     manager = create_collection_manager_user(username="reference-manager")
     accession.accessioned_by = manager
     accession.save()
+    Accession.objects.filter(pk=accession.pk).update(is_published=False)
 
     client.force_login(manager)
     response = client.get(reverse("reference_detail", args=[reference.pk]))
