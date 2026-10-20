@@ -1,9 +1,10 @@
 from decimal import Decimal, InvalidOperation
 import json
+import re
 import warnings
 
 from crum import get_current_user
-from django.db import models
+from django.db import models, transaction
 from django.db.models.functions import TruncDate
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
@@ -1209,8 +1210,8 @@ class Reference(MergeMixin, BaseModel):
     )
     year = models.CharField(
         max_length=4,
-        blank=False,
-        null=False,
+        blank=True,
+        null=True,
         help_text="Publication year (YYYY).",
     )
     journal = models.CharField(
@@ -1249,6 +1250,99 @@ class Reference(MergeMixin, BaseModel):
         help_text="Formatted citation text.",
     )
     history = HistoricalRecords()
+
+    @property
+    def citation_parts(self) -> list[str]:
+        return [part.strip() for part in self.citation.split("|") if part.strip()]
+
+    def split_by_pipe(self) -> int:
+        with transaction.atomic():
+            reference = type(self).objects.select_for_update().get(pk=self.pk)
+            citations = reference.citation_parts
+            if len(citations) < 2:
+                return 0
+
+            max_part_length = min(
+                self._meta.get_field(field_name).max_length
+                for field_name in ("title", "first_author")
+            )
+            if any(len(citation) > max_part_length for citation in citations):
+                raise ValidationError(
+                    _(
+                        "Citation parts must not exceed %(max_length)d characters."
+                    )
+                    % {"max_length": max_part_length}
+                )
+
+            accession_references = list(
+                AccessionReference.objects.filter(reference=reference)
+            )
+            identifications = list(
+                Identification.objects.filter(reference=reference)
+            )
+
+            reference_fields = {
+                field.attname: getattr(reference, field.attname)
+                for field in reference._meta.concrete_fields
+                if not field.primary_key
+                and field.name
+                not in {
+                    "title",
+                    "first_author",
+                    "year",
+                    "citation",
+                    "created_on",
+                    "modified_on",
+                    "created_by",
+                    "modified_by",
+                }
+            }
+            created_count = 0
+            for index, citation in enumerate(citations):
+                year_match = re.search(r"\b\d{4}\b", citation)
+                split_fields = {
+                    **reference_fields,
+                    "title": citation,
+                    "first_author": citation,
+                    "year": year_match.group() if year_match else None,
+                    "citation": citation,
+                }
+                if index == 0:
+                    for field_name, value in split_fields.items():
+                        setattr(reference, field_name, value)
+                    reference.save(
+                        update_fields=[
+                            "title",
+                            "first_author",
+                            "year",
+                            "citation",
+                            "modified_on",
+                            "modified_by",
+                        ]
+                    )
+                    split_reference = reference
+                else:
+                    split_reference = type(reference).objects.create(**split_fields)
+
+                    for relation in (*accession_references, *identifications):
+                        relation_fields = {
+                            field.attname: getattr(relation, field.attname)
+                            for field in relation._meta.concrete_fields
+                            if not field.primary_key
+                            and field.name
+                            not in {
+                                "created_on",
+                                "modified_on",
+                                "created_by",
+                                "modified_by",
+                            }
+                        }
+                        relation_fields["reference_id"] = split_reference.pk
+                        type(relation).objects.create(**relation_fields)
+
+                    created_count += 1
+
+            return created_count
 
     def get_absolute_url(self):
         return reverse('reference_detail', args=[str(self.id)])

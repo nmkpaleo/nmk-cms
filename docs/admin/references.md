@@ -14,6 +14,13 @@ Administrators can manage bibliographic references through the Django admin inte
 2. CSV files include citation details such as title, author and year.
 3. After uploading, review the preview and confirm to apply the changes.
 
+## Splitting Citations
+1. From the **References** changelist, select **Split References by |**.
+2. Review the citations containing multiple non-empty parts separated by `|`.
+3. Confirm to create one Reference for each part. Each part becomes that record's title, first author and citation.
+4. A four-digit year in a part is used as that Reference's year; parts without a year have a blank year.
+5. Accession-reference and identification links, including accession page details, are copied to each new record.
+
 ## Viewing Change Logs
 1. In the admin list, select a reference.
 2. Scroll to the history section for edit records.

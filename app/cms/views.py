@@ -2792,48 +2792,31 @@ class ReferenceDetailView(DetailView):
         context = super().get_context_data(**kwargs)
         user = self.request.user
 
-        accession_references = self.object.accessionreference_set.select_related(
-            "accession__collection",
-            "accession__specimen_prefix",
-            "accession__accessioned_by",
-        ).order_by(
-            "accession__collection__abbreviation",
-            "accession__specimen_prefix__abbreviation",
-            "accession__specimen_no",
-            "accession__instance_number",
+        accessions = Accession.objects.filter(accessionreference__reference=self.object)
+        if is_public_user(user):
+            accessions = accessions.filter(is_published=True)
+
+        accessions = prefetch_accession_related(accessions).order_by(
+            "collection__abbreviation",
+            "specimen_prefix__abbreviation",
+            "specimen_no",
+            "instance_number",
         )
+        page_obj = Paginator(accessions, 10).get_page(self.request.GET.get("page"))
+        accession_page = list(page_obj.object_list)
+        attach_accession_summaries(accession_page)
 
-        if not (
-            user.is_authenticated
-            and (
-                user.is_superuser
-                or user.groups.filter(name__in=["Collection Managers", "Curators"]).exists()
-            )
-        ):
-            accession_references = accession_references.filter(accession__is_published=True)
-
-        accession_ids = list(
-            dict.fromkeys(accession_references.values_list("accession_id", flat=True))
+        accession_ids = [accession.pk for accession in accession_page]
+        reference_pages = dict(
+            AccessionReference.objects.filter(
+                reference=self.object,
+                accession_id__in=accession_ids,
+            ).values_list("accession_id", "page")
         )
-
-        accession_entries = []
-        if accession_ids:
-            accessions = list(
-                prefetch_accession_related(
-                    Accession.objects.filter(id__in=accession_ids)
-                )
-            )
-            attach_accession_summaries(accessions)
-            accession_map = {accession.id: accession for accession in accessions}
-            seen_accession_ids = set()
-
-            for accession_reference in accession_references:
-                if accession_reference.accession_id in seen_accession_ids:
-                    continue
-                accession = accession_map.get(accession_reference.accession_id)
-                if accession is not None:
-                    accession_entries.append((accession, accession_reference.page))
-                    seen_accession_ids.add(accession_reference.accession_id)
+        accession_entries = [
+            (accession, reference_pages[accession.pk])
+            for accession in accession_page
+        ]
 
         doi_value = (self.object.doi or "").strip()
         if doi_value:
@@ -2843,6 +2826,8 @@ class ReferenceDetailView(DetailView):
                 context["doi_url"] = f"https://doi.org/{doi_value}"
 
         context["accession_entries"] = accession_entries
+        context["page_obj"] = page_obj
+        context["is_paginated"] = page_obj.paginator.num_pages > 1
         return context
 
 @method_decorator(login_required, name="dispatch")
