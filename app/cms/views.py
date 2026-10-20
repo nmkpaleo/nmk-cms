@@ -12,7 +12,6 @@ import csv
 import json
 import logging
 import os
-from collections import Counter
 from datetime import date, datetime, timedelta, timezone as dt_timezone
 import json
 from decimal import Decimal
@@ -434,9 +433,16 @@ def taxonomy_identification_cleanup_report(request):
                 if result.ok:
                     messages.success(request, _("Taxon '%(name)s' was synchronized.") % {"name": name})
                 else:
+                    issue_messages = []
+                    for issue in preview.issues:
+                        context = ", ".join(f"{key}: {value}" for key, value in issue.context.items())
+                        description = f"{issue.code}: {issue.message}"
+                        if context:
+                            description += f" ({context})"
+                        issue_messages.append(description)
                     messages.warning(request, _("Taxon '%(name)s' could not be synchronized: %(issues)s") % {
                         "name": name,
-                        "issues": "; ".join(issue.message for issue in preview.issues) or _("no exact match"),
+                        "issues": "; ".join(issue_messages) or _("no exact match"),
                     })
             except Exception as exc:
                 messages.error(request, _("Taxon '%(name)s' could not be synchronized: %(error)s") % {
@@ -559,11 +565,16 @@ def taxonomy_identification_cleanup_report(request):
             messages.success(request, _("Updated %(count)d identification(s).") % {"count": len(selected)})
         return redirect("taxonomy_identification_cleanup_report")
 
-    taxon_counts = Counter(
-        row["_normalized_taxon"]
-        for row in queryset.values("_normalized_taxon")
-        if row["_normalized_taxon"]
-    )
+    queryset = queryset.annotate(
+        _same_taxon_count=Case(
+            When(_normalized_taxon="", then=Value(0)),
+            default=Window(
+                expression=Count("pk"),
+                partition_by=[F("_normalized_taxon")],
+            ),
+            output_field=IntegerField(),
+        )
+    ).order_by("-_same_taxon_count", "accession_row_id", "pk")
     paginator = Paginator(queryset, 100)
     page_obj = paginator.get_page(request.GET.get("page", 1))
     identifications = list(page_obj.object_list)
@@ -573,7 +584,7 @@ def taxonomy_identification_cleanup_report(request):
             if not identification._normalized_taxon
             else "unmatched_taxon"
         )
-        identification.same_taxon_count = taxon_counts.get(identification._normalized_taxon, 0)
+        identification.same_taxon_count = identification._same_taxon_count
     return render(
         request,
         "reports/taxonomy_identification_cleanup.html",

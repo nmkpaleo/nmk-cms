@@ -107,6 +107,42 @@ def test_cleanup_report_requires_collection_manager(client, django_user_model):
     assert response.status_code == 302
 
 
+def test_cleanup_report_sorts_by_same_taxon_count_descending(client, django_user_model):
+    user = django_user_model.objects.create_user(username="count-manager", password="password")
+    managers, _ = Group.objects.get_or_create(name="Collection Managers")
+    user.groups.add(managers)
+    set_current_user(user)
+    try:
+        common_first = Identification.objects.create(
+            accession_row=_accession_row(user, specimen_no=20),
+            taxon_verbatim="Parapapio lothagamensis",
+            taxon="Parapapio lothagamensis",
+        )
+        rare = Identification.objects.create(
+            accession_row=_accession_row(user, specimen_no=21),
+            taxon_verbatim="Equus old",
+            taxon="Equus old",
+        )
+        common_second = Identification.objects.create(
+            accession_row=_accession_row(user, specimen_no=22),
+            taxon_verbatim="PARAPAPIO LOTHAGAMENSIS",
+            taxon="PARAPAPIO LOTHAGAMENSIS",
+        )
+    finally:
+        set_current_user(None)
+    client.force_login(user)
+
+    response = client.get(reverse("taxonomy_identification_cleanup_report"))
+
+    assert response.status_code == 200
+    assert [item.pk for item in response.context["identifications"]] == [
+        common_first.pk,
+        common_second.pk,
+        rare.pk,
+    ]
+    assert [item.same_taxon_count for item in response.context["identifications"]] == [2, 2, 1]
+
+
 def test_cleanup_report_filters_and_bulk_updates_case_insensitive_source(client, django_user_model):
     user = django_user_model.objects.create_user(username="bulk-manager", password="testpass123")
     managers, _ = Group.objects.get_or_create(name="Collection Managers")
