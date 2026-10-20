@@ -1,5 +1,6 @@
 from decimal import Decimal, InvalidOperation
 import json
+import re
 import warnings
 
 from crum import get_current_user
@@ -1268,48 +1269,67 @@ class Reference(MergeMixin, BaseModel):
                 Identification.objects.filter(reference=reference)
             )
 
-            reference.citation = citations[0]
-            reference.save(
-                update_fields=["citation", "modified_on", "modified_by"]
-            )
-
-            created_count = 0
-            for citation in citations[1:]:
-                reference_fields = {
-                    field.attname: getattr(reference, field.attname)
-                    for field in reference._meta.concrete_fields
-                    if not field.primary_key
-                    and field.name
-                    not in {
-                        "citation",
-                        "created_on",
-                        "modified_on",
-                        "created_by",
-                        "modified_by",
-                    }
+            original_year = reference.year
+            reference_fields = {
+                field.attname: getattr(reference, field.attname)
+                for field in reference._meta.concrete_fields
+                if not field.primary_key
+                and field.name
+                not in {
+                    "title",
+                    "first_author",
+                    "year",
+                    "citation",
+                    "created_on",
+                    "modified_on",
+                    "created_by",
+                    "modified_by",
                 }
-                split_reference = type(reference).objects.create(
+            }
+            created_count = 0
+            for index, citation in enumerate(citations):
+                year_match = re.search(r"\b\d{4}\b", citation)
+                split_fields = {
                     **reference_fields,
-                    citation=citation,
-                )
-
-                for relation in (*accession_references, *identifications):
-                    relation_fields = {
-                        field.attname: getattr(relation, field.attname)
-                        for field in relation._meta.concrete_fields
-                        if not field.primary_key
-                        and field.name
-                        not in {
-                            "created_on",
+                    "title": citation,
+                    "first_author": citation,
+                    "year": year_match.group() if year_match else original_year,
+                    "citation": citation,
+                }
+                if index == 0:
+                    for field_name, value in split_fields.items():
+                        setattr(reference, field_name, value)
+                    reference.save(
+                        update_fields=[
+                            "title",
+                            "first_author",
+                            "year",
+                            "citation",
                             "modified_on",
-                            "created_by",
                             "modified_by",
-                        }
-                    }
-                    relation_fields["reference_id"] = split_reference.pk
-                    type(relation).objects.create(**relation_fields)
+                        ]
+                    )
+                    split_reference = reference
+                else:
+                    split_reference = type(reference).objects.create(**split_fields)
 
-                created_count += 1
+                    for relation in (*accession_references, *identifications):
+                        relation_fields = {
+                            field.attname: getattr(relation, field.attname)
+                            for field in relation._meta.concrete_fields
+                            if not field.primary_key
+                            and field.name
+                            not in {
+                                "created_on",
+                                "modified_on",
+                                "created_by",
+                                "modified_by",
+                            }
+                        }
+                        relation_fields["reference_id"] = split_reference.pk
+                        type(relation).objects.create(**relation_fields)
+
+                    created_count += 1
 
             return created_count
 

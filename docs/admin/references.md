@@ -17,8 +17,9 @@ Administrators can manage bibliographic references through the Django admin inte
 ## Splitting Citations
 1. From the **References** changelist, select **Split References by |**.
 2. Review the citations containing multiple non-empty parts separated by `|`.
-3. Confirm to keep the first citation on the existing record and create one record for each remaining part.
-4. Accession-reference and identification links, including accession page details, are copied to each new record.
+3. Confirm to create one Reference for each part. Each part becomes that record's title, first author and citation.
+4. A four-digit year in a part is used as that Reference's year; parts without a year keep the original Reference's year.
+5. Accession-reference and identification links, including accession page details, are copied to each new record.
 
 ## Viewing Change Logs
 1. In the admin list, select a reference.

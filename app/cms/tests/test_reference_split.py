@@ -42,7 +42,7 @@ class ReferenceSplitAdminTests(TestCase):
                 first_author="Author",
                 year="2024",
                 journal="Journal",
-                citation="Citation one | Citation two | Citation three",
+                citation="Citation one 1999 | Citation two 2000 | Citation three",
             )
             AccessionReference.objects.create(
                 accession=accession,
@@ -64,25 +64,36 @@ class ReferenceSplitAdminTests(TestCase):
         self.assertContains(changelist_response, "Split References by |")
 
         preview_response = self.client.get(split_url)
-        self.assertContains(preview_response, "Citation one | Citation two | Citation three")
-        self.assertContains(preview_response, "Citation two")
+        self.assertContains(preview_response, "Citation one 1999 | Citation two 2000 | Citation three")
+        self.assertContains(preview_response, "Citation two 2000")
         self.assertContains(preview_response, "Citation three")
 
         with impersonate(self.admin_user):
             response = self.client.post(split_url, {"confirm": "yes"})
 
         self.assertRedirects(response, reverse("admin:cms_reference_changelist"))
-        references = list(
-            Reference.objects.filter(title="Shared title")
-            .order_by("citation")
-            .values_list("citation", flat=True)
+        citations = [
+            "Citation one 1999",
+            "Citation two 2000",
+            "Citation three",
+        ]
+        split_references = Reference.objects.filter(citation__in=citations)
+        self.assertEqual(split_references.count(), 3)
+        self.assertEqual(
+            {
+                reference.citation: (
+                    reference.title,
+                    reference.first_author,
+                    reference.year,
+                )
+                for reference in split_references
+            },
+            {
+                "Citation one 1999": ("Citation one 1999", "Citation one 1999", "1999"),
+                "Citation two 2000": ("Citation two 2000", "Citation two 2000", "2000"),
+                "Citation three": ("Citation three", "Citation three", "2024"),
+            },
         )
-        self.assertCountEqual(
-            references,
-            ["Citation one", "Citation two", "Citation three"],
-        )
-
-        split_references = Reference.objects.filter(title="Shared title")
         self.assertEqual(
             set(split_references.values_list("journal", flat=True)),
             {"Journal"},
