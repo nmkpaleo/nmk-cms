@@ -3,7 +3,7 @@ import json
 import warnings
 
 from crum import get_current_user
-from django.db import models
+from django.db import models, transaction
 from django.db.models.functions import TruncDate
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
@@ -1249,6 +1249,69 @@ class Reference(MergeMixin, BaseModel):
         help_text="Formatted citation text.",
     )
     history = HistoricalRecords()
+
+    @property
+    def citation_parts(self) -> list[str]:
+        return [part.strip() for part in self.citation.split("|") if part.strip()]
+
+    def split_by_pipe(self) -> int:
+        with transaction.atomic():
+            reference = type(self).objects.select_for_update().get(pk=self.pk)
+            citations = reference.citation_parts
+            if len(citations) < 2:
+                return 0
+
+            accession_references = list(
+                AccessionReference.objects.filter(reference=reference)
+            )
+            identifications = list(
+                Identification.objects.filter(reference=reference)
+            )
+
+            reference.citation = citations[0]
+            reference.save(
+                update_fields=["citation", "modified_on", "modified_by"]
+            )
+
+            created_count = 0
+            for citation in citations[1:]:
+                reference_fields = {
+                    field.attname: getattr(reference, field.attname)
+                    for field in reference._meta.concrete_fields
+                    if not field.primary_key
+                    and field.name
+                    not in {
+                        "citation",
+                        "created_on",
+                        "modified_on",
+                        "created_by",
+                        "modified_by",
+                    }
+                }
+                split_reference = type(reference).objects.create(
+                    **reference_fields,
+                    citation=citation,
+                )
+
+                for relation in (*accession_references, *identifications):
+                    relation_fields = {
+                        field.attname: getattr(relation, field.attname)
+                        for field in relation._meta.concrete_fields
+                        if not field.primary_key
+                        and field.name
+                        not in {
+                            "created_on",
+                            "modified_on",
+                            "created_by",
+                            "modified_by",
+                        }
+                    }
+                    relation_fields["reference_id"] = split_reference.pk
+                    type(relation).objects.create(**relation_fields)
+
+                created_count += 1
+
+            return created_count
 
     def get_absolute_url(self):
         return reverse('reference_detail', args=[str(self.id)])

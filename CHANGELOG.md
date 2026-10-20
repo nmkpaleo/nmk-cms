@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add a Reference admin tool to split pipe-delimited citations, preserving accession and identification links on each split record.
+
 - Add pagination and the basic Accessions list fields to referenced accessions on Reference details, while preserving publication visibility and staff-only accessioned-by data.
 
 - Sort the taxonomy identification cleanup report by same-taxon count, highest first.
