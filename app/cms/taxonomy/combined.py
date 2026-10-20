@@ -15,6 +15,7 @@ from .sync import NowTaxonomySyncService, SynonymRecord, SyncIssue, _latest_vers
 def _is_self_synonym(record):
     return (
         isinstance(record, SynonymRecord)
+        and record.external_source == TaxonExternalSource.NOW
         and taxon_identity(record.name, _record_rank(record.rank))
         == taxon_identity(record.accepted_name, _record_rank(record.rank))
     )
