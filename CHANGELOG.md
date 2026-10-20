@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add pagination and the basic Accessions list fields to referenced accessions on Reference details, while preserving publication visibility and staff-only accessioned-by data.
+
 - Sort the taxonomy identification cleanup report by same-taxon count, highest first.
 
 - Ignore self-referential taxonomy synonym records so cleanup retains accepted taxa and repairs invalid local self-links.

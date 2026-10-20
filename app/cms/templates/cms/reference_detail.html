@@ -79,10 +79,10 @@
       <table class="w3-table-all w3-hoverable w3-small">
         <thead>
           <tr>
-            <th scope="col">{% trans "Accession" %}</th>
             <th scope="col">{% trans "Collection" %}</th>
             <th scope="col">{% trans "Specimen prefix" %}</th>
             <th scope="col">{% trans "Specimen number" %}</th>
+            <th scope="col">{% trans "Site / Collecting Area" %}</th>
             <th scope="col">{% trans "Taxon" %}</th>
             <th scope="col">{% trans "Element" %}</th>
             <th scope="col">{% trans "Page(s)" %}</th>
@@ -94,10 +94,10 @@
         <tbody>
           {% for accession, page in accession_entries %}
             <tr>
-              <td><a href="{% url 'accession_detail' accession.pk %}">{{ accession }}</a></td>
               <td>{{ accession.collection.abbreviation }}</td>
               <td>{{ accession.specimen_prefix.abbreviation }}</td>
               <td><a href="{% url 'accession_detail' accession.pk %}">{{ accession.specimen_no }}</a></td>
+              <td>{{ accession.site|default:"—" }}</td>
               <td>
                 {% if accession.taxa_list %}
                   {{ accession.taxa_list|join:", " }}
@@ -130,5 +130,4 @@
   </section>
 </main>
 {% endblock %}
-
 
