@@ -52,6 +52,7 @@ class ReferenceSplitAdminTests(TestCase):
             Identification.objects.create(
                 accession_row=accession_row,
                 reference=self.reference,
+                taxon_verbatim="Test taxon",
                 taxon="Test taxon",
             )
 
