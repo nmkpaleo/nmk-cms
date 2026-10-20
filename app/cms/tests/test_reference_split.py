@@ -91,7 +91,7 @@ class ReferenceSplitAdminTests(TestCase):
             {
                 "Citation one 1999": ("Citation one 1999", "Citation one 1999", "1999"),
                 "Citation two 2000": ("Citation two 2000", "Citation two 2000", "2000"),
-                "Citation three": ("Citation three", "Citation three", "2024"),
+                "Citation three": ("Citation three", "Citation three", None),
             },
         )
         self.assertEqual(

@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Add a Reference admin tool to split pipe-delimited citations into separate title, first-author and citation values, extracting part-specific years and preserving accession and identification links.
+- Add a Reference admin tool to split pipe-delimited citations into separate title, first-author and citation values, extracting part-specific years and leaving missing years blank while preserving accession and identification links.
 
 - Add pagination and the basic Accessions list fields to referenced accessions on Reference details, while preserving publication visibility and staff-only accessioned-by data.
 

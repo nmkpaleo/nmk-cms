@@ -2,7 +2,7 @@
 {% load i18n %}
 {% block content %}
 <h1>{{ title }}</h1>
-<p>{% blocktrans with split_count=split_count created_count=created_count %}This will split {{ split_count }} Reference record(s) into {{ created_count }} additional record(s), using each non-empty part of the citation separated by a vertical bar as the title, first author and citation. A four-digit year in a part will be used; otherwise the original year is kept. Accession and identification links will also be copied.{% endblocktrans %}</p>
+<p>{% blocktrans with split_count=split_count created_count=created_count %}This will split {{ split_count }} Reference record(s) into {{ created_count }} additional record(s), using each non-empty part of the citation separated by a vertical bar as the title, first author and citation. A four-digit year in a part will be used; otherwise the year will be left blank. Accession and identification links will also be copied.{% endblocktrans %}</p>
 {% if candidates %}
 <ul>
   {% for candidate in candidates %}

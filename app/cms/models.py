@@ -1210,8 +1210,8 @@ class Reference(MergeMixin, BaseModel):
     )
     year = models.CharField(
         max_length=4,
-        blank=False,
-        null=False,
+        blank=True,
+        null=True,
         help_text="Publication year (YYYY).",
     )
     journal = models.CharField(
@@ -1269,7 +1269,6 @@ class Reference(MergeMixin, BaseModel):
                 Identification.objects.filter(reference=reference)
             )
 
-            original_year = reference.year
             reference_fields = {
                 field.attname: getattr(reference, field.attname)
                 for field in reference._meta.concrete_fields
@@ -1293,7 +1292,7 @@ class Reference(MergeMixin, BaseModel):
                     **reference_fields,
                     "title": citation,
                     "first_author": citation,
-                    "year": year_match.group() if year_match else original_year,
+                    "year": year_match.group() if year_match else None,
                     "citation": citation,
                 }
                 if index == 0:
