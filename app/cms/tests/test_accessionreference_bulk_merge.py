@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from crum import set_current_user
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -30,6 +31,8 @@ class BulkMergeDuplicateAccessionReferenceTests(TestCase):
     def setUp(self):
         User = get_user_model()
         self.admin_user = User.objects.create_superuser("bulk-admin", "a@example.com", "pw")
+        set_current_user(self.admin_user)
+        self.addCleanup(set_current_user, None)
         collection = Collection.objects.create(abbreviation="COLL", description="Test")
         locality = Locality.objects.create(abbreviation="LOC", name="Locality")
         self.acc1 = Accession.objects.create(collection=collection, specimen_prefix=locality, specimen_no=1)
