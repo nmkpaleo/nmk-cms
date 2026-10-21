@@ -17,4 +17,7 @@
   <a href="{% url 'admin-upload-scan' %}" class="button">Upload scans</a>
   <a href="{% url 'admin-do-ocr' %}" class="button">Do OCR</a>
   <a href="{% url 'admin-chatgpt-usage' %}" class="button">ChatGPT usage</a>
+  {% if request.user.is_superuser %}
+    <a href="{% url 'admin:cms-backups' %}" class="button">Backups</a>
+  {% endif %}
 {% endblock %}

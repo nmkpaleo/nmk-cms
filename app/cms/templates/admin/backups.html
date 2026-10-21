@@ -1,0 +1,70 @@
+{% extends "admin/base_site.html" %}
+{% load i18n humanize %}
+
+{% block content %}
+<div id="content-main">
+  <form method="post" class="module">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="create">
+    <h2>{% translate "Create backup" %}</h2>
+    <p>{% translate "Creates a database SQL dump and a media files archive." %}</p>
+    <div class="submit-row">
+      <button type="submit" class="default">{% translate "Back up CMS now" %}</button>
+    </div>
+  </form>
+
+  <div class="module">
+    <h2>{% translate "Download backups" %}</h2>
+    {% if backup_files %}
+      <table>
+        <thead>
+          <tr>
+            <th>{% translate "File" %}</th>
+            <th>{% translate "Type" %}</th>
+            <th>{% translate "Size" %}</th>
+            <th>{% translate "Modified" %}</th>
+            <th>{% translate "Download" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for backup in backup_files %}
+            <tr>
+              <td>{{ backup.name }}</td>
+              <td>{{ backup.kind }}</td>
+              <td>{{ backup.size|filesizeformat }}</td>
+              <td>{{ backup.modified_at|naturaltime }}</td>
+              <td><a class="button" href="{% url 'admin:cms-backup-download' backup.name %}">{% translate "Download" %}</a></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>{% translate "No backups have been created yet." %}</p>
+    {% endif %}
+  </div>
+
+  <div class="module">
+    <h2>{% translate "Restore database" %}</h2>
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="restore_database">
+      {{ database_restore_form.as_p }}
+      <div class="submit-row">
+        <button type="submit" class="deletelink">{% translate "Restore database" %}</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="module">
+    <h2>{% translate "Restore media files" %}</h2>
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="restore_files">
+      {{ files_restore_form.as_p }}
+      <div class="submit-row">
+        <button type="submit" class="deletelink">{% translate "Restore media files" %}</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

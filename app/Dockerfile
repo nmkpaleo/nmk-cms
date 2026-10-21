@@ -50,7 +50,7 @@ ENV APP_VERSION=${APP_VERSION}
 WORKDIR /src/app
 
 RUN apt-get update && \
-    apt-get install -y default-libmysqlclient-dev && \
+    apt-get install -y default-libmysqlclient-dev default-mysql-client && \
     useradd -m user && \
     mkdir -p /vol/web/static && \
     mkdir -p /vol/web/media && \

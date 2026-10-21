@@ -1,11 +1,14 @@
 import hashlib
 import json
 import logging
+import tempfile
+from pathlib import Path
 from typing import Any, Mapping
 
 from django.contrib import admin, messages
 from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
 from django.contrib.admin.views.decorators import staff_member_required
+from django.http import FileResponse
 from django.db import transaction
 from django.db.models import Count, OuterRef, Exists, Q
 from django.conf import settings
@@ -92,6 +95,7 @@ from django.contrib.auth import get_user_model
 
 from .taxonomy.combined import TaxonomySyncService
 from .taxonomy.snapshot import catalogue_fingerprint, sign_preview, apply_signed_preview, PreviewUnavailable
+from . import backups
 
 logger = logging.getLogger(__name__)
 from cms.upload_processing import queue_specimen_list_processing
@@ -2128,6 +2132,34 @@ class FlatImportForm(forms.Form):
     import_file = forms.FileField(label="Import CSV")
 
 
+class RestoreDatabaseForm(forms.Form):
+    backup_file = forms.FileField(label=_("Database SQL file"))
+    confirm = forms.BooleanField(
+        label=_("I understand this will overwrite live database data."),
+        required=True,
+    )
+
+    def clean_backup_file(self):
+        uploaded = self.cleaned_data["backup_file"]
+        if not uploaded.name.endswith(".sql"):
+            raise ValidationError(_("Upload a .sql database dump."))
+        return uploaded
+
+
+class RestoreFilesForm(forms.Form):
+    backup_file = forms.FileField(label=_("Media archive"))
+    confirm = forms.BooleanField(
+        label=_("I understand this will overwrite live media files."),
+        required=True,
+    )
+
+    def clean_backup_file(self):
+        uploaded = self.cleaned_data["backup_file"]
+        if not uploaded.name.endswith(".tar.gz"):
+            raise ValidationError(_("Upload a .tar.gz media archive."))
+        return uploaded
+
+
 @staff_member_required
 def flat_file_import_view(request):
     """Handle the flat file import process with staff-only access."""
@@ -2152,6 +2184,89 @@ def flat_file_import_view(request):
     return TemplateResponse(request, "admin/flat_file_import.html", context)
 
 
+def _require_backup_permission(request):
+    if not request.user.is_superuser:
+        raise PermissionDenied
+
+
+def _save_restore_upload(uploaded_file, suffix):
+    with tempfile.NamedTemporaryFile(delete=False, dir=backups.backup_root(), suffix=suffix) as tmp:
+        for chunk in uploaded_file.chunks():
+            tmp.write(chunk)
+        return tmp.name
+
+
+@staff_member_required
+def backup_admin_view(request):
+    """Create, download, and restore CMS backup files."""
+
+    _require_backup_permission(request)
+    database_restore_form = RestoreDatabaseForm()
+    files_restore_form = RestoreFilesForm()
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "create":
+            try:
+                backup_set = backups.create_backup_set()
+                messages.success(
+                    request,
+                    _("Backup created: %(database)s and %(files)s.")
+                    % {
+                        "database": backup_set.database_path.name,
+                        "files": backup_set.files_path.name,
+                    },
+                )
+            except Exception as exc:  # pragma: no cover - surfaced in admin UI
+                logger.exception("CMS backup failed")
+                messages.error(request, _("Backup failed: %(error)s") % {"error": exc})
+            return redirect(reverse("admin:cms-backups"))
+
+        if action == "restore_database":
+            database_restore_form = RestoreDatabaseForm(request.POST, request.FILES)
+            if database_restore_form.is_valid():
+                temp_path = _save_restore_upload(database_restore_form.cleaned_data["backup_file"], ".sql")
+                try:
+                    backups.restore_database(Path(temp_path))
+                    messages.success(request, _("Database restore completed."))
+                    return redirect(reverse("admin:cms-backups"))
+                except Exception as exc:  # pragma: no cover - surfaced in admin UI
+                    logger.exception("CMS database restore failed")
+                    messages.error(request, _("Database restore failed: %(error)s") % {"error": exc})
+                finally:
+                    Path(temp_path).unlink(missing_ok=True)
+
+        if action == "restore_files":
+            files_restore_form = RestoreFilesForm(request.POST, request.FILES)
+            if files_restore_form.is_valid():
+                temp_path = _save_restore_upload(files_restore_form.cleaned_data["backup_file"], ".tar.gz")
+                try:
+                    backups.restore_media(Path(temp_path))
+                    messages.success(request, _("Media restore completed."))
+                    return redirect(reverse("admin:cms-backups"))
+                except Exception as exc:  # pragma: no cover - surfaced in admin UI
+                    logger.exception("CMS media restore failed")
+                    messages.error(request, _("Media restore failed: %(error)s") % {"error": exc})
+                finally:
+                    Path(temp_path).unlink(missing_ok=True)
+
+    context = {
+        **admin.site.each_context(request),
+        "title": _("CMS Backups"),
+        "backup_files": backups.list_backup_files(),
+        "database_restore_form": database_restore_form,
+        "files_restore_form": files_restore_form,
+    }
+    return TemplateResponse(request, "admin/backups.html", context)
+
+
+@staff_member_required
+def backup_download_view(request, filename):
+    _require_backup_permission(request)
+    path = backups.resolve_backup_file(filename)
+    return FileResponse(path.open("rb"), as_attachment=True, filename=path.name)
+
+
 original_get_urls = admin.site.get_urls
 
 
@@ -2162,6 +2277,16 @@ def get_urls():
             "flat-file-import/",
             admin.site.admin_view(flat_file_import_view),
             name="flat-file-import",
+        ),
+        path(
+            "backups/",
+            admin.site.admin_view(backup_admin_view),
+            name="cms-backups",
+        ),
+        path(
+            "backups/download/<path:filename>/",
+            admin.site.admin_view(backup_download_view),
+            name="cms-backup-download",
         ),
     ]
     return custom_urls + urls
