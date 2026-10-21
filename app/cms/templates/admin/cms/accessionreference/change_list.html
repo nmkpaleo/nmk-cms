@@ -1,0 +1,16 @@
+{% extends "admin/change_list.html" %}
+{% load i18n %}
+{% block object-tools-items %}
+  {% if merge_duplicates_url %}
+    <li>
+      <form method="post" action="{{ merge_duplicates_url }}" style="display:inline;margin:0;">
+        {% csrf_token %}
+        <a href="#" role="button" class="merge_duplicates_link"
+           onclick="if (confirm('{% trans "Merge all accession references that share the same accession and reference?" %}')) { this.closest('form').submit(); } return false;">
+          {% trans "Merge duplicates" %}
+        </a>
+      </form>
+    </li>
+  {% endif %}
+  {{ block.super }}
+{% endblock %}
