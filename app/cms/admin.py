@@ -989,7 +989,6 @@ class AccessionReferenceAdmin(
     list_display = ('collection_abbreviation', 'specimen_prefix_abbreviation', 'specimen_number', 'page', 'reference')
     search_fields = (
         'accession__specimen_no',
-        'specimen_suffix',
         'reference__title',
         'page',
     )
