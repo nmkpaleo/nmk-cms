@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add a bulk "Merge duplicate references" button to the Accession references admin that merges records sharing the same accession and reference into the lowest-ID record, combining pages in ascending order and reporting any failures.
+
 - Add a Reference admin tool to split pipe-delimited citations into separate title, first-author and citation values, extracting part-specific years and leaving missing years blank while preserving accession and identification links.
 
 - Add pagination and the basic Accessions list fields to referenced accessions on Reference details, while preserving publication visibility and staff-only accessioned-by data.
