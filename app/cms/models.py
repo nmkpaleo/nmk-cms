@@ -3514,3 +3514,38 @@ class SpecimenListRowCandidate(models.Model):
 
     def __str__(self) -> str:
         return f"Row {self.row_index} candidate for page {self.page_id}"
+
+
+class CMSBackupJob(models.Model):
+    class Operation(models.TextChoices):
+        CREATE = "create", _("Create backup")
+        RESTORE_DATABASE = "restore_database", _("Restore database")
+        RESTORE_FILES = "restore_files", _("Restore media files")
+
+    class Status(models.TextChoices):
+        QUEUED = "queued", _("Queued")
+        RUNNING = "running", _("Running")
+        SUCCEEDED = "succeeded", _("Succeeded")
+        FAILED = "failed", _("Failed")
+
+    operation = models.CharField(max_length=20, choices=Operation.choices)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.QUEUED)
+    source_path = models.CharField(max_length=1024, blank=True)
+    result = models.TextField(blank=True)
+    error = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cms_backup_jobs",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.get_operation_display()} ({self.get_status_display()})"

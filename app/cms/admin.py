@@ -1,7 +1,6 @@
 import hashlib
 import json
 import logging
-import tempfile
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -85,6 +84,7 @@ from .models import (
     SpecimenListPage,
     SpecimenListPageOCR,
     SpecimenListRowCandidate,
+    CMSBackupJob,
 )
 from .resources import *
 
@@ -2244,71 +2244,68 @@ def _require_backup_permission(request):
         raise PermissionDenied
 
 
-def _save_restore_upload(uploaded_file, suffix):
-    with tempfile.NamedTemporaryFile(delete=False, dir=backups.backup_root(), suffix=suffix) as tmp:
-        for chunk in uploaded_file.chunks():
-            tmp.write(chunk)
-        return tmp.name
-
-
 @staff_member_required
 def backup_admin_view(request):
     """Create, download, and restore CMS backup files."""
 
     _require_backup_permission(request)
-    database_restore_form = RestoreDatabaseForm()
-    files_restore_form = RestoreFilesForm()
+    database_restore_form = RestoreDatabaseForm(auto_id="database_%s")
+    files_restore_form = RestoreFilesForm(auto_id="files_%s")
 
     if request.method == "POST":
         action = request.POST.get("action")
         if action == "create":
             try:
-                backup_set = backups.create_backup_set()
-                messages.success(
-                    request,
-                    _("Backup created: %(database)s and %(files)s.")
-                    % {
-                        "database": backup_set.database_path.name,
-                        "files": backup_set.files_path.name,
-                    },
-                )
+                job = backups.queue_backup_job(CMSBackupJob.Operation.CREATE, user=request.user)
+                messages.success(request, _("Backup job %(job_id)s was queued.") % {"job_id": job.pk})
             except Exception as exc:  # pragma: no cover - surfaced in admin UI
-                logger.exception("CMS backup failed")
-                messages.error(request, _("Backup failed: %(error)s") % {"error": exc})
+                logger.exception("CMS backup job could not be queued")
+                messages.error(request, _("Backup could not be queued: %(error)s") % {"error": exc})
             return redirect(reverse("admin:cms-backups"))
 
         if action == "restore_database":
-            database_restore_form = RestoreDatabaseForm(request.POST, request.FILES)
+            database_restore_form = RestoreDatabaseForm(
+                request.POST,
+                request.FILES,
+                auto_id="database_%s",
+            )
             if database_restore_form.is_valid():
-                temp_path = _save_restore_upload(database_restore_form.cleaned_data["backup_file"], ".sql")
                 try:
-                    backups.restore_database(Path(temp_path))
-                    messages.success(request, _("Database restore completed."))
+                    job = backups.queue_backup_job(
+                        CMSBackupJob.Operation.RESTORE_DATABASE,
+                        user=request.user,
+                        uploaded_file=database_restore_form.cleaned_data["backup_file"],
+                    )
+                    messages.success(request, _("Database restore job %(job_id)s was queued.") % {"job_id": job.pk})
                     return redirect(reverse("admin:cms-backups"))
                 except Exception as exc:  # pragma: no cover - surfaced in admin UI
-                    logger.exception("CMS database restore failed")
-                    messages.error(request, _("Database restore failed: %(error)s") % {"error": exc})
-                finally:
-                    Path(temp_path).unlink(missing_ok=True)
+                    logger.exception("CMS database restore job could not be queued")
+                    messages.error(request, _("Database restore could not be queued: %(error)s") % {"error": exc})
 
         if action == "restore_files":
-            files_restore_form = RestoreFilesForm(request.POST, request.FILES)
+            files_restore_form = RestoreFilesForm(
+                request.POST,
+                request.FILES,
+                auto_id="files_%s",
+            )
             if files_restore_form.is_valid():
-                temp_path = _save_restore_upload(files_restore_form.cleaned_data["backup_file"], ".tar.gz")
                 try:
-                    backups.restore_media(Path(temp_path))
-                    messages.success(request, _("Media restore completed."))
+                    job = backups.queue_backup_job(
+                        CMSBackupJob.Operation.RESTORE_FILES,
+                        user=request.user,
+                        uploaded_file=files_restore_form.cleaned_data["backup_file"],
+                    )
+                    messages.success(request, _("Media restore job %(job_id)s was queued.") % {"job_id": job.pk})
                     return redirect(reverse("admin:cms-backups"))
                 except Exception as exc:  # pragma: no cover - surfaced in admin UI
-                    logger.exception("CMS media restore failed")
-                    messages.error(request, _("Media restore failed: %(error)s") % {"error": exc})
-                finally:
-                    Path(temp_path).unlink(missing_ok=True)
+                    logger.exception("CMS media restore job could not be queued")
+                    messages.error(request, _("Media restore could not be queued: %(error)s") % {"error": exc})
 
     context = {
         **admin.site.each_context(request),
         "title": _("CMS Backups"),
         "backup_files": backups.list_backup_files(),
+        "backup_jobs": CMSBackupJob.objects.select_related("created_by")[:20],
         "database_restore_form": database_restore_form,
         "files_restore_form": files_restore_form,
     }

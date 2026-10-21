@@ -6,6 +6,22 @@ services:
       - 3000:3000
     volumes:
       - ./app:/src/app
+      - backups:/vol/backups
+    env_file:
+      - ./.env
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings
+    depends_on:
+      - db
+      - redis
+
+  backup_worker:
+    build: ./app
+    restart: unless-stopped
+    command: ["python", "manage.py", "process_backup_jobs"]
+    volumes:
+      - ./app:/src/app
+      - backups:/vol/backups
     env_file:
       - ./.env
     environment:
@@ -45,3 +61,4 @@ services:
 
 volumes:
   db: null
+  backups:

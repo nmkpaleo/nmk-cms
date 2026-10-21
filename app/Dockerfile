@@ -52,9 +52,11 @@ WORKDIR /src/app
 RUN apt-get update && \
     apt-get install -y default-libmysqlclient-dev default-mysql-client && \
     useradd -m user && \
+    mkdir -p /vol/backups && \
     mkdir -p /vol/web/static && \
     mkdir -p /vol/web/media && \
     chown -R user:user /vol && \
+    chmod 700 /vol/backups && \
     chmod -R 755 /vol/web
 
 USER user

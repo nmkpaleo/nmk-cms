@@ -8,6 +8,7 @@ services:
     command: ["sh", "-c", "./scripts/entrypoint.prod.sh"]
     volumes:
       - static:/vol/web
+      - backups:/vol/backups
     env_file:
       - ./.env
     environment:
@@ -17,6 +18,20 @@ services:
       - GUNICORN_TIMEOUT=${GUNICORN_TIMEOUT:-90}
       - GUNICORN_MAX_REQUESTS=${GUNICORN_MAX_REQUESTS:-1000}
       - GUNICORN_MAX_REQUESTS_JITTER=${GUNICORN_MAX_REQUESTS_JITTER:-50}
+    depends_on:
+      - db
+      - redis
+
+  backup_worker:
+    image: ${DOCKER_PROD_IMAGE}
+    restart: unless-stopped
+    command: ["python", "manage.py", "process_backup_jobs"]
+    volumes:
+      - backups:/vol/backups
+    env_file:
+      - ./.env
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings
     depends_on:
       - db
       - redis
@@ -97,3 +112,4 @@ services:
 volumes:
   static:
   db:
+  backups:

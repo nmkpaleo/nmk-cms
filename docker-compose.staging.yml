@@ -8,6 +8,7 @@ services:
     command: sh -c ./scripts/entrypoint.prod.sh
     volumes:
       - static:/vol/web
+      - backups:/vol/backups
     env_file:
       - ./.env
     environment:
@@ -17,6 +18,17 @@ services:
       - GUNICORN_TIMEOUT=${GUNICORN_TIMEOUT:-90}
       - GUNICORN_MAX_REQUESTS=${GUNICORN_MAX_REQUESTS:-1000}
       - GUNICORN_MAX_REQUESTS_JITTER=${GUNICORN_MAX_REQUESTS_JITTER:-50}
+
+  backup_worker:
+    image: # STAGING IMAGE NAME
+    restart: unless-stopped
+    command: ["python", "manage.py", "process_backup_jobs"]
+    volumes:
+      - backups:/vol/backups
+    env_file:
+      - ./.env
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings
 
   nginx:
     build: ./nginx
@@ -69,3 +81,4 @@ services:
 
 volumes:
   static: null
+  backups: null

@@ -18,7 +18,7 @@ from django.test import TestCase
 from django.test import override_settings
 from django.urls import reverse
 
-from cms.models import FieldSlip
+from cms.models import CMSBackupJob, FieldSlip
 from cms.resources import AccessionReferenceResource, AccessionResource, AccessionRowResource
 
 
@@ -106,45 +106,71 @@ class BackupAdminViewTests(TestCase):
         self.assertIn("Back up CMS now", content)
         self.assertIn("Restore database", content)
         self.assertIn("Restore media files", content)
+        self.assertIn('id="database_backup_file"', content)
+        self.assertIn('id="files_backup_file"', content)
+        self.assertIn('id="database_confirm"', content)
+        self.assertIn('id="files_confirm"', content)
 
     def test_create_backup_posts_to_service(self):
         self.client.login(username=self.superuser.username, password="pass")
-        backup_set = SimpleNamespace(
-            database_path=Path("paleocms_database_20261021_064037.sql"),
-            files_path=Path("paleocms_files_20261021_064037.tar.gz"),
-        )
-
         with override_settings(CMS_BACKUP_ROOT=self.backup_dir.name):
-            with mock.patch("cms.admin.backups.create_backup_set", return_value=backup_set) as create_backup:
+            with mock.patch("cms.admin.backups.queue_backup_job", return_value=SimpleNamespace(pk=7)) as queue_job:
                 response = self.client.post(reverse("admin:cms-backups"), {"action": "create"})
 
         self.assertEqual(response.status_code, 302)
-        create_backup.assert_called_once_with()
+        queue_job.assert_called_once_with(CMSBackupJob.Operation.CREATE, user=self.superuser)
 
     def test_restore_database_upload_posts_to_service(self):
         self.client.login(username=self.superuser.username, password="pass")
         upload = SimpleUploadedFile("paleocms_database.sql", b"SELECT 1;")
 
         with override_settings(CMS_BACKUP_ROOT=self.backup_dir.name):
-            with mock.patch("cms.admin.backups.restore_database") as restore_database:
+            with mock.patch("cms.admin.backups.queue_backup_job", return_value=SimpleNamespace(pk=8)) as queue_job:
                 response = self.client.post(
                     reverse("admin:cms-backups"),
                     {"action": "restore_database", "backup_file": upload, "confirm": "on"},
                 )
 
         self.assertEqual(response.status_code, 302)
-        restore_database.assert_called_once()
+        queue_job.assert_called_once()
+        args, kwargs = queue_job.call_args
+        self.assertEqual(args, (CMSBackupJob.Operation.RESTORE_DATABASE,))
+        self.assertEqual(kwargs["user"].pk, self.superuser.pk)
+        self.assertEqual(kwargs["uploaded_file"].name, upload.name)
+
+    def test_form_ids_remain_distinct_after_validation_error(self):
+        self.client.force_login(self.superuser)
+        upload = SimpleUploadedFile("not-a-dump.txt", b"invalid")
+
+        with override_settings(CMS_BACKUP_ROOT=self.backup_dir.name):
+            response = self.client.post(
+                reverse("admin:cms-backups"),
+                {"action": "restore_database", "backup_file": upload, "confirm": "on"},
+            )
+
+        content = response.content.decode()
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('id="database_backup_file"', content)
+        self.assertIn('id="files_backup_file"', content)
+        self.assertIn('id="database_confirm"', content)
+        self.assertIn('id="files_confirm"', content)
 
     def test_download_serves_backup_file(self):
-        path = Path(self.backup_dir.name) / "paleocms_database.sql"
+        timestamp = "20261021_064037_abc123"
+        path = Path(self.backup_dir.name) / f"paleocms_database_{timestamp}.sql"
         path.write_text("SELECT 1;")
+        (Path(self.backup_dir.name) / f"paleocms_files_{timestamp}.tar.gz").write_bytes(b"archive")
+        (Path(self.backup_dir.name) / f"paleocms_backup_{timestamp}.complete").touch()
         self.client.login(username=self.superuser.username, password="pass")
 
         with override_settings(CMS_BACKUP_ROOT=self.backup_dir.name):
             response = self.client.get(reverse("admin:cms-backup-download", args=[path.name]))
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response["Content-Disposition"], 'attachment; filename="paleocms_database.sql"')
+        self.assertEqual(
+            response["Content-Disposition"],
+            f'attachment; filename="{path.name}"',
+        )
 
 
 class ImportExportResourceConfigurationTests(TestCase):

@@ -14,6 +14,36 @@
   </form>
 
   <div class="module">
+    <h2>{% translate "Backup and restore jobs" %}</h2>
+    {% if backup_jobs %}
+      <table>
+        <thead>
+          <tr>
+            <th>{% translate "Job" %}</th>
+            <th>{% translate "Operation" %}</th>
+            <th>{% translate "Status" %}</th>
+            <th>{% translate "Submitted" %}</th>
+            <th>{% translate "Details" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for job in backup_jobs %}
+            <tr>
+              <td>{{ job.pk }}</td>
+              <td>{{ job.get_operation_display }}</td>
+              <td>{{ job.get_status_display }}</td>
+              <td>{{ job.created_at|naturaltime }}</td>
+              <td>{{ job.result }}{% if job.error %}{{ job.error }}{% endif %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>{% translate "No backup or restore jobs have been submitted." %}</p>
+    {% endif %}
+  </div>
+
+  <div class="module">
     <h2>{% translate "Download backups" %}</h2>
     {% if backup_files %}
       <table>
