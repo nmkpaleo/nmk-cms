@@ -121,3 +121,22 @@ class BackupServiceTests(TestCase):
         job.refresh_from_db()
         self.assertEqual(job.status, CMSBackupJob.Status.SUCCEEDED)
         self.assertIn("paleocms_database.sql", job.result)
+
+    def test_database_restore_recreates_tracking_job_when_dump_replaces_it(self):
+        upload = SimpleUploadedFile("restore.sql", b"SELECT 1;")
+
+        with override_settings(CMS_BACKUP_ROOT=self.backup_dir.name):
+            job = backups.queue_backup_job(
+                CMSBackupJob.Operation.RESTORE_DATABASE,
+                uploaded_file=upload,
+            )
+
+            def replace_tracking_table(_path):
+                CMSBackupJob.objects.filter(pk=job.pk).delete()
+
+            with mock.patch("cms.backups.restore_database", side_effect=replace_tracking_table):
+                self.assertTrue(backups.process_next_backup_job())
+
+        restored_job = CMSBackupJob.objects.get(pk=job.pk)
+        self.assertEqual(restored_job.status, CMSBackupJob.Status.SUCCEEDED)
+        self.assertEqual(restored_job.result, "Database restore completed.")

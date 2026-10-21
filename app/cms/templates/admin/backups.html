@@ -1,8 +1,53 @@
 {% extends "admin/base_site.html" %}
 {% load i18n humanize %}
 
+{% block extrahead %}
+{{ block.super }}
+{% if has_active_backup_jobs %}<meta http-equiv="refresh" content="5">{% endif %}
+<style>
+  .backup-status {
+    border-radius: 4px;
+    display: inline-block;
+    font-weight: 600;
+    padding: 2px 8px;
+  }
+  .backup-status--queued,
+  .backup-status--running {
+    background: #ffc;
+    color: #5f5200;
+  }
+  .backup-status--succeeded {
+    background: #dfd;
+    color: #275c27;
+  }
+  .backup-status--failed {
+    background: #fdd;
+    color: #8a1f11;
+  }
+  .backup-progress {
+    color: var(--body-quiet-color);
+    font-size: 0.85rem;
+    margin-top: 4px;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <div id="content-main">
+  {% if latest_restore_job %}
+    <ul class="messagelist">
+      {% if latest_restore_job.status == status_succeeded %}
+        <li class="success">{{ latest_restore_job.get_operation_display }} job {{ latest_restore_job.pk }} completed successfully.</li>
+      {% elif latest_restore_job.status == status_failed %}
+        <li class="error">{{ latest_restore_job.get_operation_display }} job {{ latest_restore_job.pk }} failed: {{ latest_restore_job.error }}</li>
+      {% elif latest_restore_job.status == status_running %}
+        <li class="warning">{{ latest_restore_job.get_operation_display }} job {{ latest_restore_job.pk }} is running. This page refreshes until it finishes.</li>
+      {% elif latest_restore_job.status == status_queued %}
+        <li class="warning">{{ latest_restore_job.get_operation_display }} job {{ latest_restore_job.pk }} is queued. This page refreshes until it finishes.</li>
+      {% endif %}
+    </ul>
+  {% endif %}
+
   <form method="post" class="module">
     {% csrf_token %}
     <input type="hidden" name="action" value="create">
@@ -22,19 +67,39 @@
             <th>{% translate "Job" %}</th>
             <th>{% translate "Operation" %}</th>
             <th>{% translate "Status" %}</th>
+            <th>{% translate "Progress" %}</th>
             <th>{% translate "Submitted" %}</th>
+            <th>{% translate "Started" %}</th>
+            <th>{% translate "Finished" %}</th>
             <th>{% translate "Details" %}</th>
           </tr>
         </thead>
         <tbody>
-          {% for job in backup_jobs %}
+          {% for row in backup_jobs %}
+            {% with job=row.job %}
             <tr>
               <td>{{ job.pk }}</td>
               <td>{{ job.get_operation_display }}</td>
-              <td>{{ job.get_status_display }}</td>
+              <td>
+                <span class="backup-status backup-status--{{ job.status }}">
+                  {{ job.get_status_display }}
+                </span>
+              </td>
+              <td>
+                {{ row.progress }}
+                {% if row.is_active %}
+                  <div class="backup-progress">{% translate "Refreshes every 5 seconds while active." %}</div>
+                {% endif %}
+              </td>
               <td>{{ job.created_at|naturaltime }}</td>
-              <td>{{ job.result }}{% if job.error %}{{ job.error }}{% endif %}</td>
+              <td>{% if job.started_at %}{{ job.started_at|naturaltime }}{% else %}-{% endif %}</td>
+              <td>{% if job.finished_at %}{{ job.finished_at|naturaltime }}{% else %}-{% endif %}</td>
+              <td>
+                {% if job.result %}{{ job.result }}{% endif %}
+                {% if job.error %}{{ job.error }}{% endif %}
+              </td>
             </tr>
+            {% endwith %}
           {% endfor %}
         </tbody>
       </table>

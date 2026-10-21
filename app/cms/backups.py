@@ -162,26 +162,41 @@ def process_next_backup_job() -> bool:
         job.started_at = timezone.now()
         job.save(update_fields=["status", "started_at"])
 
+    result = ""
+    error = ""
+    status = CMSBackupJob.Status.SUCCEEDED
     try:
         if job.operation == CMSBackupJob.Operation.CREATE:
             backup_set = create_backup_set()
-            job.result = f"{backup_set.database_path.name}, {backup_set.files_path.name}"
+            result = f"{backup_set.database_path.name}, {backup_set.files_path.name}"
         elif job.operation == CMSBackupJob.Operation.RESTORE_DATABASE:
             restore_database(Path(job.source_path))
-            job.result = "Database restore completed."
+            result = "Database restore completed."
         elif job.operation == CMSBackupJob.Operation.RESTORE_FILES:
             restore_media(Path(job.source_path))
-            job.result = "Media restore completed."
-        job.status = CMSBackupJob.Status.SUCCEEDED
-        job.error = ""
+            result = "Media restore completed."
     except Exception as exc:
-        job.status = CMSBackupJob.Status.FAILED
-        job.error = str(exc)
+        status = CMSBackupJob.Status.FAILED
+        error = str(exc)
     finally:
         if job.source_path:
             Path(job.source_path).unlink(missing_ok=True)
-        job.finished_at = timezone.now()
-        job.save(update_fields=["status", "result", "error", "finished_at"])
+        finished_at = timezone.now()
+        created_by_id = None if job.operation == CMSBackupJob.Operation.RESTORE_DATABASE else job.created_by_id
+        CMSBackupJob.objects.update_or_create(
+            pk=job.pk,
+            defaults={
+                "operation": job.operation,
+                "status": status,
+                "source_path": "",
+                "result": result,
+                "error": error,
+                "created_by_id": created_by_id,
+                "created_at": job.created_at,
+                "started_at": job.started_at,
+                "finished_at": finished_at,
+            },
+        )
     return True
 
 

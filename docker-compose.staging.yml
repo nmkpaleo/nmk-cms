@@ -24,6 +24,7 @@ services:
     restart: unless-stopped
     command: ["python", "manage.py", "process_backup_jobs"]
     volumes:
+      - static:/vol/web
       - backups:/vol/backups
     env_file:
       - ./.env

@@ -2244,6 +2244,36 @@ def _require_backup_permission(request):
         raise PermissionDenied
 
 
+def _backup_job_progress(job):
+    if job.status == CMSBackupJob.Status.QUEUED:
+        return _("Waiting for backup worker")
+    if job.status == CMSBackupJob.Status.RUNNING:
+        if job.operation == CMSBackupJob.Operation.CREATE:
+            return _("Creating backup files")
+        if job.operation == CMSBackupJob.Operation.RESTORE_DATABASE:
+            return _("Restoring database")
+        if job.operation == CMSBackupJob.Operation.RESTORE_FILES:
+            return _("Restoring media files")
+    if job.status == CMSBackupJob.Status.SUCCEEDED:
+        return _("Completed")
+    if job.status == CMSBackupJob.Status.FAILED:
+        return _("Failed")
+    return job.get_status_display()
+
+
+def _backup_job_rows(jobs):
+    rows = []
+    for job in jobs:
+        rows.append(
+            {
+                "job": job,
+                "progress": _backup_job_progress(job),
+                "is_active": job.status in {CMSBackupJob.Status.QUEUED, CMSBackupJob.Status.RUNNING},
+            }
+        )
+    return rows
+
+
 @staff_member_required
 def backup_admin_view(request):
     """Create, download, and restore CMS backup files."""
@@ -2276,7 +2306,11 @@ def backup_admin_view(request):
                         user=request.user,
                         uploaded_file=database_restore_form.cleaned_data["backup_file"],
                     )
-                    messages.success(request, _("Database restore job %(job_id)s was queued.") % {"job_id": job.pk})
+                    messages.success(
+                        request,
+                        _("Database restore job %(job_id)s was queued. Watch the job status below for completion.")
+                        % {"job_id": job.pk},
+                    )
                     return redirect(reverse("admin:cms-backups"))
                 except Exception as exc:  # pragma: no cover - surfaced in admin UI
                     logger.exception("CMS database restore job could not be queued")
@@ -2295,17 +2329,43 @@ def backup_admin_view(request):
                         user=request.user,
                         uploaded_file=files_restore_form.cleaned_data["backup_file"],
                     )
-                    messages.success(request, _("Media restore job %(job_id)s was queued.") % {"job_id": job.pk})
+                    messages.success(
+                        request,
+                        _("Media restore job %(job_id)s was queued. Watch the job status below for completion.")
+                        % {"job_id": job.pk},
+                    )
                     return redirect(reverse("admin:cms-backups"))
                 except Exception as exc:  # pragma: no cover - surfaced in admin UI
                     logger.exception("CMS media restore job could not be queued")
                     messages.error(request, _("Media restore could not be queued: %(error)s") % {"error": exc})
 
+    backup_jobs = list(CMSBackupJob.objects.select_related("created_by")[:20])
+    latest_restore_job = next(
+        (
+            job
+            for job in backup_jobs
+            if job.operation
+            in {
+                CMSBackupJob.Operation.RESTORE_DATABASE,
+                CMSBackupJob.Operation.RESTORE_FILES,
+            }
+        ),
+        None,
+    )
     context = {
         **admin.site.each_context(request),
         "title": _("CMS Backups"),
         "backup_files": backups.list_backup_files(),
-        "backup_jobs": CMSBackupJob.objects.select_related("created_by")[:20],
+        "backup_jobs": _backup_job_rows(backup_jobs),
+        "has_active_backup_jobs": any(
+            job.status in {CMSBackupJob.Status.QUEUED, CMSBackupJob.Status.RUNNING}
+            for job in backup_jobs
+        ),
+        "latest_restore_job": latest_restore_job,
+        "status_failed": CMSBackupJob.Status.FAILED,
+        "status_queued": CMSBackupJob.Status.QUEUED,
+        "status_running": CMSBackupJob.Status.RUNNING,
+        "status_succeeded": CMSBackupJob.Status.SUCCEEDED,
         "database_restore_form": database_restore_form,
         "files_restore_form": files_restore_form,
     }

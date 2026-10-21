@@ -6,6 +6,7 @@ services:
       - 3000:3000
     volumes:
       - ./app:/src/app
+      - static:/vol/web
       - backups:/vol/backups
     env_file:
       - ./.env
@@ -21,6 +22,7 @@ services:
     command: ["python", "manage.py", "process_backup_jobs"]
     volumes:
       - ./app:/src/app
+      - static:/vol/web
       - backups:/vol/backups
     env_file:
       - ./.env
@@ -61,4 +63,5 @@ services:
 
 volumes:
   db: null
+  static:
   backups:
