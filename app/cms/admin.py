@@ -31,7 +31,10 @@ from .forms import (
 from .admin_merge import MergeAdminMixin
 from .merge import merge_records
 from .merge.constants import MergeStrategy
-from .merge.services import merge_accession_references
+from .merge.services import (
+    bulk_merge_duplicate_accession_references,
+    merge_accession_references,
+)
 from .merge.signals import merge_failed
 
 from .models import (
@@ -995,7 +998,60 @@ class AccessionReferenceAdmin(
 
     merge_form_class = MergeAdminMixin.merge_form_class
     merge_template = "admin/cms/accessionreference_merge.html"
+    change_list_template = "admin/cms/accessionreference/change_list.html"
 
+    def get_urls(self):
+        custom = [
+            path(
+                "merge-duplicates/",
+                self.admin_site.admin_view(self.merge_duplicates_view),
+                name="cms_accessionreference_merge_duplicates",
+            )
+        ]
+        return custom + super().get_urls()
+
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        if self.has_merge_permission(request):
+            extra_context["merge_duplicates_url"] = reverse(
+                "admin:cms_accessionreference_merge_duplicates"
+            )
+        return super().changelist_view(request, extra_context=extra_context)
+
+    def merge_duplicates_view(self, request):
+        if request.method != "POST":
+            return redirect(reverse("admin:cms_accessionreference_changelist"))
+        if not self.has_merge_permission(request):
+            raise PermissionDenied
+
+        try:
+            set_current_user(request.user)
+            report = bulk_merge_duplicate_accession_references(user=request.user)
+        finally:
+            set_current_user(None)
+
+        if not report.groups_found:
+            self.message_user(
+                request, _("No duplicate accession references found."), messages.INFO
+            )
+        else:
+            self.message_user(
+                request,
+                _(
+                    "Found %(found)d duplicate groups; merged %(merged)d groups "
+                    "(%(rows)d records removed); %(failed)d failed."
+                )
+                % {
+                    "found": report.groups_found,
+                    "merged": report.groups_merged,
+                    "rows": report.rows_merged,
+                    "failed": len(report.failures),
+                },
+                messages.SUCCESS if not report.failures else messages.WARNING,
+            )
+        for failure in report.failures:
+            self.message_user(request, failure, messages.ERROR)
+        return redirect(reverse("admin:cms_accessionreference_changelist"))
     def has_merge_permission(self, request):  # type: ignore[override]
         if not self.is_merge_tool_enabled():
             return False

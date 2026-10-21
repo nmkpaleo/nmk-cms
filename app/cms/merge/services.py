@@ -1,10 +1,13 @@
 """Service helpers wrapping merge execution for specific models."""
 from __future__ import annotations
 
+import logging
+import re
+from dataclasses import dataclass, field
 from typing import Any, Iterable, Mapping, MutableMapping
 
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
 
 from cms.forms import AccessionReferenceFieldSelectionForm, FieldSelectionCandidate
@@ -12,6 +15,9 @@ from cms.merge.constants import MergeStrategy
 from cms.merge.engine import MergeResult, merge_records
 from cms.merge.element import build_element_strategy_map
 from cms.models import AccessionReference, Element
+
+
+logger = logging.getLogger(__name__)
 
 
 def build_accession_reference_strategy_map(
@@ -137,6 +143,99 @@ def merge_accession_references(
         user=user,
         dry_run=dry_run,
     )
+
+
+@dataclass
+class BulkMergeReport:
+    """Outcome of a bulk accession reference merge."""
+
+    groups_found: int = 0
+    groups_merged: int = 0
+    rows_merged: int = 0
+    failures: list[str] = field(default_factory=list)
+
+
+def combine_pages(pages: Iterable[str | None]) -> str:
+    """Return unique, ascending, comma-separated page values."""
+
+    values = {
+        part.strip()
+        for page in pages
+        if page
+        for part in page.split(",")
+        if part.strip()
+    }
+    if all(value.isdigit() for value in values):
+        ordered = sorted(values, key=int)
+    else:
+        ordered = sorted(
+            values,
+            key=lambda v: [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", v)],
+        )
+    return ", ".join(ordered)
+
+
+def find_duplicate_accession_reference_groups() -> list[list[AccessionReference]]:
+    """Group accession references sharing accession and reference (lowest pk first)."""
+
+    duplicate_pairs = (
+        AccessionReference.objects.values("accession_id", "reference_id")
+        .annotate(total=models.Count("pk"))
+        .filter(total__gt=1)
+    )
+    groups: list[list[AccessionReference]] = []
+    for pair in duplicate_pairs:
+        groups.append(
+            list(
+                AccessionReference.objects.filter(
+                    accession_id=pair["accession_id"], reference_id=pair["reference_id"]
+                ).order_by("pk")
+            )
+        )
+    return groups
+
+
+def bulk_merge_duplicate_accession_references(
+    *, user: Any | None = None
+) -> BulkMergeReport:
+    """Merge every duplicate accession/reference group into its lowest-pk row.
+
+    Pages from all rows are combined. Each group runs in its own transaction so
+    a failure does not block other groups.
+    """
+
+    page_max_length = AccessionReference._meta.get_field("page").max_length
+    groups = find_duplicate_accession_reference_groups()
+    report = BulkMergeReport(groups_found=len(groups))
+
+    for rows in groups:
+        target, sources = rows[0], rows[1:]
+        label = f"{target.accession} / {target.reference}"
+        combined = combine_pages(row.page for row in rows)
+        if len(combined) > page_max_length:
+            report.failures.append(
+                _("%(label)s: combined page '%(page)s' exceeds %(max)d characters.")
+                % {"label": label, "page": combined, "max": page_max_length}
+            )
+            continue
+        try:
+            with transaction.atomic():
+                for source in sources:
+                    merge_accession_references(
+                        source=source,
+                        target=target,
+                        selected_fields={"reference": "target", "page": combined or None},
+                        user=user,
+                    )
+                    target.refresh_from_db()
+        except Exception as exc:  # noqa: BLE001 - reported to the admin user
+            logger.exception("Bulk accession reference merge failed for %s", label)
+            report.failures.append(f"{label}: {exc}")
+            continue
+        report.groups_merged += 1
+        report.rows_merged += len(sources)
+
+    return report
 
 
 def _ensure_same_accession(

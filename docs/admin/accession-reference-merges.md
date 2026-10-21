@@ -18,7 +18,7 @@ Use the merge tool to consolidate duplicate accession references that point to t
 
 ## Choosing field values
 
-- The field-selection page lists the **Reference** and **Page** fields for every candidate. Pick one value per row; leave a field unselected to keep the target’s value.
+- The field-selection page lists the **Reference** and **Page** fields for every candidate. Pick one value per row; leave a field unselected to keep the targetâ€™s value.
 - Submitting applies the chosen values to the target and merges every source into it sequentially.
 - On success you return to the target change page with a banner summarising the merge. A merge log and history records capture the updates for audit and rollback.
 
@@ -26,3 +26,12 @@ Use the merge tool to consolidate duplicate accession references that point to t
 
 - Each merge creates history entries for the target and a merge log snapshot. Use these records to reconstruct the source if a merge needs to be undone.
 - If issues span multiple merges, disable the merge feature flag and restore the pre-merge database backup.
+
+## Bulk merge duplicates
+
+On **Admin ? Accession references**, the **Merge duplicate references** button merges every set of records that share the same accession and reference.
+
+- The record with the lowest ID is kept; the others are merged into it.
+- Pages from all records are combined: split on commas, de-duplicated and sorted ascending (e.g. 110, 110 and 100 become 100, 110).
+- Groups whose combined page exceeds 10 characters are left untouched and listed in the result message.
+- The button requires merge permission and the merge tool to be enabled.
