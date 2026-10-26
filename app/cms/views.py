@@ -79,7 +79,7 @@ from PIL import Image, ImageOps
 from django.core.serializers.json import DjangoJSONEncoder
 from django.core.exceptions import PermissionDenied
 from .taxonomy.combined import TaxonomySyncService
-from .taxon_identity import normalize_taxon_label
+from .taxon_identity import normalize_taxon_label, parse_taxon_label
 
 User = get_user_model()
 
@@ -539,6 +539,19 @@ def taxonomy_identification_cleanup_report(request):
     elif issue_filter == "unmatched":
         queryset = queryset.exclude(_normalized_taxon="")
 
+    # "Invalid" names can never match GBIF/NOW (numbers, special characters,
+    # more than three words); "potential" names pass the same check and may be
+    # unsynced or misspelled. Selecting both (or neither) applies no filter.
+    invalid_filter = request.GET.get("invalid_names") == "1"
+    potential_filter = request.GET.get("potential_names") == "1"
+    if invalid_filter != potential_filter:
+        wanted_valid = potential_filter
+        matching_pks = [
+            pk for pk, verbatim, taxon in queryset.values_list("pk", "taxon_verbatim", "taxon")
+            if parse_taxon_label(verbatim or taxon).valid == wanted_valid
+        ]
+        queryset = queryset.filter(pk__in=matching_pks)
+
     filtered_taxa = [
         value.strip().casefold()
         for value in queryset.values_list("taxon", flat=True)
@@ -585,6 +598,8 @@ def taxonomy_identification_cleanup_report(request):
             else "unmatched_taxon"
         )
         identification.same_taxon_count = identification._same_taxon_count
+        parsed_name = parse_taxon_label(identification.taxon_verbatim or identification.taxon)
+        identification.name_invalid_reason = "" if parsed_name.valid else parsed_name.reason
     return render(
         request,
         "reports/taxonomy_identification_cleanup.html",
@@ -599,6 +614,8 @@ def taxonomy_identification_cleanup_report(request):
             "taxon_filter": taxon_filter,
             "verbatim_filter": verbatim_filter,
             "issue_filter": issue_filter,
+            "invalid_filter": invalid_filter,
+            "potential_filter": potential_filter,
             "bulk_source_taxon": bulk_source_taxon,
             "bulk_edit_enabled": bulk_edit_enabled,
             "bulk_count": len(filtered_taxa),

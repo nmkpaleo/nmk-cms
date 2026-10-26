@@ -9,9 +9,9 @@ from django.core import signing
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import transaction
 
-from ..models import Taxon, Identification, FieldSlip
-from .sync import (AcceptedRecord, AcceptedUpdate, SynonymRecord, SynonymUpdate,
-                   SyncIssue, SyncPreview, NowTaxonomySyncResult)
+from ..models import Taxon, Identification
+from .sync import (AcceptedRecord, AcceptedUpdate, QualifierUpdate, SkippedName, SynonymRecord,
+                   SynonymUpdate, SyncIssue, SyncPreview, NowTaxonomySyncResult)
 
 SALT = "cms.taxonomy.preview.v2"
 MAX_AGE = 3600
@@ -33,6 +33,8 @@ def _serialize_preview(preview):
         "synonyms_to_create": [asdict(r) for r in preview.synonyms_to_create],
         "to_deactivate": [t.pk for t in preview.to_deactivate],
         "issues": [asdict(i) for i in preview.issues],
+        "skipped_names": [asdict(s) for s in preview.skipped_names],
+        "qualifier_updates": [asdict(q) for q in preview.qualifier_updates],
     }
     for category in ("accepted_to_update", "synonyms_to_update"):
         data[category] = [{"pk": u.instance.pk, "record": asdict(u.record), "changes": u.changes}
@@ -52,6 +54,8 @@ def _deserialize_preview(data, taxa):
         issues=[SyncIssue(**i) for i in data["issues"]],
         source_version=data["source_version"],
         import_source=data.get("import_source", "NOW_GBIF"),
+        skipped_names=[SkippedName(**s) for s in data.get("skipped_names", [])],
+        qualifier_updates=[QualifierUpdate(**q) for q in data.get("qualifier_updates", [])],
     )
 
 
@@ -61,9 +65,7 @@ def catalogue_fingerprint():
     for label, rows in (
         ("taxa", Taxon.objects.order_by("pk").values().iterator(chunk_size=1000)),
         ("identifications", Identification.objects.order_by("pk").values_list(
-            "pk", "taxon_verbatim", "taxon", "taxon_record_id").iterator(chunk_size=1000)),
-        ("field_slips", FieldSlip.objects.order_by("pk").values_list(
-            "pk", "verbatim_taxon").iterator(chunk_size=1000)),
+            "pk", "taxon_verbatim", "taxon", "taxon_record_id", "identification_qualifier").iterator(chunk_size=1000)),
     ):
         digest.update(label.encode())
         for row in rows:
@@ -93,7 +95,7 @@ def apply_signed_preview(token, user_id, service):
         raise PreviewUnavailable("This preview is missing, expired, or invalid. Generate a new preview.")
     with transaction.atomic():
         # Serialize applies and reject changes made since the user reviewed the data.
-        for model in (Taxon, Identification, FieldSlip):
+        for model in (Taxon, Identification):
             list(model.objects.select_for_update().order_by("pk").values_list("pk", flat=True))
         if data.get("fingerprint") != catalogue_fingerprint():
             raise PreviewUnavailable("The catalogue changed after this preview. Generate a new preview before applying.")
