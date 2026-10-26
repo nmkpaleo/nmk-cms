@@ -94,7 +94,7 @@ def _http_get_factory(mapping):
     TAXON_SYNC_DEACTIVATE_MISSING=True,
 )
 def test_now_sync_creates_updates_and_deactivates(db):
-    _field_slip("Newcanis junior")
+    _identification("Newcanis junior")
     accepted_existing = Taxon.objects.create(
         external_source=TaxonExternalSource.NOW,
         external_id="NOW:species:Herpestes major",
@@ -247,8 +247,8 @@ def test_now_sync_creates_updates_and_deactivates(db):
     TAXON_SYNC_DEACTIVATE_MISSING=True,
 )
 def test_now_sync_skips_subranks_and_limits_lower_taxonomy(db):
-    _field_slip("Felidae")
-    _field_slip("Theria")
+    _identification("Felidae")
+    _identification("Theria")
     accepted_tsv = "\n".join(
         [
             "taxon_name\ttaxon_rank\torder_name\tsuperfamily\tfamily\tsubfamily\ttribe\tgenus\tspecies\tauthor\tSTG_TIME_STAMP",
@@ -290,8 +290,8 @@ def test_now_sync_skips_subranks_and_limits_lower_taxonomy(db):
     TAXON_SYNC_DEACTIVATE_MISSING=True,
 )
 def test_now_sync_records_issue_when_missing_accepted(db):
-    _field_slip("Alpha beta")
-    _field_slip("Missing target")
+    _identification("Alpha beta")
+    _identification("Missing target")
     accepted_tsv = "\n".join(
         [
             "taxon_name\ttaxon_rank\tauthor\tSTG_TIME_STAMP",
@@ -378,6 +378,19 @@ def test_fallback_matched_taxon_stays_active_after_id_change(db, reassign_synony
     assert repeated.counts["deactivated"] == 0
 
 
+def _identification(name):
+    """Create a current identification whose Taxon (free text) is ``name``."""
+    user = get_user_model().objects.get(username="sync-now-user")
+    collection, _ = Collection.objects.get_or_create(abbreviation="TX", defaults={"description": "Taxon tests"})
+    locality, _ = Locality.objects.get_or_create(abbreviation="TL", defaults={"name": "Taxon locality"})
+    accession = Accession.objects.create(
+        collection=collection, specimen_prefix=locality,
+        specimen_no=Accession.objects.count() + 1, accessioned_by=user,
+    )
+    row = AccessionRow.objects.create(accession=accession)
+    return Identification.objects.create(accession_row=row, taxon_verbatim=name)
+
+
 def _field_slip(name):
     return FieldSlip.objects.create(
         field_number="scope-test", verbatim_taxon=name, verbatim_element="tooth"
@@ -408,6 +421,7 @@ def _scope_service():
 @pytest.mark.parametrize("source", ["empty", "field-slip", "identification", "legacy-identification", "taxon", "drawer"])
 def test_sync_only_imports_locally_recorded_names(db, source):
     if source == "field-slip":
+        # Field slips are not a sync source; their names must be ignored.
         _field_slip("  ALPHA   beta  ")
     elif source in {"identification", "legacy-identification"}:
         user = get_user_model().objects.get(username="sync-now-user")
@@ -430,7 +444,7 @@ def test_sync_only_imports_locally_recorded_names(db, source):
 
     service = _scope_service()
     preview = service.preview()
-    expected = set() if source == "empty" else {"Carnivora" if source in {"taxon", "drawer"} else "Alpha beta"}
+    expected = set() if source in {"empty", "field-slip"} else {"Carnivora" if source in {"taxon", "drawer"} else "Alpha beta"}
     if source in {"taxon", "drawer"}:
         assert preview.accepted_to_create == []
         assert {u.record.name for u in preview.accepted_to_update} == expected
@@ -456,7 +470,7 @@ def test_sync_only_imports_locally_recorded_names(db, source):
     TAXON_NOW_SYNONYMS_URL="https://example.com/synonyms.tsv",
 )
 def test_local_synonym_imports_all_synonyms_for_its_accepted_name(db):
-    _field_slip("Alpha old")
+    _identification("Alpha old")
     service = _scope_service()
     preview = service.preview()
     assert [r.name for r in preview.accepted_to_create] == ["Alpha beta"]
@@ -474,7 +488,7 @@ def test_local_synonym_imports_all_synonyms_for_its_accepted_name(db):
     TAXON_NOW_SYNONYMS_URL="https://example.com/synonyms.tsv",
 )
 def test_infraspecific_local_name_scopes_now_accepted_species_and_synonyms(db):
-    _field_slip("Sivachoerus syrticus tulotos")
+    _identification("Sivachoerus syrticus tulotos")
     service = NowTaxonomySyncService(http_get=_http_get_factory({
         "https://example.com/accepted.tsv": (
             "taxon_name\ttaxon_rank\tclass_name\tfamily\n"

@@ -56,6 +56,8 @@ def test_taxonomy_sync_preview_success_renders_template(monkeypatch):
         synonyms_to_update=[],
         to_deactivate=[],
         issues=[],
+        skipped_names=[],
+        qualifier_updates=[],
         counts={"created": 1},
         source_version="v1",
     )

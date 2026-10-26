@@ -203,8 +203,8 @@ def test_synonym_target_uses_source_and_id(existing_synonym):
 
 
 def test_preview_does_not_reuse_another_sources_external_id():
-    from cms.tests.test_sync_now import _field_slip
-    _field_slip("Incoming")
+    from cms.tests.test_sync_now import _identification
+    _identification("Incoming")
     other = Taxon.objects.create(taxon_name="Unrelated", taxon_rank="genus",
                                 external_source="PBDB", external_id="shared")
     incoming = record("Incoming", external_id="shared")
@@ -219,7 +219,7 @@ def test_preview_does_not_reuse_another_sources_external_id():
 
 def test_snapshot_locks_all_fingerprinted_tables_before_apply(monkeypatch):
     from django.db.models.query import QuerySet
-    from cms.models import Identification, FieldSlip
+    from cms.models import Identification
     locked = []
     original = QuerySet.select_for_update
 
@@ -232,7 +232,7 @@ def test_snapshot_locks_all_fingerprinted_tables_before_apply(monkeypatch):
     original_apply = service._apply
 
     def apply(proposed):
-        assert locked == [Taxon, Identification, FieldSlip]
+        assert locked == [Taxon, Identification]
         return original_apply(proposed)
 
     monkeypatch.setattr(QuerySet, "select_for_update", lock)
@@ -241,21 +241,15 @@ def test_snapshot_locks_all_fingerprinted_tables_before_apply(monkeypatch):
     apply_signed_preview(token, person.pk, service)
 
 
-@pytest.mark.parametrize("table", ["identification", "field_slip"])
-def test_snapshot_rejects_changed_related_names(table):
+def test_snapshot_rejects_changed_related_names():
     from cms.models import Identification
-    from cms.tests.test_sync_now import _field_slip
     from cms.tests.test_taxon_workflow import make_accession_row
     person = user()
-    if table == "field_slip":
-        obj = _field_slip("Original")
-        field = "verbatim_taxon"
-    else:
-        from crum import set_current_user
-        row = make_accession_row(person)
-        set_current_user(person)
-        obj = Identification.objects.create(accession_row=row, taxon_verbatim="Original")
-        field = "taxon_verbatim"
+    from crum import set_current_user
+    row = make_accession_row(person)
+    set_current_user(person)
+    obj = Identification.objects.create(accession_row=row, taxon_verbatim="Original")
+    field = "taxon_verbatim"
     token = sign_preview(preview([record()]), person.pk, catalogue_fingerprint())
     type(obj).objects.filter(pk=obj.pk).update(**{field: "Changed"})
     with pytest.raises(PreviewUnavailable, match="catalogue changed"):

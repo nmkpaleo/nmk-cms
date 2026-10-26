@@ -23,6 +23,12 @@
       <option value="missing" {% if issue_filter == "missing" %}selected{% endif %}>{% trans "Taxon is empty" %}</option>
       <option value="unmatched" {% if issue_filter == "unmatched" %}selected{% endif %}>{% trans "Taxon is unmatched" %}</option>
     </select></label>
+    <fieldset class="w3-margin-top">
+      <legend>{% trans "Name check" %}</legend>
+      <label class="w3-margin-right"><input class="w3-check" type="checkbox" name="invalid_names" value="1" {% if invalid_filter %}checked{% endif %}> {% trans "Invalid names" %}</label>
+      <label><input class="w3-check" type="checkbox" name="potential_names" value="1" {% if potential_filter %}checked{% endif %}> {% trans "Potential names" %}</label>
+      <p class="w3-small w3-text-grey">{% trans "Invalid names contain numbers, special characters or more than three words and cannot match GBIF or NOW. Potential names have one to three words and may be correct but unsynced, or misspelled. Leave both unchecked, or check both, to show everything." %}</p>
+    </fieldset>
     <button class="w3-button w3-deep-orange w3-margin-top" type="submit">{% trans "Filter" %}</button>
     <a class="w3-button w3-margin-top" href="{% url 'taxonomy_identification_cleanup_report' %}">{% trans "Clear" %}</a>
   </form>
@@ -52,7 +58,7 @@
               <td>{{ identification.taxon_verbatim|default:"?" }}</td>
               <td>{{ identification.taxon|default:"?" }}</td>
               <td>{{ identification.same_taxon_count }}</td>
-              <td>{% if identification.cleanup_reason == "missing_taxon" %}{% trans "Taxon is empty" %}{% else %}{% trans "Taxon does not match active controlled taxonomy" %}{% endif %}</td>
+              <td>{% if identification.cleanup_reason == "missing_taxon" %}{% trans "Taxon is empty" %}{% else %}{% trans "Taxon does not match active controlled taxonomy" %}{% endif %}{% if identification.name_invalid_reason %}<br><span class="w3-tag w3-small w3-red">{% trans "Invalid name" %}: {{ identification.name_invalid_reason }}</span>{% endif %}</td>
               <td>{{ identification.date_identified|default:"?" }}</td>
               <td>{% if identification.reference %}{{ identification.reference.year }}{% else %}?{% endif %}</td>
               <td>

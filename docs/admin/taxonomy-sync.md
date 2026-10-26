@@ -21,8 +21,23 @@ This guide covers the administrative workflow for synchronising the CMS taxonomy
 Sync uses names already present in the CMS:
 
 - Existing `Taxon` records from any source, including taxa linked to drawers and identifications.
-- Identification taxon text (`taxon_verbatim`, falling back to the legacy `taxon` field).
-- Field-slip `verbatim_taxon` text.
+- Identification **Lowest identified taxon** (`taxon_verbatim`, falling back to the legacy `taxon` field) of each current identification.
+- Field-slip `verbatim_taxon` text is **not** used.
+
+### Names that are skipped or cleaned
+
+Before lookup, each free-text name is cleaned so that only names GBIF or NOW can match are queried:
+
+- Rank markers (`subsp.`, `ssp.`, `var.`, `f.`) are removed before words are counted, so `Canis lupus subsp. familiaris` is looked up as `Canis lupus familiaris`.
+- Qualifiers (`cf.`, `aff.`, `gen.`, `sp.`, `spp.`, `sp. nov.`, `indet.`, `nr.`, `?`) are removed for the lookup. `Canis cf. lupus` is looked up as `Canis lupus` and `Felis sp.` as `Felis`.
+- Names are **skipped** if they contain numbers, special characters (anything except letters, hyphens and apostrophes), more than three words, or are a placeholder such as `unknown`. Capitalisation is not checked.
+- Skipped names are listed (with the reason and number of occurrences) in a collapsed section of the preview and result pages. Existing taxa are never changed or deactivated because of a skipped name.
+
+Extracted qualifiers are appended to the identification's **Identification qualifier** when the
+apply step runs (for example `cf.` becomes `aff. cf.` if `aff.` was already set). A qualifier already
+present is not added again. When the cleaned name is linked to a taxon, **Lowest identified taxon** is rewritten to that
+cleaned name (`Homo cf. sapiens` becomes `Homo sapiens` with qualifier `cf.`); unmatched names are left unchanged. The planned additions are
+shown in the preview before you apply.
 
 Names must match the NOW name after ignoring case and normalizing whitespace.
 A matching synonym also brings in its accepted taxon so the link can be stored.
@@ -46,6 +61,12 @@ The action downloads the NOW exports as needed, but successful exports are reuse
 from the configured cache. A failed or unresolved match remains in the report with
 an explanatory message and can be retried later. Empty taxon values still require
 manual editing.
+
+Use the **Invalid names** and **Potential names** checkboxes in the report filter to narrow the list
+(neither or both checked shows everything):
+
+- **Invalid names** contain numbers, special characters or more than three words (after stripping rank markers such as `subsp.`), so they can never match GBIF or NOW and need manual correction. The reason is shown on each row.
+- **Potential names** have one to three words and may be correct but unsynced, or misspelled. Qualifiers such as `cf.` or `sp.` are ignored when judging the name.
 
 ## Source selection and duplicate prevention
 
@@ -170,5 +191,5 @@ Accepted IDs under the limit use `NOW:<rank>:<name>`. Synonym IDs use
 rank-qualified form during sync; names remain stored in full.
 
 Generate a fresh preview after deployment; snapshots created before the source-aware
-accepted-target format are rejected. Apply locks existing taxa, identifications, and
-field slips while checking and saving the snapshot on databases with row locking.
+accepted-target format are rejected. Apply locks existing taxa and identifications
+while checking and saving the snapshot on databases with row locking.

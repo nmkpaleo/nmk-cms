@@ -15,9 +15,8 @@ from django.db import transaction, DataError, IntegrityError
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
-from ..taxon_identity import taxon_identity
+from ..taxon_identity import merge_qualifier, parse_taxon_label, taxon_identity
 from ..models import (
-    FieldSlip,
     Identification,
     Taxon,
     TaxonExternalSource,
@@ -154,6 +153,22 @@ class SynonymUpdate:
 
 
 @dataclass
+class SkippedName:
+    name: str
+    reason: str
+    source: str
+    count: int = 1
+
+
+@dataclass
+class QualifierUpdate:
+    identification_id: int
+    taxon_verbatim: str
+    previous: str
+    additions: List[str]
+
+
+@dataclass
 class SyncPreview:
     accepted_to_create: List[AcceptedRecord]
     accepted_to_update: List[AcceptedUpdate]
@@ -164,6 +179,8 @@ class SyncPreview:
     source_version: str
     import_source: str = TaxonomyImport.Source.NOW
     identifications_linked: int = 0
+    skipped_names: List[SkippedName] = field(default_factory=list)
+    qualifier_updates: List[QualifierUpdate] = field(default_factory=list)
 
     @property
     def counts(self) -> Dict[str, Any]:
@@ -179,6 +196,10 @@ class SyncPreview:
         }
         if self.identifications_linked:
             counts["identifications_linked"] = self.identifications_linked
+        if self.skipped_names:
+            counts["skipped_invalid_names"] = len(self.skipped_names)
+        if self.qualifier_updates:
+            counts["qualifiers_added"] = len(self.qualifier_updates)
         return counts
 
 
@@ -338,14 +359,12 @@ class NowTaxonomySyncService:
         # existing_taxa. Free text is unranked and therefore matches by name.
         if local_names is None:
             names = {
-                (_normalize_label(identification.taxon_verbatim)
-                 or _normalize_label(identification.taxon)).lower()
+                parsed.name.lower()
                 for identification in iter_current_identifications()
+                if (parsed := parse_taxon_label(
+                    identification.taxon_verbatim or identification.taxon
+                )).valid
             }
-            names.update(
-                _normalize_label(name).lower()
-                for name in FieldSlip.objects.order_by().values_list("verbatim_taxon", flat=True).iterator()
-            )
         else:
             names = set(local_names)
         names.discard("")
@@ -635,6 +654,13 @@ class NowTaxonomySyncService:
             except (DataError, IntegrityError, ValidationError) as exc:
                 logger.exception("Taxonomy saved but identification linkage failed")
                 preview.issues.append(SyncIssue("identification-link", str(exc)))
+            try:
+                with transaction.atomic():
+                    preview.qualifier_updates = self._apply_qualifier_updates(preview.qualifier_updates)
+            except (DataError, IntegrityError, ValidationError) as exc:
+                logger.exception("Taxonomy saved but qualifier update failed")
+                preview.qualifier_updates = []
+                preview.issues.append(SyncIssue("identification-qualifier", str(exc)))
             source_id = lambda record: f"{record.external_source}:{record.external_id}"
             report = {
                 "accepted_created": [source_id(r) for r in preview.accepted_to_create],
@@ -643,6 +669,8 @@ class NowTaxonomySyncService:
                 "synonyms_updated": [source_id(u.record) for u in preview.synonyms_to_update],
                 "deactivated": [source_id(t) for t in preview.to_deactivate],
                 "identifications_linked": preview.identifications_linked,
+                "qualifiers_added": len(preview.qualifier_updates),
+                "skipped_invalid_names": len(preview.skipped_names),
                 "issues": [{"code": i.code, "message": i.message, **i.context} for i in preview.issues],
                 "sources": sorted({r.external_source for r in preview.accepted_to_create + preview.synonyms_to_create}
                                   | {u.record.external_source for u in preview.accepted_to_update + preview.synonyms_to_update}),
@@ -834,8 +862,8 @@ class NowTaxonomySyncService:
                 by_name.setdefault(_normalize_label(taxon.taxon_name).lower(), set()).add(target.pk)
         changed = []
         for identification in Identification.objects.all().iterator():
-            name = (_normalize_label(identification.taxon_verbatim)
-                    or _normalize_label(identification.taxon)).lower()
+            parsed = parse_taxon_label(identification.taxon_verbatim or identification.taxon)
+            name = parsed.name.lower() if parsed.valid else ""
             targets = by_name.get(name, set())
             if len(targets) == 1:
                 target_id = next(iter(targets))
@@ -848,6 +876,40 @@ class NowTaxonomySyncService:
                                      default_change_reason="Linked during taxonomy sync")
         return len(changed)
 
+    def _apply_qualifier_updates(self, updates):
+        """Append split qualifiers and rewrite Lowest identified taxon to the matched clean name."""
+        if not updates:
+            return []
+        by_id = {i.pk: i for i in Identification.objects.filter(pk__in=[u.identification_id for u in updates])}
+        changed, applied = [], []
+        for update in updates:
+            identification = by_id.get(update.identification_id)
+            if identification is None:
+                continue
+            touched = False
+            merged = merge_qualifier(identification.identification_qualifier, update.additions)
+            if merged != (identification.identification_qualifier or ""):
+                identification.identification_qualifier = merged
+                touched = True
+            current = identification.taxon_verbatim or identification.taxon
+            parsed = parse_taxon_label(current)
+            if (
+                parsed.valid
+                and identification.taxon_record_id
+                and parsed.name != _normalize_label(current)
+            ):
+                identification.taxon_verbatim = parsed.name
+                identification.taxon = parsed.name
+                touched = True
+            if touched:
+                changed.append(identification)
+                applied.append(update)
+        if changed:
+            from simple_history.utils import bulk_update_with_history
+            bulk_update_with_history(
+                changed, Identification, ["identification_qualifier", "taxon_verbatim", "taxon"],
+                default_change_reason="Qualifier extracted during taxonomy sync")
+        return applied
     # ------------------------
     # Helpers
     # ------------------------

@@ -622,6 +622,25 @@ class PlaceWidget(s2forms.ModelSelect2Widget):
         return f"{obj.name} ({obj.locality.abbreviation})"
 
 
+class LocalityWidget(s2forms.ModelSelect2Widget):
+    """Searchable locality select matching on abbreviation or name."""
+
+    model = Locality
+    search_fields = ["abbreviation__icontains", "name__icontains"]
+
+    def __init__(self, *args, **kwargs):
+        attrs = kwargs.setdefault("attrs", {})
+        attrs.setdefault("data-placeholder", "Search by abbreviation or name")
+        attrs.setdefault("data-minimum-input-length", 0)
+        super().__init__(*args, **kwargs)
+
+    def get_queryset(self):
+        return Locality.objects.order_by("abbreviation")
+
+    def label_from_instance(self, obj):
+        return f"{obj.abbreviation} - {obj.name}"
+
+
 class PlaceCandidateWidget(s2forms.ModelSelect2TagWidget):
     model = Place
     allow_multiple_selected = False
@@ -752,6 +771,7 @@ class AccessionForm(BaseW3ModelForm):
         ]
         widgets = {
             "accessioned_by": forms.HiddenInput(),
+            "specimen_prefix": LocalityWidget,
             "site": PlaceWidget,
         }
 
@@ -763,6 +783,13 @@ class AccessionForm(BaseW3ModelForm):
         elif self.instance and self.instance.site_id:
             self.fields["site_area"].initial = self.instance.site.name
 
+        self.fields["specimen_prefix"].label_from_instance = (
+            lambda obj: f"{obj.abbreviation} - {obj.name}"
+        )
+        self.fields["site"].label_from_instance = (
+            lambda obj: f"{obj.name} ({obj.get_place_type_display()})"
+        )
+
     def clean_site_area(self):
         value = (self.cleaned_data.get("site_area") or "").strip()
         if value.isdigit():
@@ -773,14 +800,6 @@ class AccessionForm(BaseW3ModelForm):
             if place:
                 return place.name
         return value
-
-        # Custom label for Locality field in dropdown
-        self.fields["specimen_prefix"].label_from_instance = (
-            lambda obj: f"{obj.abbreviation} - {obj.name}"
-        )
-        self.fields["site"].label_from_instance = (
-            lambda obj: f"{obj.name} ({obj.get_place_type_display()})"
-        )
 
 
 class AccessionCommentForm(BaseW3ModelForm):
@@ -1388,7 +1407,7 @@ class AccessionRowIdentificationForm(BaseW3ModelForm):
         ]
         labels = {
             "identification_qualifier": "Taxon Qualifier",
-            "taxon_verbatim": "Taxon (free text)",
+            "taxon_verbatim": "Lowest identified taxon",
             "verbatim_identification": "Taxon Verbatim",
             "identification_remarks": "Remarks",
         }
