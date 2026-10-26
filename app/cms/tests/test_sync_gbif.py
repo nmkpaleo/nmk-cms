@@ -207,6 +207,14 @@ def test_gbif_request_uses_checklist_rank_and_timeout():
     assert query["scientificName"] == ["Struthio"]
 
 
+def test_gbif_query_capitalizes_lowercase_ranked_name():
+    calls = []
+    def get(url, **kwargs):
+        calls.append(url)
+        return Response(payload("Aves", "Aves", "CLASS"))
+    GbifClient(get).match("aves", "class")
+    assert parse_qs(urlparse(calls[0]).query)["scientificName"] == ["Aves"]
+
 @override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")
 def test_gbif_accepted_name_change_preserves_old_row_as_synonym():
     old = Taxon.objects.create(

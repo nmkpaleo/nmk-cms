@@ -49,7 +49,9 @@ def parse_taxon_label(value) -> ParsedTaxonLabel:
     for token in label.replace("?", " ? ").split():
         key = token.lower().rstrip(".")
         if key in QUALIFIER_TOKENS:
-            phrase.append(QUALIFIER_TOKENS[key])
+            qualifier = QUALIFIER_TOKENS[key]
+            if qualifier not in phrase:
+                phrase.append(qualifier)
             continue
         if key == "et" and phrase:
             phrase.append("et")
@@ -63,7 +65,7 @@ def parse_taxon_label(value) -> ParsedTaxonLabel:
     if phrase:
         phrases.append(" ".join(phrase))
 
-    qualifiers = tuple(phrases)
+    qualifiers = tuple(dict.fromkeys(phrases))
     if not words:
         return ParsedTaxonLabel("", qualifiers, False, "empty name")
     if any(not _WORD_RE.match(word) for word in words):

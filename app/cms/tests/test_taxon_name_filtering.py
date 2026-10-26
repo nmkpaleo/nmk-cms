@@ -45,6 +45,8 @@ def test_parser_rejects_unmatchable_names(label, reason):
     ("Canis sp. nov.", "Canis", ("sp. nov.",)),
     ("Canis lupus?", "Canis lupus", ("?",)),
     ("Canis lupus subsp. familiaris", "Canis lupus familiaris", ()),
+    ("Papionini Indet indet", "Papionini", ("indet.",)),
+    ("Canis cf. lupus cf.", "Canis lupus", ("cf.",)),
 ])
 def test_parser_strips_qualifiers_and_rank_markers(label, name, qualifiers):
     parsed = parse_taxon_label(label)
