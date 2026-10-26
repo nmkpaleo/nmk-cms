@@ -1,0 +1,77 @@
+{% load i18n %}
+<section class="w3-section">
+  <header class="w3-margin-bottom">
+    <h2 class="w3-xlarge">
+      <i class="fa-solid fa-filter" aria-hidden="true"></i>
+      {% translate "Skipped names and qualifiers" %}
+    </h2>
+  </header>
+
+  <details class="w3-margin-bottom">
+    <summary>
+      {% blocktranslate with total=preview_data.skipped_names_total %}Skipped names that cannot match GBIF or NOW ({{ total }}){% endblocktranslate %}
+    </summary>
+    {% if preview_data.skipped_names %}
+    <div class="w3-responsive">
+      <table class="w3-table-all w3-small">
+        <thead>
+          <tr>
+            <th>{% translate "Name" %}</th>
+            <th>{% translate "Reason" %}</th>
+            <th>{% translate "Source" %}</th>
+            <th>{% translate "Occurrences" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in preview_data.skipped_names %}
+          <tr>
+            <td>{{ item.name }}</td>
+            <td>{{ item.reason }}</td>
+            <td>{{ item.source }}</td>
+            <td>{{ item.count }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if preview_data.skipped_names_total > preview_data.skipped_names|length %}
+    <p class="w3-small w3-text-gray">{% translate "Only the first rows are shown." %}</p>
+    {% endif %}
+    {% else %}
+    <p class="w3-text-gray">{% translate "No names were skipped." %}</p>
+    {% endif %}
+  </details>
+
+  <details>
+    <summary>
+      {% blocktranslate with total=preview_data.qualifier_updates_total %}Identification qualifiers extracted from Taxon (free text) ({{ total }}){% endblocktranslate %}
+    </summary>
+    {% if preview_data.qualifier_updates %}
+    <div class="w3-responsive">
+      <table class="w3-table-all w3-small">
+        <thead>
+          <tr>
+            <th>{% translate "Taxon (free text)" %}</th>
+            <th>{% translate "Current qualifier" %}</th>
+            <th>{% translate "New qualifier" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in preview_data.qualifier_updates %}
+          <tr>
+            <td>{{ item.name }}</td>
+            <td>{{ item.previous }}</td>
+            <td>{{ item.new }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if preview_data.qualifier_updates_total > preview_data.qualifier_updates|length %}
+    <p class="w3-small w3-text-gray">{% translate "Only the first rows are shown." %}</p>
+    {% endif %}
+    {% else %}
+    <p class="w3-text-gray">{% translate "No qualifiers to add." %}</p>
+    {% endif %}
+  </details>
+</section>

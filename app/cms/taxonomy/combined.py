@@ -5,11 +5,12 @@ import hashlib
 import requests
 from django.conf import settings
 
-from ..models import FieldSlip, Taxon, TaxonExternalSource, TaxonomyImport
+from ..models import Taxon, TaxonExternalSource, TaxonomyImport
 from ..utils import iter_current_identifications
-from ..taxon_identity import normalize_taxon_label, taxon_identity
+from ..taxon_identity import merge_qualifier, normalize_taxon_label, parse_taxon_label, taxon_identity
 from .gbif import GbifClient, GbifNoMatchError
-from .sync import NowTaxonomySyncService, SynonymRecord, SyncIssue, _latest_version, _record_rank
+from .sync import (NowTaxonomySyncService, QualifierUpdate, SkippedName, SynonymRecord, SyncIssue,
+                   _latest_version, _record_rank)
 
 
 def _is_self_synonym(record):
@@ -30,21 +31,39 @@ class TaxonomySyncService(NowTaxonomySyncService):
         now_accepted, now_synonyms = self._load_remote_records()
         full_now_accepted, full_now_synonyms = now_accepted, now_synonyms
         taxa = list(Taxon.objects.all())
-        names = {(normalize_taxon_label(t.taxon_name).lower(), normalize_taxon_label(t.taxon_rank).lower()) for t in taxa}
+        skipped = {}
+
+        def skip(name, reason, source):
+            entry = skipped.setdefault((name, source), SkippedName(name, reason, source, 0))
+            entry.count += 1
+
+        names = set()
+        for t in taxa:
+            taxon_name = normalize_taxon_label(t.taxon_name)
+            parsed = parse_taxon_label(taxon_name)
+            if parsed.valid and not parsed.qualifiers:
+                names.add((taxon_name.lower(), normalize_taxon_label(t.taxon_rank).lower()))
+            elif taxon_name:
+                skip(taxon_name, parsed.reason or "contains qualifier text", "taxon")
         # Free-text identifications have no known rank; retain that query even
         # when a catalogue row has the same label at a different rank. Stream the
         # values directly into the set to avoid a catalogue-sized temporary list.
-        local_names = {
-            name.lower()
-            for identification in iter_current_identifications()
-            if (name := normalize_taxon_label(identification.taxon_verbatim)
-                or normalize_taxon_label(identification.taxon))
-        }
-        local_names.update(
-            name.lower()
-            for verbatim in FieldSlip.objects.order_by().values_list("verbatim_taxon", flat=True).iterator()
-            if (name := normalize_taxon_label(verbatim))
-        )
+        local_names = set()
+        qualifier_updates = []
+        for identification in iter_current_identifications():
+            raw = normalize_taxon_label(identification.taxon_verbatim) or normalize_taxon_label(identification.taxon)
+            if not raw:
+                continue
+            parsed = parse_taxon_label(raw)
+            if not parsed.valid:
+                skip(raw, parsed.reason, "identification")
+                continue
+            local_names.add(parsed.name.lower())
+            if parsed.qualifiers:
+                existing = identification.identification_qualifier or ""
+                if merge_qualifier(existing, parsed.qualifiers) != existing:
+                    qualifier_updates.append(QualifierUpdate(
+                        identification.pk, raw, existing, list(parsed.qualifiers)))
         names.update((name, "") for name in local_names)
         names = {(name.lower(), rank) for name, rank in names if name}
         now_accepted, now_synonyms = self._scope_records(
@@ -183,6 +202,8 @@ class TaxonomySyncService(NowTaxonomySyncService):
             and (normalize_taxon_label(taxon.taxon_name).lower(), None) not in failed_names
         ]
         preview.issues.extend(issues)
+        preview.skipped_names = sorted(skipped.values(), key=lambda s: (s.source, s.name.lower()))
+        preview.qualifier_updates = qualifier_updates
         preview.import_source = TaxonomyImport.Source.COMBINED
         gbif_hashes = sorted({record.source_version for record in candidates
                               if record.external_source == TaxonExternalSource.GBIF and record.source_version})
@@ -196,9 +217,10 @@ class TaxonomySyncService(NowTaxonomySyncService):
         NOW is a bulk export, so it is still downloaded in full, but only the
         requested name is sent through GBIF and only its records are applied.
         """
-        requested = normalize_taxon_label(name)
-        if not requested:
-            raise ValueError("A taxon name is required")
+        parsed = parse_taxon_label(name)
+        if not parsed.valid:
+            raise ValueError(f"Taxon name cannot be synced: {parsed.reason}")
+        requested = parsed.name
         now_accepted, now_synonyms = self._load_remote_records()
         key = requested.lower()
         accepted = [r for r in now_accepted if normalize_taxon_label(r.name).lower() == key]

@@ -13,7 +13,7 @@ from app.cms.models import Taxon, TaxonStatus, Identification, DrawerRegister
 from app.cms.taxonomy import combined, sync
 from app.cms.taxonomy.combined import TaxonomySyncService
 from app.cms.taxonomy.gbif import GbifClient, GbifMatchError, GbifNoMatchError
-from app.cms.tests.test_sync_now import authenticated_model_user, _field_slip, _http_get_factory
+from app.cms.tests.test_sync_now import authenticated_model_user, _identification, _http_get_factory
 from app.cms.tests.test_taxon_workflow import make_accession_row
 from django.contrib.auth import get_user_model
 from crum import set_current_user
@@ -83,7 +83,7 @@ def test_mammal_now_promotion_preserves_identification_and_drawer(source):
 @pytest.mark.parametrize("class_name,name", [("Aves", "Struthio"), ("Mammalia", "Panthera")])
 @override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")
 def test_gbif_import_and_repeat_for_local_name(class_name, name):
-    _field_slip(name)
+    _identification(name)
     svc = service(payload(name, class_name))
     assert svc.preview().counts["created"] == 1
     result = svc.sync(apply=True)
@@ -97,7 +97,7 @@ def test_gbif_import_and_repeat_for_local_name(class_name, name):
 
 @override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")
 def test_non_mammal_gbif_overrides_now_homonym():
-    _field_slip("Struthio")
+    _identification("Struthio")
     svc = service(payload(), "Struthio\tgenus\tAves\tWrongidae\n", now_class=True)
     svc.sync(apply=True)
     assert Taxon.objects.get().external_source == "GBIF"
@@ -244,7 +244,7 @@ def test_gbif_outage_does_not_replace_known_bird_with_now_homonym():
 
 @override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")
 def test_gbif_name_miss_keeps_exact_now_mammal_match():
-    _field_slip("Struthio")
+    _identification("Struthio")
     gbif_miss = {"diagnostics": {"matchType": "NONE"}}
 
     preview = service(gbif_miss, "Struthio\tgenus\tMammalidae\n").preview()
@@ -256,7 +256,7 @@ def test_gbif_name_miss_keeps_exact_now_mammal_match():
 
 @override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")
 def test_unsafe_gbif_response_keeps_exact_now_mammal_match():
-    _field_slip("Struthio")
+    _identification("Struthio")
     malformed_gbif = {"diagnostics": {"matchType": "EXACT"}}
 
     preview = service(malformed_gbif, "Struthio\tgenus\tMammalidae\n").preview()
@@ -317,7 +317,7 @@ def test_gbif_name_misses_do_not_stop_remaining_lookups():
 
 @override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")
 def test_gbif_null_authorship_and_malformed_accepted_usage_are_safe():
-    _field_slip("Struthio")
+    _identification("Struthio")
     data = payload()
     data["usage"]["authorship"] = None
     result = service(data).sync(apply=True)
@@ -345,7 +345,7 @@ def test_whitespace_verbatim_uses_legacy_taxon_for_gbif_lookup():
 
 @override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")
 def test_combined_source_version_includes_gbif_response_hash():
-    _field_slip("Struthio")
+    _identification("Struthio")
     preview = service(payload()).preview()
     assert "GBIF:7ddf754f-d193-4cc9-b351-99906754a03b:" in preview.source_version
     assert not preview.source_version.endswith("7ddf754f-d193-4cc9-b351-99906754a03b")
@@ -353,7 +353,7 @@ def test_combined_source_version_includes_gbif_response_hash():
 
 @override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")
 def test_gbif_outage_does_not_block_exact_now_mammal_match():
-    _field_slip("Struthio")
+    _identification("Struthio")
 
     def get(url, **kwargs):
         raise requests.exceptions.Timeout("unavailable")
@@ -413,7 +413,7 @@ def test_combined_preview_scans_current_identifications_once(monkeypatch):
 
 @override_settings(TAXON_NOW_ACCEPTED_URL="accepted", TAXON_NOW_SYNONYMS_URL="synonyms")
 def test_now_synonym_skips_gbif_and_replaces_existing_gbif_target():
-    _field_slip("Aepyceros premelampus")
+    _identification("Aepyceros premelampus")
     existing = Taxon.objects.create(
         taxon_name="Afrotragus premelampus", taxon_rank="species",
         class_name="Mammalia", external_source="GBIF", external_id="GBIF:old",

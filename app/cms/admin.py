@@ -95,6 +95,7 @@ from django.contrib.auth import get_user_model
 
 from .taxonomy.combined import TaxonomySyncService
 from .taxonomy.snapshot import catalogue_fingerprint, sign_preview, apply_signed_preview, PreviewUnavailable
+from .taxon_identity import merge_qualifier
 
 logger = logging.getLogger(__name__)
 from cms.upload_processing import queue_specimen_list_processing
@@ -135,6 +136,9 @@ def _serialize_changeset(update) -> list[dict[str, str]]:
             }
         )
     return changes
+
+
+SYNC_DISPLAY_LIMIT = 200
 
 
 def _serialize_preview_for_template(preview):
@@ -192,6 +196,20 @@ def _serialize_preview_for_template(preview):
             }
             for issue in preview.issues
         ],
+        "skipped_names": [
+            {"name": s.name, "reason": s.reason, "source": s.source, "count": s.count}
+            for s in preview.skipped_names[:SYNC_DISPLAY_LIMIT]
+        ],
+        "skipped_names_total": len(preview.skipped_names),
+        "qualifier_updates": [
+            {
+                "name": q.taxon_verbatim,
+                "previous": q.previous or "—",
+                "new": merge_qualifier(q.previous, q.additions),
+            }
+            for q in preview.qualifier_updates[:SYNC_DISPLAY_LIMIT]
+        ],
+        "qualifier_updates_total": len(preview.qualifier_updates),
     }
 
 

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Make **Sync Taxa Now** query only names GBIF/NOW can match: Taxon (free text) values with numbers, special characters or more than three words (after stripping `subsp.`/`var.`) are skipped and listed in the preview, qualifiers such as `cf.`, `aff.`, `sp.`, `gen.` and `indet.` are stripped for lookup and appended to the identification qualifier, and field-slip names are no longer a sync source.
+
 - Add a bulk "Merge duplicate references" button to the Accession references admin that merges records sharing the same accession and reference into the lowest-ID record, combining pages in ascending order and reporting any failures.
 
 - Add a Reference admin tool to split pipe-delimited citations into separate title, first-author and citation values, extracting part-specific years and leaving missing years blank while preserving accession and identification links.

@@ -21,8 +21,22 @@ This guide covers the administrative workflow for synchronising the CMS taxonomy
 Sync uses names already present in the CMS:
 
 - Existing `Taxon` records from any source, including taxa linked to drawers and identifications.
-- Identification taxon text (`taxon_verbatim`, falling back to the legacy `taxon` field).
-- Field-slip `verbatim_taxon` text.
+- Identification **Taxon (free text)** (`taxon_verbatim`, falling back to the legacy `taxon` field) of each current identification.
+- Field-slip `verbatim_taxon` text is **not** used.
+
+### Names that are skipped or cleaned
+
+Before lookup, each free-text name is cleaned so that only names GBIF or NOW can match are queried:
+
+- Rank markers (`subsp.`, `ssp.`, `var.`, `f.`) are removed before words are counted, so `Canis lupus subsp. familiaris` is looked up as `Canis lupus familiaris`.
+- Qualifiers (`cf.`, `aff.`, `gen.`, `sp.`, `spp.`, `sp. nov.`, `indet.`, `nr.`, `?`) are removed for the lookup. `Canis cf. lupus` is looked up as `Canis lupus` and `Felis sp.` as `Felis`.
+- Names are **skipped** if they contain numbers, special characters (anything except letters, hyphens and apostrophes), more than three words, or are a placeholder such as `unknown`. Capitalisation is not checked.
+- Skipped names are listed (with the reason and number of occurrences) in a collapsed section of the preview and result pages. Existing taxa are never changed or deactivated because of a skipped name.
+
+Extracted qualifiers are appended to the identification's **Identification qualifier** when the
+apply step runs (for example `cf.` becomes `aff. cf.` if `aff.` was already set). A qualifier already
+present is not added again, and the recorded Taxon (free text) is left unchanged. The planned additions are
+shown in the preview before you apply.
 
 Names must match the NOW name after ignoring case and normalizing whitespace.
 A matching synonym also brings in its accepted taxon so the link can be stored.
@@ -170,5 +184,5 @@ Accepted IDs under the limit use `NOW:<rank>:<name>`. Synonym IDs use
 rank-qualified form during sync; names remain stored in full.
 
 Generate a fresh preview after deployment; snapshots created before the source-aware
-accepted-target format are rejected. Apply locks existing taxa, identifications, and
-field slips while checking and saving the snapshot on databases with row locking.
+accepted-target format are rejected. Apply locks existing taxa and identifications
+while checking and saving the snapshot on databases with row locking.

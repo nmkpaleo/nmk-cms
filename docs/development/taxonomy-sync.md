@@ -8,7 +8,7 @@ The sync feature ingests two TSV exports from the NOW-Data repository—`latest_
 
 1. Downloads the TSV files using configured environment variables.
 2. Parses the rows into in-memory records (`AcceptedRecord` / `SynonymRecord`).
-3. Restricts records to normalized local names from `Taxon`, identification text, and field-slip text, plus accepted targets required by matching synonyms. Existing NOW external IDs also retain their matching source records. Drawer links are covered by the existing `Taxon` records.
+3. Restricts records to normalized local names from `Taxon` and identification `taxon_verbatim` (field slips are not used). Names are cleaned by `parse_taxon_label` (`taxon_identity.py`): qualifiers and rank markers are stripped, and names with numbers, special characters or more than three words are skipped and reported in `SyncPreview.skipped_names`. Extracted qualifiers are planned in `SyncPreview.qualifier_updates` and appended to `Identification.identification_qualifier` on apply. Accepted targets required by matching synonyms are also kept. Existing NOW external IDs also retain their matching source records. Drawer links are covered by the existing `Taxon` records.
 4. Compares that subset with existing `Taxon` rows across sources to produce a diff preview. Matched database rows are excluded from deactivation even if their external IDs change.
 5. Applies each independent dependency group atomically, retaining successful groups and recording skipped groups in a `TaxonomyImport` audit row.
 
@@ -106,7 +106,7 @@ All tests should pass with coverage ≥ 90%. Mock external requests in additiona
 
 The UI posts a server-side cached, signed, user-bound snapshot reference (`taxonomy/snapshot.py`).
 It contains the reviewed records and a hash of the local taxa, identification names
-and links, and field-slip names. Apply verifies the signature, one-hour lifetime,
+and links, and identification qualifiers. Apply verifies the signature, one-hour lifetime,
 user, and current catalogue hash while locking existing taxa. It does not refetch
 external sources. Modified, stale, or expired previews require a new preview.
 Unexpected failures render a dedicated error page and are logged server-side.
