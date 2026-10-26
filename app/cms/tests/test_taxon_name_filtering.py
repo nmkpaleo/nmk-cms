@@ -98,7 +98,8 @@ def test_qualifier_is_written_on_apply_only_and_not_duplicated():
 
     preview = svc.preview()
     # Only current identifications are considered; each is on its own row here.
-    assert {q.identification_id for q in preview.qualifier_updates} == {with_qualifier.pk}
+    assert {q.identification_id for q in preview.qualifier_updates} == {
+        with_qualifier.pk, existing.pk, already.pk}
     with_qualifier.refresh_from_db()
     assert not with_qualifier.identification_qualifier
 
@@ -112,9 +113,14 @@ def test_qualifier_is_written_on_apply_only_and_not_duplicated():
 
     with_qualifier.refresh_from_db()
     assert with_qualifier.identification_qualifier == "cf."
-    assert with_qualifier.taxon_verbatim == "Struthio cf. camelus"
+    assert with_qualifier.taxon_verbatim == "Struthio camelus"
     assert with_qualifier.history.count() >= 2
-    assert result.preview.counts["qualifiers_added"] == 1
+    existing.refresh_from_db()
+    assert existing.identification_qualifier == "aff."
+    assert existing.taxon_verbatim == "Struthio camelus"
+    already.refresh_from_db()
+    assert already.identification_qualifier == "CF."
+    assert result.preview.counts["qualifiers_added"] == 3
     assert Taxon.objects.filter(taxon_name="Struthio camelus").exists()
     linked = Identification.objects.get(pk=with_qualifier.pk)
     assert linked.taxon_record is not None

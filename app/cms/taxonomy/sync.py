@@ -877,7 +877,7 @@ class NowTaxonomySyncService:
         return len(changed)
 
     def _apply_qualifier_updates(self, updates):
-        """Append qualifiers split from taxon_verbatim; the recorded text is unchanged."""
+        """Append split qualifiers and rewrite Lowest identified taxon to the matched clean name."""
         if not updates:
             return []
         by_id = {i.pk: i for i in Identification.objects.filter(pk__in=[u.identification_id for u in updates])}
@@ -886,15 +886,29 @@ class NowTaxonomySyncService:
             identification = by_id.get(update.identification_id)
             if identification is None:
                 continue
+            touched = False
             merged = merge_qualifier(identification.identification_qualifier, update.additions)
             if merged != (identification.identification_qualifier or ""):
                 identification.identification_qualifier = merged
+                touched = True
+            current = identification.taxon_verbatim or identification.taxon
+            parsed = parse_taxon_label(current)
+            if (
+                parsed.valid
+                and identification.taxon_record_id
+                and parsed.name != _normalize_label(current)
+            ):
+                identification.taxon_verbatim = parsed.name
+                identification.taxon = parsed.name
+                touched = True
+            if touched:
                 changed.append(identification)
                 applied.append(update)
         if changed:
             from simple_history.utils import bulk_update_with_history
-            bulk_update_with_history(changed, Identification, ["identification_qualifier"],
-                                     default_change_reason="Qualifier extracted during taxonomy sync")
+            bulk_update_with_history(
+                changed, Identification, ["identification_qualifier", "taxon_verbatim", "taxon"],
+                default_change_reason="Qualifier extracted during taxonomy sync")
         return applied
     # ------------------------
     # Helpers

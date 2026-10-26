@@ -59,9 +59,9 @@ class TaxonomySyncService(NowTaxonomySyncService):
                 skip(raw, parsed.reason, "identification")
                 continue
             local_names.add(parsed.name.lower())
-            if parsed.qualifiers:
+            if parsed.qualifiers or parsed.name != raw:
                 existing = identification.identification_qualifier or ""
-                if merge_qualifier(existing, parsed.qualifiers) != existing:
+                if merge_qualifier(existing, parsed.qualifiers) != existing or parsed.name != raw:
                     qualifier_updates.append(QualifierUpdate(
                         identification.pk, raw, existing, list(parsed.qualifiers)))
         names.update((name, "") for name in local_names)

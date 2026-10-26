@@ -21,7 +21,7 @@ This guide covers the administrative workflow for synchronising the CMS taxonomy
 Sync uses names already present in the CMS:
 
 - Existing `Taxon` records from any source, including taxa linked to drawers and identifications.
-- Identification **Taxon (free text)** (`taxon_verbatim`, falling back to the legacy `taxon` field) of each current identification.
+- Identification **Lowest identified taxon** (`taxon_verbatim`, falling back to the legacy `taxon` field) of each current identification.
 - Field-slip `verbatim_taxon` text is **not** used.
 
 ### Names that are skipped or cleaned
@@ -35,7 +35,8 @@ Before lookup, each free-text name is cleaned so that only names GBIF or NOW can
 
 Extracted qualifiers are appended to the identification's **Identification qualifier** when the
 apply step runs (for example `cf.` becomes `aff. cf.` if `aff.` was already set). A qualifier already
-present is not added again, and the recorded Taxon (free text) is left unchanged. The planned additions are
+present is not added again. When the cleaned name is linked to a taxon, **Lowest identified taxon** is rewritten to that
+cleaned name (`Homo cf. sapiens` becomes `Homo sapiens` with qualifier `cf.`); unmatched names are left unchanged. The planned additions are
 shown in the preview before you apply.
 
 Names must match the NOW name after ignoring case and normalizing whitespace.

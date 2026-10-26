@@ -44,14 +44,14 @@
 
   <details>
     <summary>
-      {% blocktranslate with total=preview_data.qualifier_updates_total %}Identification qualifiers extracted from Taxon (free text) ({{ total }}){% endblocktranslate %}
+      {% blocktranslate with total=preview_data.qualifier_updates_total %}Identification qualifiers extracted from Lowest identified taxon ({{ total }}){% endblocktranslate %}
     </summary>
     {% if preview_data.qualifier_updates %}
     <div class="w3-responsive">
       <table class="w3-table-all w3-small">
         <thead>
           <tr>
-            <th>{% translate "Taxon (free text)" %}</th>
+            <th>{% translate "Lowest identified taxon" %}</th>
             <th>{% translate "Current qualifier" %}</th>
             <th>{% translate "New qualifier" %}</th>
           </tr>

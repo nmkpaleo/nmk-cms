@@ -1388,7 +1388,7 @@ class AccessionRowIdentificationForm(BaseW3ModelForm):
         ]
         labels = {
             "identification_qualifier": "Taxon Qualifier",
-            "taxon_verbatim": "Taxon (free text)",
+            "taxon_verbatim": "Lowest identified taxon",
             "verbatim_identification": "Taxon Verbatim",
             "identification_remarks": "Remarks",
         }

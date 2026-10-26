@@ -59,9 +59,9 @@ Contact the technical team if a problem persists or if you need to restore from 
 ## Scope of NOW synchronization
 
 NOW sync imports names already recorded in the taxonomy catalogue or in the
-identification field **Taxon (free text)**. Names with numbers, special characters or
+identification field **Lowest identified taxon**. Names with numbers, special characters or
 more than three words are skipped, and qualifiers such as `cf.` or `sp.` are moved to
-the identification qualifier. Drawer taxa are included through the catalogue. A matching synonym
+the identification qualifier; once the name is linked, the field keeps only the cleaned name. Drawer taxa are included through the catalogue. A matching synonym
 also includes its accepted name. Recording an order or family does not import all
 species below it. Names are compared ignoring case and extra whitespace; uncertain
 or abbreviated names need review rather than fuzzy matching.
