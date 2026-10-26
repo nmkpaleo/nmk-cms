@@ -622,6 +622,25 @@ class PlaceWidget(s2forms.ModelSelect2Widget):
         return f"{obj.name} ({obj.locality.abbreviation})"
 
 
+class LocalityWidget(s2forms.ModelSelect2Widget):
+    """Searchable locality select matching on abbreviation or name."""
+
+    model = Locality
+    search_fields = ["abbreviation__icontains", "name__icontains"]
+
+    def __init__(self, *args, **kwargs):
+        attrs = kwargs.setdefault("attrs", {})
+        attrs.setdefault("data-placeholder", "Search by abbreviation or name")
+        attrs.setdefault("data-minimum-input-length", 0)
+        super().__init__(*args, **kwargs)
+
+    def get_queryset(self):
+        return Locality.objects.order_by("abbreviation")
+
+    def label_from_instance(self, obj):
+        return f"{obj.abbreviation} - {obj.name}"
+
+
 class PlaceCandidateWidget(s2forms.ModelSelect2TagWidget):
     model = Place
     allow_multiple_selected = False
@@ -752,6 +771,7 @@ class AccessionForm(BaseW3ModelForm):
         ]
         widgets = {
             "accessioned_by": forms.HiddenInput(),
+            "specimen_prefix": LocalityWidget,
             "site": PlaceWidget,
         }
 

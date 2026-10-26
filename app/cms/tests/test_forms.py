@@ -255,6 +255,9 @@ def test_accession_form_specimen_prefix_shows_abbreviation_and_name():
 
     labels = [label for _value, label in form.fields["specimen_prefix"].choices]
     assert "AB - Amboseli" in labels
+    widget = form.fields["specimen_prefix"].widget
+    assert "abbreviation__icontains" in widget.search_fields
+    assert "name__icontains" in widget.search_fields
 
 
 def test_base_form_marks_field_errors_accessibly():
