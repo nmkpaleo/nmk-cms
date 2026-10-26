@@ -53,6 +53,8 @@ def test_serialize_preview_for_template_shapes_all_sections():
         synonyms_to_update=[update],
         to_deactivate=[SimpleNamespace(taxon_name="D", external_source="NOW", external_id="ext-4")],
         issues=[SimpleNamespace(code="warn", message="msg", context={"k": "v"})],
+        skipped_names=[],
+        qualifier_updates=[],
     )
 
     payload = _serialize_preview_for_template(preview)
