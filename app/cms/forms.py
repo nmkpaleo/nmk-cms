@@ -763,6 +763,13 @@ class AccessionForm(BaseW3ModelForm):
         elif self.instance and self.instance.site_id:
             self.fields["site_area"].initial = self.instance.site.name
 
+        self.fields["specimen_prefix"].label_from_instance = (
+            lambda obj: f"{obj.abbreviation} - {obj.name}"
+        )
+        self.fields["site"].label_from_instance = (
+            lambda obj: f"{obj.name} ({obj.get_place_type_display()})"
+        )
+
     def clean_site_area(self):
         value = (self.cleaned_data.get("site_area") or "").strip()
         if value.isdigit():
@@ -773,14 +780,6 @@ class AccessionForm(BaseW3ModelForm):
             if place:
                 return place.name
         return value
-
-        # Custom label for Locality field in dropdown
-        self.fields["specimen_prefix"].label_from_instance = (
-            lambda obj: f"{obj.abbreviation} - {obj.name}"
-        )
-        self.fields["site"].label_from_instance = (
-            lambda obj: f"{obj.name} ({obj.get_place_type_display()})"
-        )
 
 
 class AccessionCommentForm(BaseW3ModelForm):

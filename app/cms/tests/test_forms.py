@@ -248,6 +248,15 @@ def test_base_form_renders_w3_layout():
     assert '<h1 id="accession-form"' in html
 
 
+def test_accession_form_specimen_prefix_shows_abbreviation_and_name():
+    Locality.objects.create(abbreviation="AB", name="Amboseli")
+
+    form = AccessionForm()
+
+    labels = [label for _value, label in form.fields["specimen_prefix"].choices]
+    assert "AB - Amboseli" in labels
+
+
 def test_base_form_marks_field_errors_accessibly():
     collection = Collection.objects.create(abbreviation="COL", description="Collection")
     locality = Locality.objects.create(abbreviation="LC", name="Locality")

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Show the locality abbreviation and name (for example `AB - Amboseli`) in the **Specimen prefix** dropdown on the accession form (#452); the label code was unreachable and the Site dropdown now also shows its place type.
+
 - Add **Invalid names** and **Potential names** checkboxes to the taxonomy identification cleanup report, to find names that can never match GBIF/NOW (numbers, special characters, more than three words) separately from one-to-three-word names that may be unsynced or misspelled.
 
 - Make **Sync Taxa Now** query only names GBIF/NOW can match: Taxon (free text) values with numbers, special characters or more than three words (after stripping `subsp.`/`var.`) are skipped and listed in the preview, qualifiers such as `cf.`, `aff.`, `sp.`, `gen.` and `indet.` are stripped for lookup and appended to the identification qualifier, and field-slip names are no longer a sync source.
