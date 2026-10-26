@@ -61,6 +61,12 @@ from the configured cache. A failed or unresolved match remains in the report wi
 an explanatory message and can be retried later. Empty taxon values still require
 manual editing.
 
+Use the **Invalid names** and **Potential names** checkboxes in the report filter to narrow the list
+(neither or both checked shows everything):
+
+- **Invalid names** contain numbers, special characters or more than three words (after stripping rank markers such as `subsp.`), so they can never match GBIF or NOW and need manual correction. The reason is shown on each row.
+- **Potential names** have one to three words and may be correct but unsynced, or misspelled. Qualifiers such as `cf.` or `sp.` are ignored when judging the name.
+
 ## Source selection and duplicate prevention
 
 - GBIF checks each locally recorded name, using its rank when known.

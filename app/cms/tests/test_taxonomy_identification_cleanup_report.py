@@ -187,3 +187,43 @@ def test_cleanup_report_filters_and_bulk_updates_case_insensitive_source(client,
     assert second.taxon == "Parapapio lothagamensis"
     assert first.identification_qualifier == "cf."
     assert second.identification_qualifier == "cf."
+
+
+def test_cleanup_report_invalid_and_potential_name_filters(client, django_user_model):
+    user = django_user_model.objects.create_user(username="name-check-manager", password="pw")
+    managers, _ = Group.objects.get_or_create(name="Collection Managers")
+    user.groups.add(managers)
+    set_current_user(user)
+    try:
+        names = {
+            "potential": "Unknownus species",
+            "qualified": "Unknownus cf. species",
+            "digits": "Unknownus 12",
+            "special": "Unknownus (x)",
+            "long": "Alpha beta gamma delta",
+        }
+        items = {
+            key: Identification.objects.create(
+                accession_row=_accession_row(user, specimen_no=50 + index),
+                taxon_verbatim=value,
+                taxon=value,
+            )
+            for index, (key, value) in enumerate(names.items())
+        }
+    finally:
+        set_current_user(None)
+    client.force_login(user)
+    url = reverse("taxonomy_identification_cleanup_report")
+
+    def shown(params):
+        return {item.pk for item in client.get(url, params).context["identifications"]}
+
+    invalid = {items["digits"].pk, items["special"].pk, items["long"].pk}
+    potential = {items["potential"].pk, items["qualified"].pk}
+    assert shown({"invalid_names": "1"}) == invalid
+    assert shown({"potential_names": "1"}) == potential
+    assert shown({"invalid_names": "1", "potential_names": "1"}) == invalid | potential
+    assert shown({}) == invalid | potential
+    response = client.get(url, {"invalid_names": "1"})
+    assert response.context["invalid_filter"] is True
+    assert b"contains numbers" in response.content

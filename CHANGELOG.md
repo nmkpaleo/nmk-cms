@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add **Invalid names** and **Potential names** checkboxes to the taxonomy identification cleanup report, to find names that can never match GBIF/NOW (numbers, special characters, more than three words) separately from one-to-three-word names that may be unsynced or misspelled.
+
 - Make **Sync Taxa Now** query only names GBIF/NOW can match: Taxon (free text) values with numbers, special characters or more than three words (after stripping `subsp.`/`var.`) are skipped and listed in the preview, qualifiers such as `cf.`, `aff.`, `sp.`, `gen.` and `indet.` are stripped for lookup and appended to the identification qualifier, and field-slip names are no longer a sync source.
 
 - Add a bulk "Merge duplicate references" button to the Accession references admin that merges records sharing the same accession and reference into the lowest-ID record, combining pages in ascending order and reporting any failures.
