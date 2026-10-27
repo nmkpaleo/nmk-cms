@@ -3,14 +3,17 @@
 The CMS uses `django-dbbackup` for database and media backups. The package
 provides standard Django management commands for creating and restoring backups.
 
-Backups use the `dbbackup` storage configured in Django `STORAGES`. By default,
-this project stores backup files in `BACKUP_ROOT`, which defaults to:
+Backups use the `dbbackup` storage configured in Django `STORAGES`. Local
+commands default to `app/backups/`. Production Compose sets `BACKUP_ROOT` to the
+private, persistent named volume mounted at:
 
 ```text
-/src/app/backups/
+/vol/backups/
 ```
 
-inside the production web container.
+inside the production web container. Backups are excluded from Git and Docker
+build inputs. Copy production backups to separate off-server storage for disaster
+recovery.
 
 ## Create Backups
 
@@ -36,7 +39,7 @@ docker compose -f docker-compose.prod.yml exec web python manage.py mediabackup
 List backup files:
 
 ```bash
-docker compose -f docker-compose.prod.yml exec web ls -lh /src/app/backups/
+docker compose -f docker-compose.prod.yml exec web ls -lh /vol/backups/
 ```
 
 ## Restore Backups

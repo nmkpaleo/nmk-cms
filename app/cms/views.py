@@ -420,12 +420,17 @@ def _review_report_date_bounds(period, start_date_value, end_date_value):
     if period == "monthly":
         return today - timedelta(days=29), today
     if period == "custom":
-        start_date = parse_date(start_date_value or "")
-        end_date = parse_date(end_date_value or "")
+        start_date = start_date_value
+        end_date = end_date_value
         if start_date and end_date and start_date > end_date:
             start_date, end_date = end_date, start_date
         return start_date, end_date
     return None, None
+
+
+class ReviewReportDateRangeForm(forms.Form):
+    start_date = forms.DateField(required=False)
+    end_date = forms.DateField(required=False)
 
 
 @login_required
@@ -439,30 +444,37 @@ def review_report_view(request):
     if selected_period not in {"weekly", "monthly", "custom", "all"}:
         selected_period = "weekly"
 
-    start_date, end_date = _review_report_date_bounds(
-        selected_period,
-        request.GET.get("start_date"),
-        request.GET.get("end_date"),
+    date_form = ReviewReportDateRangeForm(
+        request.GET if selected_period == "custom" else None
     )
+    dates_valid = date_form.is_valid() if selected_period == "custom" else True
+    if selected_period == "custom":
+        if dates_valid:
+            start_date, end_date = _review_report_date_bounds(
+                selected_period,
+                date_form.cleaned_data["start_date"],
+                date_form.cleaned_data["end_date"],
+            )
+        else:
+            start_date = end_date = None
+    else:
+        start_date, end_date = _review_report_date_bounds(selected_period, None, None)
     selected_user_id = request.GET.get("reviewer") or ""
     if selected_user_id and not selected_user_id.isdigit():
         selected_user_id = ""
     generated = "generate" in request.GET
 
-    reviewers = (
-        User.objects.filter(
-            Q(media_qc_intern_checked__intern_checked_on__isnull=False)
-            | Q(media_qc_expert_checked__expert_checked_on__isnull=False)
-        )
-        .order_by("username")
-        .distinct()
+    reviewed_media = Media.objects.filter(
+        Q(intern_checked_by=OuterRef("pk"), intern_checked_on__isnull=False)
+        | Q(expert_checked_by=OuterRef("pk"), expert_checked_on__isnull=False)
     )
+    reviewers = User.objects.filter(Exists(reviewed_media)).order_by("username")
 
     summary = None
     chart_html = None
     message = "Choose a reviewer role, period, and reviewer, then generate the report."
 
-    if generated:
+    if generated and dates_valid:
         date_field = role_config["date_field"]
         user_field = role_config["user_field"]
         queryset = Media.objects.select_related(user_field).filter(
@@ -545,6 +557,7 @@ def review_report_view(request):
         "selected_period": selected_period,
         "start_date": start_date,
         "end_date": end_date,
+        "date_form": date_form,
         "reviewers": reviewers,
         "selected_user_id": selected_user_id,
         "generated": generated,
@@ -695,6 +708,7 @@ def taxonomy_identification_cleanup_report(request):
         value
         for value in queryset.exclude(taxon__isnull=True)
         .exclude(taxon="")
+        .exclude(_normalized_taxon="")
         .order_by()
         .values_list("_normalized_taxon", flat=True)
         .distinct()[:2]

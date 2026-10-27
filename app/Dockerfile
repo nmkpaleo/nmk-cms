@@ -54,8 +54,10 @@ RUN apt-get update && \
     useradd -m user && \
     mkdir -p /vol/web/static && \
     mkdir -p /vol/web/media && \
+    mkdir -p /vol/backups && \
     chown -R user:user /vol && \
-    chmod -R 755 /vol/web
+    chmod -R 755 /vol/web && \
+    chmod 700 /vol/backups
 
 USER user
 

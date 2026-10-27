@@ -130,6 +130,51 @@ def test_review_report_generates_expert_report(client, django_user_model):
     assert "Expert Review Report: Expert" in response.content.decode()
 
 
+def test_review_report_shows_validation_error_for_impossible_custom_date(client, django_user_model):
+    manager = _manager_user(django_user_model, "date-manager")
+    client.force_login(manager)
+
+    response = client.get(
+        reverse("review_report"),
+        {
+            "generate": "1",
+            "period": "custom",
+            "start_date": "2026-02-30",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.context["summary"] is None
+    assert response.context["date_form"].has_error("start_date")
+    assert b"Enter a valid date" in response.content
+
+
+def test_review_report_lists_reviewers_without_duplicate_join_rows(client, django_user_model):
+    manager = _manager_user(django_user_model, "reviewer-manager")
+    reviewer = _reviewer(django_user_model, "both-roles")
+    accession = _accession(manager, 3)
+    _media(
+        manager,
+        media_location="uploads/both-roles-intern.jpg",
+        accession=accession,
+        intern_checked_by=reviewer,
+        intern_checked_on=_reviewed_at(2026, 10, 1),
+    )
+    _media(
+        manager,
+        media_location="uploads/both-roles-expert.jpg",
+        accession=accession,
+        expert_checked_by=reviewer,
+        expert_checked_on=_reviewed_at(2026, 10, 2),
+    )
+    client.force_login(manager)
+
+    response = client.get(reverse("review_report"))
+
+    assert response.status_code == 200
+    assert list(response.context["reviewers"]) == [reviewer]
+
+
 def test_review_report_requires_collection_manager(client, django_user_model):
     url = reverse("review_report")
     response = client.get(url)

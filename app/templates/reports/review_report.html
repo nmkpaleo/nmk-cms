@@ -38,11 +38,13 @@
       </div>
       <div class="w3-col s12 m2">
         <label for="review-report-start-date"><strong>Start date</strong></label>
-        <input id="review-report-start-date" class="w3-input w3-border w3-round" type="date" name="start_date" value="{{ start_date|date:'Y-m-d' }}">
+        <input id="review-report-start-date" class="w3-input w3-border w3-round" type="date" name="start_date" value="{% if selected_period == 'custom' %}{{ date_form.start_date.value|default_if_none:'' }}{% else %}{{ start_date|date:'Y-m-d' }}{% endif %}">
+        {% if date_form.start_date.errors %}<div class="w3-text-red" role="alert">{{ date_form.start_date.errors }}</div>{% endif %}
       </div>
       <div class="w3-col s12 m2">
         <label for="review-report-end-date"><strong>End date</strong></label>
-        <input id="review-report-end-date" class="w3-input w3-border w3-round" type="date" name="end_date" value="{{ end_date|date:'Y-m-d' }}">
+        <input id="review-report-end-date" class="w3-input w3-border w3-round" type="date" name="end_date" value="{% if selected_period == 'custom' %}{{ date_form.end_date.value|default_if_none:'' }}{% else %}{{ end_date|date:'Y-m-d' }}{% endif %}">
+        {% if date_form.end_date.errors %}<div class="w3-text-red" role="alert">{{ date_form.end_date.errors }}</div>{% endif %}
       </div>
     </div>
     <div class="w3-margin-top">

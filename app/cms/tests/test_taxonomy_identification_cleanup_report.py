@@ -189,6 +189,49 @@ def test_cleanup_report_filters_and_bulk_updates_case_insensitive_source(client,
     assert second.identification_qualifier == "cf."
 
 
+def test_cleanup_report_ignores_empty_normalized_taxa_before_bulk_limit(client, django_user_model):
+    user = django_user_model.objects.create_user(username="empty-bulk-manager")
+    managers, _ = Group.objects.get_or_create(name="Collection Managers")
+    user.groups.add(managers)
+    set_current_user(user)
+    try:
+        whitespace = Identification.objects.create(
+            accession_row=_accession_row(user, specimen_no=30),
+            taxon_verbatim="Whitespace taxon",
+            taxon="\t",
+        )
+        first = Identification.objects.create(
+            accession_row=_accession_row(user, specimen_no=31),
+            taxon_verbatim="Unknownus alpha",
+            taxon="Unknownus alpha",
+        )
+        second = Identification.objects.create(
+            accession_row=_accession_row(user, specimen_no=32),
+            taxon_verbatim="Unknownus beta",
+            taxon="Unknownus beta",
+        )
+    finally:
+        set_current_user(None)
+    client.force_login(user)
+    url = reverse("taxonomy_identification_cleanup_report")
+
+    response = client.get(url)
+
+    assert response.status_code == 200
+    assert response.context["bulk_edit_enabled"] is False
+    assert response.context["bulk_source_taxon"] == ""
+
+    response = client.post(url, {"target_taxon": "Replacement name"})
+
+    assert response.status_code == 302
+    whitespace.refresh_from_db()
+    first.refresh_from_db()
+    second.refresh_from_db()
+    assert whitespace.taxon == "\t"
+    assert first.taxon == "Unknownus alpha"
+    assert second.taxon == "Unknownus beta"
+
+
 def test_cleanup_report_invalid_and_potential_name_filters(client, django_user_model):
     user = django_user_model.objects.create_user(username="name-check-manager", password="pw")
     managers, _ = Group.objects.get_or_create(name="Collection Managers")
