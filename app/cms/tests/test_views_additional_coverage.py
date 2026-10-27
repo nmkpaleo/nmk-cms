@@ -42,18 +42,7 @@ class TestViewCoverageAdditions:
         user.groups.add(Group.objects.create(name="Collection Managers"))
         client.force_login(user)
 
-        class _EmptyQS:
-            def values(self, *_args, **_kwargs):
-                return self
-
-            def annotate(self, *_args, **_kwargs):
-                return self
-
-            def order_by(self, *_args, **_kwargs):
-                return []
-
-        with patch("cms.views.Accession.objects", _EmptyQS()):
-            response = client.get(reverse("accession_distribution_report"))
+        response = client.get(reverse("accession_distribution_report"))
 
         assert response.status_code == 200
         assert "No accession data available yet." in response.content.decode()
