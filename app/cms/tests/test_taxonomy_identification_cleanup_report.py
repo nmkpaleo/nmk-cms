@@ -198,7 +198,6 @@ def test_cleanup_report_ignores_empty_normalized_taxa_before_bulk_limit(client, 
         whitespace = Identification.objects.create(
             accession_row=_accession_row(user, specimen_no=30),
             taxon_verbatim="Whitespace taxon",
-            taxon="\t",
         )
         first = Identification.objects.create(
             accession_row=_accession_row(user, specimen_no=31),
@@ -212,6 +211,7 @@ def test_cleanup_report_ignores_empty_normalized_taxa_before_bulk_limit(client, 
         )
     finally:
         set_current_user(None)
+    Identification.objects.filter(pk=whitespace.pk).update(taxon="\t")
     client.force_login(user)
     url = reverse("taxonomy_identification_cleanup_report")
 
