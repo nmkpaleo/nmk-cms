@@ -24,7 +24,7 @@ from django import forms
 from django.apps import apps
 from django.db import models, transaction
 from django.db.models import (
-    Case, CharField, Count, Exists, F, IntegerField, Max, OuterRef, Prefetch,
+    Case, CharField, Count, Exists, F, IntegerField, Max, Min, OuterRef, Prefetch,
     Q, Subquery, Sum, Value, When,
 )
 from django.db.models.expressions import Window
@@ -167,8 +167,6 @@ from cms.models import (
 )
 from django.shortcuts import render
 from .models import Media
-import plotly.express as px
-import pandas as pd
 from plotly.io import to_html
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
@@ -271,29 +269,27 @@ def media_report_view(request):
         row['ocr_status']: row['count']
         for row in media_queryset.values('ocr_status').annotate(count=Count('pk'))
     }
-    counts = pd.DataFrame([
+    counts = [
         {
             'OCR Status': status_labels.get(status, status.replace('_', ' ').title()),
             'Count': int(status_counts.get(status, 0)),
         }
         for status, _label in Media.OCRStatus.choices
-    ])
+    ]
 
     completed = int(status_counts.get(Media.OCRStatus.COMPLETED, 0))
     completion_rate = (completed / total_files * 100) if total_files > 0 else 0
 
-    # Build OCR summary chart
-    fig1 = px.bar(
-        counts,
-        x='OCR Status',
-        y='Count',
-        title="OCR Status Summary of Media Files",
-        color='OCR Status',
-        text='Count',
-        color_discrete_sequence=px.colors.qualitative.Vivid
-    )
-    fig1.update_traces(textposition='outside')
+    fig1 = go.Figure(data=go.Bar(
+        x=[row["OCR Status"] for row in counts],
+        y=[row["Count"] for row in counts],
+        text=[row["Count"] for row in counts],
+        textposition='outside',
+        marker_color=["#0f6663", "#2e6f4e", "#c27d13"],
+        hovertemplate="<b>%{x}</b><br>Files: %{y}<extra></extra>",
+    ))
     fig1.update_layout(
+        title="OCR Status Summary of Media Files",
         plot_bgcolor='#ffffff',
         paper_bgcolor='#ffffff',
         title_font_size=22,
@@ -317,50 +313,37 @@ def media_report_view(request):
         report_start = timezone.now() - timedelta(days=range_config["days"])
         report_queryset = report_queryset.filter(created_on__gte=report_start)
 
-    progress_data = (
+    progress_data = list(
         report_queryset
         .annotate(period=range_config["trunc"]("created_on"))
         .values("period")
         .annotate(new_media=Count("pk"))
         .order_by("period")
     )
-    progress_df = pd.DataFrame.from_records(progress_data)
-    if not progress_df.empty:
-        progress_df["period"] = pd.to_datetime(progress_df["period"], errors="coerce")
-        progress_df = progress_df.dropna(subset=["period"]).sort_values("period")
-        progress_df["new_media"] = progress_df["new_media"].astype(int)
+    if progress_data:
+        progress_periods = []
+        progress_counts = []
+        progress_totals = []
+        running_total = 0
+        for row in progress_data:
+            count = int(row["new_media"])
+            running_total += count
+            progress_periods.append(row["period"])
+            progress_counts.append(count)
+            progress_totals.append(running_total)
 
-        full_range = pd.date_range(
-            progress_df["period"].min(),
-            progress_df["period"].max(),
-            freq=range_config["freq"],
-        )
-        if len(full_range):
-            progress_df = (
-                progress_df
-                .set_index("period")
-                .reindex(full_range, fill_value=0)
-                .rename_axis("period")
-                .reset_index()
+        if len(progress_periods) == 1:
+            interval = timedelta(
+                days=7 if range_config["freq"].startswith("W") else 30 if range_config["freq"] == "MS" else 1
             )
-        if len(progress_df) == 1:
-            interval = pd.Timedelta(days=7 if range_config["freq"].startswith("W") else 30 if range_config["freq"] == "MS" else 1)
-            progress_df = pd.concat(
-                [
-                    pd.DataFrame([{
-                        "period": progress_df["period"].iloc[0] - interval,
-                        "new_media": 0,
-                    }]),
-                    progress_df,
-                ],
-                ignore_index=True,
-            )
+            progress_periods.insert(0, progress_periods[0] - interval)
+            progress_counts.insert(0, 0)
+            progress_totals.insert(0, 0)
 
-        progress_df["total_media"] = progress_df["new_media"].cumsum()
         fig2 = go.Figure(data=go.Scatter(
-            x=progress_df["period"],
-            y=progress_df["total_media"],
-            customdata=progress_df["new_media"],
+            x=progress_periods,
+            y=progress_totals,
+            customdata=progress_counts,
             mode="lines+markers",
             line=dict(color="#2e6f4e", width=3, shape="spline"),
             marker=dict(size=7, color="#2e6f4e", line=dict(width=1, color="#ffffff")),
@@ -373,11 +356,11 @@ def media_report_view(request):
             ),
         ))
         xaxis_config = dict(gridcolor="#f1ebe2", tickformat="%b %d, %Y")
-        if len(progress_df) <= 10:
+        if len(progress_periods) <= 10:
             xaxis_config.update(
                 tickmode="array",
-                tickvals=progress_df["period"],
-                ticktext=[period.strftime("%b %d, %Y") for period in progress_df["period"]],
+                tickvals=progress_periods,
+                ticktext=[period.strftime("%b %d, %Y") for period in progress_periods],
             )
 
         fig2.update_layout(
@@ -414,6 +397,162 @@ def media_report_view(request):
         'selected_range': selected_range,
     }
     return render(request, 'reports/media_report.html', context)
+
+
+REVIEW_REPORT_ROLES = {
+    "intern": {
+        "label": "Intern",
+        "user_field": "intern_checked_by",
+        "date_field": "intern_checked_on",
+    },
+    "expert": {
+        "label": "Expert",
+        "user_field": "expert_checked_by",
+        "date_field": "expert_checked_on",
+    },
+}
+
+
+def _review_report_date_bounds(period, start_date_value, end_date_value):
+    today = timezone.localdate()
+    if period == "weekly":
+        return today - timedelta(days=6), today
+    if period == "monthly":
+        return today - timedelta(days=29), today
+    if period == "custom":
+        start_date = parse_date(start_date_value or "")
+        end_date = parse_date(end_date_value or "")
+        if start_date and end_date and start_date > end_date:
+            start_date, end_date = end_date, start_date
+        return start_date, end_date
+    return None, None
+
+
+@login_required
+@user_passes_test(is_collection_manager)
+def review_report_view(request):
+    selected_role = request.GET.get("role", "intern")
+    if selected_role not in REVIEW_REPORT_ROLES:
+        selected_role = "intern"
+    role_config = REVIEW_REPORT_ROLES[selected_role]
+    selected_period = request.GET.get("period", "weekly")
+    if selected_period not in {"weekly", "monthly", "custom", "all"}:
+        selected_period = "weekly"
+
+    start_date, end_date = _review_report_date_bounds(
+        selected_period,
+        request.GET.get("start_date"),
+        request.GET.get("end_date"),
+    )
+    selected_user_id = request.GET.get("reviewer") or ""
+    if selected_user_id and not selected_user_id.isdigit():
+        selected_user_id = ""
+    generated = "generate" in request.GET
+
+    reviewers = (
+        User.objects.filter(
+            Q(media_qc_intern_checked__intern_checked_on__isnull=False)
+            | Q(media_qc_expert_checked__expert_checked_on__isnull=False)
+        )
+        .order_by("username")
+        .distinct()
+    )
+
+    summary = None
+    chart_html = None
+    message = "Choose a reviewer role, period, and reviewer, then generate the report."
+
+    if generated:
+        date_field = role_config["date_field"]
+        user_field = role_config["user_field"]
+        queryset = Media.objects.select_related(user_field).filter(
+            **{f"{date_field}__isnull": False}
+        )
+        if selected_user_id:
+            queryset = queryset.filter(**{f"{user_field}_id": selected_user_id})
+        if start_date:
+            queryset = queryset.filter(**{f"{date_field}__date__gte": start_date})
+        if end_date:
+            queryset = queryset.filter(**{f"{date_field}__date__lte": end_date})
+
+        queryset = queryset.order_by(date_field, "pk")
+        reviewed_records = queryset.count()
+        records_rearranged = queryset.filter(rows_rearranged=True).count()
+        first_record = queryset.first()
+        latest_record = queryset.last()
+
+        daily_rows = list(
+            queryset.annotate(review_day=TruncDate(date_field))
+            .values("review_day")
+            .annotate(review_count=Count("pk"))
+            .order_by("review_day")
+        )
+        if daily_rows:
+            review_days = [row["review_day"] for row in daily_rows]
+            review_counts = [int(row["review_count"]) for row in daily_rows]
+            active_days = len(review_days)
+
+            per_day_fig = go.Figure(data=go.Bar(
+                x=review_days,
+                y=review_counts,
+                marker_color="#0f6663",
+                text=review_counts,
+                textposition="outside",
+                hovertemplate="<b>%{x|%b %-d, %Y}</b><br>Reviews: %{y}<extra></extra>",
+            ))
+            per_day_fig.update_layout(
+                title="Reviews per day",
+                xaxis_title="Review date",
+                yaxis_title="Reviewed records",
+                plot_bgcolor="#ffffff",
+                paper_bgcolor="#ffffff",
+                font=dict(size=14, color="#213635"),
+                showlegend=False,
+                yaxis=dict(rangemode="tozero", gridcolor="#dce5e2", tickformat=",d"),
+                margin=dict(l=48, r=24, t=64, b=48),
+            )
+            chart_html = to_html(
+                per_day_fig,
+                full_html=False,
+                include_plotlyjs="cdn",
+                config={"displayModeBar": False, "responsive": True},
+            )
+        elif reviewed_records == 0:
+            active_days = 0
+            message = "No review records match the selected filters."
+        else:
+            active_days = 0
+
+        summary = {
+            "reviewed_records": reviewed_records,
+            "active_days": active_days,
+            "average_per_day": round(reviewed_records / active_days, 1) if active_days else 0,
+            "records_rearranged": records_rearranged,
+            "first_review": getattr(first_record, date_field, None) if first_record else None,
+            "latest_review": getattr(latest_record, date_field, None) if latest_record else None,
+            "role_label": role_config["label"],
+        }
+
+    context = {
+        "role_options": REVIEW_REPORT_ROLES,
+        "selected_role": selected_role,
+        "period_options": {
+            "weekly": "Weekly",
+            "monthly": "Monthly",
+            "custom": "Specific days",
+            "all": "All time",
+        },
+        "selected_period": selected_period,
+        "start_date": start_date,
+        "end_date": end_date,
+        "reviewers": reviewers,
+        "selected_user_id": selected_user_id,
+        "generated": generated,
+        "summary": summary,
+        "chart_html": chart_html,
+        "message": message,
+    }
+    return render(request, "reports/review_report.html", context)
 
 @login_required
 @user_passes_test(is_collection_manager)
@@ -552,14 +691,17 @@ def taxonomy_identification_cleanup_report(request):
         ]
         queryset = queryset.filter(pk__in=matching_pks)
 
-    filtered_taxa = [
-        value.strip().casefold()
-        for value in queryset.values_list("taxon", flat=True)
-        if value and value.strip()
+    distinct_source_taxa = [
+        value
+        for value in queryset.exclude(taxon__isnull=True)
+        .exclude(taxon="")
+        .order_by()
+        .values_list("_normalized_taxon", flat=True)
+        .distinct()[:2]
+        if value
     ]
-    distinct_source_taxa = set(filtered_taxa)
-    bulk_source_taxon = next(iter(distinct_source_taxa), "") if len(distinct_source_taxa) == 1 else ""
-    bulk_edit_enabled = bool(bulk_source_taxon and filtered_taxa)
+    bulk_source_taxon = distinct_source_taxa[0] if len(distinct_source_taxa) == 1 else ""
+    bulk_edit_enabled = bool(bulk_source_taxon)
 
     if request.method == "POST":
         selected = list(queryset) if bulk_edit_enabled else []
@@ -618,7 +760,7 @@ def taxonomy_identification_cleanup_report(request):
             "potential_filter": potential_filter,
             "bulk_source_taxon": bulk_source_taxon,
             "bulk_edit_enabled": bulk_edit_enabled,
-            "bulk_count": len(filtered_taxa),
+            "bulk_count": paginator.count if bulk_edit_enabled else 0,
         },
     )
 
@@ -630,135 +772,127 @@ def accession_distribution_report(request):
     """
     Generates a report showing the distribution of accessions per locality.
     """
-    # Query grouped counts per locality (specimen_prefix)
-    accession_data = (
-        Accession.objects
-        .values('specimen_prefix__name')
-        .annotate(total_accessions=Count('specimen_no', distinct=True))
-        .order_by('specimen_prefix__name')
+    date_bounds = Accession.objects.aggregate(
+        first_day=Min(TruncDate("created_on")),
+        latest_day=Max(TruncDate("created_on")),
     )
-
-    if not accession_data:
+    first_day = date_bounds["first_day"]
+    latest_day = date_bounds["latest_day"]
+    if first_day is None or latest_day is None:
         return render(request, 'reports/accession_distribution.html', {
             'message': 'No accession data available yet.'
         })
 
-    df = pd.DataFrame.from_records(accession_data)
-    df.rename(columns={'specimen_prefix__name': 'Locality', 'total_accessions': 'Accessions'}, inplace=True)
-
-    progress_data = (
-        Accession.objects
-        .annotate(day=TruncDate('created_on'))
-        .values('day')
-        .annotate(new_accessions=Count('pk'))
-        .order_by('day')
-    )
-    progress_df = pd.DataFrame.from_records(progress_data)
-    if not progress_df.empty:
-        progress_df['day'] = pd.to_datetime(progress_df['day'], errors='coerce')
-        progress_df = progress_df.dropna(subset=['day']).sort_values('day')
-        progress_df['new_accessions'] = progress_df['new_accessions'].astype(int)
-
-        date_span = (progress_df['day'].max() - progress_df['day'].min()).days
-        if date_span > 180:
-            progress_df = (
-                progress_df
-                .set_index('day')
-                .resample('W-MON', label='left', closed='left')
-                .sum()
-                .reset_index()
-            )
-            xaxis_title = 'Week'
-            chart_title = 'Accession Data Progress by Week'
-        else:
-            full_range = pd.date_range(progress_df['day'].min(), progress_df['day'].max(), freq='D')
-            progress_df = (
-                progress_df
-                .set_index('day')
-                .reindex(full_range, fill_value=0)
-                .rename_axis('day')
-                .reset_index()
-            )
-            xaxis_title = 'Date'
-            chart_title = 'Accession Data Progress by Day'
-
-        if len(progress_df) == 1:
-            interval = pd.Timedelta(weeks=1 if xaxis_title == 'Week' else 0, days=0 if xaxis_title == 'Week' else 1)
-            progress_df = pd.concat(
-                [
-                    pd.DataFrame([{
-                        'day': progress_df['day'].iloc[0] - interval,
-                        'new_accessions': 0,
-                    }]),
-                    progress_df,
-                ],
-                ignore_index=True,
-            )
-
-        progress_df['total_accessions'] = progress_df['new_accessions'].cumsum()
-        progress_total = int(progress_df['total_accessions'].max())
-        progress_new_latest = int(progress_df['new_accessions'].iloc[-1])
-
-        fig_progress = go.Figure()
-        fig_progress.add_trace(go.Scatter(
-            x=progress_df['day'],
-            y=progress_df['total_accessions'],
-            mode='lines+markers',
-            name='Total accessions',
-            line=dict(color='#2e6f4e', width=3, shape='spline'),
-            marker=dict(size=7, color='#2e6f4e', line=dict(width=1, color='#ffffff')),
-            fill='tozeroy',
-            fillcolor='rgba(46, 111, 78, 0.12)',
-            customdata=progress_df['new_accessions'],
-            hovertemplate=(
-                '<b>%{x|%Y-%m-%d}</b><br>'
-                'Total accessions: %{y}<br>'
-                'New in period: %{customdata}<extra></extra>'
-            ),
-        ))
-        xaxis_config = dict(gridcolor='#f1ebe2', tickformat='%b %d, %Y')
-        if len(progress_df) <= 10:
-            xaxis_config.update(
-                tickmode='array',
-                tickvals=progress_df['day'],
-                ticktext=[day.strftime('%b %d, %Y') for day in progress_df['day']],
-            )
-        fig_progress.update_layout(
-            title=chart_title,
-            xaxis_title=xaxis_title,
-            yaxis_title='Cumulative accessions',
-            plot_bgcolor='#ffffff',
-            paper_bgcolor='#ffffff',
-            font=dict(size=14, color='#3f2a1d'),
-            hovermode='x unified',
-            showlegend=False,
-            margin=dict(l=48, r=24, t=64, b=48),
-            yaxis=dict(rangemode='tozero', gridcolor='#eadfce', dtick=1, tickformat=',d'),
-            xaxis=xaxis_config,
+    date_span = (latest_day - first_day).days
+    if date_span > 180:
+        progress_rows = (
+            Accession.objects
+            .annotate(period=TruncWeek("created_on"))
+            .values("period")
+            .annotate(new_accessions=Count("pk"))
+            .order_by("period")
         )
-        chart_progress = to_html(
-            fig_progress,
-            full_html=False,
-            include_plotlyjs='cdn',
-            config={'displayModeBar': False, 'responsive': True},
-        )
+        xaxis_title = "Week"
+        chart_title = "Accession Data Progress by Week"
     else:
-        chart_progress = None
-        progress_total = 0
-        progress_new_latest = 0
+        progress_rows = (
+            Accession.objects
+            .annotate(period=TruncDate("created_on"))
+            .values("period")
+            .annotate(new_accessions=Count("pk"))
+            .order_by("period")
+        )
+        xaxis_title = "Date"
+        chart_title = "Accession Data Progress by Day"
+
+    progress_periods = []
+    progress_counts = []
+    progress_totals = []
+    running_total = 0
+    for row in progress_rows:
+        count = int(row["new_accessions"])
+        running_total += count
+        progress_periods.append(row["period"])
+        progress_counts.append(count)
+        progress_totals.append(running_total)
+
+    if len(progress_periods) == 1:
+        interval = timedelta(weeks=1 if xaxis_title == "Week" else 0, days=0 if xaxis_title == "Week" else 1)
+        progress_periods.insert(0, progress_periods[0] - interval)
+        progress_counts.insert(0, 0)
+        progress_totals.insert(0, 0)
+
+    progress_total = progress_totals[-1] if progress_totals else 0
+    progress_new_latest = progress_counts[-1] if progress_counts else 0
+
+    fig_progress = go.Figure(data=go.Scatter(
+        x=progress_periods,
+        y=progress_totals,
+        mode='lines+markers',
+        name='Total accessions',
+        line=dict(color='#2e6f4e', width=3, shape='spline'),
+        marker=dict(size=7, color='#2e6f4e', line=dict(width=1, color='#ffffff')),
+        fill='tozeroy',
+        fillcolor='rgba(46, 111, 78, 0.12)',
+        customdata=progress_counts,
+        hovertemplate=(
+            '<b>%{x|%Y-%m-%d}</b><br>'
+            'Total accessions: %{y}<br>'
+            'New in period: %{customdata}<extra></extra>'
+        ),
+    ))
+    xaxis_config = dict(gridcolor='#f1ebe2', tickformat='%b %d, %Y')
+    if len(progress_periods) <= 10:
+        xaxis_config.update(
+            tickmode='array',
+            tickvals=progress_periods,
+            ticktext=[period.strftime('%b %d, %Y') for period in progress_periods],
+        )
+    fig_progress.update_layout(
+        title=chart_title,
+        xaxis_title=xaxis_title,
+        yaxis_title='Cumulative accessions',
+        plot_bgcolor='#ffffff',
+        paper_bgcolor='#ffffff',
+        font=dict(size=14, color='#3f2a1d'),
+        hovermode='x unified',
+        showlegend=False,
+        margin=dict(l=48, r=24, t=64, b=48),
+        yaxis=dict(rangemode='tozero', gridcolor='#eadfce', dtick=1, tickformat=',d'),
+        xaxis=xaxis_config,
+    )
+    chart_progress = to_html(
+        fig_progress,
+        full_html=False,
+        include_plotlyjs='cdn',
+        config={'displayModeBar': False, 'responsive': True},
+    )
 
     # --- Locality-based chart ---
-    fig_locality = px.bar(
-        df,
-        x='Locality',
-        y='Accessions',
-        text='Accessions',
-        title='Accessions per Locality',
-        color='Locality',
-        color_discrete_sequence=px.colors.qualitative.Set3
+    locality_table = list(
+        Accession.objects
+        .values("specimen_prefix__name")
+        .annotate(total_accessions=Count("pk"))
+        .order_by("-total_accessions", "specimen_prefix__name")
     )
-    fig_locality.update_traces(textposition='outside')
+    locality_table = [
+        {
+            "Locality": row["specimen_prefix__name"] or "Unknown",
+            "Accessions": int(row["total_accessions"]),
+        }
+        for row in locality_table
+    ]
+    chart_localities = locality_table[:25]
+    fig_locality = go.Figure(data=go.Bar(
+        x=[row["Locality"] for row in chart_localities],
+        y=[row["Accessions"] for row in chart_localities],
+        text=[row["Accessions"] for row in chart_localities],
+        textposition='outside',
+        marker_color='#0f6663',
+        hovertemplate='<b>%{x}</b><br>Accessions: %{y}<extra></extra>',
+    ))
     fig_locality.update_layout(
+        title='Accessions per Locality',
         xaxis_title='Locality',
         yaxis_title='Number of Accessions',
         xaxis_tickangle=-30,
@@ -777,7 +911,7 @@ def accession_distribution_report(request):
     context = {
         'chart_progress': chart_progress,
         'chart_locality': chart_locality,
-        'locality_table': df.to_dict(orient='records'),
+        'locality_table': locality_table,
         'progress_summary': {
             'total': progress_total,
             'latest_period': progress_new_latest,
