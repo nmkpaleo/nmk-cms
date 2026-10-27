@@ -20,6 +20,7 @@ django-allauth>=0.63.3
 django-recaptcha>=4.1.0
 django-autocomplete-light>=3.9.2
 django-crum>=0.7
+django-dbbackup==5.4.0
 django-filter>=25.1
 django-formtools>=2.5.1
 django-redis>=5.4.0

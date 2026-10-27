@@ -56,6 +56,7 @@ class NavigationTemplateTests(TestCase):
 
         self.assertContains(response, 'id="reports-menu"', html=False)
         self.assertContains(response, _("Reports"))
+        self.assertContains(response, _("Review Reports"))
 
     def test_reports_menu_visible_for_superuser(self):
         user = self._create_user("admin", is_superuser=True)
@@ -69,6 +70,7 @@ class NavigationTemplateTests(TestCase):
     def test_reports_views_require_authorised_user(self):
         media_report_url = reverse("media_report")
         accession_report_url = reverse("accession_distribution_report")
+        review_report_url = reverse("review_report")
 
         # Anonymous users should be redirected to login
         response = self.client.get(media_report_url)
@@ -89,4 +91,7 @@ class NavigationTemplateTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
         response = self.client.get(accession_report_url)
+        self.assertEqual(response.status_code, 200)
+
+        response = self.client.get(review_report_url)
         self.assertEqual(response.status_code, 200)

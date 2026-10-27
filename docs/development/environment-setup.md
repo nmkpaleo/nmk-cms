@@ -263,7 +263,8 @@ The `watchtower` service checks Docker Hub every 30 seconds (`--interval 30`). I
 
 | Task | Frequency | Command |
 | --- | --- | --- |
-| Database backup | Daily | `docker compose -f docker-compose.prod.yml exec db mysqldump -u root -p"$DB_ROOT_PASS" $DB_NAME > backup.sql` |
+| Database backup | Daily | `docker compose -f docker-compose.prod.yml exec web python manage.py dbbackup` |
+| Media backup | Daily | `docker compose -f docker-compose.prod.yml exec web python manage.py mediabackup` |
 | Check container status | Weekly | `docker compose -f docker-compose.prod.yml ps` |
 | Renew certificates | Automatic via Certbot | Ensure ports 80/443 stay open |
 

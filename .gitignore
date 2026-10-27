@@ -7,6 +7,7 @@ nginx/certbot/*
 .vscode/
 media/
 app/media/
+app/backups/
 github_kli*
 
 node_modules/
