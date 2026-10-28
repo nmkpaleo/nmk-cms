@@ -1,7 +1,7 @@
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 
@@ -57,6 +57,12 @@ def test_task_helper_functions_coerce_and_normalize():
     assert str(_coerce_confidence("0.25")) == "0.25"
     assert _normalize_page_type(" typewritten_text ") == SpecimenListPage.PageType.TYPED_TEXT
     assert _normalize_page_type("unknown") is None
+
+
+def test_dbbackup_app_and_storage_are_configured():
+    assert "dbbackup" in settings.INSTALLED_APPS
+    assert settings.STORAGES["dbbackup"]["BACKEND"] == "django.core.files.storage.FileSystemStorage"
+    assert settings.STORAGES["dbbackup"]["OPTIONS"]["location"] == settings.BACKUP_ROOT
 
 
 @pytest.mark.django_db

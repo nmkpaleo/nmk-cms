@@ -118,6 +118,7 @@ if TRUSTED_ORIGINS_ENV:
 
 INSTALLED_APPS = [
     "cms.apps.CmsConfig",
+    "dbbackup",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -337,6 +338,22 @@ STATIC_ROOT = get_var("STATIC_ROOT", os.path.join(BASE_DIR, "static"))
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = get_var("MEDIA_ROOT", os.path.join(BASE_DIR, "media"))
+BACKUP_ROOT = get_var("BACKUP_ROOT", os.path.join(BASE_DIR, "backups"))
+
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+    },
+    "dbbackup": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+        "OPTIONS": {
+            "location": BACKUP_ROOT,
+        },
+    },
+}
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.0/ref/settings/#default-auto-field

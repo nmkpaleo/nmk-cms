@@ -1,0 +1,106 @@
+{% extends "base_generic.html" %}
+{% load static %}
+
+{% block title %}Review Reports{% endblock %}
+
+{% block content %}
+<div class="w3-content w3-padding-32 w3-animate-opacity">
+  <h2 class="w3-margin-bottom">Review Reports</h2>
+
+  <form method="get" class="w3-card w3-white w3-round-large w3-padding w3-margin-bottom" aria-label="Review report filters">
+    <div class="w3-row-padding">
+      <div class="w3-col s12 m3">
+        <label for="review-report-role"><strong>Review type</strong></label>
+        <select id="review-report-role" name="role" class="w3-select w3-border w3-round">
+          {% for value, option in role_options.items %}
+            <option value="{{ value }}"{% if value == selected_role %} selected{% endif %}>{{ option.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="w3-col s12 m3">
+        <label for="review-report-reviewer"><strong>Reviewer</strong></label>
+        <select id="review-report-reviewer" name="reviewer" class="w3-select w3-border w3-round">
+          <option value="">All reviewers</option>
+          {% for reviewer in reviewers %}
+            <option value="{{ reviewer.pk }}"{% if reviewer.pk|stringformat:"s" == selected_user_id %} selected{% endif %}>
+              {{ reviewer.get_username }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="w3-col s12 m2">
+        <label for="review-report-period"><strong>Period</strong></label>
+        <select id="review-report-period" name="period" class="w3-select w3-border w3-round">
+          {% for value, label in period_options.items %}
+            <option value="{{ value }}"{% if value == selected_period %} selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="w3-col s12 m2">
+        <label for="review-report-start-date"><strong>Start date</strong></label>
+        <input id="review-report-start-date" class="w3-input w3-border w3-round" type="date" name="start_date" value="{% if selected_period == 'custom' %}{{ date_form.start_date.value|default_if_none:'' }}{% else %}{{ start_date|date:'Y-m-d' }}{% endif %}">
+        {% if date_form.start_date.errors %}<div class="w3-text-red" role="alert">{{ date_form.start_date.errors }}</div>{% endif %}
+      </div>
+      <div class="w3-col s12 m2">
+        <label for="review-report-end-date"><strong>End date</strong></label>
+        <input id="review-report-end-date" class="w3-input w3-border w3-round" type="date" name="end_date" value="{% if selected_period == 'custom' %}{{ date_form.end_date.value|default_if_none:'' }}{% else %}{{ end_date|date:'Y-m-d' }}{% endif %}">
+        {% if date_form.end_date.errors %}<div class="w3-text-red" role="alert">{{ date_form.end_date.errors }}</div>{% endif %}
+      </div>
+    </div>
+    <div class="w3-margin-top">
+      <button type="submit" name="generate" value="1" class="w3-button w3-blue w3-round">
+        <i class="fa-solid fa-chart-column" aria-hidden="true"></i>
+        <span class="w3-margin-left">Generate</span>
+      </button>
+    </div>
+  </form>
+
+  {% if summary %}
+    <h3 class="w3-margin-top">{{ summary.role_label }} Review Report{% if selected_user_id %}{% for reviewer in reviewers %}{% if reviewer.pk|stringformat:"s" == selected_user_id %}: {{ reviewer.get_username }}{% endif %}{% endfor %}{% endif %}</h3>
+
+    <div class="w3-card w3-white w3-round-large w3-padding-large w3-margin-bottom">
+      {% if chart_html %}
+        {{ chart_html|safe }}
+      {% else %}
+        <p class="w3-text-grey">{{ message }}</p>
+      {% endif %}
+    </div>
+
+    <div class="w3-card w3-white w3-round-large w3-padding-large">
+      <h4 class="w3-margin-top">Summary</h4>
+      <div class="w3-row-padding">
+        <div class="w3-col s6 m3">
+          <strong class="w3-xxlarge w3-text-teal">{{ summary.reviewed_records }}</strong>
+          <div class="w3-small w3-text-grey">Total reviews</div>
+        </div>
+        <div class="w3-col s6 m3">
+          <strong class="w3-xxlarge w3-text-teal">{{ summary.active_days }}</strong>
+          <div class="w3-small w3-text-grey">Days reviewed</div>
+        </div>
+        <div class="w3-col s6 m3">
+          <strong class="w3-xxlarge w3-text-teal">{{ summary.average_per_day }}</strong>
+          <div class="w3-small w3-text-grey">Average per day</div>
+        </div>
+        <div class="w3-col s6 m3">
+          <strong class="w3-xxlarge w3-text-orange">{{ summary.records_rearranged }}</strong>
+          <div class="w3-small w3-text-grey">Rows rearranged</div>
+        </div>
+      </div>
+      {% if summary.first_review %}
+        <p class="w3-margin-top">
+          <strong>First:</strong> {{ summary.first_review|date:"M j, Y H:i" }}
+          <span class="w3-margin-left"><strong>Latest:</strong> {{ summary.latest_review|date:"M j, Y H:i" }}</span>
+        </p>
+      {% endif %}
+    </div>
+  {% elif generated %}
+    <div class="w3-card w3-white w3-round-large w3-padding-large">
+      <p class="w3-text-grey">{{ message }}</p>
+    </div>
+  {% else %}
+    <div class="w3-panel w3-pale-blue w3-leftbar w3-border-blue">
+      <p>{{ message }}</p>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

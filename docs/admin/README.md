@@ -1,6 +1,7 @@
 # Admin Guides
 
 - [Accession Number Series](accession-number-series.md)
+- [Backups](backups.md)
 - [Drawer Register](drawer-register.md)
 - [Localities](localities.md)
 - [Places](places.md)
