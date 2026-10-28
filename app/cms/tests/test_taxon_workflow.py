@@ -107,3 +107,8 @@ def test_admin_displays_taxonomy_fields_readonly():
     assert identification_admin.verbatim_taxon_display(identification) == "Recorded text"
     assert "taxon_record" in identification_admin.readonly_fields
 
+
+def test_taxon_admin_subspecies_column_is_orderable():
+    taxon_admin = admin.site._registry[Taxon]
+
+    assert taxon_admin.formatted_subspecies.admin_order_field == "infraspecific_epithet"

@@ -1990,6 +1990,7 @@ class TaxonAdmin(HistoricalImportExportAdmin):
     def formatted_subspecies(self, obj):
         return obj.infraspecific_epithet if obj.infraspecific_epithet else "-"
     formatted_subspecies.short_description = 'Subspecies'
+    formatted_subspecies.admin_order_field = "infraspecific_epithet"
 
     def changelist_view(self, request, extra_context=None):
         extra_context = extra_context or {}
