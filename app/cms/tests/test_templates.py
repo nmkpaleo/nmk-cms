@@ -104,6 +104,19 @@ def test_accession_preview_panel_structure():
     assert "fa-solid fa-photo-film" in content
 
 
+def test_accession_filter_taxonomy_fields_follow_requested_order():
+    content = load_template("accession_list.html")
+    fields = (
+        "{{ filter.form.tribe }}",
+        "{{ filter.form.genus }}",
+        "{{ filter.form.species }}",
+        "{{ filter.form.element }}",
+    )
+
+    positions = [content.index(field) for field in fields]
+    assert positions == sorted(positions)
+
+
 def test_accession_detail_sections_follow_collection_workflow_order():
     content = Path(
         settings.BASE_DIR, "cms", "templates", "cms", "partials", "accession_preview_panel.html"
