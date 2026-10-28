@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Read the NOW export's `subspecies_name` column into the existing infraspecific epithet field when synchronizing taxa.
+
 - Show the locality abbreviation and name (for example `AB - Amboseli`) in the **Specimen prefix** dropdown on the accession form (#452); the label code was unreachable and the Site dropdown now also shows its place type.
 
 - Add **Invalid names** and **Potential names** checkboxes to the taxonomy identification cleanup report, to find names that can never match GBIF/NOW (numbers, special characters, more than three words) separately from one-to-three-word names that may be unsynced or misspelled.

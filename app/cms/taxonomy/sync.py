@@ -90,7 +90,12 @@ TAXONOMY_ALIASES = {
     "tribe": ["tribe", "tribe_name"],
     "genus": ["genus", "genus_name"],
     "species": ["species", "species_name", "species_epithet"],
-    "infraspecific_epithet": ["subspecies", "infraspecific_epithet", "varietas"],
+    "infraspecific_epithet": [
+        "subspecies_name",
+        "subspecies",
+        "infraspecific_epithet",
+        "varietas",
+    ],
 }
 
 SKIPPED_RANKS = {"subclass", "suborder"}
