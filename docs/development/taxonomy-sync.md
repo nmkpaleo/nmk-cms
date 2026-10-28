@@ -93,6 +93,7 @@ All tests should pass with coverage ≥ 90%. Mock external requests in additiona
 
 * To add new external sources, create additional `ExternalSource` enum values and corresponding service classes following the NOW example.
 * If the NOW schema changes, update the parser helpers (`_parse_accepted`, `_parse_synonyms`) and maintain the external ID format helpers in the same module.
+* The NOW `subspecies_name` TSV column maps to `Taxon.infraspecific_epithet`; subspecies rank and full taxon names remain in the existing `taxon_rank`/`taxon_name` fields. No additional model field or migration is needed.
 * Any new metadata should be added to the `Taxon` model along with migrations and tests before adjusting the sync service.
 
 ## Observability

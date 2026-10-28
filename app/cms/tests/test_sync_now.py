@@ -54,6 +54,26 @@ def test_now_synonym_parser_skips_self_synonyms():
     assert synonyms == []
 
 
+def test_now_subspecies_column_populates_infraspecific_epithet():
+    rows = list(NowTaxonomySyncService()._parse_accepted(io.StringIO(
+        "taxon_level\ttaxon_name\tclass_name\tsubclass_or_superorder_name\torder_name\t"
+        "suborder_name\tsuperfamily_name\tfamily_name\tsubfamily_name\ttribe_name\t"
+        "genus_name\tspecies_name\tsubspecies_name\tauthor\tSTG_TIME_STAMP\n"
+        "subspecies\tBos gaurus\tMAMMALIA\t\tARTIODACTYLA\t\tBovoidea\tBovidae\t"
+        "\t\tBos\tgaurus\tgrangeri\tColbert and Hooijer, 1953\t2026/10/27\n"
+        "subspecies\tBos gaurus grangeri\tMAMMALIA\t\tARTIODACTYLA\t\tBovoidea\t"
+        "Bovidae\t\t\tBos\tgaurus\t\t\t2026/10/27\n"
+    )))
+
+    assert rows[0].rank == "subspecies"
+    assert rows[0].taxonomy["species"] == "gaurus"
+    assert rows[0].taxonomy["infraspecific_epithet"] == "grangeri"
+    taxon = build_taxon_from_record(rows[0], status=TaxonStatus.ACCEPTED)
+    assert taxon.taxon_rank == "subspecies"
+    assert taxon.infraspecific_epithet == "grangeri"
+    assert rows[1].taxonomy["infraspecific_epithet"] == "grangeri"
+
+
 @pytest.fixture(autouse=True)
 def authenticated_model_user(db):
     """Ensure model saves in sync tests have a current user."""
