@@ -40,10 +40,10 @@ class IdentificationImportExportTests(TestCase):
         dataset = Dataset(
             headers=[
                 "id",
-                "Verbatim identification",
-                "Lowest identified taxon",
-                "Taxon Qualifier",
-                "Remarks",
+                "verbatim_identification",
+                "taxon_verbatim",
+                "identification_qualifier",
+                "identification_remarks",
             ]
         )
         dataset.append(
@@ -97,10 +97,10 @@ class IdentificationImportExportTests(TestCase):
             dataset.headers,
             [
                 "id",
-                "Verbatim identification",
-                "Lowest identified taxon",
-                "Taxon Qualifier",
-                "Remarks",
+                "verbatim_identification",
+                "taxon_verbatim",
+                "identification_qualifier",
+                "identification_remarks",
             ],
         )
         self.assertEqual(str(dataset[0][0]), str(identification.pk))

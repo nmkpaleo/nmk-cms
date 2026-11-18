@@ -511,23 +511,6 @@ class IdentificationResourceBase(resources.ModelResource):
 
 
 class IdentificationUpdateResource(IdentificationResourceBase):
-    verbatim_identification = fields.Field(
-        column_name="Verbatim identification",
-        attribute="verbatim_identification",
-    )
-    taxon_verbatim = fields.Field(
-        column_name="Lowest identified taxon",
-        attribute="taxon_verbatim",
-    )
-    identification_qualifier = fields.Field(
-        column_name="Taxon Qualifier",
-        attribute="identification_qualifier",
-    )
-    identification_remarks = fields.Field(
-        column_name="Remarks",
-        attribute="identification_remarks",
-    )
-
     def get_instance(self, instance_loader, row):
         identification_id = row.get("id")
         if identification_id in (None, ""):
