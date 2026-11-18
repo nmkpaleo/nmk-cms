@@ -1,11 +1,12 @@
 from crum import set_current_user
+from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from import_export.results import RowResult
 from tablib import Dataset
 
 from cms.models import Accession, AccessionRow, Collection, Identification, Locality
-from cms.resources import IdentificationResource
+from cms.resources import IdentificationCreateResource, IdentificationUpdateResource
 
 
 class IdentificationImportExportTests(TestCase):
@@ -33,47 +34,56 @@ class IdentificationImportExportTests(TestCase):
             specimen_suffix="A",
         )
 
-    def _dataset(self, identification_id, qualifier, taxon_verbatim="Homo sapiens"):
+    def _update_dataset(self, identification_id, taxon_verbatim="Homo sapiens"):
         dataset = Dataset(
-            headers=[
-                "id",
-                "collection",
-                "specimen_prefix",
-                "specimen_no",
-                "specimen_suffix",
-                "identification_qualifier",
-                "taxon_verbatim",
-            ]
+            headers=["id", "taxon_verbatim", "identification_qualifier"]
         )
-        dataset.append(
-            [
-                identification_id,
-                self.collection.abbreviation,
-                self.locality.abbreviation,
-                self.accession.specimen_no,
-                self.accession_row.specimen_suffix,
-                qualifier,
-                taxon_verbatim,
-            ]
-        )
+        dataset.append([identification_id, taxon_verbatim, "cf."])
         return dataset
 
-    def test_export_includes_identification_id(self):
+    def _create_dataset(self, include_id=False):
+        headers = [
+            "collection",
+            "specimen_prefix",
+            "specimen_no",
+            "specimen_suffix",
+            "taxon_verbatim",
+            "identification_qualifier",
+        ]
+        if include_id:
+            headers.insert(0, "id")
+        dataset = Dataset(headers=headers)
+        row = [
+            self.collection.abbreviation,
+            self.locality.abbreviation,
+            self.accession.specimen_no,
+            self.accession_row.specimen_suffix,
+            "Homo sapiens",
+            "cf.",
+        ]
+        if include_id:
+            row.insert(0, "")
+        dataset.append(row)
+        return dataset
+
+    def test_update_export_contains_only_identification_fields(self):
         identification = Identification.objects.create(
             accession_row=self.accession_row,
             taxon_verbatim="Homo sapiens",
             taxon="Homo sapiens",
         )
 
-        dataset = IdentificationResource().export(
+        dataset = IdentificationUpdateResource().export(
             queryset=Identification.objects.filter(pk=identification.pk)
         )
 
-        self.assertEqual(dataset.headers[:2], ["id", "collection"])
-        self.assertIn("taxon_verbatim", dataset.headers)
+        self.assertEqual(dataset.headers[0], "id")
+        self.assertNotIn("collection", dataset.headers)
+        self.assertNotIn("specimen_prefix", dataset.headers)
+        self.assertNotIn("accession_row", dataset.headers)
         self.assertEqual(str(dataset[0][0]), str(identification.pk))
 
-    def test_import_updates_identification_by_id(self):
+    def test_update_import_matches_only_existing_identification_id(self):
         identification = Identification.objects.create(
             accession_row=self.accession_row,
             taxon_verbatim="Homo sapiens",
@@ -87,65 +97,71 @@ class IdentificationImportExportTests(TestCase):
             identification_qualifier="aff.",
         )
 
-        result = IdentificationResource().import_data(
-            self._dataset(identification.pk, "sp."),
-            dry_run=False,
-        )
+        dataset = self._update_dataset(identification.pk, "Homo erectus")
+        result = IdentificationUpdateResource().import_data(dataset, dry_run=False)
 
         self.assertFalse(result.has_errors())
         identification.refresh_from_db()
         other_identification.refresh_from_db()
-        self.assertEqual(identification.identification_qualifier, "sp.")
-        self.assertEqual(other_identification.identification_qualifier, "aff.")
+        self.assertEqual(identification.taxon_verbatim, "Homo erectus")
+        self.assertEqual(other_identification.taxon_verbatim, "Pan troglodytes")
         self.assertEqual(Identification.objects.count(), 2)
 
-    def test_blank_id_creates_new_identification(self):
+    def test_update_import_rejects_blank_and_unknown_ids(self):
         existing = Identification.objects.create(
             accession_row=self.accession_row,
             taxon_verbatim="Homo sapiens",
             taxon="Homo sapiens",
         )
 
-        result = IdentificationResource().import_data(
-            self._dataset("", "cf.", "Pan troglodytes"),
+        for identification_id in ("", "999999"):
+            result = IdentificationUpdateResource().import_data(
+                self._update_dataset(identification_id),
+                dry_run=False,
+            )
+            self.assertTrue(result.has_errors())
+
+        existing.refresh_from_db()
+        self.assertEqual(existing.taxon_verbatim, "Homo sapiens")
+        self.assertEqual(Identification.objects.count(), 1)
+
+    def test_create_import_resolves_accession_row_and_always_creates(self):
+        existing = Identification.objects.create(
+            accession_row=self.accession_row,
+            taxon_verbatim="Pan troglodytes",
+            taxon="Pan troglodytes",
+        )
+
+        result = IdentificationCreateResource().import_data(
+            self._create_dataset(),
             dry_run=False,
         )
 
         self.assertFalse(result.has_errors())
-        self.assertFalse(
-            result.has_validation_errors(),
-            result.rows[0].validation_error,
-        )
+        self.assertFalse(result.has_validation_errors())
         self.assertEqual(result.rows[0].import_type, RowResult.IMPORT_TYPE_NEW)
         self.assertEqual(Identification.objects.count(), 2)
-        self.assertEqual(
-            Identification.objects.exclude(pk=existing.pk).get().accession_row,
-            self.accession_row,
-        )
+        created = Identification.objects.exclude(pk=existing.pk).get()
+        self.assertEqual(created.accession_row, self.accession_row)
+        self.assertEqual(created.taxon_verbatim, "Homo sapiens")
 
-    def test_missing_id_column_is_rejected(self):
-        dataset = Dataset(
-            headers=[
-                "collection",
-                "specimen_prefix",
-                "specimen_no",
-                "specimen_suffix",
-                "identification_qualifier",
-                "taxon_verbatim",
-            ]
+    def test_create_import_rejects_identification_id_column(self):
+        result = IdentificationCreateResource().import_data(
+            self._create_dataset(include_id=True),
+            dry_run=False,
         )
-        dataset.append(
-            [
-                self.collection.abbreviation,
-                self.locality.abbreviation,
-                self.accession.specimen_no,
-                self.accession_row.specimen_suffix,
-                "cf.",
-                "Pan troglodytes",
-            ]
-        )
-
-        result = IdentificationResource().import_data(dataset, dry_run=False)
 
         self.assertTrue(result.has_errors())
         self.assertFalse(Identification.objects.exists())
+
+    def test_admin_offers_separate_imports_and_only_update_export(self):
+        model_admin = admin.site._registry[Identification]
+
+        self.assertEqual(
+            model_admin.get_import_resource_classes(None),
+            (IdentificationUpdateResource, IdentificationCreateResource),
+        )
+        self.assertEqual(
+            model_admin.get_export_resource_classes(None),
+            [IdentificationUpdateResource],
+        )

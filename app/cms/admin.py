@@ -1262,7 +1262,7 @@ class TaxonLinkStatusListFilter(admin.SimpleListFilter):
 
 
 class IdentificationAdmin(HistoricalImportExportAdmin):
-    resource_class = IdentificationResource
+    resource_classes = (IdentificationUpdateResource, IdentificationCreateResource)
     list_display = (
         "accession_row",
         "identification_qualifier",
@@ -1271,6 +1271,10 @@ class IdentificationAdmin(HistoricalImportExportAdmin):
         "identified_by",
         "date_identified",
     )
+
+    def get_export_resource_classes(self, request):
+        return [IdentificationUpdateResource]
+
     search_fields = (
         "accession_row__accession__specimen_no",
         "verbatim_identification",

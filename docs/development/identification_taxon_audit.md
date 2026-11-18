@@ -18,7 +18,7 @@
 
 ## Admin/import surfaces
 - `IdentificationAdmin` displays both `taxon` (free text) and `verbatim_identification` and allows searching via specimen number, verbatim text, `taxon` (configured as `taxon__taxon_name`), and identifier name; the search reference to `taxon__taxon_name` assumes relational traversal even though `taxon` is a `CharField`, which may limit search effectiveness until fields are unified.
-- Import/export resource `IdentificationResource` exposes `taxon`, `taxon_verbatim`, and `taxon_record`, mapping the latter via `taxon_record` plus `taxon_record_source`. The source disambiguates external IDs that occur in more than one catalogue; older imports without it remain valid only when the ID is unique.
+- `IdentificationUpdateResource` exports Identification-only fields and updates existing rows by ID. `IdentificationCreateResource` resolves the related accession row from collection/specimen columns and always creates a new record. Both expose `taxon`, `taxon_verbatim`, and `taxon_record`; the latter is mapped via `taxon_record` plus `taxon_record_source` to disambiguate external IDs shared across catalogues.
 
 ## Observations for unification
 - Both fields are used throughout forms, filters, utilities, and admin. `taxon_record` enables richer taxonomy traversal and validation, while `taxon` preserves free-text or verbatim names and is used as a fallback for matching. Any unification must preserve free-text capture while maintaining accepted-taxonomy constraints and downstream filters that rely on structured attributes.

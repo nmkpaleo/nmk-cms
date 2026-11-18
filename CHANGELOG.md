@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Include Identification IDs and the required verbatim taxon in admin exports, and use IDs to match imports.
+- Separate Identification admin imports into ID-only updates and new-record imports that resolve accession rows from specimen details.
 
 - Include Element IDs in admin exports and use them to match imports; parent Elements continue to match by name.
 

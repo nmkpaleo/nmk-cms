@@ -450,32 +450,7 @@ class FieldSlipResource(resources.ModelResource):
         )
 
 
-class IdentificationResource(resources.ModelResource):
-    accession_row = fields.Field(
-        column_name="accession_row",
-        attribute="accession_row",
-        widget=ForeignKeyWidget(AccessionRow, "id"),
-    )
-
-    collection = fields.Field(
-        column_name="collection",
-        attribute="accession_row__accession__collection",
-        widget=ForeignKeyWidget(Collection, "abbreviation"),
-    )
-    specimen_prefix = fields.Field(
-        column_name="specimen_prefix",
-        attribute="accession_row__accession__specimen_prefix",
-        widget=ForeignKeyWidget(Locality, "abbreviation"),
-    )
-    specimen_no = fields.Field(
-        column_name="specimen_no",
-        attribute="accession_row__accession__specimen_no",
-    )
-    specimen_suffix = fields.Field(
-        column_name="specimen_suffix",
-        attribute="accession_row__specimen_suffix",
-    )
-
+class IdentificationResourceBase(resources.ModelResource):
     identified_by = fields.Field(
         column_name="identified_by",
         attribute="identified_by",
@@ -526,18 +501,84 @@ class IdentificationResource(resources.ModelResource):
         attribute="identification_remarks",
     )
 
-    def before_import(self, dataset, **kwargs):
-        # mimic a 'dynamic field' - i.e. append field which exists on
-        # Mmodel, but not in dataset
-        dataset.headers.append("accession_row")
-        super().before_import(dataset, **kwargs)
-
     def dehydrate_taxon_record_source(self, obj):
         return obj.taxon_record.external_source if obj.taxon_record else ""
 
+    class Meta:
+        model = Identification
+        skip_unchanged = True
+        report_skipped = False
+
+
+class IdentificationUpdateResource(IdentificationResourceBase):
+    def get_instance(self, instance_loader, row):
+        identification_id = row.get("id")
+        if identification_id in (None, ""):
+            raise ValueError("An identification ID is required for updates.")
+
+        instance = instance_loader.get_instance(row)
+        if instance is None:
+            raise Identification.DoesNotExist(
+                f"No Identification exists with ID {identification_id}."
+            )
+        return instance
+
+    class Meta(IdentificationResourceBase.Meta):
+        import_id_fields = ("id",)
+        fields = (
+            "id",
+            "identified_by",
+            "taxon",
+            "taxon_verbatim",
+            "taxon_record",
+            "taxon_record_source",
+            "reference",
+            "date_identified",
+            "identification_qualifier",
+            "verbatim_identification",
+            "identification_remarks",
+        )
+        export_order = fields
+
+
+class IdentificationCreateResource(IdentificationResourceBase):
+    accession_row = fields.Field(
+        column_name="accession_row",
+        attribute="accession_row",
+        widget=ForeignKeyWidget(AccessionRow, "id"),
+    )
+    collection = fields.Field(
+        column_name="collection",
+        attribute="accession_row__accession__collection",
+        widget=ForeignKeyWidget(Collection, "abbreviation"),
+    )
+    specimen_prefix = fields.Field(
+        column_name="specimen_prefix",
+        attribute="accession_row__accession__specimen_prefix",
+        widget=ForeignKeyWidget(Locality, "abbreviation"),
+    )
+    specimen_no = fields.Field(
+        column_name="specimen_no",
+        attribute="accession_row__accession__specimen_no",
+    )
+    specimen_suffix = fields.Field(
+        column_name="specimen_suffix",
+        attribute="accession_row__specimen_suffix",
+    )
+
+    def before_import(self, dataset, **kwargs):
+        if "id" in dataset.headers:
+            raise ValueError(
+                "The create-only import must not include an identification ID column."
+            )
+        if "accession_row" in dataset.headers:
+            raise ValueError(
+                "Use the accession row search fields instead of an accession_row ID."
+            )
+        dataset.headers.append("accession_row")
+        super().before_import(dataset, **kwargs)
+
     def before_import_row(self, row, **kwargs):
-        # Add accession_row_id to the row
-        # Validate required fields
         collection = row.get("collection")
         specimen_prefix = row.get("specimen_prefix")
         specimen_no = row.get("specimen_no")
@@ -570,18 +611,12 @@ class IdentificationResource(resources.ModelResource):
         accession_row = accession_row_queryset.first()
         if not accession_row:
             raise ValueError("Failed to retrieve a valid Accession Row after query.")
-        # Add accession_row_id to the row
         row["accession_row"] = str(accession_row.id)
-        print("Import row number: ", kwargs.get("row_number"))
-        print(row)
 
-    class Meta:
-        model = Identification
-        skip_unchanged = True
-        report_skipped = False
-        import_id_fields = ("id",)
+    class Meta(IdentificationResourceBase.Meta):
+        import_id_fields = ()
+        force_init_instance = True
         fields = (
-            "id",
             "accession_row",
             "collection",
             "specimen_prefix",
@@ -599,7 +634,6 @@ class IdentificationResource(resources.ModelResource):
             "identification_remarks",
         )
         export_order = (
-            "id",
             "collection",
             "specimen_prefix",
             "specimen_no",

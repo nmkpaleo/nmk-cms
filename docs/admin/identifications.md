@@ -2,8 +2,9 @@
 
 ## Importing and Exporting
 
-Use the **Import** and **Export** buttons on the Identifications admin changelist. Exports include each Identification's `id` and `taxon_verbatim`.
+Use the **Export** button on the Identifications admin changelist to download Identification-only fields, including each record's `id` and `taxon_verbatim`.
 
-The `id` column is required in import files and identifies which Identification to update. A row with a blank `id` creates a new Identification; a file without an `id` column is rejected. Include `taxon_verbatim` when creating a row because it is required to validate the Identification.
+The **Import** workflow offers separate resources for updating existing Identifications and creating new ones:
 
-The collection, specimen prefix, specimen number, and specimen suffix columns continue to identify the accession row associated with each Identification.
+- **Update existing:** Include the Identification `id` and only Identification fields. Blank or unknown IDs are rejected; this workflow cannot create records or change their accession row.
+- **Create new:** Do not include an Identification `id`. Include collection, specimen prefix, specimen number, and specimen suffix to resolve the accession row. Exactly one matching row must exist. Include `taxon_verbatim`, which is required to validate the new Identification.
