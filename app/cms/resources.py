@@ -511,6 +511,11 @@ class IdentificationResourceBase(resources.ModelResource):
 
 
 class IdentificationUpdateResource(IdentificationResourceBase):
+    taxon = fields.Field(
+        column_name="taxon",
+        attribute="taxon_verbatim",
+    )
+
     def get_instance(self, instance_loader, row):
         identification_id = row.get("id")
         if identification_id in (None, ""):
@@ -529,7 +534,6 @@ class IdentificationUpdateResource(IdentificationResourceBase):
             "id",
             "identified_by",
             "taxon",
-            "taxon_verbatim",
             "taxon_record",
             "taxon_record_source",
             "reference",

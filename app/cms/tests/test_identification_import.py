@@ -34,11 +34,11 @@ class IdentificationImportExportTests(TestCase):
             specimen_suffix="A",
         )
 
-    def _update_dataset(self, identification_id, taxon_verbatim="Homo sapiens"):
+    def _update_dataset(self, identification_id, taxon="Homo sapiens"):
         dataset = Dataset(
-            headers=["id", "taxon_verbatim", "identification_qualifier"]
+            headers=["id", "taxon", "identification_qualifier"]
         )
-        dataset.append([identification_id, taxon_verbatim, "cf."])
+        dataset.append([identification_id, taxon, "cf."])
         return dataset
 
     def _create_dataset(self, include_id=False):
@@ -81,6 +81,8 @@ class IdentificationImportExportTests(TestCase):
         self.assertNotIn("collection", dataset.headers)
         self.assertNotIn("specimen_prefix", dataset.headers)
         self.assertNotIn("accession_row", dataset.headers)
+        self.assertIn("taxon", dataset.headers)
+        self.assertNotIn("taxon_verbatim", dataset.headers)
         self.assertEqual(str(dataset[0][0]), str(identification.pk))
 
     def test_update_import_matches_only_existing_identification_id(self):
@@ -103,8 +105,14 @@ class IdentificationImportExportTests(TestCase):
         self.assertFalse(result.has_errors())
         identification.refresh_from_db()
         other_identification.refresh_from_db()
+        self.assertEqual(identification.taxon, "Homo erectus")
         self.assertEqual(identification.taxon_verbatim, "Homo erectus")
         self.assertEqual(other_identification.taxon_verbatim, "Pan troglodytes")
+        model_admin = admin.site._registry[Identification]
+        self.assertEqual(
+            model_admin.preferred_taxon_name_display(identification),
+            "Homo erectus",
+        )
         self.assertEqual(Identification.objects.count(), 2)
 
     def test_update_import_rejects_blank_and_unknown_ids(self):
