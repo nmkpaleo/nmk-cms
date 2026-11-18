@@ -3,6 +3,7 @@
 - [Accession Number Series](accession-number-series.md)
 - [Backups](backups.md)
 - [Drawer Register](drawer-register.md)
+- [Elements](elements.md)
 - [Localities](localities.md)
 - [Places](places.md)
 - [References](references.md)

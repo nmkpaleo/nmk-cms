@@ -390,27 +390,9 @@ class ElementResource(resources.ModelResource):
         model = Element
         skip_unchanged = True
         report_skipped = False
-        fields = ("parent_element", "name")  # Fields to import/export
-        import_id_fields = ["name"]  # Use `name` as the unique identifier
-
-    def get_instance(self, instance_loader, row):
-        """Resolve the import id with Python-level case-sensitive matching.
-
-        Some database collations make an ``exact`` query case-insensitive. Do
-        the final comparison in Python so importing ``Femur`` cannot update an
-        existing ``femur`` row.
-        """
-        name = row.get("name")
-        if name is None:
-            return None
-        return next(
-            (
-                element
-                for element in self.get_queryset().filter(name=name)
-                if element.name == name
-            ),
-            None,
-        )
+        fields = ("id", "parent_element", "name")
+        export_order = ("id", "parent_element", "name")
+        import_id_fields = ("id",)
 
     def before_import_row(self, row, **kwargs):
         """

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Include Element IDs in admin exports and use them to match imports; parent Elements continue to match by name.
+
 - Read the NOW export's `subspecies_name` column into the existing infraspecific epithet field when synchronizing taxa.
 
 - Show the locality abbreviation and name (for example `AB - Amboseli`) in the **Specimen prefix** dropdown on the accession form (#452); the label code was unreachable and the Site dropdown now also shows its place type.
