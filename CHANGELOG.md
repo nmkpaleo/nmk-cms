@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Separate Identification admin imports into ID-only updates and new-record imports that resolve accession rows from specimen details; update the authoritative verbatim taxon through the `taxon` column.
+- Limit ID-based Identification updates to the four fields shown on the record edit page, while keeping new-record imports on the accession-row search workflow.
 
 - Include Element IDs in admin exports and use them to match imports; parent Elements continue to match by name.
 

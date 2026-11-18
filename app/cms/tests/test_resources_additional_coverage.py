@@ -241,7 +241,7 @@ def test_taxonomy_relation_source_columns_export_related_source():
     identification = SimpleNamespace(taxon_record=target)
 
     taxon_resource = cms_resources.TaxonResource()
-    identification_resource = cms_resources.IdentificationUpdateResource()
+    identification_resource = cms_resources.IdentificationCreateResource()
     assert taxon_resource.dehydrate_accepted_taxon_source(taxon) == "NOW"
     assert taxon_resource.dehydrate_parent_source(taxon) == "NOW"
     assert identification_resource.dehydrate_taxon_record_source(identification) == "NOW"

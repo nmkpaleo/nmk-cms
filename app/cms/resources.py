@@ -511,9 +511,21 @@ class IdentificationResourceBase(resources.ModelResource):
 
 
 class IdentificationUpdateResource(IdentificationResourceBase):
-    taxon = fields.Field(
-        column_name="taxon",
+    verbatim_identification = fields.Field(
+        column_name="Verbatim identification",
+        attribute="verbatim_identification",
+    )
+    taxon_verbatim = fields.Field(
+        column_name="Lowest identified taxon",
         attribute="taxon_verbatim",
+    )
+    identification_qualifier = fields.Field(
+        column_name="Taxon Qualifier",
+        attribute="identification_qualifier",
+    )
+    identification_remarks = fields.Field(
+        column_name="Remarks",
+        attribute="identification_remarks",
     )
 
     def get_instance(self, instance_loader, row):
@@ -532,14 +544,9 @@ class IdentificationUpdateResource(IdentificationResourceBase):
         import_id_fields = ("id",)
         fields = (
             "id",
-            "identified_by",
-            "taxon",
-            "taxon_record",
-            "taxon_record_source",
-            "reference",
-            "date_identified",
-            "identification_qualifier",
             "verbatim_identification",
+            "taxon_verbatim",
+            "identification_qualifier",
             "identification_remarks",
         )
         export_order = fields

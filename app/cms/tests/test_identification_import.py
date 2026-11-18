@@ -1,3 +1,5 @@
+from datetime import date
+
 from crum import set_current_user
 from django.contrib import admin
 from django.contrib.auth import get_user_model
@@ -36,9 +38,23 @@ class IdentificationImportExportTests(TestCase):
 
     def _update_dataset(self, identification_id, taxon="Homo sapiens"):
         dataset = Dataset(
-            headers=["id", "taxon", "identification_qualifier"]
+            headers=[
+                "id",
+                "Verbatim identification",
+                "Lowest identified taxon",
+                "Taxon Qualifier",
+                "Remarks",
+            ]
         )
-        dataset.append([identification_id, taxon, "cf."])
+        dataset.append(
+            [
+                identification_id,
+                "Fossil specimen",
+                taxon,
+                "cf.",
+                "Updated from spreadsheet",
+            ]
+        )
         return dataset
 
     def _create_dataset(self, include_id=False):
@@ -66,7 +82,7 @@ class IdentificationImportExportTests(TestCase):
         dataset.append(row)
         return dataset
 
-    def test_update_export_contains_only_identification_fields(self):
+    def test_update_export_contains_only_selected_identification_fields(self):
         identification = Identification.objects.create(
             accession_row=self.accession_row,
             taxon_verbatim="Homo sapiens",
@@ -77,12 +93,16 @@ class IdentificationImportExportTests(TestCase):
             queryset=Identification.objects.filter(pk=identification.pk)
         )
 
-        self.assertEqual(dataset.headers[0], "id")
-        self.assertNotIn("collection", dataset.headers)
-        self.assertNotIn("specimen_prefix", dataset.headers)
-        self.assertNotIn("accession_row", dataset.headers)
-        self.assertIn("taxon", dataset.headers)
-        self.assertNotIn("taxon_verbatim", dataset.headers)
+        self.assertEqual(
+            dataset.headers,
+            [
+                "id",
+                "Verbatim identification",
+                "Lowest identified taxon",
+                "Taxon Qualifier",
+                "Remarks",
+            ],
+        )
         self.assertEqual(str(dataset[0][0]), str(identification.pk))
 
     def test_update_import_matches_only_existing_identification_id(self):
@@ -91,6 +111,7 @@ class IdentificationImportExportTests(TestCase):
             taxon_verbatim="Homo sapiens",
             taxon="Homo sapiens",
             identification_qualifier="cf.",
+            date_identified=date(2020, 1, 2),
         )
         other_identification = Identification.objects.create(
             accession_row=self.accession_row,
@@ -105,14 +126,16 @@ class IdentificationImportExportTests(TestCase):
         self.assertFalse(result.has_errors())
         identification.refresh_from_db()
         other_identification.refresh_from_db()
-        self.assertEqual(identification.taxon, "Homo erectus")
+        self.assertEqual(identification.verbatim_identification, "Fossil specimen")
         self.assertEqual(identification.taxon_verbatim, "Homo erectus")
-        self.assertEqual(other_identification.taxon_verbatim, "Pan troglodytes")
-        model_admin = admin.site._registry[Identification]
+        self.assertEqual(identification.identification_qualifier, "cf.")
         self.assertEqual(
-            model_admin.preferred_taxon_name_display(identification),
-            "Homo erectus",
+            identification.identification_remarks,
+            "Updated from spreadsheet",
         )
+        self.assertEqual(identification.date_identified, date(2020, 1, 2))
+        self.assertEqual(identification.taxon, "Homo erectus")
+        self.assertEqual(other_identification.taxon_verbatim, "Pan troglodytes")
         self.assertEqual(Identification.objects.count(), 2)
 
     def test_update_import_rejects_blank_and_unknown_ids(self):
