@@ -487,6 +487,11 @@ class IdentificationResource(resources.ModelResource):
         attribute="taxon",
     )
 
+    taxon_verbatim = fields.Field(
+        column_name="taxon_verbatim",
+        attribute="taxon_verbatim",
+    )
+
     taxon_record = fields.Field(
         column_name="taxon_record",
         attribute="taxon_record",
@@ -574,8 +579,9 @@ class IdentificationResource(resources.ModelResource):
         model = Identification
         skip_unchanged = True
         report_skipped = False
-        import_id_fields = ("accession_row",)
+        import_id_fields = ("id",)
         fields = (
+            "id",
             "accession_row",
             "collection",
             "specimen_prefix",
@@ -583,6 +589,7 @@ class IdentificationResource(resources.ModelResource):
             "specimen_suffix",
             "identified_by",
             "taxon",
+            "taxon_verbatim",
             "taxon_record",
             "taxon_record_source",
             "reference",
@@ -592,12 +599,14 @@ class IdentificationResource(resources.ModelResource):
             "identification_remarks",
         )
         export_order = (
+            "id",
             "collection",
             "specimen_prefix",
             "specimen_no",
             "specimen_suffix",
             "identified_by",
             "taxon",
+            "taxon_verbatim",
             "taxon_record",
             "taxon_record_source",
             "reference",

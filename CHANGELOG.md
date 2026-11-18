@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Include Identification IDs and the required verbatim taxon in admin exports, and use IDs to match imports.
+
 - Include Element IDs in admin exports and use them to match imports; parent Elements continue to match by name.
 
 - Read the NOW export's `subspecies_name` column into the existing infraspecific epithet field when synchronizing taxa.
