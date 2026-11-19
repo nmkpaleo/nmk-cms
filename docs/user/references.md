@@ -16,3 +16,4 @@ Collection managers can record publications related to specimens.
 - Use the edit icon to update information when needed.
 - Filter by author, year or title using the filter panel.
 - When a DOI is available, click it in the list to open the DOI resolver in a new tab.
+- The reference detail page also shows the DOI as the last field in Reference metadata.

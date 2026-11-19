@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Show available DOIs as links in the References list, opening the DOI resolver in a new tab.
+- Show available DOIs as links in the References list and as the last field in Reference metadata, opening the DOI resolver in a new tab.
 
 - Limit ID-based Identification updates to `verbatim_identification`, `taxon_verbatim`, `identification_qualifier`, and `identification_remarks`, while keeping new-record imports on the accession-row search workflow.
 
