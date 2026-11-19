@@ -98,6 +98,7 @@
               {% endif %}
             </a>
           </th>
+          <th>DOI</th>
         </tr>
       </thead>
       <tbody>
@@ -109,10 +110,15 @@
           <td>{{ reference.year }}</td>
           <td>{{ reference.title }}</td>
           <td class="w3-center">{{ reference.accession_count }}</td>
+          <td>
+            {% if reference.doi_url %}
+              <a href="{{ reference.doi_url }}" target="_blank" rel="noopener">{{ reference.doi }}</a>
+            {% endif %}
+          </td>
         </tr>
         {% empty %}
         <tr>
-          <td colspan="4" class="w3-center">No references found.</td>
+          <td colspan="5" class="w3-center">No references found.</td>
         </tr>
         {% endfor %}
       </tbody>

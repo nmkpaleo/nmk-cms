@@ -166,6 +166,10 @@ def test_reference_list_header_links_use_contrast_class():
     content = load_template("reference_list.html")
     assert "reference-list-page" in content
     assert "sort='first_author'" in content
+    assert content.index("Accessions") < content.index("<th>DOI</th>")
+    assert content.index("{{ reference.accession_count }}") < content.index(
+        "{{ reference.doi }}"
+    )
 
     stylesheet = Path(settings.BASE_DIR, "cms", "static", "css", "style.css").read_text(
         encoding="utf-8"
