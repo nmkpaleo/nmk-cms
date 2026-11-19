@@ -2983,12 +2983,8 @@ class ReferenceDetailView(DetailView):
             for accession in accession_page
         ]
 
-        doi_value = (self.object.doi or "").strip()
-        if doi_value:
-            if doi_value.lower().startswith("http"):
-                context["doi_url"] = doi_value
-            else:
-                context["doi_url"] = f"https://doi.org/{doi_value}"
+        if self.object.doi_url:
+            context["doi_url"] = self.object.doi_url
 
         context["accession_entries"] = accession_entries
         context["page_obj"] = page_obj

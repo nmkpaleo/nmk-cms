@@ -15,3 +15,4 @@ Collection managers can record publications related to specimens.
 - Click the first author to view the reference.
 - Use the edit icon to update information when needed.
 - Filter by author, year or title using the filter panel.
+- When a DOI is available, click it in the list to open the DOI resolver in a new tab.

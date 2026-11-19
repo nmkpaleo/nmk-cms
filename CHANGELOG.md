@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Show available DOIs as links in the References list, opening the DOI resolver in a new tab.
+
 - Limit ID-based Identification updates to `verbatim_identification`, `taxon_verbatim`, `identification_qualifier`, and `identification_remarks`, while keeping new-record imports on the accession-row search workflow.
 
 - Include Element IDs in admin exports and use them to match imports; parent Elements continue to match by name.

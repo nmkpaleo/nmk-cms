@@ -300,6 +300,37 @@ def test_reference_detail_accessions_are_paginated_and_respect_user_visibility(c
     assert "Accessioned by" not in content
 
 
+def test_reference_list_shows_doi_links_in_new_tabs(client, collection_manager_user):
+    references = (
+        ("A. Author", "10.1234/example"),
+        ("B. Author", "https://doi.org/10.5678/example"),
+        ("C. Author", ""),
+    )
+    for first_author, doi in references:
+        Reference.objects.create(
+            title="Reference title",
+            first_author=first_author,
+            year="2024",
+            citation="Author 2024",
+            doi=doi,
+        )
+
+    client.force_login(collection_manager_user)
+    response = client.get(reverse("reference_list"))
+
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert (
+        '<a href="https://doi.org/10.1234/example" target="_blank" rel="noopener">'
+        "10.1234/example</a>"
+    ) in content
+    assert (
+        '<a href="https://doi.org/10.5678/example" target="_blank" rel="noopener">'
+        "https://doi.org/10.5678/example</a>"
+    ) in content
+    assert "<a href=\"\" target=\"_blank\"" not in content
+
+
 def test_reference_detail_accessions_show_staff_column_to_collection_managers(client):
     locality = create_locality(abbreviation="RM", name="Reference Manager")
     reference = Reference.objects.create(
