@@ -96,7 +96,7 @@ def test_accession_row_resource_before_import_and_row_paths(monkeypatch):
 
 
 def test_identification_resource_before_import_row_sets_defaults_and_validates(monkeypatch):
-    resource = cms_resources.IdentificationResource()
+    resource = cms_resources.IdentificationCreateResource()
     ds = _Dataset(headers=[])
     resource.before_import(ds)
     assert "accession_row" in ds.headers
@@ -241,7 +241,7 @@ def test_taxonomy_relation_source_columns_export_related_source():
     identification = SimpleNamespace(taxon_record=target)
 
     taxon_resource = cms_resources.TaxonResource()
-    identification_resource = cms_resources.IdentificationResource()
+    identification_resource = cms_resources.IdentificationCreateResource()
     assert taxon_resource.dehydrate_accepted_taxon_source(taxon) == "NOW"
     assert taxon_resource.dehydrate_parent_source(taxon) == "NOW"
     assert identification_resource.dehydrate_taxon_record_source(identification) == "NOW"
