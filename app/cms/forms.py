@@ -53,6 +53,7 @@ from .models import (
     Person,
     Preparation,
     Reference,
+    ReferenceDocument,
     SpecimenGeology,
     DrawerRegister,
     UserOrganisation,
@@ -1134,6 +1135,17 @@ class MediaUploadForm(BaseW3ModelForm):
     class Meta:
         model = Media
         fields = ["media_location", "type", "license", "rights_holder"]
+
+
+class ReferenceDocumentUploadForm(BaseW3ModelForm):
+    class Meta:
+        model = ReferenceDocument
+        fields = ["file"]
+        widgets = {
+            "file": forms.ClearableFileInput(
+                attrs={"accept": ".pdf,application/pdf"}
+            ),
+        }
 
 
 class MultiFileInput(forms.ClearableFileInput):

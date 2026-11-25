@@ -9,7 +9,12 @@ from django.db.models.functions import TruncDate
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError
-from django.core.validators import MaxValueValidator, MinValueValidator
+from django.core.files import File
+from django.core.validators import (
+    FileExtensionValidator,
+    MaxValueValidator,
+    MinValueValidator,
+)
 from django.urls import reverse
 from django.utils import timezone
 from django_userforeignkey.models.fields import UserForeignKey
@@ -1363,6 +1368,56 @@ class Reference(MergeMixin, BaseModel):
 
     def __str__(self):
         return self.citation
+
+
+def reference_document_upload_to(
+    instance: "ReferenceDocument", filename: str
+) -> str:
+    reference_id = instance.reference_id or "unassigned"
+    return f"uploads/references/{reference_id}/{uuid.uuid4()}.pdf"
+
+
+def validate_reference_document_pdf(uploaded_file: File) -> None:
+    if os.path.splitext(uploaded_file.name)[1].lower() != ".pdf":
+        raise ValidationError(_("Only PDF files are supported."))
+
+    position = uploaded_file.tell()
+    try:
+        uploaded_file.seek(0)
+        header = uploaded_file.read(1024)
+    finally:
+        uploaded_file.seek(position)
+
+    if b"%PDF-" not in header:
+        raise ValidationError(_("The uploaded file is not a valid PDF."))
+
+
+class ReferenceDocument(BaseModel):
+    reference = models.ForeignKey(
+        Reference,
+        on_delete=models.CASCADE,
+        related_name="documents",
+    )
+    file = models.FileField(
+        upload_to=reference_document_upload_to,
+        validators=[
+            FileExtensionValidator(allowed_extensions=["pdf"]),
+            validate_reference_document_pdf,
+        ],
+    )
+    original_filename = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        verbose_name = "Reference document"
+        verbose_name_plural = "Reference documents"
+
+    def save(self, *args, **kwargs):
+        if self.file and not self.file._committed:
+            self.original_filename = os.path.basename(self.file.name)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.original_filename or os.path.basename(self.file.name)
 
 
 

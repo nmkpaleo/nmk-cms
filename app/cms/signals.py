@@ -11,6 +11,7 @@ from cms.models import (
     AccessionReference,
     DrawerRegister,
     Media,
+    ReferenceDocument,
     SpecimenListPDF,
     SpecimenListPage,
 )
@@ -59,6 +60,12 @@ def check_series_completion(sender, instance, **kwargs):
 def delete_media_file_on_delete(sender, instance, **kwargs):
     if instance.media_location:
         instance.media_location.delete(save=False)
+
+
+@receiver(post_delete, sender=ReferenceDocument)
+def delete_reference_document_file_on_delete(sender, instance, **kwargs):
+    if instance.file:
+        instance.file.delete(save=False)
 
 
 @receiver(post_delete, sender=SpecimenListPDF)
