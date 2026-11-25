@@ -331,6 +331,46 @@ def test_reference_list_shows_doi_links_in_new_tabs(client, collection_manager_u
     assert "<a href=\"\" target=\"_blank\"" not in content
 
 
+def test_reference_list_filters_and_sorts_doi(client, collection_manager_user):
+    references = []
+    for author, doi in (
+        ("A. Author", "10.300/alpha"),
+        ("B. Author", "10.200/alpha"),
+        ("C. Author", "10.100/other"),
+    ):
+        references.append(
+            Reference.objects.create(
+                title=author,
+                first_author=author,
+                year="2024",
+                citation="Author 2024",
+                doi=doi,
+            )
+        )
+
+    client.force_login(collection_manager_user)
+    url = reverse("reference_list")
+    response = client.get(url, {"doi": "ALPHA", "sort": "doi", "page": 1})
+
+    assert response.status_code == 200
+    assert list(response.context["references"]) == [references[1], references[0]]
+    content = response.content.decode()
+    assert 'name="doi"' in content
+    header = re.search(r'<a href="([^"]+)">\s*DOI\s*<i class="([^"]+)"', content)
+    assert header is not None
+    assert "fa-sort-up" in header.group(2)
+    assert parse_qs(unescape(header.group(1)).lstrip("?")) == {
+        "doi": ["ALPHA"],
+        "sort": ["doi"],
+        "direction": ["desc"],
+    }
+
+    response = client.get(url, {"doi": "ALPHA", "sort": "doi", "direction": "desc"})
+    assert response.status_code == 200
+    assert list(response.context["references"]) == [references[0], references[1]]
+    assert "fa-sort-down" in response.content.decode()
+
+
 def test_reference_detail_shows_doi_last_in_metadata_in_new_tab(
     client, collection_manager_user
 ):

@@ -3004,6 +3004,7 @@ class ReferenceListView(FilterView):
         "year": "year",
         "title": "title",
         "accessions": "accession_count",
+        "doi": "doi",
     }
     default_order = "first_author"
 

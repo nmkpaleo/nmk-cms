@@ -502,10 +502,15 @@ class ReferenceFilter(django_filters.FilterSet):
         label="Title",
         widget=forms.TextInput(attrs={"class": "w3-input"}),
     )
+    doi = django_filters.CharFilter(
+        lookup_expr="icontains",
+        label="DOI",
+        widget=forms.TextInput(attrs={"class": "w3-input"}),
+    )
 
     class Meta:
         model = Reference
-        fields = ["first_author", "year", "title"]
+        fields = ["first_author", "year", "title", "doi"]
 
 
 class FieldSlipFilter(django_filters.FilterSet):

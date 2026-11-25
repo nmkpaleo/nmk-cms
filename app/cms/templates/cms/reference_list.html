@@ -39,6 +39,10 @@
           <label class="w3-text-grey">Title</label>
           {{ filter.form.title }}
         </div>
+        <div class="w3-col s12 m6 l4 w3-margin-bottom">
+          <label class="w3-text-grey" for="{{ filter.form.doi.id_for_label }}">DOI</label>
+          {{ filter.form.doi }}
+        </div>
       </div>
 
       <div class="w3-margin-top">
@@ -98,7 +102,16 @@
               {% endif %}
             </a>
           </th>
-          <th>DOI</th>
+          <th>
+            <a href="?{% querystring_replace sort='doi' direction=sort_directions|get_item:'doi' page=None %}">
+              DOI
+              {% if current_sort == 'doi' %}
+                <i class="fa-solid {% if current_direction == 'asc' %}fa-sort-up{% else %}fa-sort-down{% endif %}"></i>
+              {% else %}
+                <i class="fa-solid fa-sort"></i>
+              {% endif %}
+            </a>
+          </th>
         </tr>
       </thead>
       <tbody>
