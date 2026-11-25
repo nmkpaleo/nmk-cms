@@ -3,6 +3,7 @@ from crum import impersonate, set_current_user
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import transaction
 from django.test import override_settings
 from django.urls import reverse
 
@@ -38,6 +39,7 @@ def pdf_upload(name="paper.pdf", content=b"%PDF-1.7\nPDF content"):
     return SimpleUploadedFile(name, content, content_type="application/pdf")
 
 
+@pytest.mark.django_db(transaction=True)
 def test_collection_manager_can_upload_pdf_to_reference(
     client, collection_manager, reference, tmp_path
 ):
@@ -63,6 +65,7 @@ def test_collection_manager_can_upload_pdf_to_reference(
         assert not stored_file.exists()
 
 
+@pytest.mark.django_db(transaction=True)
 def test_reference_document_folder_is_removed_after_its_last_file_is_deleted(
     collection_manager, reference, tmp_path
 ):
@@ -87,6 +90,54 @@ def test_reference_document_folder_is_removed_after_its_last_file_is_deleted(
             last_document.delete()
 
         assert not document_folder.exists()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_replacing_reference_pdf_removes_old_file_after_commit(
+    collection_manager, reference, tmp_path
+):
+    with override_settings(MEDIA_ROOT=tmp_path):
+        document = ReferenceDocument.objects.create(
+            reference=reference,
+            file=pdf_upload("original.pdf"),
+        )
+        old_file_name = document.file.name
+        old_file = tmp_path / old_file_name
+
+        with transaction.atomic():
+            document.file = pdf_upload("replacement.pdf")
+            document.save()
+            new_file_name = document.file.name
+            assert old_file.is_file()
+            assert (tmp_path / new_file_name).is_file()
+
+        assert not old_file.exists()
+        assert ReferenceDocument.objects.get(pk=document.pk).file.name == new_file_name
+
+
+@pytest.mark.django_db(transaction=True)
+def test_rolled_back_document_deletion_keeps_file_and_folder(
+    collection_manager, reference, tmp_path
+):
+    with override_settings(MEDIA_ROOT=tmp_path):
+        document = ReferenceDocument.objects.create(
+            reference=reference,
+            file=pdf_upload(),
+        )
+        document_id = document.pk
+        stored_file = tmp_path / document.file.name
+        document_folder = stored_file.parent
+
+        with pytest.raises(RuntimeError, match="roll back"):
+            with transaction.atomic():
+                with impersonate(collection_manager):
+                    document.delete()
+                assert stored_file.is_file()
+                raise RuntimeError("roll back")
+
+        assert ReferenceDocument.objects.filter(pk=document_id).exists()
+        assert stored_file.is_file()
+        assert document_folder.is_dir()
 
 
 @pytest.mark.parametrize(
@@ -143,6 +194,7 @@ def test_reference_detail_lists_documents_without_preview_or_license(
         )
         assert "paper.pdf" in content
         assert "Upload PDF" in content
+        assert 'aria-label="Upload PDF"' in content
         assert "Preview" not in content
         assert "License" not in content
         assert (

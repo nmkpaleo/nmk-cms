@@ -4,7 +4,7 @@ import re
 import warnings
 
 from crum import get_current_user
-from django.db import models, transaction
+from django.db import models, router, transaction
 from django.db.models.functions import TruncDate
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
@@ -1412,9 +1412,36 @@ class ReferenceDocument(BaseModel):
         verbose_name_plural = "Reference documents"
 
     def save(self, *args, **kwargs):
-        if self.file and not self.file._committed:
+        uploaded_file = bool(self.file) and not self.file._committed
+        update_fields = kwargs.get("update_fields")
+        saves_file = update_fields is None or "file" in update_fields
+        db_alias = kwargs.get("using") or router.db_for_write(
+            type(self), instance=self
+        )
+        previous_file = None
+
+        if uploaded_file:
             self.original_filename = os.path.basename(self.file.name)
+
+            if self.pk and saves_file:
+                previous_file_name = (
+                    type(self)
+                    .objects.using(db_alias)
+                    .filter(pk=self.pk)
+                    .values_list("file", flat=True)
+                    .first()
+                )
+                if previous_file_name and previous_file_name != self.file.name:
+                    previous_file = (self.file.storage, previous_file_name)
+
         super().save(*args, **kwargs)
+
+        if previous_file is not None:
+            storage, previous_file_name = previous_file
+            transaction.on_commit(
+                lambda: storage.delete(previous_file_name),
+                using=db_alias,
+            )
 
     def __str__(self):
         return self.original_filename or os.path.basename(self.file.name)
