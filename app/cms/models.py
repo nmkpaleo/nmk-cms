@@ -1381,6 +1381,9 @@ def validate_reference_document_pdf(uploaded_file: File) -> None:
     if os.path.splitext(uploaded_file.name)[1].lower() != ".pdf":
         raise ValidationError(_("Only PDF files are supported."))
 
+    if getattr(uploaded_file, "_committed", False):
+        return
+
     position = uploaded_file.tell()
     try:
         uploaded_file.seek(0)

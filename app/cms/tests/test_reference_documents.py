@@ -206,6 +206,61 @@ def test_reference_detail_lists_documents_without_preview_or_license(
         document.file.delete(save=False)
 
 
+@pytest.mark.django_db(transaction=True)
+def test_admin_inline_delete_removes_pdf_file_and_folder(
+    client, collection_manager, reference, tmp_path
+):
+    admin_user = User.objects.create_superuser(
+        username="reference-document-inline-admin",
+        email="reference-document-inline-admin@example.com",
+        password="password",
+    )
+    with override_settings(MEDIA_ROOT=tmp_path):
+        document = ReferenceDocument.objects.create(
+            reference=reference, file=pdf_upload()
+        )
+        stored_file = tmp_path / document.file.name
+        document_folder = stored_file.parent
+        assert stored_file.is_file()
+
+        client.force_login(admin_user)
+        url = reverse("admin:cms_reference_change", args=[reference.pk])
+        form = client.get(url).context["adminform"].form
+        data = {name: form.initial.get(name, "") or "" for name in form.fields}
+        data = {k: v for k, v in data.items() if v is not None}
+        inline = client.get(url).context["inline_admin_formsets"]
+        formset = next(i for i in inline if i.opts.model is ReferenceDocument)
+        prefix = formset.formset.prefix
+        data.update(
+            {
+                f"{prefix}-TOTAL_FORMS": "1",
+                f"{prefix}-INITIAL_FORMS": "1",
+                f"{prefix}-MIN_NUM_FORMS": "0",
+                f"{prefix}-MAX_NUM_FORMS": "1000",
+                f"{prefix}-0-id": str(document.pk),
+                f"{prefix}-0-reference": str(reference.pk),
+                f"{prefix}-0-DELETE": "on",
+            }
+        )
+        for other in inline:
+            if other is not formset:
+                p = other.formset.prefix
+                data.update(
+                    {
+                        f"{p}-TOTAL_FORMS": "0",
+                        f"{p}-INITIAL_FORMS": "0",
+                        f"{p}-MIN_NUM_FORMS": "0",
+                        f"{p}-MAX_NUM_FORMS": "1000",
+                    }
+                )
+        response = client.post(url, data)
+
+        assert response.status_code == 302
+        assert not ReferenceDocument.objects.filter(pk=document.pk).exists()
+        assert not stored_file.exists()
+        assert not document_folder.exists()
+
+
 def test_reference_admin_includes_document_upload_inline(
     client, reference
 ):
