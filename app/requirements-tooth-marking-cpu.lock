@@ -1292,9 +1292,9 @@ pillow==12.3.0 \
     #   matplotlib
     #   pytesseract
     #   torchvision
-plotly==7.1.0 \
-    --hash=sha256:dbb7fa18afce40d0a8e80d1bf162eceb3faa0ce5a77fe741ad09a74cf78f53f3 \
-    --hash=sha256:f860166a4a3d78c69cb1f4a15f28a5c8283eade98a282a698f3bb853a449ace5
+plotly==7.2.0 \
+    --hash=sha256:0c8299da0556ba9bf18d157f23982d189b627492a6c3cafba9d010b1b6ccb746 \
+    --hash=sha256:51ed86a5e71b0abfe4df9679a1da0564f9e7e93d5dc7cb35d433256b2cfce854
     # via -r /home/runner/work/_temp/dependency-inputs/app/requirements.txt
 pluggy==1.7.0 \
     --hash=sha256:7dd7b0d8832ba3cb632c306926ded123429211b83641b35dc5c41ad2d34f9bec \
