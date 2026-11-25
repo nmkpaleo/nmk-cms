@@ -1255,6 +1255,15 @@ class Reference(MergeMixin, BaseModel):
     def citation_parts(self) -> list[str]:
         return [part.strip() for part in self.citation.split("|") if part.strip()]
 
+    @property
+    def doi_url(self) -> str | None:
+        doi_value = (self.doi or "").strip()
+        if not doi_value:
+            return None
+        if doi_value.lower().startswith("http"):
+            return doi_value
+        return f"https://doi.org/{doi_value}"
+
     def split_by_pipe(self) -> int:
         with transaction.atomic():
             reference = type(self).objects.select_for_update().get(pk=self.pk)

@@ -300,6 +300,102 @@ def test_reference_detail_accessions_are_paginated_and_respect_user_visibility(c
     assert "Accessioned by" not in content
 
 
+def test_reference_list_shows_doi_links_in_new_tabs(client, collection_manager_user):
+    references = (
+        ("A. Author", "10.1234/example"),
+        ("B. Author", "https://doi.org/10.5678/example"),
+        ("C. Author", ""),
+    )
+    for first_author, doi in references:
+        Reference.objects.create(
+            title="Reference title",
+            first_author=first_author,
+            year="2024",
+            citation="Author 2024",
+            doi=doi,
+        )
+
+    client.force_login(collection_manager_user)
+    response = client.get(reverse("reference_list"))
+
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert (
+        '<a href="https://doi.org/10.1234/example" target="_blank" rel="noopener">'
+        "10.1234/example</a>"
+    ) in content
+    assert (
+        '<a href="https://doi.org/10.5678/example" target="_blank" rel="noopener">'
+        "https://doi.org/10.5678/example</a>"
+    ) in content
+    assert "<a href=\"\" target=\"_blank\"" not in content
+
+
+def test_reference_list_filters_and_sorts_doi(client, collection_manager_user):
+    references = []
+    for author, doi in (
+        ("A. Author", "10.300/alpha"),
+        ("B. Author", "10.200/alpha"),
+        ("C. Author", "10.100/other"),
+    ):
+        references.append(
+            Reference.objects.create(
+                title=author,
+                first_author=author,
+                year="2024",
+                citation="Author 2024",
+                doi=doi,
+            )
+        )
+
+    client.force_login(collection_manager_user)
+    url = reverse("reference_list")
+    response = client.get(url, {"doi": "ALPHA", "sort": "doi", "page": 1})
+
+    assert response.status_code == 200
+    assert list(response.context["references"]) == [references[1], references[0]]
+    content = response.content.decode()
+    assert 'name="doi"' in content
+    header = re.search(r'<a href="([^"]+)">\s*DOI\s*<i class="([^"]+)"', content)
+    assert header is not None
+    assert "fa-sort-up" in header.group(2)
+    assert parse_qs(unescape(header.group(1)).lstrip("?")) == {
+        "doi": ["ALPHA"],
+        "sort": ["doi"],
+        "direction": ["desc"],
+    }
+
+    response = client.get(url, {"doi": "ALPHA", "sort": "doi", "direction": "desc"})
+    assert response.status_code == 200
+    assert list(response.context["references"]) == [references[0], references[1]]
+    assert "fa-sort-down" in response.content.decode()
+
+
+def test_reference_detail_shows_doi_last_in_metadata_in_new_tab(
+    client, collection_manager_user
+):
+    reference = Reference.objects.create(
+        title="Reference metadata",
+        first_author="A. Author",
+        year="2024",
+        citation="Author 2024",
+        doi="10.1234/metadata",
+    )
+    client.force_login(collection_manager_user)
+    response = client.get(reverse("reference_detail", args=[reference.pk]))
+
+    assert response.status_code == 200
+    content = response.content.decode()
+    doi_link = (
+        '<a href="https://doi.org/10.1234/metadata" target="_blank" '
+        'rel="noopener">10.1234/metadata</a>'
+    )
+    assert doi_link in content
+    assert content.index("Reference metadata") < content.index(doi_link)
+    assert content.index(doi_link) < content.index("Publication details")
+    assert content.count("10.1234/metadata") == 2
+
+
 def test_reference_detail_accessions_show_staff_column_to_collection_managers(client):
     locality = create_locality(abbreviation="RM", name="Reference Manager")
     reference = Reference.objects.create(
