@@ -38,6 +38,12 @@
           {% if reference.citation %}
             <tr><th scope="row">{% trans "Citation" %}</th><td>{{ reference.citation }}</td></tr>
           {% endif %}
+          {% if doi_url %}
+            <tr>
+              <th scope="row">{% trans "DOI" %}</th>
+              <td><a href="{{ doi_url }}" target="_blank" rel="noopener">{{ reference.doi }}</a></td>
+            </tr>
+          {% endif %}
         </tbody>
       </table>
     </div>
@@ -57,12 +63,6 @@
           <tr><th scope="row">{% trans "Volume" %}</th><td>{{ reference.volume|default:"—" }}</td></tr>
           <tr><th scope="row">{% trans "Issue" %}</th><td>{{ reference.issue|default:"—" }}</td></tr>
           <tr><th scope="row">{% trans "Pages" %}</th><td>{{ reference.pages|default:"—" }}</td></tr>
-          {% if doi_url %}
-            <tr>
-              <th scope="row">{% trans "DOI" %}</th>
-              <td><a href="{{ doi_url }}" target="_blank" rel="noopener">{{ reference.doi }}</a></td>
-            </tr>
-          {% endif %}
         </tbody>
       </table>
     </div>
