@@ -1,3 +1,4 @@
+import errno
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 
@@ -65,7 +66,20 @@ def delete_media_file_on_delete(sender, instance, **kwargs):
 @receiver(post_delete, sender=ReferenceDocument)
 def delete_reference_document_file_on_delete(sender, instance, **kwargs):
     if instance.file:
+        reference_directory = (
+            Path(settings.MEDIA_ROOT)
+            / "uploads"
+            / "references"
+            / str(instance.reference_id)
+        )
         instance.file.delete(save=False)
+        try:
+            reference_directory.rmdir()
+        except FileNotFoundError:
+            return
+        except OSError as exc:
+            if exc.errno != errno.ENOTEMPTY:
+                raise
 
 
 @receiver(post_delete, sender=SpecimenListPDF)

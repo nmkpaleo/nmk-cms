@@ -63,6 +63,32 @@ def test_collection_manager_can_upload_pdf_to_reference(
         assert not stored_file.exists()
 
 
+def test_reference_document_folder_is_removed_after_its_last_file_is_deleted(
+    collection_manager, reference, tmp_path
+):
+    with override_settings(MEDIA_ROOT=tmp_path):
+        first_document = ReferenceDocument.objects.create(
+            reference=reference,
+            file=pdf_upload("first.pdf"),
+        )
+        last_document = ReferenceDocument.objects.create(
+            reference=reference,
+            file=pdf_upload("last.pdf"),
+        )
+        document_folder = (tmp_path / first_document.file.name).parent
+
+        with impersonate(collection_manager):
+            first_document.delete()
+
+        assert document_folder.is_dir()
+        assert (tmp_path / last_document.file.name).is_file()
+
+        with impersonate(collection_manager):
+            last_document.delete()
+
+        assert not document_folder.exists()
+
+
 @pytest.mark.parametrize(
     ("name", "content"),
     [
