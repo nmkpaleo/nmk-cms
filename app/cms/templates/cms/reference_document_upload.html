@@ -1,0 +1,18 @@
+{% extends "base_generic.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Upload Reference PDF" %}{% endblock %}
+
+{% block content %}
+  {% trans "Upload PDF" as upload_pdf_label %}
+  {% trans "Document for reference:" as document_for_reference_label %}
+  <main class="w3-container w3-margin-top w3-margin-bottom" role="main">
+    {% include "includes/base_form.html" with form=form submit_label=upload_pdf_label submit_icon="fa-upload" method="post" action=request.path title=document_for_reference_label access=reference heading_id="reference-document-form" %}
+    <div class="w3-margin-top">
+      <a href="{% url 'reference_detail' reference.pk %}" class="w3-button w3-white w3-border w3-round-large w3-hover-light-grey">
+        <i class="fa-solid fa-arrow-left-long" aria-hidden="true"></i>
+        <span class="w3-margin-left">{% trans "Back to reference" %}</span>
+      </a>
+    </div>
+  </main>
+{% endblock %}

@@ -9,6 +9,11 @@ Administrators can manage bibliographic references through the Django admin inte
 4. Provide the title, first author, year and any optional fields.
 5. Save the entry.
 
+## Adding a PDF
+1. Open a Reference in the admin and use the **Reference documents** inline to upload a PDF.
+2. Collection Managers can also upload a PDF from the **Documents / media** section on the reference detail page.
+3. Uploaded documents are listed by filename and open in a new browser tab.
+
 ## Importing and Exporting
 1. From the **References** changelist, use **Import** and **Export** for bulk operations.
 2. CSV files include citation details such as title, author and year.

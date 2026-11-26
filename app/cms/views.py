@@ -30,7 +30,7 @@ from django.db.models import (
 from django.db.models.expressions import Window
 from django.db.models.functions import Cast, Coalesce, Concat, Greatest, Lower, Replace, TruncDate, TruncMonth, TruncWeek, Trim
 from django.db.models.functions.window import RowNumber
-from django.http import JsonResponse
+from django.http import HttpRequest, JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
@@ -111,6 +111,7 @@ from cms.forms import (
     PreparationForm,
     PreparationMediaUploadForm,
     ReferenceForm,
+    ReferenceDocumentUploadForm,
     ReferenceWidget,
     ScanUploadForm,
     SpecimenCompositeForm,
@@ -136,6 +137,7 @@ from cms.models import (
     Preparation,
     PreparationMedia,
     Reference,
+    ReferenceDocument,
     SpecimenGeology,
     Storage,
     Taxon,
@@ -2986,6 +2988,7 @@ class ReferenceDetailView(DetailView):
         if self.object.doi_url:
             context["doi_url"] = self.object.doi_url
 
+        context["reference_documents"] = self.object.documents.all()
         context["accession_entries"] = accession_entries
         context["page_obj"] = page_obj
         context["is_paginated"] = page_obj.paginator.num_pages > 1
@@ -5293,6 +5296,28 @@ def upload_media(request, accession_id):
         form = MediaUploadForm()
 
     return render(request, 'cms/upload_media.html', {'form': form, 'accession': accession})
+
+
+@login_required
+@user_passes_test(is_collection_manager)
+def upload_reference_document(request: HttpRequest, reference_id: int) -> HttpResponse:
+    reference = get_object_or_404(Reference, pk=reference_id)
+
+    if request.method == "POST":
+        form = ReferenceDocumentUploadForm(request.POST, request.FILES)
+        if form.is_valid():
+            document = form.save(commit=False)
+            document.reference = reference
+            document.save()
+            return redirect("reference_detail", pk=reference.pk)
+    else:
+        form = ReferenceDocumentUploadForm()
+
+    return render(
+        request,
+        "cms/reference_document_upload.html",
+        {"form": form, "reference": reference},
+    )
 
 
 class LLMUsageReportFilterForm(forms.Form):

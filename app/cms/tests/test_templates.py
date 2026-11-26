@@ -183,6 +183,7 @@ def test_reference_detail_sections_are_ordered_tables():
     headings = (
         'id="reference-metadata-heading"',
         'id="reference-publication-heading"',
+        'id="reference-documents-heading"',
         'id="reference-accessions-heading"',
     )
     positions = [content.index(heading) for heading in headings]

@@ -68,6 +68,47 @@
     </div>
   </section>
 
+  <section class="w3-margin-top reference-detail-section" aria-labelledby="reference-documents-heading">
+    <header class="reference-section-header">
+      <div class="w3-col s12 m8">
+        <h2 id="reference-documents-heading" class="w3-margin-0">
+          <i class="fa-solid fa-file-pdf" aria-hidden="true"></i>
+          <span class="w3-margin-left">{% trans "Documents / media" %}</span>
+        </h2>
+      </div>
+      {% if user.is_superuser or user|has_group:"Collection Managers" %}
+        <div class="w3-col s12 m4 w3-right-align">
+          <a href="{% url 'reference_upload_document' reference.pk %}" class="w3-button w3-green w3-round" aria-label="{% trans 'Upload PDF' %}">
+            <i class="fa-solid fa-upload" aria-hidden="true"></i>
+            <span class="w3-hide-small w3-margin-left">{% trans "Upload PDF" %}</span>
+          </a>
+        </div>
+      {% endif %}
+    </header>
+    <div class="w3-responsive">
+      <table class="w3-table-all w3-hoverable w3-small">
+        <thead>
+          <tr><th scope="col">{% trans "File name" %}</th></tr>
+        </thead>
+        <tbody>
+          {% for document in reference_documents %}
+            <tr>
+              <td>
+                <a href="{{ document.file.url }}" target="_blank" rel="noopener">
+                  {{ document.original_filename }}
+                </a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td class="w3-center">{% trans "There are no documents available for this reference." %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
   <section class="w3-margin-top reference-detail-section" aria-labelledby="reference-accessions-heading">
     <header class="reference-section-header">
       <h2 id="reference-accessions-heading" class="w3-margin-0">

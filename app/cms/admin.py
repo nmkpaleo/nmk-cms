@@ -62,6 +62,7 @@ from .models import (
     Comment,
     FieldSlip,
     Reference,
+    ReferenceDocument,
     Storage,
     User,
     Preparation,
@@ -1723,11 +1724,19 @@ class PersonAdmin(HistoricalImportExportAdmin):
     search_fields = ('first_name', 'last_name', 'orcid')
 
 # Reference Model
+class ReferenceDocumentInline(admin.TabularInline):
+    model = ReferenceDocument
+    fields = ("file", "original_filename")
+    readonly_fields = ("original_filename",)
+    extra = 0
+
+
 class ReferenceAdmin(MergeAdminActionMixin, MergeAdminMixin, HistoricalImportExportAdmin):
     resource_class = ReferenceResource
     list_display = ('citation', 'doi')
     search_fields = ('citation', 'doi')
     change_list_template = "admin/cms/reference/change_list.html"
+    inlines = [ReferenceDocumentInline]
 
     def get_urls(self):
         urls = super().get_urls()

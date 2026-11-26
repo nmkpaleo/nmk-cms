@@ -4,6 +4,8 @@
 
 - Show available DOIs as links in the References list and as the last field in Reference metadata, opening the DOI resolver in a new tab. Filter and sort the References list by DOI.
 
+- Add PDF uploads to Reference details and the References admin, with Collection Manager access, PDF validation, and files stored in per-reference folders.
+
 - Limit ID-based Identification updates to `verbatim_identification`, `taxon_verbatim`, `identification_qualifier`, and `identification_remarks`, while keeping new-record imports on the accession-row search workflow.
 
 - Include Element IDs in admin exports and use them to match imports; parent Elements continue to match by name.
